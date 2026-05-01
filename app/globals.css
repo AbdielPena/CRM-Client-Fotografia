@@ -1,0 +1,414 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =======================================================================
+   STUDIOFLOW · DESIGN TOKENS
+   Paleta "Aurora": violet + indigo + fuchsia
+   Todos los tokens son HSL sin wrapper, consumidos via hsl(var(--token))
+   ======================================================================= */
+
+@layer base {
+  :root {
+    /* ---- Superficies (light) ---- */
+    --background: 0 0% 99%;
+    --foreground: 240 10% 10%;
+    --surface: 0 0% 100%;
+    --elevated: 240 20% 99%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+
+    --muted: 240 14% 96%;
+    --muted-foreground: 240 5% 46%;
+    --accent: 240 14% 96%;
+    --accent-foreground: 240 10% 10%;
+    --secondary: 240 14% 96%;
+    --secondary-foreground: 240 10% 10%;
+
+    /* ---- Brand Aurora ---- */
+    --brand: 262 83% 58%;
+    --brand-foreground: 0 0% 100%;
+    --brand-soft: 270 100% 98%;
+    --brand-soft-foreground: 262 83% 35%;
+
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    /* ---- Estados semánticos ---- */
+    --success: 152 60% 40%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 152 70% 95%;
+
+    --warning: 38 92% 48%;
+    --warning-foreground: 30 60% 12%;
+    --warning-soft: 42 100% 95%;
+
+    --danger: 0 75% 55%;
+    --danger-foreground: 0 0% 100%;
+    --danger-soft: 0 85% 96%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --info: 210 90% 55%;
+    --info-foreground: 0 0% 100%;
+    --info-soft: 210 100% 96%;
+
+    /* ---- Bordes / inputs ---- */
+    --border: 240 13% 91%;
+    --border-strong: 240 10% 86%;
+    --input: 240 13% 91%;
+    --ring: 262 83% 58%;
+
+    /* ---- Skeleton / misc ---- */
+    --skeleton: 240 13% 94%;
+
+    /* ---- Sidebar ---- */
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 240 5% 26%;
+    --sidebar-primary: 262 83% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 14% 96%;
+    --sidebar-accent-foreground: 240 10% 10%;
+    --sidebar-border: 240 13% 92%;
+    --sidebar-ring: 262 83% 58%;
+
+    /* ---- Charts ---- */
+    --chart-1: 262 83% 58%;
+    --chart-2: 240 84% 64%;
+    --chart-3: 292 84% 60%;
+    --chart-4: 152 60% 45%;
+    --chart-5: 38 92% 55%;
+
+    /* ---- Fonts (no se declaran aquí: next/font las inyecta vía <html className>) ----
+       next/font establece --font-sans, --font-display, --font-mono con valores
+       hash-scoped. Declararlas en :root las sobreescribiría y el browser caería
+       a system-ui. Si next/font no carga, el fallback se define en html { font-family } abajo. */
+
+    /* ---- Radius ---- */
+    --radius: 10px;
+  }
+
+  /* ============================= DARK MODE ============================ */
+  .dark {
+    --background: 240 14% 6%;
+    --foreground: 240 10% 96%;
+    --surface: 240 12% 9%;
+    --elevated: 240 11% 12%;
+
+    --card: 240 12% 9%;
+    --card-foreground: 240 10% 96%;
+    --popover: 240 11% 10%;
+    --popover-foreground: 240 10% 96%;
+
+    --muted: 240 10% 16%;
+    --muted-foreground: 240 6% 64%;
+    --accent: 240 10% 16%;
+    --accent-foreground: 240 10% 96%;
+    --secondary: 240 10% 14%;
+    --secondary-foreground: 240 10% 96%;
+
+    --brand: 262 85% 68%;
+    --brand-foreground: 0 0% 100%;
+    --brand-soft: 263 50% 18%;
+    --brand-soft-foreground: 270 100% 90%;
+
+    --primary: 262 85% 68%;
+    --primary-foreground: 0 0% 100%;
+
+    --success: 152 55% 55%;
+    --success-foreground: 152 70% 8%;
+    --success-soft: 152 45% 15%;
+
+    --warning: 38 90% 60%;
+    --warning-foreground: 30 60% 8%;
+    --warning-soft: 38 40% 16%;
+
+    --danger: 0 72% 62%;
+    --danger-foreground: 0 0% 100%;
+    --danger-soft: 0 40% 18%;
+
+    --destructive: 0 72% 62%;
+    --destructive-foreground: 0 0% 100%;
+
+    --info: 210 88% 65%;
+    --info-foreground: 210 90% 10%;
+    --info-soft: 210 50% 18%;
+
+    --border: 240 8% 18%;
+    --border-strong: 240 8% 24%;
+    --input: 240 8% 18%;
+    --ring: 262 85% 68%;
+
+    --skeleton: 240 8% 16%;
+
+    --sidebar: 240 13% 7%;
+    --sidebar-foreground: 240 10% 72%;
+    --sidebar-primary: 262 85% 68%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 10% 14%;
+    --sidebar-accent-foreground: 240 10% 96%;
+    --sidebar-border: 240 8% 16%;
+    --sidebar-ring: 262 85% 68%;
+
+    --chart-1: 262 85% 68%;
+    --chart-2: 240 84% 72%;
+    --chart-3: 292 84% 70%;
+    --chart-4: 152 55% 55%;
+    --chart-5: 38 90% 65%;
+  }
+
+  * {
+    @apply border-border;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    /* Fallback chain si next/font falla o --font-sans no se ha inyectado.
+       "__Inter_Fallback" es el nombre del fallback metric que genera next/font. */
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1, "cv11" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground transition-colors;
+    transition-duration: 220ms;
+    transition-timing-function: cubic-bezier(.4, 0, .2, 1);
+  }
+
+  /* Selección consistente con brand */
+  ::selection {
+    background-color: hsl(var(--brand) / 0.25);
+    color: hsl(var(--foreground));
+  }
+
+  /* Scrollbar refinada */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-strong));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+    background-clip: padding-box;
+  }
+
+  /* Focus visible — anillo consistente brand */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px hsl(var(--brand) / 0.18);
+    border-radius: calc(var(--radius) - 2px);
+  }
+}
+
+/* =======================================================================
+   UTILIDADES STUDIOFLOW
+   ======================================================================= */
+@layer utilities {
+  /* ---- Tipografía display ---- */
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    font-feature-settings: "ss01", "ss02";
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Gradientes brand ---- */
+  .text-gradient-aurora {
+    background-image: linear-gradient(
+      135deg,
+      hsl(240, 84%, 64%) 0%,
+      hsl(262, 83%, 58%) 50%,
+      hsl(292, 84%, 60%) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .bg-aurora {
+    background-image: linear-gradient(
+      135deg,
+      hsl(240, 84%, 64%) 0%,
+      hsl(262, 83%, 58%) 50%,
+      hsl(292, 84%, 60%) 100%
+    );
+  }
+
+  .bg-aurora-animated {
+    background: linear-gradient(
+      135deg,
+      hsl(240, 84%, 64%) 0%,
+      hsl(262, 83%, 58%) 50%,
+      hsl(292, 84%, 60%) 100%
+    );
+    background-size: 200% 200%;
+    animation: gradient-shift 8s ease infinite;
+  }
+
+  /* ---- Glass / surface elevated ---- */
+  .sf-glass {
+    background-color: hsl(var(--surface) / 0.72);
+    backdrop-filter: blur(14px) saturate(160%);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    border: 1px solid hsl(var(--border) / 0.6);
+  }
+
+  .dark .sf-glass {
+    background-color: hsl(var(--surface) / 0.6);
+    border-color: hsl(var(--border) / 0.8);
+  }
+
+  /* ---- Card base con hover premium ---- */
+  .sf-card {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 14px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 2px 0 rgba(16, 24, 40, 0.04);
+    transition: all 220ms cubic-bezier(.4, 0, .2, 1);
+  }
+
+  .dark .sf-card {
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+      0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  }
+
+  .sf-card-interactive {
+    cursor: pointer;
+  }
+
+  .sf-card-interactive:hover {
+    border-color: hsl(var(--border-strong));
+    transform: translateY(-1px);
+    box-shadow: 0 12px 32px -8px rgba(16, 24, 40, 0.12),
+      0 4px 8px -4px rgba(16, 24, 40, 0.06);
+  }
+
+  .dark .sf-card-interactive:hover {
+    border-color: hsl(var(--brand) / 0.3);
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
+      0 12px 32px -8px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ---- Section dividers overline ---- */
+  .sf-overline {
+    font-size: 0.6875rem;
+    line-height: 1.3;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* ---- Noise / grain overlay ---- */
+  .sf-noise::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+
+  /* ---- Skeleton shimmer ---- */
+  .sf-skeleton {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--skeleton)) 0%,
+      hsl(var(--muted)) 50%,
+      hsl(var(--skeleton)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2.2s linear infinite;
+  }
+
+  /* ---- Theme transition circle (View Transitions API) ---- */
+  @supports (view-transition-name: root) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+    ::view-transition-old(root) {
+      z-index: 1;
+    }
+    ::view-transition-new(root) {
+      z-index: 2;
+    }
+    .dark::view-transition-old(root) {
+      z-index: 2;
+    }
+    .dark::view-transition-new(root) {
+      z-index: 1;
+    }
+  }
+
+  /* Reduce motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* =======================================================================
+   COMPONENT LAYER
+   ======================================================================= */
+@layer components {
+  /* Botón primario con glow */
+  .sf-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-body font-medium text-white transition-all;
+    background-image: linear-gradient(
+      135deg,
+      hsl(240, 84%, 64%) 0%,
+      hsl(262, 83%, 58%) 50%,
+      hsl(292, 84%, 60%) 100%
+    );
+    background-size: 200% 200%;
+    box-shadow: 0 0 0 1px hsla(262, 83%, 58%, 0.12),
+      0 8px 24px -8px hsla(262, 83%, 58%, 0.35);
+    transition-duration: 220ms;
+    transition-timing-function: cubic-bezier(.4, 0, .2, 1);
+  }
+  .sf-btn-primary:hover {
+    background-position: 100% 50%;
+    box-shadow: 0 0 0 1px hsla(262, 83%, 58%, 0.15),
+      0 20px 48px -12px hsla(262, 83%, 58%, 0.45);
+    transform: translateY(-1px);
+  }
+  .sf-btn-primary:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  /* Input focused ring */
+  .sf-input-focus:focus {
+    outline: none;
+    border-color: hsl(var(--brand));
+    box-shadow: 0 0 0 4px hsl(var(--brand) / 0.15);
+  }
+}

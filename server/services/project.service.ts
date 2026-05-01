@@ -1,0 +1,230 @@
+import 'server-only'
+
+import { projectsRepo } from '@/server/repositories'
+import { createSupabaseServerClient } from '@/server/supabase/server'
+import type {
+  CreateProjectInput,
+  UpdateProjectInput,
+} from '@/lib/validations/project.schema'
+import { logActivity } from './activity.service'
+import {
+  syncProjectById,
+  deleteProjectEventSafe,
+} from './google-calendar.service'
+
+// ----------------------------------------------------------------------------
+// Listado + detalle
+// ----------------------------------------------------------------------------
+
+export async function getProjects(
+  studioId: string,
+  opts: {
+    status?: string
+    search?: string
+    page?: number
+    pageSize?: number
+  } = {},
+) {
+  const { status, search, page = 1, pageSize = 50 } = opts
+  const supabase = createSupabaseServerClient()
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  let query = supabase
+    .from('projects')
+    .select(
+      `
+        *,
+        client:clients(id, name, email)
+      `,
+      { count: 'exact' },
+    )
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .order('event_date', { ascending: false, nullsFirst: false })
+    .range(from, to)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (status) query = query.eq('status', status as any)
+  if (search && search.trim()) {
+    const term = `%${search.trim()}%`
+    query = query.ilike('name', term)
+  }
+
+  const { data, count, error } = await query
+  if (error) throw new Error(error.message)
+
+  const total = count ?? 0
+  return {
+    items: data ?? [],
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize) || 1,
+  }
+}
+
+export async function getProjectById(studioId: string, projectId: string) {
+  const supabase = createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('projects')
+    .select(
+      `
+        *,
+        client:clients(*),
+        package:packages(id, name, price, currency),
+        invoices(*),
+        contracts(*),
+        notes(*)
+      `,
+    )
+    .eq('id', projectId)
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) return null
+
+  // Filtrar y ordenar relaciones en JS para no depender de joins anidados complejos
+  return {
+    ...data,
+    invoices: [...((data.invoices ?? []) as Array<Record<string, unknown>>)]
+      .filter((i) => (i.deleted_at ?? null) === null)
+      .sort((a, b) => {
+        const ad = a.created_at ? new Date(a.created_at as string).getTime() : 0
+        const bd = b.created_at ? new Date(b.created_at as string).getTime() : 0
+        return bd - ad
+      }),
+    contracts: [...((data.contracts ?? []) as Array<Record<string, unknown>>)]
+      .filter((c) => (c.deleted_at ?? null) === null)
+      .sort((a, b) => {
+        const ad = a.created_at ? new Date(a.created_at as string).getTime() : 0
+        const bd = b.created_at ? new Date(b.created_at as string).getTime() : 0
+        return bd - ad
+      }),
+    notes: [...((data.notes ?? []) as unknown as Array<Record<string, unknown>>)]
+      .filter((n) => (n.deleted_at ?? null) === null)
+      .sort((a, b) => {
+        const ad = a.created_at ? new Date(a.created_at as string).getTime() : 0
+        const bd = b.created_at ? new Date(b.created_at as string).getTime() : 0
+        return bd - ad
+      }),
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Crear / actualizar / borrar
+// ----------------------------------------------------------------------------
+
+export async function createProject(
+  studioId: string,
+  actorId: string,
+  data: CreateProjectInput,
+) {
+  const project = await projectsRepo.create({
+    studio_id: studioId,
+    client_id: data.clientId,
+    package_id: data.packageId || null,
+    name: data.name,
+    event_type: data.eventType,
+    status: data.status || 'Consulta inicial',
+    event_date: data.eventDate || null,
+    location: data.location || null,
+    notes: data.notes || null,
+    total_amount: data.totalAmount ?? null,
+    currency: (data.currency || 'DOP').toUpperCase(),
+  })
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: 'project',
+    entityId: project.id,
+    action: 'project.created',
+    metadata: { name: project.name, clientId: data.clientId },
+  })
+
+  // Sync a Google Calendar (best-effort — no bloquea si la integración no
+  // está conectada o si Google falla).
+  if (project.event_date) {
+    await syncProjectById(studioId, project.id).catch(() => {})
+  }
+
+  return project
+}
+
+export async function updateProject(
+  studioId: string,
+  actorId: string,
+  projectId: string,
+  data: UpdateProjectInput,
+) {
+  const existing = await projectsRepo.findById(projectId)
+  if (!existing || existing.studio_id !== studioId) {
+    throw new Error('PROJECT_NOT_FOUND')
+  }
+
+  const patch: Record<string, unknown> = {}
+  if (data.name !== undefined) patch.name = data.name
+  if (data.eventType !== undefined) patch.event_type = data.eventType
+  if (data.status !== undefined) patch.status = data.status
+  if (data.eventDate !== undefined) patch.event_date = data.eventDate || null
+  if (data.location !== undefined) patch.location = data.location || null
+  if (data.notes !== undefined) patch.notes = data.notes || null
+  if (data.packageId !== undefined) patch.package_id = data.packageId || null
+  if (data.totalAmount !== undefined) patch.total_amount = data.totalAmount
+
+  const project = await projectsRepo.update(projectId, patch)
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: 'project',
+    entityId: project.id,
+    action: 'project.updated',
+    metadata: data as Record<string, unknown>,
+  })
+
+  // Re-sync a Google si cambiaron campos visibles en el evento (fecha,
+  // título, location) o si se canceló. Si status = 'cancelled' borra el
+  // evento; en cualquier otro caso actualiza.
+  const touchedEventFields =
+    data.eventDate !== undefined ||
+    data.name !== undefined ||
+    data.location !== undefined ||
+    data.notes !== undefined
+  if (data.status === 'cancelled') {
+    await deleteProjectEventSafe(studioId, project.id)
+  } else if (touchedEventFields && project.event_date) {
+    await syncProjectById(studioId, project.id).catch(() => {})
+  }
+
+  return project
+}
+
+export async function deleteProject(
+  studioId: string,
+  actorId: string,
+  projectId: string,
+) {
+  const existing = await projectsRepo.findById(projectId)
+  if (!existing || existing.studio_id !== studioId) {
+    throw new Error('PROJECT_NOT_FOUND')
+  }
+
+  await projectsRepo.update(projectId, {
+    deleted_at: new Date().toISOString(),
+  })
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: 'project',
+    entityId: projectId,
+    action: 'project.deleted',
+  })
+
+  // Limpiar evento en Google si existía
+  await deleteProjectEventSafe(studioId, projectId)
+}

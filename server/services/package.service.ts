@@ -1,0 +1,132 @@
+import 'server-only'
+
+import slugify from 'slugify'
+
+import { packagesRepo } from '@/server/repositories'
+import { createSupabaseServerClient } from '@/server/supabase/server'
+import type {
+  CreatePackageInput,
+  UpdatePackageInput,
+} from '@/lib/validations/package.schema'
+
+// Convierte el campo `includes` (string multi-línea) a array jsonb
+function parseIncludes(value: string | undefined | null): string[] {
+  if (!value) return []
+  return value
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
+function buildSlug(name: string): string {
+  return slugify(name, { lower: true, strict: true }).slice(0, 80)
+}
+
+async function uniqueSlug(studioId: string, base: string): Promise<string> {
+  const supabase = createSupabaseServerClient()
+  let slug = base
+  let suffix = 1
+  // Loop bounded — si chocan 10 veces, algo raro pasa
+  for (let i = 0; i < 10; i++) {
+    const { data } = await supabase
+      .from('packages')
+      .select('id')
+      .eq('studio_id', studioId)
+      .eq('slug', slug)
+      .maybeSingle()
+    if (!data) return slug
+    suffix += 1
+    slug = `${base}-${suffix}`
+  }
+  return `${base}-${Date.now()}`
+}
+
+export async function getPackages(studioId: string) {
+  const supabase = createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('packages')
+    .select('*')
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .order('is_active', { ascending: false })
+    .order('price', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+export async function getPackageById(studioId: string, packageId: string) {
+  const supabase = createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('packages')
+    .select('*')
+    .eq('id', packageId)
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function createPackage(studioId: string, data: CreatePackageInput) {
+  const explicit = data.slug?.trim() || ''
+  const base = explicit || buildSlug(data.name) || 'paquete'
+  const slug = await uniqueSlug(studioId, base)
+
+  return packagesRepo.create({
+    studio_id: studioId,
+    name: data.name,
+    slug,
+    description: data.description || null,
+    price: data.price,
+    currency: (data.currency || 'DOP').toUpperCase(),
+    duration_hours: data.durationHours ?? null,
+    edited_photos: data.editedPhotos ?? null,
+    includes: parseIncludes(data.includes),
+    is_active: data.isActive ?? true,
+  })
+}
+
+export async function updatePackage(
+  studioId: string,
+  packageId: string,
+  data: UpdatePackageInput,
+) {
+  const existing = await packagesRepo.findById(packageId)
+  if (!existing || existing.studio_id !== studioId) {
+    throw new Error('PACKAGE_NOT_FOUND')
+  }
+
+  const patch: Record<string, unknown> = {}
+  if (data.name !== undefined) patch.name = data.name
+  if (data.description !== undefined)
+    patch.description = data.description || null
+  if (data.price !== undefined) patch.price = data.price
+  if (data.durationHours !== undefined) patch.duration_hours = data.durationHours
+  if (data.editedPhotos !== undefined) patch.edited_photos = data.editedPhotos
+  if (data.includes !== undefined) patch.includes = parseIncludes(data.includes)
+  if (data.isActive !== undefined) patch.is_active = data.isActive
+
+  // Slug: si el user lo escribe explícito → usamos su valor (sanitizado).
+  // Si cambia el nombre sin slug explícito → regeneramos para mantener SEO-friendly.
+  const explicitSlug = data.slug?.trim()
+  if (explicitSlug) {
+    const sanitized = buildSlug(explicitSlug)
+    if (sanitized && sanitized !== existing.slug) {
+      patch.slug = await uniqueSlug(studioId, sanitized)
+    }
+  } else if (data.name && data.name !== existing.name) {
+    const base = buildSlug(data.name) || existing.slug
+    patch.slug = await uniqueSlug(studioId, base)
+  }
+
+  return packagesRepo.update(packageId, patch)
+}
+
+export async function deletePackage(studioId: string, packageId: string) {
+  const existing = await packagesRepo.findById(packageId)
+  if (!existing || existing.studio_id !== studioId) {
+    throw new Error('PACKAGE_NOT_FOUND')
+  }
+  await packagesRepo.softDelete(packageId)
+}

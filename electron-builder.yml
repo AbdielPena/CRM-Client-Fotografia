@@ -1,0 +1,62 @@
+appId: do.studioflow.desktop
+productName: StudioFlow
+copyright: Copyright © 2026 StudioFlow
+
+# Archivos que se empaquetan en el ASAR
+files:
+  - desktop/**/*
+  - package.json
+  - "!**/node_modules/**/{README.md,CHANGELOG.md,*.d.ts,test/**,__tests__/**}"
+  - "!**/{.git,.github,.vscode,.idea,docker,prisma,workers,scripts,emails}/**"
+  - "!**/{app,components,lib,server,types,public}/**"
+
+# Directorios de build
+directories:
+  output: dist-electron
+  buildResources: desktop/assets
+
+# Windows (NSIS installer + portable)
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: desktop/assets/icon.ico
+  artifactName: StudioFlow-Setup-${version}.${ext}
+  # requireAdministrator=false → instalación per-user, no pide UAC
+  requestedExecutionLevel: asInvoker
+  verifyUpdateCodeSignature: false
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: StudioFlow
+  installerIcon: desktop/assets/icon.ico
+  uninstallerIcon: desktop/assets/icon.ico
+  deleteAppDataOnUninstall: false
+
+# macOS (opcional, para futuro)
+mac:
+  category: public.app-category.business
+  target:
+    - dmg
+  icon: desktop/assets/icon.icns
+  hardenedRuntime: true
+
+# Linux (opcional)
+linux:
+  target:
+    - AppImage
+  icon: desktop/assets/icon.png
+  category: Office
+
+# Auto-updater feed → GitHub Releases
+publish:
+  - provider: github
+    owner: soyabdielpena
+    repo: studioflow
+    releaseType: release

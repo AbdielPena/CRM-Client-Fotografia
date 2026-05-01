@@ -1,0 +1,22 @@
+// Barrel de repositorios. Importar desde aquí:
+//   import { clientsRepo, packagesRepo, bookingRequestsRepo } from '@/server/repositories'
+
+export { clientsRepo } from './clients'
+export { packagesRepo } from './packages'
+export { projectsRepo } from './projects'
+export { bookingRequestsRepo } from './booking-requests'
+export { contractsRepo } from './contracts'
+export { contractTemplatesRepo } from './contract-templates'
+export type { ContractTemplate } from './contract-templates'
+export { invoicesRepo } from './invoices'
+export { emailQueueRepo } from './email-queue'
+export { activityLogRepo } from './activity-log'
+export { integrationsRepo } from './integrations'
+export { studiosRepo } from './studios'
+export { availabilityRepo } from './availability'
+export type { AvailabilityRule, AvailabilityBlock } from './availability'
+export { formTemplatesRepo, formResponsesRepo } from './forms'
+export type { FormTemplate, FormResponse } from './forms'
+
+export { RepoError } from './base'
+export type { RepoOptions } from './base'
