@@ -24,6 +24,7 @@ const PUBLIC_PREFIXES = [
   '/api/webhooks',
   '/api/health',
   '/api/public',
+  '/api/deploy', // hooks de deploy desde GitHub Actions (auth por Bearer interno)
   '/_next',
   '/favicon',
 ]
