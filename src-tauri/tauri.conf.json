@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -43,5 +44,15 @@
     "shortDescription": "StudioFlow — CRM y galerías para fotógrafos",
     "longDescription": "Wrapper desktop de StudioFlow. Carga la app web en una ventana nativa para una experiencia integrada en Windows, macOS y Linux.",
     "copyright": "© 2026 Abby Pixel"
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQzNEVERkQ0NTY0OEJGODMKUldTRHYwaFcxTjlPUTExOFdobE8wdnZZOVJaZWJWclFFbmYxR1dINHF2UWM0ejdYV3JMdzRJNSsK",
+      "endpoints": [
+        "https://github.com/AbdielPena/CRM-Client-Fotografia/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

@@ -47,6 +47,21 @@ coverage/
 # Misc
 .turbo/
 
+# Tauri signing keys (la priv key NUNCA va al repo)
+studioflow-updater.key
+studioflow-updater.key.pub
+*.pem
+
+# Tauri build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# Logo provisorio
+logo.png
+
+# Build output local
+next-build.zip
+
 # Claude Code workspace + sesiones
 .claude/
 

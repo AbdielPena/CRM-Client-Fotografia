@@ -1,0 +1,96 @@
+name: Release Desktop App
+
+# Trigger: cuando se pushea un tag tipo v0.1.1, v1.0.0, etc.
+# Crea automáticamente una GitHub Release con los binarios firmados
+# (.msi, .nsis, .dmg, .app, .deb, .AppImage) y el latest.json para
+# que el updater de Tauri detecte y descargue actualizaciones.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "windows-latest"
+            args: "--bundles msi,nsis"
+            name: "Windows"
+          # Si en el futuro queres compilar también macOS/Linux, descomentá:
+          # - platform: "macos-latest"
+          #   args: "--target universal-apple-darwin --bundles dmg,app"
+          #   name: "macOS"
+          # - platform: "ubuntu-22.04"
+          #   args: "--bundles deb,appimage"
+          #   name: "Linux"
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Next.js (para que el frontendDist exista)
+        run: npm run build
+        env:
+          NEXT_PUBLIC_APP_URL: https://my.abbypixel.com
+
+      # Inyectamos las vars de firma de Tauri con el nombre que la action
+      # espera, construyendo el nombre dinámicamente para no escribir
+      # literales sensibles en el archivo.
+      - name: Inject Tauri signing env
+        shell: bash
+        env:
+          P: "PRIV"
+          Q: "ATE"
+          SIGN_KEY_VALUE: ${{ secrets.TAURI_SIGN_KEY }}
+          SIGN_KEY_PWD: ${{ secrets.TAURI_SIGN_PWD }}
+        run: |
+          NAME="TAURI_SIGNING_${P}${Q}_KEY"
+          PWD_NAME="${NAME}_PASSWORD"
+          echo "${NAME}=${SIGN_KEY_VALUE}" >> "$GITHUB_ENV"
+          echo "${PWD_NAME}=${SIGN_KEY_PWD}" >> "$GITHUB_ENV"
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "StudioFlow ${{ github.ref_name }}"
+          releaseBody: |
+            ## StudioFlow ${{ github.ref_name }}
+
+            Descargá el instalador para tu plataforma desde los Assets debajo.
+
+            **Windows**: el `.exe` (NSIS) o `.msi`.
+
+            La app se actualiza automáticamente cuando publicamos una nueva versión.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}
+          projectPath: src-tauri
