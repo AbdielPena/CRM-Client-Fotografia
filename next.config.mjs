@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-// build: production deploy via GitHub Actions (FTP + auto chmod hook)
+// build: production deploy via GitHub Actions (FTP + atomic staging swap)
 const nextConfig = {
   images: {
     remotePatterns: [
