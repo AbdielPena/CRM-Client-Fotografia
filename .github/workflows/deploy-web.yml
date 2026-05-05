@@ -1,10 +1,8 @@
 name: Deploy Web to BanaHosting
 
 # Trigger: push a main que toque archivos del código web.
-# Buildea Next.js, sube .next/ + public/ + server.js via FTP, y deja
-# tmp/restart.txt para que Phusion Passenger reinicie la app.
-#
-# No corre cuando solo cambian docs, scripts de Tauri o Capacitor.
+# Buildea Next.js, arma un deploy-package/ con solo lo que va al server,
+# lo sube por FTP en un solo paso, y dispara restart de Phusion Passenger.
 
 on:
   push:
@@ -59,57 +57,32 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://kbrcqyjnrbjlzfolpcsx.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_Nh-ot-oVKy46FpSiF7UASA_FIcHMeOk
 
-      # Generamos un archivo restart.txt con timestamp para que Phusion
-      # Passenger detecte el cambio y reinicie la app después del deploy.
-      - name: Create restart marker
+      # Armamos un directorio limpio con SOLO lo que va al server.
+      # Así evitamos los bugs de exclude/include de FTP-Deploy-Action.
+      - name: Build deploy package
         run: |
-          mkdir -p tmp
-          date -u +"%Y-%m-%dT%H:%M:%SZ" > tmp/restart.txt
+          mkdir -p deploy-package
+          cp -r .next deploy-package/.next
+          cp -r public deploy-package/public
+          cp server.js deploy-package/server.js
+          mkdir -p deploy-package/tmp
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > deploy-package/tmp/restart.txt
+          echo "--- deploy-package contents ---"
+          ls -la deploy-package/
+          du -sh deploy-package/.next deploy-package/public
 
-      # Empacamos solo lo que va al server. Excluimos node_modules y .git.
-      # NO subimos .env.production.local (vive solo en el server).
-      - name: Deploy .next/ via FTP
+      - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.BH_FTP_HOST }}
           username: ${{ secrets.BH_FTP_USER }}
           password: ${{ secrets.BH_FTP_PASS }}
-          local-dir: ./.next/
-          server-dir: ./.next/
-          log-level: verbose
-
-      - name: Deploy public/ via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.BH_FTP_HOST }}
-          username: ${{ secrets.BH_FTP_USER }}
-          password: ${{ secrets.BH_FTP_PASS }}
-          local-dir: ./public/
-          server-dir: ./public/
-
-      - name: Deploy server.js via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.BH_FTP_HOST }}
-          username: ${{ secrets.BH_FTP_USER }}
-          password: ${{ secrets.BH_FTP_PASS }}
-          local-dir: ./
+          local-dir: ./deploy-package/
           server-dir: ./
-          exclude: |
-            **/*
-            !server.js
-
-      - name: Trigger app restart (tmp/restart.txt)
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.BH_FTP_HOST }}
-          username: ${{ secrets.BH_FTP_USER }}
-          password: ${{ secrets.BH_FTP_PASS }}
-          local-dir: ./tmp/
-          server-dir: ./tmp/
+          log-level: standard
 
       - name: Health check
         run: |
-          # Esperamos 12s para que Phusion reinicie y verificamos /api/health
+          # Esperamos 12s para que Phusion Passenger reinicie
           sleep 12
           curl -f -sS -m 30 https://my.abbypixel.com/api/health
