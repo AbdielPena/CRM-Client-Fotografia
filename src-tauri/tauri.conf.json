@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "StudioFlow",
+  "version": "0.1.0",
+  "identifier": "com.studioflow.app",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "devUrl": "https://my.abbypixel.com",
+    "frontendDist": "../public"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "StudioFlow",
+        "url": "https://my.abbypixel.com",
+        "width": 1366,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 600,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "shortDescription": "StudioFlow — CRM y galerías para fotógrafos",
+    "longDescription": "Wrapper desktop de StudioFlow. Carga la app web en una ventana nativa para una experiencia integrada en Windows, macOS y Linux.",
+    "copyright": "© 2026 Abby Pixel"
+  }
+}

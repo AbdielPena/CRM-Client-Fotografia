@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities por defecto del wrapper desktop. La app remota corre en navegador embebido sin permisos nativos especiales.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

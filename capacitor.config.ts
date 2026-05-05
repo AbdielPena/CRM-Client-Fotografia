@@ -19,7 +19,7 @@ const config: CapacitorConfig = {
   server: {
     // Apunta al SaaS en producción. Para dev local, sobrescribir con
     // CAPACITOR_SERVER_URL=http://192.168.x.x:3000 antes de `cap sync`.
-    url: process.env["CAPACITOR_SERVER_URL"] ?? "https://app.studioflow.do",
+    url: process.env["CAPACITOR_SERVER_URL"] ?? "https://my.abbypixel.com",
     cleartext: false,
     androidScheme: "https",
     iosScheme: "https",

@@ -1,5 +1,6 @@
 "use client"
 
+import { Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { useFormState, useFormStatus } from "react-dom"
@@ -28,6 +29,15 @@ function SubmitButton() {
 }
 
 export default function LoginPage() {
+  // useSearchParams() requiere Suspense en Next 14 para SSG/CSR bailout
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  )
+}
+
+function LoginPageInner() {
   const params = useSearchParams()
   const callbackUrl = params.get("callbackUrl") ?? "/dashboard"
 
