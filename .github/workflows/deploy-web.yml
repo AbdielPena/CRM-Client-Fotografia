@@ -93,7 +93,6 @@ jobs:
           # Esperamos 6s a que Phusion levante la app con el código nuevo
           sleep 6
           response=$(curl -sS -w "\n%{http_code}" \
-            --request POST \
             --max-time 60 \
             --header "Authorization: Bearer $HOOK_TOKEN" \
             "https://my.abbypixel.com/api/deploy/finalize")

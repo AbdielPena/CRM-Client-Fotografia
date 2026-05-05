@@ -46,7 +46,7 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
-export async function POST(req: Request) {
+export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization") ?? ""
   const expectedToken = procEnv["DEPLOY_HOOK_TOKEN"]
 
