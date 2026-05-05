@@ -65,7 +65,7 @@ Antes de correr este script, en cPanel hacé:
   1. Setup Node.js App -> Create Application
   2. Node version: la más alta disponible (>= 18.17, ideal 20+)
   3. Application mode: Production
-  4. Application root: my/studioflow
+  4. Application root: my
   5. Application URL: my.abbypixel.com
   6. Click Create
 
