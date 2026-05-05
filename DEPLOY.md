@@ -92,9 +92,16 @@ Si alguna falla, aplicar las migraciones de `supabase/migrations/` en orden.
 
 ```bash
 # Por SSH (recomendado):
-cd ~
-git clone https://github.com/AbdielPena/CRM-Client-Fotografia.git studioflow
-cd studioflow
+# El subdominio my.abbypixel.com se mapea a ~/my/, entonces clonamos ahí.
+cd ~/my
+
+# Backup de los archivos default que cPanel haya puesto
+mkdir -p ~/my-backup-cpanel
+mv * ~/my-backup-cpanel/ 2>/dev/null || true
+mv .htaccess ~/my-backup-cpanel/ 2>/dev/null || true
+
+# Clonar al directorio actual
+git clone https://github.com/AbdielPena/CRM-Client-Fotografia.git .
 ```
 
 ### b) Crear la app Node
@@ -103,7 +110,7 @@ cPanel → **Setup Node.js App** → **Create Application**:
 
 - **Node version:** la más alta disponible (>= 18.17)
 - **Application mode:** Production
-- **Application root:** `studioflow`
+- **Application root:** `my`
 - **Application URL:** `my.abbypixel.com`
 - **Application startup file:** dejar default por ahora
 - Click **Create**
@@ -120,7 +127,7 @@ Por SSH dentro de la carpeta del proyecto:
 
 ```bash
 # Activar el venv de Node de cPanel (el path exacto te lo da el panel arriba)
-source /home/USUARIO/nodevenv/studioflow/20/bin/activate
+source /home/USUARIO/nodevenv/my/20/bin/activate
 
 # Build
 npm run build
@@ -306,10 +313,8 @@ Después del primer deploy, crear un cliente con tu email personal y verificar:
 ### Updates de código
 
 ```bash
-cd ~/studioflow
-git pull
-npm install
-npm run build
+cd ~/my
+bash scripts/deploy-server.sh
 # Restart app desde cPanel
 ```
 
