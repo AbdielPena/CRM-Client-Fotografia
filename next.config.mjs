@@ -20,12 +20,18 @@ const nextConfig = {
   poweredByHeader: false, // ocultar X-Powered-By: Next.js
   compress: true, // gzip de respuestas (cPanel también puede manejarlo)
   productionBrowserSourceMaps: false, // no exponer sourcemaps en prod
+  // En shared hosting (BanaHosting/cPanel) el límite de threads es bajo —
+  // forzamos build single-thread para evitar "Resource temporarily unavailable"
+  // de rayon-core al inicializar su thread pool.
+  swcMinify: false, // Terser puro JS en vez de SWC nativo (no necesita rayon)
   experimental: {
     // Permite el uso de instrumentation.ts para validación de env al arranque
     instrumentationHook: true,
     serverActions: {
       bodySizeLimit: "10mb", // incrementado para galerías con múltiples archivos
     },
+    workerThreads: false,
+    cpus: 1,
   },
   async headers() {
     // Headers de seguridad globales — aplican a todas las rutas excepto print/portal públicos

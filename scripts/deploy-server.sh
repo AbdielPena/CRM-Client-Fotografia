@@ -141,7 +141,18 @@ npm install --no-audit --no-fund 2>&1 | tail -20
 # --- 5. Build ---
 step "Compilando app de producción"
 log "Esto puede tardar 1-3 minutos..."
-npm run build
+log "Limitando workers a 1 (shared hosting tiene NPROC bajo)..."
+
+# Variables para minimizar uso de threads en shared hosting:
+# - NEXT_TELEMETRY_DISABLED: evita worker de telemetría
+# - UV_THREADPOOL_SIZE=1: libuv usa 1 solo thread (en vez de 4 default)
+# - NODE_OPTIONS: limita memoria a 1GB
+# - SHARP_IGNORE_GLOBAL_LIBVIPS=1: usa Sharp built-in (más predecible)
+NEXT_TELEMETRY_DISABLED=1 \
+UV_THREADPOOL_SIZE=1 \
+NODE_OPTIONS="--max-old-space-size=1024" \
+SHARP_IGNORE_GLOBAL_LIBVIPS=1 \
+    npm run build
 
 # --- 6. Done ---
 echo
