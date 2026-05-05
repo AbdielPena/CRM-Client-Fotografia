@@ -46,18 +46,26 @@ log "Usuario: $(whoami)"
 # --- 1. Activar Node venv de cPanel ---
 step "Activando Node.js venv de cPanel"
 
-NODE_ACTIVATE=$(find "$HOME/nodevenv" -maxdepth 4 -name "activate" 2>/dev/null | head -1 || true)
+# Buscar venv específicamente de studioflow/my (nombres comunes que cPanel asigna)
+NODE_ACTIVATE=$(find "$HOME/nodevenv" -maxdepth 4 -name "activate" 2>/dev/null \
+    | grep -Ei '/(studioflow|my-studioflow|my)/' \
+    | head -1 || true)
 
+# Si no encuentra específico, listar todos los disponibles
 if [[ -z "$NODE_ACTIVATE" ]]; then
-    warn "No se encontró venv en \$HOME/nodevenv/"
-    warn "Esto significa que aún no creaste la app Node en cPanel."
+    ALL_VENVS=$(find "$HOME/nodevenv" -maxdepth 4 -name "activate" 2>/dev/null || true)
+    warn "No se encontró venv específico de studioflow."
+    if [[ -n "$ALL_VENVS" ]]; then
+        warn "Venvs disponibles:"
+        echo "$ALL_VENVS" | while read -r v; do echo "  - $v"; done
+    fi
     echo
     cat <<EOF
 Antes de correr este script, en cPanel hacé:
   1. Setup Node.js App -> Create Application
-  2. Node version: la más alta disponible (>= 18.17)
+  2. Node version: la más alta disponible (>= 18.17, ideal 20+)
   3. Application mode: Production
-  4. Application root: my
+  4. Application root: my/studioflow
   5. Application URL: my.abbypixel.com
   6. Click Create
 
@@ -66,8 +74,15 @@ EOF
     exit 1
 fi
 
+log "Venv encontrado: $NODE_ACTIVATE"
+
+# Desactivar -u temporalmente porque los activate de cPanel a veces
+# referencian variables como CL_VIRTUAL_ENV que no están seteadas
+set +u
 # shellcheck disable=SC1090
 source "$NODE_ACTIVATE"
+set -u
+
 log "Node $(node -v) activado"
 log "npm $(npm -v)"
 
