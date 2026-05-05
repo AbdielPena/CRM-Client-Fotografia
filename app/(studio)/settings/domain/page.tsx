@@ -64,7 +64,7 @@ export default async function DomainSettingsPage() {
         {/* List */}
         {domains.length === 0 ? (
           <div className="sf-card p-10 text-center">
-            <Globe className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+            <Globe className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
             <p className="text-sm text-muted-foreground">
               Aún no has añadido dominios. El primero será el principal.
             </p>
@@ -102,7 +102,7 @@ function DomainCard({ domain }: { domain: StudioDomain }) {
           </div>
           <StatusPill domain={domain} />
           {domain.lastError && (
-            <p className="text-xs text-red-600 mt-2">{domain.lastError}</p>
+            <p className="text-xs text-danger mt-2">{domain.lastError}</p>
           )}
         </div>
 
@@ -136,7 +136,7 @@ function DomainCard({ domain }: { domain: StudioDomain }) {
               <button
                 type="submit"
                 title="Eliminar"
-                className="p-1.5 text-muted-foreground hover:text-red-600 border border-transparent hover:border-red-100 rounded-lg transition-colors"
+                className="p-1.5 text-muted-foreground hover:text-danger border border-transparent hover:border-red-100 rounded-lg transition-colors"
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </button>
@@ -203,14 +203,14 @@ function StatusPill({ domain }: { domain: StudioDomain }) {
   }
   if (domain.status === 'verifying') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5">
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-brand bg-brand-soft border border-blue-100 rounded-full px-2 py-0.5">
         <Clock className="h-3 w-3 animate-pulse" /> Verificando
       </span>
     )
   }
   if (domain.status === 'failed') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 bg-red-50 border border-red-100 rounded-full px-2 py-0.5">
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-danger bg-danger/10 border border-red-100 rounded-full px-2 py-0.5">
         <XCircle className="h-3 w-3" /> Falló verificación
       </span>
     )

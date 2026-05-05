@@ -25,25 +25,25 @@ type ActivityRow = {
 }
 
 const ICON_MAP: Record<string, { Icon: React.ElementType; color: string }> = {
-  "booking_request.created": { Icon: Inbox, color: "text-blue-500 bg-blue-50" },
+  "booking_request.created": { Icon: Inbox, color: "text-brand bg-brand-soft" },
   "booking_request.approved": {
     Icon: CheckCircle2,
     color: "text-emerald-500 bg-emerald-50",
   },
   "booking_request.rejected": {
     Icon: XCircle,
-    color: "text-red-500 bg-red-50",
+    color: "text-danger bg-danger/10",
   },
   "booking_request.cancelled": {
     Icon: Ban,
-    color: "text-gray-500 bg-gray-100",
+    color: "text-muted-foreground bg-muted",
   },
   "email.sent": { Icon: Mail, color: "text-indigo-500 bg-indigo-50" },
   "client.created": { Icon: UserPlus, color: "text-violet-500 bg-violet-50" },
 }
 
 function iconFor(action: string) {
-  return ICON_MAP[action] ?? { Icon: Sparkles, color: "text-gray-400 bg-gray-50" }
+  return ICON_MAP[action] ?? { Icon: Sparkles, color: "text-muted-foreground bg-muted" }
 }
 
 function actorLabel(row: ActivityRow): string {
@@ -67,7 +67,7 @@ function fallbackDescription(action: string): string {
 export function ActivityTimeline({ rows }: { rows: ActivityRow[] }) {
   if (rows.length === 0) {
     return (
-      <div className="p-5 text-center text-sm text-gray-400">
+      <div className="p-5 text-center text-sm text-muted-foreground">
         <Circle className="h-5 w-5 mx-auto mb-2 opacity-50" />
         Sin actividad registrada aún.
       </div>
@@ -77,7 +77,7 @@ export function ActivityTimeline({ rows }: { rows: ActivityRow[] }) {
   return (
     <ol className="relative pl-6 pr-3 py-5 space-y-4">
       <span
-        className="absolute left-[17px] top-6 bottom-6 w-px bg-gray-100"
+        className="absolute left-[17px] top-6 bottom-6 w-px bg-muted"
         aria-hidden
       />
 
@@ -93,10 +93,10 @@ export function ActivityTimeline({ rows }: { rows: ActivityRow[] }) {
             </span>
 
             <div className="pl-5">
-              <p className="text-sm text-gray-900">
+              <p className="text-sm text-foreground">
                 {row.description ?? fallbackDescription(row.action)}
               </p>
-              <p className="text-[11px] text-gray-400 mt-0.5">
+              <p className="text-[11px] text-muted-foreground mt-0.5">
                 {actorLabel(row)}
                 <span className="mx-1.5">·</span>
                 {formatDateShort(new Date(row.created_at))}

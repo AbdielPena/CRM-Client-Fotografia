@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
+import { getAuthContext } from "@/server/supabase/auth-context"
 
 export default async function RootPage() {
-  const session = await auth()
+  const ctx = await getAuthContext()
 
-  if (session?.user?.studioId) {
+  if (ctx?.studioId) {
     redirect("/dashboard")
   }
 

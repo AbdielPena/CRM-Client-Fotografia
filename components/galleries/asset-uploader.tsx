@@ -43,10 +43,11 @@ export function AssetUploader({ galleryId, studioId }: AssetUploaderProps) {
       })
 
       if (!prepRes.ok) throw new Error("Error preparando la subida")
-      const { assetId, uploadUrl } = await prepRes.json()
+      const { assetId, signedUrl } = await prepRes.json()
 
-      // Step 2: Upload directly to S3
-      const uploadRes = await fetch(uploadUrl, {
+      // Step 2: Upload directly to storage (Supabase signed URL o /api/local-direct
+      // según STORAGE_DRIVER en el server).
+      const uploadRes = await fetch(signedUrl, {
         method: "PUT",
         body: uploadFile.file,
         headers: { "Content-Type": uploadFile.file.type },
@@ -125,31 +126,31 @@ export function AssetUploader({ galleryId, studioId }: AssetUploaderProps) {
         {...getRootProps()}
         className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
           isDragActive
-            ? "border-blue-400 bg-blue-50"
-            : "border-gray-200 bg-gray-50 hover:border-gray-300 hover:bg-gray-100"
+            ? "border-blue-400 bg-brand-soft"
+            : "border-border bg-muted hover:border-border-strong hover:bg-muted"
         }`}
       >
         <input {...getInputProps()} />
-        <Upload className={`h-8 w-8 mx-auto mb-3 ${isDragActive ? "text-blue-500" : "text-gray-400"}`} />
-        <p className="text-sm font-medium text-gray-700">
+        <Upload className={`h-8 w-8 mx-auto mb-3 ${isDragActive ? "text-brand" : "text-muted-foreground"}`} />
+        <p className="text-sm font-medium text-foreground">
           {isDragActive ? "Suelta las fotos aquí" : "Arrastra fotos o haz clic para seleccionar"}
         </p>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-muted-foreground mt-1">
           JPG, PNG, WebP, HEIC · Máximo 50MB por foto · Subida múltiple permitida
         </p>
       </div>
 
       {/* Upload progress */}
       {files.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-50">
+        <div className="bg-card rounded-xl border border-border divide-y divide-gray-50">
           <div className="px-4 py-3 flex items-center justify-between">
-            <p className="text-xs font-medium text-gray-700">
-              {done}/{files.length} fotos · {errors > 0 && <span className="text-red-500">{errors} errores</span>}
+            <p className="text-xs font-medium text-foreground">
+              {done}/{files.length} fotos · {errors > 0 && <span className="text-danger">{errors} errores</span>}
             </p>
             {!isUploading && (
               <button
                 onClick={() => setFiles([])}
-                className="text-xs text-gray-400 hover:text-gray-600"
+                className="text-xs text-muted-foreground hover:text-muted-foreground"
               >
                 Limpiar
               </button>
@@ -163,31 +164,31 @@ export function AssetUploader({ galleryId, studioId }: AssetUploaderProps) {
                   {f.status === "done" || f.status === "processing" ? (
                     <CheckCircle className="h-4 w-4 text-emerald-500" />
                   ) : f.status === "error" ? (
-                    <AlertCircle className="h-4 w-4 text-red-500" />
+                    <AlertCircle className="h-4 w-4 text-danger" />
                   ) : f.status === "uploading" ? (
-                    <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+                    <Loader2 className="h-4 w-4 text-brand animate-spin" />
                   ) : (
-                    <div className="h-4 w-4 border-2 border-gray-200 rounded-full" />
+                    <div className="h-4 w-4 border-2 border-border rounded-full" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-700 truncate">{f.file.name}</p>
+                  <p className="text-xs font-medium text-foreground truncate">{f.file.name}</p>
                   {f.status === "uploading" && (
-                    <div className="w-full bg-gray-100 rounded-full h-1 mt-1">
+                    <div className="w-full bg-muted rounded-full h-1 mt-1">
                       <div
-                        className="bg-blue-500 h-1 rounded-full transition-all"
+                        className="bg-brand h-1 rounded-full transition-all"
                         style={{ width: `${f.progress}%` }}
                       />
                     </div>
                   )}
                   {f.status === "error" && (
-                    <p className="text-xs text-red-500">{f.error}</p>
+                    <p className="text-xs text-danger">{f.error}</p>
                   )}
                   {f.status === "processing" && (
-                    <p className="text-xs text-gray-400">Procesando variantes…</p>
+                    <p className="text-xs text-muted-foreground">Procesando variantes…</p>
                   )}
                 </div>
-                <span className="text-xs text-gray-400 flex-shrink-0">
+                <span className="text-xs text-muted-foreground flex-shrink-0">
                   {(f.file.size / 1024 / 1024).toFixed(1)}MB
                 </span>
               </div>

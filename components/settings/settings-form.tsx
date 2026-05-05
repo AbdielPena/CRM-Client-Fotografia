@@ -92,8 +92,8 @@ export function SettingsForm({ studio }: { studio: StudioData }) {
           <Building2 className="h-4 w-4 text-white" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-gray-900">{studio.name}</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm font-semibold text-foreground">{studio.name}</p>
+          <p className="text-xs text-muted-foreground">
             Plan{" "}
             <span className="font-medium text-violet-700 capitalize">{studio.plan.toLowerCase()}</span>
           </p>
@@ -188,7 +188,7 @@ export function SettingsForm({ studio }: { studio: StudioData }) {
         <button
           type="submit"
           disabled={isPending}
-          className="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+          className="px-6 py-2.5 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50"
         >
           {isPending ? "Guardando…" : "Guardar cambios"}
         </button>
@@ -209,10 +209,10 @@ function Section({
   children: React.ReactNode
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 bg-gray-50">
-        <span className="text-gray-500">{icon}</span>
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-border bg-muted">
+        <span className="text-muted-foreground">{icon}</span>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       </div>
       <div className="p-5 space-y-4">{children}</div>
     </div>
@@ -230,9 +230,9 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-700 mb-1.5">{label}</label>
+      <label className="block text-xs font-medium text-foreground mb-1.5">{label}</label>
       {children}
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
     </div>
   )
 }
@@ -257,7 +257,7 @@ function Input({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       maxLength={maxLength}
-      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 transition-colors"
+      className="w-full px-3 py-2.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-border-strong transition-colors"
     />
   )
 }
@@ -279,7 +279,7 @@ function Textarea({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={rows}
-      className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 transition-colors resize-none"
+      className="w-full px-3 py-2.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-border-strong transition-colors resize-none"
     />
   )
 }
@@ -298,11 +298,11 @@ function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full appearance-none px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-gray-400 transition-colors pr-8"
+        className="w-full appearance-none px-3 py-2.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900/10 focus:border-border-strong transition-colors pr-8"
       >
         {children}
       </select>
-      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
     </div>
   )
 }

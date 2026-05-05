@@ -95,7 +95,7 @@ export function FilterChips({
                 className={cn(
                   "inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] tabular-nums",
                   item.active
-                    ? "bg-white/20 text-white"
+                    ? "bg-card/20 text-white"
                     : "bg-muted text-muted-foreground",
                 )}
               >

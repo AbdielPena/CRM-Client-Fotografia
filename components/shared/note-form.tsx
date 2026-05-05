@@ -36,7 +36,7 @@ export function NoteForm({ entityType, entityId }: NoteFormProps) {
         onChange={(e) => setContent(e.target.value)}
         placeholder="Escribe una nota interna..."
         rows={2}
-        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+        className="flex-1 px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none"
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault()
@@ -47,12 +47,12 @@ export function NoteForm({ entityType, entityId }: NoteFormProps) {
       <button
         type="submit"
         disabled={isPending || !content.trim()}
-        className="px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-40 self-end"
+        className="px-3 py-2 bg-brand text-brand-foreground rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-40 self-end"
         title="Guardar nota (Cmd+Enter)"
       >
         <Send className="h-4 w-4" />
       </button>
-      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {error && <p className="text-xs text-danger mt-1">{error}</p>}
     </form>
   )
 }

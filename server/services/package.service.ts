@@ -51,7 +51,13 @@ export async function getPackages(studioId: string) {
     .order('is_active', { ascending: false })
     .order('price', { ascending: true })
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    // Permission denied / RLS / network → degradar gracefully
+    // (no romper la página entera por una query secundaria)
+    console.error('[getPackages] error', { studioId, error })
+    if (error.code === '42501') return [] // permission denied: caller no autenticado
+    throw new Error(`No se pudieron cargar los paquetes: ${error.message}`)
+  }
   return data ?? []
 }
 
@@ -64,7 +70,11 @@ export async function getPackageById(studioId: string, packageId: string) {
     .eq('studio_id', studioId)
     .is('deleted_at', null)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) {
+    console.error('[getPackageById] error', { studioId, packageId, error })
+    if (error.code === '42501') return null
+    throw new Error(`No se pudo cargar el paquete: ${error.message}`)
+  }
   return data
 }
 
@@ -128,5 +138,22 @@ export async function deletePackage(studioId: string, packageId: string) {
   if (!existing || existing.studio_id !== studioId) {
     throw new Error('PACKAGE_NOT_FOUND')
   }
-  await packagesRepo.softDelete(packageId)
+  // Cascade real (SQL function): borra todos los proyectos que usan el
+  // paquete, y por cada proyecto cascadea contratos / facturas / pagos
+  // / notas / galerías. También cancela booking_requests pendientes y
+  // desactiva public_booking_links.
+  const { createSupabaseServiceClient } = await import(
+    '@/server/supabase/service'
+  )
+  const supabase = createSupabaseServiceClient()
+  const { error } = await supabase.rpc('cascade_delete_package', {
+    p_package_id: packageId,
+    p_studio_id: studioId,
+  })
+  if (error) {
+    if (error.message?.includes('PACKAGE_NOT_FOUND')) {
+      throw new Error('PACKAGE_NOT_FOUND')
+    }
+    throw new Error(error.message)
+  }
 }

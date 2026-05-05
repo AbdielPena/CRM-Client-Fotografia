@@ -3,6 +3,7 @@ import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google"
 import { Toaster } from "sonner"
 
 import { ThemeProvider, ThemeScript } from "@/components/shared/theme-provider"
+import { PWARegister } from "@/components/shared/pwa-register"
 import "./globals.css"
 
 const inter = Inter({
@@ -30,6 +31,22 @@ export const metadata: Metadata = {
     template: "%s | StudioFlow",
   },
   description: "CRM y Client Gallery para fotógrafos profesionales",
+  manifest: "/manifest.webmanifest",
+  applicationName: "StudioFlow",
+  appleWebApp: {
+    capable: true,
+    title: "StudioFlow",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/icons/icon-192.png",
+  },
+  formatDetection: { telephone: false },
 }
 
 export const viewport: Viewport = {
@@ -53,6 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="font-sans antialiased bg-background text-foreground">
         <ThemeProvider defaultTheme="system">
+          <PWARegister />
           {children}
           <Toaster
             richColors

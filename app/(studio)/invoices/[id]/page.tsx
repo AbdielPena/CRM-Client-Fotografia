@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { InvoiceDetailActions } from "@/components/invoices/invoice-detail-actions"
 import { RecordPaymentForm } from "@/components/invoices/record-payment-form"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
-import { Receipt, CreditCard } from "lucide-react"
+import { Receipt, CreditCard, Printer } from "lucide-react"
 import Link from "next/link"
 import type { Metadata } from "next"
 
@@ -63,6 +63,14 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         actions={
           <>
             <StatusBadge status={status} />
+            <Link
+              href={`/invoice-print/${invoice.id}`}
+              target="_blank"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Imprimir / PDF
+            </Link>
             <InvoiceDetailActions
               invoice={{
                 id: invoice.id as string,
@@ -143,7 +151,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                 <tbody className="divide-y divide-border/40">
                   {items.map((item) => (
                     <tr key={String(item.id)}>
-                      <td className="py-3 text-gray-800">{String(item.description ?? "")}</td>
+                      <td className="py-3 text-foreground">{String(item.description ?? "")}</td>
                       <td className="py-3 text-right text-foreground/80">
                         {Number(item.quantity)}
                       </td>
@@ -166,7 +174,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
                     <span>{fmt(subtotal)}</span>
                   </div>
                   {discount > 0 && (
-                    <div className="flex justify-between text-red-500">
+                    <div className="flex justify-between text-danger">
                       <span>Descuento</span>
                       <span>-{fmt(discount)}</span>
                     </div>

@@ -129,10 +129,10 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
 
   return (
     <div className="space-y-6">
-      <section className="bg-white rounded-2xl border border-gray-200 p-5 space-y-4">
+      <section className="bg-card rounded-2xl border border-border p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-foreground mb-1">
               Nombre de la plantilla
             </label>
             <input
@@ -140,11 +140,11 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Contrato XV años — paquete completo"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
+            <label className="block text-xs font-medium text-foreground mb-1">
               Validez por defecto (días)
             </label>
             <input
@@ -154,16 +154,16 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
               value={validityDays}
               onChange={(e) => setValidityDays(e.target.value)}
               placeholder="Ej: 14"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10"
             />
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-[11px] text-muted-foreground mt-1">
               Si el cliente no firma dentro de estos días, el contrato expira.
             </p>
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-foreground mb-1">
             Descripción interna
           </label>
           <input
@@ -171,36 +171,36 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Para uso interno; el cliente no lo ve."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+            className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10"
           />
         </div>
 
         <div className="flex items-center gap-6">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
               checked={isDefault}
               onChange={(e) => setIsDefault(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-border-strong"
             />
             Usar como plantilla por defecto
           </label>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-sm text-foreground">
             <input
               type="checkbox"
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
-              className="rounded border-gray-300"
+              className="rounded border-border-strong"
             />
             Activa
           </label>
         </div>
       </section>
 
-      <section className="bg-white rounded-2xl border border-gray-200 p-5">
+      <section className="bg-card rounded-2xl border border-border p-5">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-gray-900">Cuerpo del contrato</h2>
-          <span className="text-[11px] text-gray-500">
+          <h2 className="text-sm font-semibold text-foreground">Cuerpo del contrato</h2>
+          <span className="text-[11px] text-muted-foreground">
             Soporta HTML básico y placeholders {"{{variable}}"}
           </span>
         </div>
@@ -212,7 +212,7 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
               type="button"
               onClick={() => insertVar(v.key)}
               title={v.label}
-              className="px-2 py-1 text-[11px] border border-gray-200 rounded hover:bg-gray-50 text-gray-700"
+              className="px-2 py-1 text-[11px] border border-border rounded hover:bg-muted text-foreground"
             >
               {"{{"}
               {v.key}
@@ -226,7 +226,7 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
           value={bodyHtml}
           onChange={(e) => setBodyHtml(e.target.value)}
           rows={18}
-          className="w-full px-3 py-3 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+          className="w-full px-3 py-3 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900/10"
           placeholder={`<h1>Contrato de servicios fotográficos</h1>\n<p>Entre {{estudio_nombre}} y {{cliente_nombre}}, se acuerda lo siguiente...</p>`}
         />
       </section>
@@ -237,7 +237,7 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
             type="button"
             onClick={remove}
             disabled={isDeleting}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-danger hover:bg-danger/10 rounded-lg disabled:opacity-50"
           >
             {isDeleting ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -253,7 +253,7 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
           type="button"
           onClick={submit}
           disabled={isPending}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 disabled:opacity-50"
         >
           {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
           {mode === "create" ? "Crear plantilla" : "Guardar cambios"}

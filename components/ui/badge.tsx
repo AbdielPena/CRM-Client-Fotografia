@@ -73,7 +73,7 @@ function Badge({ className, variant, size, withDot, children, ...props }: BadgeP
             variant === "warning" && "bg-warning",
             variant === "destructive" && "bg-danger",
             variant === "info" && "bg-info",
-            variant === "brand" && "bg-white/80",
+            variant === "brand" && "bg-card/80",
             (!variant || variant === "default" || variant === "secondary") &&
               "bg-brand",
           )}

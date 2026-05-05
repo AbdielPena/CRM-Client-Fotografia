@@ -62,19 +62,19 @@ export function RecordPaymentForm({ invoiceId, balance, currency }: RecordPaymen
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
+    <div className="bg-card rounded-xl border border-border p-5">
       <div className="flex items-center gap-2 mb-4">
-        <CreditCard className="h-4 w-4 text-gray-500" />
-        <h2 className="text-sm font-semibold text-gray-900">Registrar pago</h2>
+        <CreditCard className="h-4 w-4 text-muted-foreground" />
+        <h2 className="text-sm font-semibold text-foreground">Registrar pago</h2>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
             Monto (saldo: {formatCurrency(balance, currency)})
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
             <input
               name="amount"
               type="number"
@@ -83,19 +83,19 @@ export function RecordPaymentForm({ invoiceId, balance, currency }: RecordPaymen
               value={amount}
               onChange={(e) => setAmount(Number(e.target.value))}
               required
-              className="w-full pl-7 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className="w-full pl-7 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
             Método de pago
           </label>
           <select
             name="method"
             required
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
           >
             {PAYMENT_METHODS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -106,24 +106,24 @@ export function RecordPaymentForm({ invoiceId, balance, currency }: RecordPaymen
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de pago</label>
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Fecha de pago</label>
           <input
             name="paidAt"
             type="date"
             defaultValue={new Date().toISOString().split("T")[0]}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-1">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
             Referencia / Comprobante
           </label>
           <input
             name="reference"
             type="text"
             placeholder="Número de transferencia, etc."
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
 

@@ -101,7 +101,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
                   <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <a
                     href={`tel:${String(lead.phone)}`}
-                    className="text-sm text-foreground hover:text-blue-600"
+                    className="text-sm text-foreground hover:text-brand"
                   >
                     {String(lead.phone)}
                   </a>
@@ -286,8 +286,8 @@ function LeadStatusButton({
         type="submit"
         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
           current
-            ? "bg-gray-900 text-white font-medium"
-            : "text-foreground/80 hover:bg-gray-50"
+            ? "bg-brand text-brand-foreground font-medium"
+            : "text-foreground/80 hover:bg-muted"
         }`}
       >
         {label}

@@ -10,6 +10,7 @@ import {
   deleteInvoice,
 } from "@/server/services/invoice.service"
 import { createInvoiceSchema } from "@/lib/validations/invoice.schema"
+import { onPaymentRecorded } from "@/server/services/project-automation.service"
 
 export async function createInvoiceAction(formData: FormData) {
   const session = await requireStudioAuth()
@@ -75,8 +76,19 @@ export async function recordPaymentAction(invoiceId: string, formData: FormData)
     paidAt: paidAt ? new Date(paidAt) : undefined,
   })
 
+  // Automatización: contar pagos completados del proyecto y mover de status.
+  // 1er pago → "Reservado", 2do+ → "Sesión realizada".
+  if (result.projectId) {
+    try {
+      await onPaymentRecorded(session.studioId, result.projectId)
+    } catch (err) {
+      console.error("[recordPaymentAction] automation onPaymentRecorded falló:", err)
+    }
+  }
+
   revalidatePath(`/invoices/${invoiceId}`)
   revalidatePath("/invoices")
+  revalidatePath("/projects")
   return { success: true, ...result }
 }
 

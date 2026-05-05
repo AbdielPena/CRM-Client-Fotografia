@@ -55,33 +55,39 @@ const config: Config = {
           foreground: "hsl(var(--popover-foreground))",
         },
 
-        // Brand palette - Aurora (violet + indigo + fuchsia)
+        // Brand: azul premium SaaS
         brand: {
           DEFAULT: "hsl(var(--brand))",
           foreground: "hsl(var(--brand-foreground))",
           soft: "hsl(var(--brand-soft))",
           "soft-foreground": "hsl(var(--brand-soft-foreground))",
-          50: "hsl(270, 100%, 98%)",
-          100: "hsl(269, 100%, 95%)",
-          200: "hsl(269, 100%, 92%)",
-          300: "hsl(268, 100%, 86%)",
-          400: "hsl(267, 84%, 75%)",
-          500: "hsl(263, 83%, 66%)",
-          600: "hsl(262, 83%, 58%)",
-          700: "hsl(263, 70%, 50%)",
-          800: "hsl(263, 69%, 42%)",
-          900: "hsl(263, 67%, 35%)",
-        },
-        indigo: {
-          500: "hsl(240, 84%, 64%)",
-          600: "hsl(243, 75%, 59%)",
-        },
-        fuchsia: {
-          500: "hsl(292, 84%, 60%)",
-          600: "hsl(292, 71%, 52%)",
+          50: "hsl(214, 100%, 97%)",
+          100: "hsl(214, 95%, 93%)",
+          200: "hsl(213, 97%, 87%)",
+          300: "hsl(212, 96%, 78%)",
+          400: "hsl(213, 94%, 68%)",
+          500: "hsl(217, 91%, 60%)",
+          600: "hsl(221, 83%, 53%)",
+          700: "hsl(224, 76%, 48%)",
+          800: "hsl(226, 71%, 40%)",
+          900: "hsl(224, 64%, 33%)",
         },
 
-        // Semantic state colors
+        // Acentos secundarios para charts/highlights
+        indigo: {
+          500: "hsl(238, 78%, 64%)",
+          600: "hsl(243, 75%, 58%)",
+        },
+        violet: {
+          500: "hsl(262, 83%, 65%)",
+          600: "hsl(262, 83%, 58%)",
+        },
+        emerald: {
+          500: "hsl(152, 65%, 45%)",
+          600: "hsl(152, 70%, 38%)",
+        },
+
+        // Estados semánticos
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
@@ -107,42 +113,45 @@ const config: Config = {
       },
       borderRadius: {
         sm: "6px",
-        md: "10px",
-        lg: "14px",
-        xl: "20px",
-        "2xl": "28px",
-        "3xl": "36px",
-        DEFAULT: "10px",
+        md: "8px",
+        lg: "12px",
+        xl: "16px",
+        "2xl": "20px",
+        "3xl": "28px",
+        DEFAULT: "8px",
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "Geist", "Inter", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "Instrument Serif", "Georgia", "serif"],
-        mono: ["var(--font-mono)", "Geist Mono", "JetBrains Mono", "monospace"],
+        sans: ["var(--font-sans)", "Inter", "system-ui", "sans-serif"],
+        // Display = misma Inter, sólo cambia tracking via .font-display utility
+        display: ["var(--font-sans)", "Inter", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "JetBrains Mono", "monospace"],
       },
       fontSize: {
-        "display-xl": ["3.5rem", { lineHeight: "1.05", letterSpacing: "-0.02em" }],
-        "display-lg": ["2.5rem", { lineHeight: "1.1", letterSpacing: "-0.02em" }],
-        "h1": ["2rem", { lineHeight: "1.2", letterSpacing: "-0.015em" }],
-        "h2": ["1.5rem", { lineHeight: "1.25", letterSpacing: "-0.01em" }],
-        "h3": ["1.25rem", { lineHeight: "1.3" }],
-        "h4": ["1rem", { lineHeight: "1.4" }],
+        "display-xl": ["3rem", { lineHeight: "1.1", letterSpacing: "-0.025em", fontWeight: "700" }],
+        "display-lg": ["2.25rem", { lineHeight: "1.15", letterSpacing: "-0.02em", fontWeight: "700" }],
+        "h1": ["1.75rem", { lineHeight: "1.25", letterSpacing: "-0.015em", fontWeight: "700" }],
+        "h2": ["1.375rem", { lineHeight: "1.3", letterSpacing: "-0.01em", fontWeight: "600" }],
+        "h3": ["1.125rem", { lineHeight: "1.35", fontWeight: "600" }],
+        "h4": ["1rem", { lineHeight: "1.4", fontWeight: "600" }],
         "body": ["0.875rem", { lineHeight: "1.55" }],
         "body-sm": ["0.8125rem", { lineHeight: "1.5" }],
-        "caption": ["0.75rem", { lineHeight: "1.4", letterSpacing: "0.01em" }],
-        "overline": ["0.6875rem", { lineHeight: "1.3", letterSpacing: "0.12em" }],
+        "caption": ["0.75rem", { lineHeight: "1.4", letterSpacing: "0.005em" }],
+        "overline": ["0.6875rem", { lineHeight: "1.3", letterSpacing: "0.1em" }],
       },
       boxShadow: {
-        xs: "0 1px 1px 0 rgba(16,24,40,.04)",
-        sm: "0 1px 2px 0 rgba(16,24,40,.06), 0 1px 1px 0 rgba(16,24,40,.04)",
-        md: "0 4px 12px -2px rgba(16,24,40,.08), 0 2px 4px -2px rgba(16,24,40,.04)",
-        lg: "0 12px 32px -8px rgba(16,24,40,.12), 0 4px 8px -4px rgba(16,24,40,.06)",
-        xl: "0 24px 48px -12px rgba(16,24,40,.18), 0 8px 16px -8px rgba(16,24,40,.08)",
-        glow: "0 0 0 1px hsla(262,83%,58%,.12), 0 8px 24px -8px hsla(262,83%,58%,.35)",
-        "glow-lg": "0 0 0 1px hsla(262,83%,58%,.15), 0 20px 48px -12px hsla(262,83%,58%,.45)",
-        "glow-success": "0 0 0 1px hsla(152,60%,45%,.15), 0 8px 24px -8px hsla(152,60%,45%,.35)",
-        "glow-danger": "0 0 0 1px hsla(0,75%,55%,.15), 0 8px 24px -8px hsla(0,75%,55%,.35)",
+        // Sombras minimales — el feel "Lumen" es plano, casi sin sombras
+        xs: "0 1px 1px 0 rgba(15, 23, 42, .03)",
+        sm: "0 1px 2px 0 rgba(15, 23, 42, .04)",
+        md: "0 2px 4px -1px rgba(15, 23, 42, .06), 0 1px 2px -1px rgba(15, 23, 42, .04)",
+        lg: "0 8px 16px -4px rgba(15, 23, 42, .08), 0 2px 4px -2px rgba(15, 23, 42, .04)",
+        xl: "0 16px 32px -8px rgba(15, 23, 42, .12), 0 4px 8px -4px rgba(15, 23, 42, .06)",
+        // Glow ahora azul muy ligero (no más violet pesado)
+        glow: "0 0 0 1px hsla(217,91%,60%,.08), 0 4px 12px -2px hsla(217,91%,60%,.18)",
+        "glow-lg": "0 0 0 1px hsla(217,91%,60%,.12), 0 12px 28px -6px hsla(217,91%,60%,.28)",
+        "glow-success": "0 0 0 1px hsla(152,70%,38%,.10), 0 4px 12px -2px hsla(152,70%,38%,.20)",
+        "glow-danger": "0 0 0 1px hsla(0,75%,55%,.10), 0 4px 12px -2px hsla(0,75%,55%,.20)",
         "inner-lift": "inset 0 1px 0 0 rgba(255,255,255,.06)",
-        "ring-focus": "0 0 0 4px hsla(262,83%,58%,.15)",
+        "ring-focus": "0 0 0 3px hsla(217,91%,60%,.16)",
       },
       transitionTimingFunction: {
         standard: "cubic-bezier(.4, 0, .2, 1)",
@@ -197,8 +206,8 @@ const config: Config = {
           "100%": { backgroundPosition: "-200% 0" },
         },
         "pulse-glow": {
-          "0%, 100%": { boxShadow: "0 0 0 0 hsla(262,83%,58%,.4)" },
-          "50%": { boxShadow: "0 0 0 8px hsla(262,83%,58%,0)" },
+          "0%, 100%": { boxShadow: "0 0 0 0 hsla(217,91%,60%,.3)" },
+          "50%": { boxShadow: "0 0 0 6px hsla(217,91%,60%,0)" },
         },
         "gradient-shift": {
           "0%, 100%": { backgroundPosition: "0% 50%" },
@@ -207,6 +216,10 @@ const config: Config = {
         "slide-in-right": {
           from: { opacity: "0", transform: "translateX(8px)" },
           to: { opacity: "1", transform: "translateX(0)" },
+        },
+        "draw-line": {
+          from: { strokeDashoffset: "1000" },
+          to: { strokeDashoffset: "0" },
         },
       },
       animation: {
@@ -222,14 +235,15 @@ const config: Config = {
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
         "gradient-shift": "gradient-shift 8s ease infinite",
         "slide-in-right": "slide-in-right 220ms cubic-bezier(.34,1.56,.64,1)",
+        "draw-line": "draw-line 1.4s cubic-bezier(.4,0,.2,1) forwards",
       },
       backgroundImage: {
         "aurora":
-          "linear-gradient(135deg, hsl(240,84%,64%) 0%, hsl(262,83%,58%) 50%, hsl(292,84%,60%) 100%)",
+          "linear-gradient(135deg, hsl(217,91%,60%) 0%, hsl(240,80%,62%) 50%, hsl(262,83%,65%) 100%)",
         "aurora-soft":
-          "linear-gradient(135deg, hsl(240,84%,64%,.08) 0%, hsl(262,83%,58%,.08) 50%, hsl(292,84%,60%,.08) 100%)",
+          "linear-gradient(135deg, hsl(217,91%,60%,.08) 0%, hsl(240,80%,62%,.08) 50%, hsl(262,83%,65%,.08) 100%)",
         "aurora-radial":
-          "radial-gradient(ellipse at top, hsl(262,83%,58%,.15), transparent 70%)",
+          "radial-gradient(ellipse at top, hsl(217,91%,60%,.10), transparent 70%)",
         "shimmer":
           "linear-gradient(90deg, transparent 0%, hsla(0,0%,100%,.08) 50%, transparent 100%)",
       },

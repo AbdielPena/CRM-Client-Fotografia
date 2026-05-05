@@ -2,6 +2,7 @@ import 'server-only'
 
 import { promises as dns } from 'dns'
 
+import type { Database } from '@/types/supabase'
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
 import { logActivity } from '@/server/services/activity.service'
@@ -64,19 +65,25 @@ function isValidDomain(d: string): boolean {
   return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(d)
 }
 
-function mapRow(row: any): StudioDomain {
+type StudioDomainRow = Database['public']['Tables']['studio_domains']['Row']
+
+function mapRow(row: StudioDomainRow | null): StudioDomain {
+  if (!row) {
+    throw new Error('STUDIO_DOMAIN_ROW_MISSING')
+  }
+  // Type narrowing — desde aquí row no es null
   return {
     id: row.id,
     studioId: row.studio_id,
     domain: row.domain,
-    type: row.type,
-    status: row.status,
+    type: row.type as StudioDomain['type'],
+    status: row.status as StudioDomain['status'],
     isPrimary: !!row.is_primary,
     dnsTarget: row.dns_target,
     verificationToken: row.verification_token,
-    verificationMethod: row.verification_method,
+    verificationMethod: row.verification_method as StudioDomain['verificationMethod'],
     verifiedAt: row.verified_at,
-    sslStatus: row.ssl_status,
+    sslStatus: row.ssl_status as StudioDomain['sslStatus'],
     lastCheckAt: row.last_check_at,
     lastError: row.last_error,
     createdAt: row.created_at,

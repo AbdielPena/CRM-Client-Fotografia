@@ -11,8 +11,12 @@ const PUBLIC_PREFIXES = [
   '/auth', // callbacks OAuth / magic link
   '/invite',
   '/g/', // galerías públicas
-  '/portal/', // portal cliente
+  '/portal', // portal cliente (matchea /portal y /portal/...)
+  '/api/portal', // endpoints del portal (login, logout)
+  '/contract-print', // página print del contrato (auth interna por path)
+  '/invoice-print', // página print de factura (auth interna por path)
   '/p/', // links públicos de booking
+  '/r/', // registro público de cliente (sin paquete)
   '/sign/', // firma pública de contrato (también abre la factura 50%)
   '/i/', // factura pública
   '/f/', // formularios públicos
@@ -25,15 +29,18 @@ const PUBLIC_PREFIXES = [
 ]
 
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
+  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
+
   const { supabase, response } = createSupabaseMiddlewareClient(req)
 
-  // Refrescar sesión — Supabase puede rotar el access token aquí.
+  // Refrescar sesión — Supabase rota el access token automáticamente.
+  // En rutas públicas también lo hacemos para que el siguiente nav
+  // protegido no necesite refresh.
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname } = req.nextUrl
-  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
   if (isPublic) return response
 
   // Sin sesión → login
@@ -43,20 +50,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Con sesión pero sin studio activo (intermedio de onboarding)
-  // Lo chequeamos via studio_members. Una sola query por request.
-  const { data: member } = await supabase
-    .from('studio_members')
-    .select('studio_id')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle()
-
-  if (!member && pathname !== '/setup') {
-    return NextResponse.redirect(new URL('/setup', req.url))
-  }
-
+  // El check de studio activo (studio_members) lo hace el server component
+  // con `requireStudioAuth()` / `getAuthContext()` que está cacheado por
+  // request con React `cache()`. Hacerlo aquí también duplicaba la query
+  // y agregaba ~80-150ms a CADA navegación.
   return response
 }
 

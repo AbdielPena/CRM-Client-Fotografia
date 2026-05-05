@@ -64,8 +64,8 @@ export default async function GoogleCalendarIntegrationPage({
         )}
 
         {callbackError && (
-          <div className="sf-card p-4 bg-red-50 border-red-100 flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="sf-card p-4 bg-danger/10 border-red-100 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-danger flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-medium text-red-900">No pudimos conectar</p>
               <p className="text-xs text-red-800 mt-0.5 break-all">{callbackError}</p>
@@ -78,10 +78,10 @@ export default async function GoogleCalendarIntegrationPage({
             <div className="w-14 h-14 rounded-2xl bg-violet-100 text-violet-700 mx-auto mb-4 flex items-center justify-center">
               <CalendarDays className="h-6 w-6" />
             </div>
-            <h2 className="font-display text-2xl text-gray-900 mb-2">
+            <h2 className="font-display text-2xl text-foreground mb-2">
               Conecta tu Google Calendar
             </h2>
-            <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+            <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
               Cada sesión aprobada en StudioFlow se crea automáticamente como evento
               en el calendario que elijas. También podrás recibir cambios de vuelta.
             </p>
@@ -100,14 +100,14 @@ export default async function GoogleCalendarIntegrationPage({
             <section className="sf-card p-6">
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
-                  <h2 className="font-display text-xl text-gray-900 mb-1">
+                  <h2 className="font-display text-xl text-foreground mb-1">
                     Cuenta conectada
                   </h2>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-foreground">
                     {status.email ?? 'cuenta de Google'}
                   </p>
                   {status.lastVerifiedAt && (
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Verificado{' '}
                       {new Date(status.lastVerifiedAt).toLocaleDateString('es')}
                     </p>
@@ -116,7 +116,7 @@ export default async function GoogleCalendarIntegrationPage({
                 <form action={disconnectGoogleCalendarAction}>
                   <button
                     type="submit"
-                    className="text-xs font-medium text-red-600 hover:text-red-800"
+                    className="text-xs font-medium text-danger hover:text-red-800"
                   >
                     Desconectar
                   </button>
@@ -124,36 +124,36 @@ export default async function GoogleCalendarIntegrationPage({
               </div>
 
               {status.lastError && (
-                <div className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2.5 mb-4">
+                <div className="text-xs text-danger bg-danger/10 border border-red-100 rounded-lg p-2.5 mb-4">
                   {status.lastError}
                 </div>
               )}
             </section>
 
             <section className="sf-card p-6">
-              <h2 className="font-display text-xl text-gray-900 mb-1">
+              <h2 className="font-display text-xl text-foreground mb-1">
                 Calendario activo
               </h2>
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-xs text-muted-foreground mb-4">
                 StudioFlow creará eventos aquí cuando apruebes un booking o confirmes
                 una sesión.
               </p>
 
               {loadCalendarsError && (
-                <p className="text-xs text-red-700 mb-3">{loadCalendarsError}</p>
+                <p className="text-xs text-danger mb-3">{loadCalendarsError}</p>
               )}
 
               {calendars.length > 0 && (
                 <form action={setActiveCalendarAction} className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    <label className="block text-xs font-medium text-foreground mb-1.5">
                       Elige un calendario
                     </label>
                     <div className="space-y-2">
                       {calendars.map((c) => (
                         <label
                           key={c.id}
-                          className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 hover:border-violet-200 hover:bg-violet-50/40 cursor-pointer transition-colors"
+                          className="flex items-center gap-3 p-2.5 rounded-lg border border-border hover:border-violet-200 hover:bg-violet-50/40 cursor-pointer transition-colors"
                         >
                           <input
                             type="radio"
@@ -166,7 +166,7 @@ export default async function GoogleCalendarIntegrationPage({
                             className="w-3 h-3 rounded-full border border-white shadow-sm"
                             style={{ backgroundColor: c.backgroundColor ?? '#7c3aed' }}
                           />
-                          <span className="text-sm text-gray-900 flex-1">{c.summary}</span>
+                          <span className="text-sm text-foreground flex-1">{c.summary}</span>
                           {c.primary && (
                             <span className="text-[10px] font-semibold text-violet-700 bg-violet-50 border border-violet-100 rounded-full px-2 py-0.5">
                               Principal
@@ -193,9 +193,9 @@ export default async function GoogleCalendarIntegrationPage({
               )}
 
               {status.calendarId && (
-                <p className="text-xs text-gray-500 mt-3">
+                <p className="text-xs text-muted-foreground mt-3">
                   Usando:{' '}
-                  <span className="text-gray-900 font-medium">
+                  <span className="text-foreground font-medium">
                     {status.calendarName ?? status.calendarId}
                   </span>
                 </p>

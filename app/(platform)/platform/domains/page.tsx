@@ -15,7 +15,7 @@ const STATUS_META: Record<DomainStatus, { label: string; icon: any; cls: string 
   verifying: {
     label: 'Verificando',
     icon: Clock,
-    cls: 'text-blue-700 bg-blue-50 border-blue-100',
+    cls: 'text-brand bg-blue-50 border-blue-100',
   },
   active: {
     label: 'Activo',
@@ -25,12 +25,12 @@ const STATUS_META: Record<DomainStatus, { label: string; icon: any; cls: string 
   failed: {
     label: 'Falló',
     icon: XCircle,
-    cls: 'text-red-700 bg-red-50 border-red-100',
+    cls: 'text-danger bg-danger/10 border-red-100',
   },
   disabled: {
     label: 'Deshabilitado',
     icon: XCircle,
-    cls: 'text-gray-600 bg-gray-100 border-gray-200',
+    cls: 'text-muted-foreground bg-muted border-border',
   },
 }
 
@@ -69,12 +69,12 @@ export default async function PlatformDomainsPage({
             name="q"
             defaultValue={q ?? ''}
             placeholder="Buscar dominio…"
-            className="flex-1 min-w-[240px] px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400"
+            className="flex-1 min-w-[240px] px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400"
           />
           <select
             name="status"
             defaultValue={statusParam ?? ''}
-            className="px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400"
+            className="px-3 py-2 rounded-lg border border-border text-sm bg-card focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400"
           >
             <option value="">Todos los estados</option>
             <option value="pending">Pendientes</option>
@@ -94,15 +94,15 @@ export default async function PlatformDomainsPage({
         <div className="sf-card overflow-hidden">
           {domains.length === 0 ? (
             <div className="p-10 text-center">
-              <Globe className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-400">
+              <Globe className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">
                 No hay dominios registrados todavía.
               </p>
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <thead className="bg-muted border-b border-border">
+                <tr className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   <th className="px-4 py-2.5">Dominio</th>
                   <th className="px-4 py-2.5">Studio</th>
                   <th className="px-4 py-2.5">Tipo</th>
@@ -116,11 +116,11 @@ export default async function PlatformDomainsPage({
                   const meta = STATUS_META[d.status]
                   const Icon = meta.icon
                   return (
-                    <tr key={d.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={d.id} className="hover:bg-muted transition-colors">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <Globe className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                          <span className="font-medium text-gray-900 truncate">
+                          <Globe className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="font-medium text-foreground truncate">
                             {d.domain}
                           </span>
                           {d.isPrimary && (
@@ -133,13 +133,13 @@ export default async function PlatformDomainsPage({
                       <td className="px-4 py-3">
                         <Link
                           href={`/platform/studios/${d.studioId}`}
-                          className="text-gray-700 hover:text-violet-700 truncate inline-block max-w-[200px]"
+                          className="text-foreground hover:text-violet-700 truncate inline-block max-w-[200px]"
                         >
                           {d.studioName}
                         </Link>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs text-gray-600 capitalize">{d.type}</span>
+                        <span className="text-xs text-muted-foreground capitalize">{d.type}</span>
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -148,12 +148,12 @@ export default async function PlatformDomainsPage({
                           <Icon className="h-3 w-3" /> {meta.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
                         {d.verifiedAt
                           ? new Date(d.verifiedAt).toLocaleDateString('es')
                           : '—'}
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-500">
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
                         {d.lastCheckAt
                           ? new Date(d.lastCheckAt).toLocaleString('es')
                           : '—'}

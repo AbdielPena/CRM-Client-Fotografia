@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 import { createSupabaseServiceClient } from '@/server/supabase/service'
 import { pullIncrementalChanges } from '@/server/services/google-calendar.service'
+import type { Database } from '@/types/supabase'
+
+type ProjectsUpdate = Database['public']['Tables']['projects']['Update']
 
 /**
  * Webhook endpoint para Google Calendar push notifications.
@@ -27,11 +30,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(null, { status: 200 })
   }
 
-  // Nota: casts a `any` porque `google_calendar_watches` y las columnas
-  // `google_event_id/google_calendar_id/google_synced_at` aún no están en
-  // los types generados de Supabase. Regenerar types para removerlos.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = createSupabaseServiceClient() as any
+  const supabase = createSupabaseServiceClient()
   const { data: watch } = await supabase
     .from('google_calendar_watches')
     .select('studio_id, calendar_id')
@@ -45,9 +44,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const { events } = await pullIncrementalChanges(watch.studio_id)
-    // Por cada evento cancelado (status='cancelled'), limpiar sync en el proyecto
+
     for (const ev of events) {
-      if (ev.status === 'cancelled' && ev.id) {
+      if (!ev.id) continue
+
+      // Cancelado → limpiar sync del proyecto
+      if (ev.status === 'cancelled') {
         await supabase
           .from('projects')
           .update({
@@ -57,12 +59,53 @@ export async function POST(req: NextRequest) {
           })
           .eq('studio_id', watch.studio_id)
           .eq('google_event_id', ev.id)
+        continue
       }
-      // TODO: aplicar cambios de fecha/hora desde Google → proyecto.
-      // Necesita mapping via google_event_id. En esta iteración solo tracked.
+
+      // Modificado → política last-write-wins basada en timestamps:
+      // si Google.updated > project.google_synced_at, aplicamos los cambios.
+      // Esto evita un loop infinito donde nuestro propio sync dispara
+      // un push notification y reescribimos los mismos datos.
+      const { data: project } = await supabase
+        .from('projects')
+        .select('id, event_date, location, google_synced_at')
+        .eq('studio_id', watch.studio_id)
+        .eq('google_event_id', ev.id)
+        .maybeSingle()
+
+      if (!project) continue
+
+      const googleUpdatedAt = ev.updated ? new Date(ev.updated).getTime() : 0
+      const lastSyncedAt = project.google_synced_at
+        ? new Date(project.google_synced_at).getTime()
+        : 0
+
+      // Margen de 2s para absorber latencia entre nuestro PATCH y el push
+      if (googleUpdatedAt <= lastSyncedAt + 2000) continue
+
+      // Extraer fecha (all-day) o dateTime
+      const newDate: string | null =
+        ev.start?.date ?? // all-day: YYYY-MM-DD
+        (ev.start?.dateTime
+          ? String(ev.start.dateTime).slice(0, 10)
+          : null)
+
+      const newLocation: string | null =
+        typeof ev.location === 'string' ? ev.location : null
+
+      const patch: ProjectsUpdate = {
+        google_synced_at: new Date().toISOString(),
+        google_sync_error: null,
+      }
+      if (newDate && newDate !== project.event_date) patch.event_date = newDate
+      if (newLocation !== null && newLocation !== project.location) {
+        patch.location = newLocation
+      }
+
+      await supabase.from('projects').update(patch).eq('id', project.id)
     }
   } catch (e) {
-    // Logeamos pero respondemos 200 para que Google no reintente indefinidamente
+    // Loggeamos pero respondemos 200 para que Google no reintente indefinidamente
     console.error('Google webhook error:', e)
   }
 

@@ -24,11 +24,11 @@ interface Props {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-gray-100 text-gray-600",
-  sent: "bg-blue-50 text-blue-700",
+  pending: "bg-muted text-muted-foreground",
+  sent: "bg-brand-soft text-brand",
   in_progress: "bg-amber-50 text-amber-700",
   completed: "bg-emerald-50 text-emerald-700",
-  expired: "bg-red-50 text-red-700",
+  expired: "bg-danger/10 text-danger",
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -61,12 +61,12 @@ export function FormResponsesPanel({ responses, publicBaseUrl, bookingId }: Prop
 
   if (responses.length === 0) {
     return (
-      <section className="bg-white rounded-2xl border border-gray-200 p-5">
+      <section className="bg-card rounded-2xl border border-border p-5">
         <div className="flex items-center gap-2 mb-2">
-          <ClipboardList className="h-4 w-4 text-gray-400" />
-          <h2 className="text-sm font-semibold text-gray-900">Formularios</h2>
+          <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Formularios</h2>
         </div>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           No hay formularios asociados a esta solicitud.
         </p>
       </section>
@@ -74,12 +74,12 @@ export function FormResponsesPanel({ responses, publicBaseUrl, bookingId }: Prop
   }
 
   return (
-    <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-100">
+    <section className="bg-card rounded-2xl border border-border overflow-hidden">
+      <div className="px-5 py-4 border-b border-border">
         <div className="flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-gray-400" />
-          <h2 className="text-sm font-semibold text-gray-900">Formularios</h2>
-          <span className="text-xs text-gray-400">
+          <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Formularios</h2>
+          <span className="text-xs text-muted-foreground">
             ({responses.length})
           </span>
         </div>
@@ -98,18 +98,18 @@ export function FormResponsesPanel({ responses, publicBaseUrl, bookingId }: Prop
                   className="flex-1 text-left min-w-0"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {r.templateName}
                     </p>
                     <span
                       className={`text-[11px] px-2 py-0.5 rounded-full ${
-                        STATUS_STYLES[r.status] ?? "bg-gray-100 text-gray-600"
+                        STATUS_STYLES[r.status] ?? "bg-muted text-muted-foreground"
                       }`}
                     >
                       {STATUS_LABELS[r.status] ?? r.status}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-3 text-[11px] text-gray-500">
+                  <div className="flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                     {r.completedAt && (
                       <span className="flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3 text-emerald-500" />
@@ -152,7 +152,7 @@ export function FormResponsesPanel({ responses, publicBaseUrl, bookingId }: Prop
                         handleSend(r.id, r.status !== "pending")
                       }}
                       disabled={isPending && sendingId === r.id}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-white bg-gray-900 hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-brand-foreground bg-brand hover:bg-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                       title={r.status === "pending" ? "Enviar al cliente" : "Reenviar al cliente"}
                     >
                       {isPending && sendingId === r.id ? (
@@ -174,7 +174,7 @@ export function FormResponsesPanel({ responses, publicBaseUrl, bookingId }: Prop
                         toast.error("No se pudo copiar")
                       }
                     }}
-                    className="p-1.5 text-gray-400 hover:text-gray-700 rounded"
+                    className="p-1.5 text-muted-foreground hover:text-foreground rounded"
                     title="Copiar enlace público"
                   >
                     <Copy className="h-3.5 w-3.5" />
@@ -183,7 +183,7 @@ export function FormResponsesPanel({ responses, publicBaseUrl, bookingId }: Prop
                     href={publicUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-1.5 text-gray-400 hover:text-gray-700 rounded"
+                    className="p-1.5 text-muted-foreground hover:text-foreground rounded"
                     title="Abrir en nueva pestaña"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -191,7 +191,7 @@ export function FormResponsesPanel({ responses, publicBaseUrl, bookingId }: Prop
                   <button
                     type="button"
                     onClick={() => setExpanded(open ? null : r.id)}
-                    className="p-1.5 text-gray-400 hover:text-gray-700 rounded"
+                    className="p-1.5 text-muted-foreground hover:text-foreground rounded"
                   >
                     {open ? (
                       <ChevronUp className="h-4 w-4" />
@@ -217,7 +217,7 @@ function AnswersView({ response }: { response: FormResponseSummary }) {
 
   if (fields.length === 0) {
     return (
-      <p className="mt-3 text-xs text-gray-500">
+      <p className="mt-3 text-xs text-muted-foreground">
         La plantilla de este formulario no tiene campos.
       </p>
     )
@@ -230,22 +230,22 @@ function AnswersView({ response }: { response: FormResponseSummary }) {
 
   if (!anyAnswer) {
     return (
-      <p className="mt-3 text-xs text-gray-500">
+      <p className="mt-3 text-xs text-muted-foreground">
         El cliente aún no ha respondido ningún campo.
       </p>
     )
   }
 
   return (
-    <dl className="mt-3 bg-gray-50 rounded-lg p-4 space-y-3">
+    <dl className="mt-3 bg-muted rounded-lg p-4 space-y-3">
       {fields.map((f) => {
         const raw = data[f.key]
         return (
           <div key={f.key}>
-            <dt className="text-[11px] uppercase tracking-wide text-gray-400">
+            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
               {f.label}
             </dt>
-            <dd className="text-sm text-gray-900 mt-0.5">
+            <dd className="text-sm text-foreground mt-0.5">
               {formatValue(f, raw)}
             </dd>
           </div>
@@ -260,7 +260,7 @@ function formatValue(
   raw: unknown,
 ): React.ReactNode {
   if (raw === undefined || raw === null || raw === "") {
-    return <span className="text-gray-300 italic">— sin respuesta —</span>
+    return <span className="text-muted-foreground italic">— sin respuesta —</span>
   }
 
   if (field.type === "checkbox") {

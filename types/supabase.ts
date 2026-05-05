@@ -399,6 +399,99 @@ export type Database = {
           },
         ]
       }
+      client_deliveries: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          delivered_at: string | null
+          description: string | null
+          external_links: Json
+          files: Json
+          gallery_id: string | null
+          id: string
+          project_id: string | null
+          reviewed_at: string | null
+          status: string
+          studio_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          delivered_at?: string | null
+          description?: string | null
+          external_links?: Json
+          files?: Json
+          gallery_id?: string | null
+          id?: string
+          project_id?: string | null
+          reviewed_at?: string | null
+          status?: string
+          studio_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          delivered_at?: string | null
+          description?: string | null
+          external_links?: Json
+          files?: Json
+          gallery_id?: string | null
+          id?: string
+          project_id?: string | null
+          reviewed_at?: string | null
+          status?: string
+          studio_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_deliveries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_deliveries_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_deliveries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_deliveries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_deliveries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_users: {
         Row: {
           created_at: string
@@ -452,6 +545,8 @@ export type Database = {
       }
       clients: {
         Row: {
+          access_code: string | null
+          access_code_sent_at: string | null
           address: string | null
           avatar_url: string | null
           birthday: string | null
@@ -462,6 +557,7 @@ export type Database = {
           email: string | null
           id: string
           instagram_handle: string | null
+          last_portal_login_at: string | null
           name: string
           notes: string | null
           phone: string | null
@@ -471,6 +567,8 @@ export type Database = {
           website_url: string | null
         }
         Insert: {
+          access_code?: string | null
+          access_code_sent_at?: string | null
           address?: string | null
           avatar_url?: string | null
           birthday?: string | null
@@ -481,6 +579,7 @@ export type Database = {
           email?: string | null
           id?: string
           instagram_handle?: string | null
+          last_portal_login_at?: string | null
           name: string
           notes?: string | null
           phone?: string | null
@@ -490,6 +589,8 @@ export type Database = {
           website_url?: string | null
         }
         Update: {
+          access_code?: string | null
+          access_code_sent_at?: string | null
           address?: string | null
           avatar_url?: string | null
           birthday?: string | null
@@ -500,6 +601,7 @@ export type Database = {
           email?: string | null
           id?: string
           instagram_handle?: string | null
+          last_portal_login_at?: string | null
           name?: string
           notes?: string | null
           phone?: string | null
@@ -762,6 +864,10 @@ export type Database = {
           signing_token: string
           status: Database["public"]["Enums"]["contract_status"]
           studio_id: string
+          studio_signature_image_url: string | null
+          studio_signed_at: string | null
+          studio_signed_by_user_id: string | null
+          studio_signed_name: string | null
           template_id: string | null
           title: string
           updated_at: string
@@ -792,6 +898,10 @@ export type Database = {
           signing_token?: string
           status?: Database["public"]["Enums"]["contract_status"]
           studio_id: string
+          studio_signature_image_url?: string | null
+          studio_signed_at?: string | null
+          studio_signed_by_user_id?: string | null
+          studio_signed_name?: string | null
           template_id?: string | null
           title: string
           updated_at?: string
@@ -822,6 +932,10 @@ export type Database = {
           signing_token?: string
           status?: Database["public"]["Enums"]["contract_status"]
           studio_id?: string
+          studio_signature_image_url?: string | null
+          studio_signed_at?: string | null
+          studio_signed_by_user_id?: string | null
+          studio_signed_name?: string | null
           template_id?: string | null
           title?: string
           updated_at?: string
@@ -1254,6 +1368,762 @@ export type Database = {
           },
           {
             foreignKeyName: "form_templates_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      galleries: {
+        Row: {
+          accent_color: string
+          allow_download: boolean
+          asset_count: number
+          client_id: string | null
+          cover_asset_id: string | null
+          cover_design: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          download_pin_required: boolean
+          event_date: string | null
+          expires_at: string | null
+          id: string
+          layout_grid: string
+          name: string
+          password_hash: string | null
+          project_id: string | null
+          require_email: boolean
+          selection_enabled: boolean
+          selection_locked: boolean
+          selection_submitted: boolean
+          selection_submitted_at: string | null
+          selection_submitted_by: string | null
+          slug: string
+          status: Database["public"]["Enums"]["gallery_status"]
+          studio_id: string
+          tags: string[]
+          updated_at: string
+          visibility: Database["public"]["Enums"]["gallery_visibility"]
+          watermark_enabled: boolean
+          watermark_image_key: string | null
+          watermark_mode: string | null
+          watermark_opacity: number
+          watermark_position: string
+          watermark_text: string | null
+        }
+        Insert: {
+          accent_color?: string
+          allow_download?: boolean
+          asset_count?: number
+          client_id?: string | null
+          cover_asset_id?: string | null
+          cover_design?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          download_pin_required?: boolean
+          event_date?: string | null
+          expires_at?: string | null
+          id?: string
+          layout_grid?: string
+          name: string
+          password_hash?: string | null
+          project_id?: string | null
+          require_email?: boolean
+          selection_enabled?: boolean
+          selection_locked?: boolean
+          selection_submitted?: boolean
+          selection_submitted_at?: string | null
+          selection_submitted_by?: string | null
+          slug: string
+          status?: Database["public"]["Enums"]["gallery_status"]
+          studio_id: string
+          tags?: string[]
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["gallery_visibility"]
+          watermark_enabled?: boolean
+          watermark_image_key?: string | null
+          watermark_mode?: string | null
+          watermark_opacity?: number
+          watermark_position?: string
+          watermark_text?: string | null
+        }
+        Update: {
+          accent_color?: string
+          allow_download?: boolean
+          asset_count?: number
+          client_id?: string | null
+          cover_asset_id?: string | null
+          cover_design?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          download_pin_required?: boolean
+          event_date?: string | null
+          expires_at?: string | null
+          id?: string
+          layout_grid?: string
+          name?: string
+          password_hash?: string | null
+          project_id?: string | null
+          require_email?: boolean
+          selection_enabled?: boolean
+          selection_locked?: boolean
+          selection_submitted?: boolean
+          selection_submitted_at?: string | null
+          selection_submitted_by?: string | null
+          slug?: string
+          status?: Database["public"]["Enums"]["gallery_status"]
+          studio_id?: string
+          tags?: string[]
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["gallery_visibility"]
+          watermark_enabled?: boolean
+          watermark_image_key?: string | null
+          watermark_mode?: string | null
+          watermark_opacity?: number
+          watermark_position?: string
+          watermark_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "galleries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "galleries_cover_fk"
+            columns: ["cover_asset_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "galleries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "galleries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "galleries_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_assets: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          file_size: number
+          filename: string
+          gallery_id: string
+          height: number | null
+          id: string
+          is_private: boolean
+          metadata: Json | null
+          mime_type: string
+          original_key: string | null
+          original_name: string
+          set_id: string | null
+          sort_order: number
+          status: Database["public"]["Enums"]["asset_processing_status"]
+          studio_id: string
+          thumb_key: string | null
+          updated_at: string
+          web_key: string | null
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          file_size: number
+          filename: string
+          gallery_id: string
+          height?: number | null
+          id?: string
+          is_private?: boolean
+          metadata?: Json | null
+          mime_type: string
+          original_key?: string | null
+          original_name: string
+          set_id?: string | null
+          sort_order?: number
+          status?: Database["public"]["Enums"]["asset_processing_status"]
+          studio_id: string
+          thumb_key?: string | null
+          updated_at?: string
+          web_key?: string | null
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          file_size?: number
+          filename?: string
+          gallery_id?: string
+          height?: number | null
+          id?: string
+          is_private?: boolean
+          metadata?: Json | null
+          mime_type?: string
+          original_key?: string | null
+          original_name?: string
+          set_id?: string | null
+          sort_order?: number
+          status?: Database["public"]["Enums"]["asset_processing_status"]
+          studio_id?: string
+          thumb_key?: string | null
+          updated_at?: string
+          web_key?: string | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_assets_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_assets_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_assets_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_assets_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_collection_items: {
+        Row: {
+          asset_id: string
+          collection_id: string
+          created_at: string
+          id: string
+          sort_order: number
+        }
+        Insert: {
+          asset_id: string
+          collection_id: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+        }
+        Update: {
+          asset_id?: string
+          collection_id?: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_collection_items_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_collection_items_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_collections: {
+        Row: {
+          asset_count: number
+          client_email: string | null
+          client_name: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          description: string | null
+          gallery_id: string
+          id: string
+          is_client_editable: boolean
+          is_locked: boolean
+          name: string
+          studio_id: string
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_count?: number
+          client_email?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          gallery_id: string
+          id?: string
+          is_client_editable?: boolean
+          is_locked?: boolean
+          name: string
+          studio_id: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_count?: number
+          client_email?: string | null
+          client_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          description?: string | null
+          gallery_id?: string
+          id?: string
+          is_client_editable?: boolean
+          is_locked?: boolean
+          name?: string
+          studio_id?: string
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_collections_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_collections_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_collections_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_download_pins: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          gallery_id: string
+          id: string
+          label: string | null
+          last_used_at: string | null
+          max_downloads: number
+          pin_hash: string
+          pin_last4: string
+          resolution: string
+          revoked_at: string | null
+          studio_id: string
+          used_count: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          gallery_id: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          max_downloads?: number
+          pin_hash: string
+          pin_last4: string
+          resolution?: string
+          revoked_at?: string | null
+          studio_id: string
+          used_count?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          gallery_id?: string
+          id?: string
+          label?: string | null
+          last_used_at?: string | null
+          max_downloads?: number
+          pin_hash?: string
+          pin_last4?: string
+          resolution?: string
+          revoked_at?: string | null
+          studio_id?: string
+          used_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_download_pins_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_download_pins_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_download_pins_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_downloads: {
+        Row: {
+          asset_id: string | null
+          client_email: string | null
+          client_ip: string | null
+          created_at: string
+          gallery_id: string
+          id: string
+          resolution: string
+          scope: string
+          user_agent: string | null
+        }
+        Insert: {
+          asset_id?: string | null
+          client_email?: string | null
+          client_ip?: string | null
+          created_at?: string
+          gallery_id: string
+          id?: string
+          resolution: string
+          scope: string
+          user_agent?: string | null
+        }
+        Update: {
+          asset_id?: string | null
+          client_email?: string | null
+          client_ip?: string | null
+          created_at?: string
+          gallery_id?: string
+          id?: string
+          resolution?: string
+          scope?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_downloads_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_downloads_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_favorites: {
+        Row: {
+          asset_id: string
+          client_email: string | null
+          client_name: string | null
+          created_at: string
+          gallery_id: string
+          id: string
+        }
+        Insert: {
+          asset_id: string
+          client_email?: string | null
+          client_name?: string | null
+          created_at?: string
+          gallery_id: string
+          id?: string
+        }
+        Update: {
+          asset_id?: string
+          client_email?: string | null
+          client_name?: string | null
+          created_at?: string
+          gallery_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_favorites_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_favorites_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_sets: {
+        Row: {
+          asset_count: number
+          cover_asset_id: string | null
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          gallery_id: string
+          id: string
+          is_private: boolean
+          name: string
+          sort_order: number
+          studio_id: string
+          updated_at: string
+        }
+        Insert: {
+          asset_count?: number
+          cover_asset_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          gallery_id: string
+          id?: string
+          is_private?: boolean
+          name: string
+          sort_order?: number
+          studio_id: string
+          updated_at?: string
+        }
+        Update: {
+          asset_count?: number
+          cover_asset_id?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          gallery_id?: string
+          id?: string
+          is_private?: boolean
+          name?: string
+          sort_order?: number
+          studio_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_sets_cover_asset_id_fkey"
+            columns: ["cover_asset_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_sets_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_sets_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_sets_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_share_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          gallery_id: string
+          id: string
+          last_viewed_at: string | null
+          revoked_at: string | null
+          studio_id: string
+          token: string
+          view_count: number
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          gallery_id: string
+          id?: string
+          last_viewed_at?: string | null
+          revoked_at?: string | null
+          studio_id: string
+          token: string
+          view_count?: number
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          gallery_id?: string
+          id?: string
+          last_viewed_at?: string | null
+          revoked_at?: string | null
+          studio_id?: string
+          token?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_share_tokens_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_share_tokens_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_share_tokens_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gallery_zip_exports: {
+        Row: {
+          asset_count: number
+          asset_ids: string[] | null
+          client_email: string | null
+          client_ip: string | null
+          collection_id: string | null
+          created_at: string
+          error_message: string | null
+          expires_at: string | null
+          gallery_id: string
+          id: string
+          requested_by_user_id: string | null
+          resolution: string
+          scope: Database["public"]["Enums"]["zip_export_scope"]
+          status: Database["public"]["Enums"]["zip_export_status"]
+          studio_id: string
+          updated_at: string
+          zip_key: string | null
+          zip_size: number | null
+        }
+        Insert: {
+          asset_count?: number
+          asset_ids?: string[] | null
+          client_email?: string | null
+          client_ip?: string | null
+          collection_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          gallery_id: string
+          id?: string
+          requested_by_user_id?: string | null
+          resolution?: string
+          scope: Database["public"]["Enums"]["zip_export_scope"]
+          status?: Database["public"]["Enums"]["zip_export_status"]
+          studio_id: string
+          updated_at?: string
+          zip_key?: string | null
+          zip_size?: number | null
+        }
+        Update: {
+          asset_count?: number
+          asset_ids?: string[] | null
+          client_email?: string | null
+          client_ip?: string | null
+          collection_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          expires_at?: string | null
+          gallery_id?: string
+          id?: string
+          requested_by_user_id?: string | null
+          resolution?: string
+          scope?: Database["public"]["Enums"]["zip_export_scope"]
+          status?: Database["public"]["Enums"]["zip_export_status"]
+          studio_id?: string
+          updated_at?: string
+          zip_key?: string | null
+          zip_size?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_zip_exports_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "gallery_collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_zip_exports_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_zip_exports_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_zip_exports_studio_id_fkey"
             columns: ["studio_id"]
             isOneToOne: false
             referencedRelation: "studios_public"
@@ -2771,6 +3641,7 @@ export type Database = {
           plan_id: string | null
           primary_color: string | null
           secondary_color: string | null
+          signature_image_url: string | null
           slug: string
           storage_limit_bytes: number | null
           storage_used_bytes: number | null
@@ -2806,6 +3677,7 @@ export type Database = {
           plan_id?: string | null
           primary_color?: string | null
           secondary_color?: string | null
+          signature_image_url?: string | null
           slug: string
           storage_limit_bytes?: number | null
           storage_used_bytes?: number | null
@@ -2841,6 +3713,7 @@ export type Database = {
           plan_id?: string | null
           primary_color?: string | null
           secondary_color?: string | null
+          signature_image_url?: string | null
           slug?: string
           storage_limit_bytes?: number | null
           storage_used_bytes?: number | null
@@ -3125,6 +3998,14 @@ export type Database = {
         Args: { p_client_id: string; p_studio_id: string }
         Returns: undefined
       }
+      cascade_delete_package: {
+        Args: { p_package_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      cascade_delete_project: {
+        Args: { p_project_id: string; p_studio_id: string }
+        Returns: undefined
+      }
       create_client_with_booking: {
         Args: { p_payload: Json; p_studio_id: string }
         Returns: Json
@@ -3139,9 +4020,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_studio_member: { Args: { p_studio: string }; Returns: boolean }
       next_invoice_number: {
         Args: { p_prefix?: string; p_studio_id: string }
         Returns: string
+      }
+      public_register_client: {
+        Args: {
+          p_email: string
+          p_name: string
+          p_notes: string
+          p_phone: string
+          p_studio_slug: string
+        }
+        Returns: Json
       }
       request_has_valid_token: { Args: { p_token: string }; Returns: boolean }
       storage_studio_id_from_path: { Args: { p_name: string }; Returns: string }
@@ -3162,6 +4054,7 @@ export type Database = {
     }
     Enums: {
       actor_type: "user" | "client" | "system"
+      asset_processing_status: "pending" | "processing" | "completed" | "failed"
       booking_request_status:
         | "pending_review"
         | "approved"
@@ -3197,6 +4090,8 @@ export type Database = {
         | "bounced"
         | "cancelled"
       form_status: "pending" | "sent" | "in_progress" | "completed" | "expired"
+      gallery_status: "draft" | "published" | "archived" | "expired"
+      gallery_visibility: "public" | "private" | "password"
       integration_service:
         | "resend"
         | "google_calendar"
@@ -3259,6 +4154,11 @@ export type Database = {
         | "system"
         | "mention"
         | "comment"
+        | "client_registered"
+        | "gallery_selection_submitted"
+        | "client_portal_login"
+        | "delivery_ready"
+        | "delivery_reviewed"
       payment_method:
         | "cash"
         | "bank_transfer"
@@ -3292,6 +4192,13 @@ export type Database = {
         | "cancelled"
       task_priority: "low" | "medium" | "high" | "urgent"
       task_status: "pending" | "in_progress" | "completed" | "cancelled"
+      zip_export_scope: "gallery" | "collection" | "selection"
+      zip_export_status:
+        | "pending"
+        | "processing"
+        | "ready"
+        | "failed"
+        | "expired"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3420,6 +4327,7 @@ export const Constants = {
   public: {
     Enums: {
       actor_type: ["user", "client", "system"],
+      asset_processing_status: ["pending", "processing", "completed", "failed"],
       booking_request_status: [
         "pending_review",
         "approved",
@@ -3459,6 +4367,8 @@ export const Constants = {
         "cancelled",
       ],
       form_status: ["pending", "sent", "in_progress", "completed", "expired"],
+      gallery_status: ["draft", "published", "archived", "expired"],
+      gallery_visibility: ["public", "private", "password"],
       integration_service: [
         "resend",
         "google_calendar",
@@ -3525,6 +4435,11 @@ export const Constants = {
         "system",
         "mention",
         "comment",
+        "client_registered",
+        "gallery_selection_submitted",
+        "client_portal_login",
+        "delivery_ready",
+        "delivery_reviewed",
       ],
       payment_method: [
         "cash",
@@ -3562,6 +4477,14 @@ export const Constants = {
       ],
       task_priority: ["low", "medium", "high", "urgent"],
       task_status: ["pending", "in_progress", "completed", "cancelled"],
+      zip_export_scope: ["gallery", "collection", "selection"],
+      zip_export_status: [
+        "pending",
+        "processing",
+        "ready",
+        "failed",
+        "expired",
+      ],
     },
   },
 } as const

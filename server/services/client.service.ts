@@ -133,6 +133,29 @@ export async function createClient(
     metadata: { name: client.name },
   })
 
+  // Generar código de acceso al portal y enviárselo por email (best-effort).
+  // No queremos bloquear la creación si el email falla.
+  if (client.email) {
+    void (async () => {
+      try {
+        const { ensureClientAccessCode } = await import('./client-portal.service')
+        const code = await ensureClientAccessCode(studioId, client.id)
+        const { sendClientPortalAccessEmail } = await import(
+          './client-portal-email.service'
+        )
+        await sendClientPortalAccessEmail({
+          studioId,
+          clientId: client.id,
+          clientName: client.name,
+          clientEmail: client.email!,
+          accessCode: code,
+        })
+      } catch (err) {
+        console.error('[createClient] portal welcome failed', err)
+      }
+    })()
+  }
+
   return client
 }
 

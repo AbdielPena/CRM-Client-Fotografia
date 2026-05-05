@@ -9,6 +9,7 @@ import { formatDateShort } from "@/lib/utils/currency"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
+import { ShareRegisterLinkButton } from "@/components/clients/share-register-link-button"
 import { SearchInput } from "@/components/shared/search-input"
 import { EmptyState } from "@/components/shared/empty-state"
 import { Pagination } from "@/components/shared/pagination"
@@ -71,9 +72,12 @@ export default async function ClientsPage({
         description={`${data.total} cliente${data.total === 1 ? "" : "s"} registrado${data.total === 1 ? "" : "s"} — el corazón de tu estudio.`}
         unreadNotifications={unread}
         actions={
-          <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
-            <Link href="/clients/new">Nuevo cliente</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <ShareRegisterLinkButton studioSlug={session.studioSlug} />
+            <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
+              <Link href="/clients/new">Nuevo cliente</Link>
+            </Button>
+          </div>
         }
       />
 

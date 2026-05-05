@@ -1,13 +1,28 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { z } from "zod"
 
-const disabled = () =>
-  NextResponse.json(
-    { error: "La funcionalidad de galerías está deshabilitada temporalmente." },
-    { status: 410 },
-  )
+import { requireStudioAuth } from "@/server/supabase/auth-context"
+import { bulkDeleteAssets } from "@/server/services/gallery.service"
+import { apiError } from "@/lib/utils/api-error"
 
-export const GET = disabled
-export const POST = disabled
-export const PUT = disabled
-export const PATCH = disabled
-export const DELETE = disabled
+const schema = z.object({
+  assetIds: z.array(z.string().min(1)).min(1).max(500),
+})
+
+async function handle(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  try {
+    const ctx = await requireStudioAuth()
+    const { assetIds } = schema.parse(await req.json())
+    const result = await bulkDeleteAssets(ctx.studioId, params.id, assetIds)
+    return NextResponse.json(result)
+  } catch (e) {
+    return apiError(e)
+  }
+}
+
+// El cliente llama con DELETE; mantenemos POST como alias para compatibilidad.
+export const DELETE = handle
+export const POST = handle

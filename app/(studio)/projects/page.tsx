@@ -1,5 +1,12 @@
 import Link from "next/link"
-import { FolderOpen, Calendar, Plus, Settings2 } from "lucide-react"
+import {
+  FolderOpen,
+  Calendar,
+  Plus,
+  Settings2,
+  LayoutGrid,
+  KanbanSquare,
+} from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
@@ -7,6 +14,7 @@ import { getProjects } from "@/server/services/project.service"
 import { getProjectStatuses } from "@/server/services/project-status.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { formatDate } from "@/lib/utils/currency"
+import { cn } from "@/lib/utils/cn"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
@@ -15,6 +23,10 @@ import { EmptyState } from "@/components/shared/empty-state"
 import { FilterChips, type FilterChip } from "@/components/shared/filter-chips"
 import { Pagination } from "@/components/shared/pagination"
 import { ProjectStatusPicker } from "@/components/projects/project-status-picker"
+import {
+  ProjectKanbanView,
+  type ProjectCard,
+} from "@/components/projects/project-kanban-view"
 
 export const metadata: Metadata = { title: "Proyectos" }
 
@@ -38,44 +50,57 @@ type ProjectRow = {
   client: { name: string } | { name: string }[]
 }
 
+type ViewMode = "grid" | "kanban"
+
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: { q?: string; status?: string; page?: string }
+  searchParams: { q?: string; status?: string; page?: string; view?: string }
 }) {
   const session = await requireStudioAuth()
   const search = searchParams.q
   const status = searchParams.status
   const page = Number(searchParams.page ?? 1)
+  const view: ViewMode = searchParams.view === "kanban" ? "kanban" : "grid"
+
+  // En kanban traemos hasta 200 sin paginar; en grid usamos paginación normal.
+  const fetchOpts =
+    view === "kanban"
+      ? { search, page: 1, pageSize: 200 }
+      : { search, status, page }
 
   const [data, statuses, unread] = await Promise.all([
-    getProjects(session.studioId, { search, status, page }),
+    getProjects(session.studioId, fetchOpts),
     getProjectStatuses(session.studioId),
     countUnreadNotifications(session.studioId),
   ])
 
-  // FilterChips dinámicos basados en los estados del studio
   const STATUS_CHIPS: FilterChip[] = statuses.map((s) => ({
     key: s.label,
     label: s.label,
   }))
 
+  const buildHref = (overrides: Record<string, string | undefined>) => {
+    const params = new URLSearchParams()
+    const merged = { q: search, status, page: undefined, view, ...overrides }
+    for (const [k, v] of Object.entries(merged)) {
+      if (v) params.set(k, v)
+    }
+    const qs = params.toString()
+    return qs ? `/projects?${qs}` : "/projects"
+  }
+
   return (
     <>
       <AppTopbar
-        eyebrow="Producción activa"
         title="Proyectos"
         description={`${data.total} proyecto${data.total === 1 ? "" : "s"} en total`}
         unreadNotifications={unread}
         actions={
           <div className="flex items-center gap-2">
-            <Button
-              asChild
-              size="sm"
-              variant="ghost"
-            >
+            <Button asChild size="sm" variant="ghost">
               <Link href="/settings/project-statuses">
-                <Settings2 className="h-4 w-4 mr-1" />
+                <Settings2 className="mr-1 h-4 w-4" />
                 Estados
               </Link>
             </Button>
@@ -92,18 +117,47 @@ export default async function ProjectsPage({
             placeholder="Buscar proyectos…"
             className="w-full lg:w-80"
           />
-          <FilterChips
-            baseHref="/projects"
-            paramName="status"
-            current={status}
-            chips={STATUS_CHIPS}
-            preserveQuery={{ q: search }}
-            className="flex-1"
-          />
+
+          {view === "grid" && (
+            <FilterChips
+              baseHref="/projects"
+              paramName="status"
+              current={status}
+              chips={STATUS_CHIPS}
+              preserveQuery={{ q: search, view: "grid" }}
+              className="flex-1"
+            />
+          )}
+
+          {/* View toggle */}
+          <div className="ml-auto inline-flex rounded-lg border border-border bg-card p-0.5">
+            <Link
+              href={buildHref({ view: "grid" })}
+              className={cn(
+                "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors",
+                view === "grid"
+                  ? "bg-brand text-brand-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Grid
+            </Link>
+            <Link
+              href={buildHref({ view: "kanban" })}
+              className={cn(
+                "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors",
+                view === "kanban"
+                  ? "bg-brand text-brand-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <KanbanSquare className="h-3.5 w-3.5" /> Kanban
+            </Link>
+          </div>
         </div>
 
         {data.items.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card shadow-xs">
+          <div className="rounded-xl border border-border bg-card">
             <EmptyState
               icon={<FolderOpen className="h-5 w-5" />}
               title={
@@ -123,6 +177,11 @@ export default async function ProjectsPage({
               </Button>
             </EmptyState>
           </div>
+        ) : view === "kanban" ? (
+          <ProjectKanbanView
+            projects={data.items as unknown as ProjectCard[]}
+            statuses={statuses}
+          />
         ) : (
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -134,48 +193,43 @@ export default async function ProjectsPage({
                   <Link
                     key={project.id}
                     href={`/projects/${project.id}`}
-                    className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card p-5 shadow-xs transition-all duration-fast hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                    className="group relative flex flex-col overflow-hidden rounded-xl border border-border bg-card p-5 transition-colors duration-fast hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                   >
-                      {/* Aurora halo */}
-                      <div
-                        aria-hidden="true"
-                        className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-aurora opacity-0 blur-2xl transition-opacity duration-base group-hover:opacity-20"
+                    <div className="relative mb-3 flex items-start justify-between gap-2">
+                      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand">
+                        <FolderOpen className="h-4 w-4" />
+                      </div>
+                      <ProjectStatusPicker
+                        projectId={project.id}
+                        currentStatus={project.status}
+                        statuses={statuses}
+                        compact
                       />
+                    </div>
 
-                      <div className="relative mb-3 flex items-start justify-between gap-2">
-                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand-soft-foreground">
-                          <FolderOpen className="h-4 w-4" />
+                    <h3 className="line-clamp-1 text-sm font-semibold text-foreground transition-colors group-hover:text-brand">
+                      {project.name}
+                    </h3>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {clientName}
+                    </p>
+
+                    <div className="mt-4 space-y-1.5 border-t border-border/60 pt-3">
+                      {project.event_type && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="inline-flex rounded-full bg-muted px-2 py-0.5 font-medium capitalize text-muted-foreground">
+                            {TYPE_LABELS[project.event_type] ??
+                              project.event_type}
+                          </span>
                         </div>
-                          <ProjectStatusPicker
-                          projectId={project.id}
-                          currentStatus={project.status}
-                          statuses={statuses}
-                          compact
-                        />
-                      </div>
-
-                      <h3 className="line-clamp-1 text-body font-semibold text-foreground transition-colors group-hover:text-brand">
-                        {project.name}
-                      </h3>
-                      <p className="mt-0.5 truncate text-caption text-muted-foreground">
-                        {clientName}
-                      </p>
-
-                      <div className="mt-4 space-y-1.5 border-t border-border/60 pt-3">
-                        {project.event_type && (
-                          <div className="flex items-center gap-2 text-caption">
-                            <span className="inline-flex rounded-full bg-muted px-2 py-0.5 font-medium capitalize text-muted-foreground">
-                              {TYPE_LABELS[project.event_type] ?? project.event_type}
-                            </span>
-                          </div>
-                        )}
-                        {project.event_date && (
-                          <div className="flex items-center gap-1.5 text-caption text-muted-foreground">
-                            <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span>{formatDate(new Date(project.event_date))}</span>
-                          </div>
-                        )}
-                      </div>
+                      )}
+                      {project.event_date && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span>{formatDate(new Date(project.event_date))}</span>
+                        </div>
+                      )}
+                    </div>
                   </Link>
                 )
               })}
@@ -188,7 +242,7 @@ export default async function ProjectsPage({
                 total={data.total}
                 pageSize={data.pageSize}
                 baseHref="/projects"
-                preserveQuery={{ q: search, status }}
+                preserveQuery={{ q: search, status, view: "grid" }}
                 itemsLabel="proyectos"
               />
             )}

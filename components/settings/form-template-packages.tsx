@@ -60,13 +60,13 @@ export function FormTemplatePackages({
     [...selected].some((id) => !initialSelectedIds.includes(id))
 
   return (
-    <section className="bg-white rounded-xl border border-gray-200">
-      <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+    <section className="bg-card rounded-xl border border-border">
+      <div className="px-5 py-4 border-b border-border flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">
+          <h2 className="text-sm font-semibold text-foreground">
             Paquetes vinculados
           </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Cuando alguien reserve uno de estos paquetes, este formulario se
             envía automáticamente.
           </p>
@@ -75,18 +75,18 @@ export function FormTemplatePackages({
           type="button"
           onClick={save}
           disabled={isPending || !dirty}
-          className="px-3 py-1.5 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-40"
+          className="px-3 py-1.5 text-xs bg-brand text-brand-foreground rounded-lg hover:bg-brand/90 disabled:opacity-40"
         >
           {isPending ? "Guardando…" : "Guardar"}
         </button>
       </div>
 
       {packages.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-gray-500 text-center">
+        <p className="px-5 py-6 text-sm text-muted-foreground text-center">
           Aún no tienes paquetes activos. Crea uno en{" "}
           <a
             href="/settings/packages"
-            className="text-blue-600 hover:underline"
+            className="text-brand hover:underline"
           >
             Paquetes
           </a>
@@ -105,15 +105,15 @@ export function FormTemplatePackages({
                     onChange={() => toggle(pkg.id)}
                     className="h-4 w-4"
                   />
-                  <PackageIcon className="h-4 w-4 text-gray-400" />
+                  <PackageIcon className="h-4 w-4 text-muted-foreground" />
                   <span
                     className={`text-sm ${
-                      pkg.isActive ? "text-gray-900" : "text-gray-400"
+                      pkg.isActive ? "text-foreground" : "text-muted-foreground"
                     }`}
                   >
                     {pkg.name}
                     {!pkg.isActive && (
-                      <span className="ml-2 text-xs text-gray-400">
+                      <span className="ml-2 text-xs text-muted-foreground">
                         (inactivo)
                       </span>
                     )}

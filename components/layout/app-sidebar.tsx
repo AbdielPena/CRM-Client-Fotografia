@@ -3,10 +3,9 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   LayoutDashboard,
-  UserCheck,
   Users,
   FolderOpen,
   CalendarDays,
@@ -23,16 +22,30 @@ import {
   FileStack,
   Globe,
   CalendarClock,
-  ChevronRight,
   Layers,
+  Mail,
+  PanelLeftClose,
+  PanelLeftOpen,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
 import { ThemeDock } from "@/components/shared/theme-dock"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
+  SIDEBAR_WIDTH_COLLAPSED,
+  SIDEBAR_WIDTH_EXPANDED,
+  useSidebar,
+} from "./sidebar-context"
 
 // ---------------------------------------------------------------------------
-// Nav schema — agrupado por secciones, cada una con overline label
+// Nav schema — dos secciones planas (PRINCIPAL + ACCOUNT) estilo Lumen
 // ---------------------------------------------------------------------------
 
 type NavLink = {
@@ -62,22 +75,11 @@ const NAV_GROUPS: NavGroup[] = [
     type: "group",
     label: "CRM",
     items: [
-      { type: "link", href: "/leads", label: "Leads", icon: UserCheck },
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
       { type: "link", href: "/projects", label: "Proyectos", icon: FolderOpen },
       { type: "link", href: "/calendar", label: "Calendario", icon: CalendarDays },
-      {
-        type: "link",
-        href: "/settings/availability",
-        label: "Disponibilidad",
-        icon: Clock,
-      },
+      { type: "link", href: "/galleries", label: "Galerías", icon: ImageIcon },
     ],
-  },
-  {
-    type: "group",
-    label: "Entregas",
-    items: [{ type: "link", href: "/galleries", label: "Galerías", icon: ImageIcon }],
   },
   {
     type: "group",
@@ -85,20 +87,18 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
       { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
+    ],
+  },
+  {
+    type: "group",
+    label: "Configuración",
+    items: [
       { type: "link", href: "/settings/packages", label: "Paquetes", icon: Package },
+      { type: "link", href: "/settings/forms", label: "Formularios", icon: ClipboardList },
+      { type: "link", href: "/settings/contracts", label: "Contratos", icon: FileStack },
+      { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },
       { type: "link", href: "/settings/project-statuses", label: "Estados", icon: Layers },
-      {
-        type: "link",
-        href: "/settings/forms",
-        label: "Formularios",
-        icon: ClipboardList,
-      },
-      {
-        type: "link",
-        href: "/settings/contracts",
-        label: "Plantillas",
-        icon: FileStack,
-      },
+      { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },
     ],
   },
   {
@@ -112,38 +112,49 @@ const NAV_GROUPS: NavGroup[] = [
         label: "Google Calendar",
         icon: CalendarClock,
       },
-      { type: "link", href: "/settings", label: "Configuración", icon: Settings },
+      { type: "link", href: "/settings", label: "Ajustes generales", icon: Settings },
     ],
   },
 ]
 
-// ---------------------------------------------------------------------------
-// Animation variants
-// ---------------------------------------------------------------------------
+// Persistencia local del estado collapsed por grupo
+const COLLAPSED_GROUPS_KEY = "sf-sidebar-groups-collapsed"
 
-const shellVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.025,
-      delayChildren: 0.05,
-    },
-  },
+function loadCollapsedGroups(): Set<string> {
+  if (typeof window === "undefined") return new Set()
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_GROUPS_KEY)
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) ? new Set(arr) : new Set()
+  } catch {
+    return new Set()
+  }
 }
 
-const itemVariants = {
-  hidden: { opacity: 0, x: -8 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { type: "spring" as const, stiffness: 400, damping: 30 },
-  },
+function saveCollapsedGroups(s: Set<string>): void {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(
+      COLLAPSED_GROUPS_KEY,
+      JSON.stringify(Array.from(s)),
+    )
+  } catch {
+    // ignore
+  }
 }
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
+const SIDEBAR_TRANSITION = {
+  type: "spring" as const,
+  stiffness: 380,
+  damping: 36,
+  mass: 0.6,
+}
+
+const labelVariants = {
+  expanded: { opacity: 1, width: "auto", marginLeft: 12 },
+  collapsed: { opacity: 0, width: 0, marginLeft: 0 },
+}
 
 interface AppSidebarProps {
   studioName: string
@@ -160,6 +171,7 @@ export function AppSidebar({
   unreadNotifications = 0,
 }: AppSidebarProps) {
   const pathname = usePathname()
+  const { collapsed, toggle } = useSidebar()
 
   const isActive = React.useCallback(
     (href: string) => {
@@ -169,195 +181,402 @@ export function AppSidebar({
     [pathname],
   )
 
+  // Estado collapsed por grupo (persiste en localStorage). Hidrata cliente-side
+  // para evitar mismatch SSR.
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(
+    () => new Set(),
+  )
+  const [hydrated, setHydrated] = React.useState(false)
+
+  React.useEffect(() => {
+    setCollapsedGroups(loadCollapsedGroups())
+    setHydrated(true)
+  }, [])
+
+  const toggleGroup = React.useCallback((label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      saveCollapsedGroups(next)
+      return next
+    })
+  }, [])
+
+  // Auto-expand un grupo si la ruta activa cae en alguno de sus items
+  // (solo en el primer render hidratado, no en cada navegación para no
+  // re-abrir grupos que el usuario cerró voluntariamente)
+  const autoExpandedRef = React.useRef(false)
+  React.useEffect(() => {
+    if (!hydrated || autoExpandedRef.current) return
+    autoExpandedRef.current = true
+    const activeGroups = NAV_GROUPS.filter((g) =>
+      g.items.some((i) => isActive(i.href)),
+    ).map((g) => g.label)
+    if (activeGroups.length === 0) return
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      let changed = false
+      for (const lbl of activeGroups) {
+        if (next.has(lbl)) {
+          next.delete(lbl)
+          changed = true
+        }
+      }
+      if (changed) saveCollapsedGroups(next)
+      return changed ? next : prev
+    })
+  }, [hydrated, isActive])
+
   const initial = studioName.charAt(0).toUpperCase()
   const userInitial = userName.charAt(0).toUpperCase()
 
   return (
-    <motion.aside
-      initial="hidden"
-      animate="visible"
-      variants={shellVariants}
-      className={cn(
-        "relative flex h-full w-64 flex-shrink-0 flex-col",
-        "bg-[hsl(var(--sidebar))] border-r border-[hsl(var(--sidebar-border))]",
-        "text-[hsl(var(--sidebar-foreground))]",
-      )}
-    >
-      {/* ======================== Studio Header ======================== */}
-      <motion.header
-        variants={itemVariants}
-        className="flex items-center gap-3 px-5 py-5 border-b border-[hsl(var(--sidebar-border))]"
+    <TooltipProvider delayDuration={120} skipDelayDuration={80}>
+      <motion.aside
+        initial={false}
+        animate={{
+          width: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED,
+        }}
+        transition={SIDEBAR_TRANSITION}
+        data-collapsed={collapsed}
+        className={cn(
+          "relative z-20 flex h-full flex-shrink-0 flex-col overflow-hidden",
+          "bg-[hsl(var(--sidebar))] border-r border-[hsl(var(--sidebar-border))]",
+          "text-[hsl(var(--sidebar-foreground))]",
+        )}
       >
-        <div
-          aria-hidden
+        {/* ======================== Header ======================== */}
+        <header
           className={cn(
-            "relative flex h-9 w-9 items-center justify-center rounded-xl",
-            "bg-aurora text-white text-body-sm font-semibold leading-none",
-            "shadow-glow",
-          )}
-        >
-          {initial}
-          <span className="absolute inset-0 rounded-xl ring-1 ring-inset ring-white/15" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-body-sm font-semibold text-foreground truncate">
-            {studioName}
-          </p>
-          <p className="text-caption text-muted-foreground tracking-wide">
-            StudioFlow
-          </p>
-        </div>
-      </motion.header>
-
-      {/* ======================== Navigation ======================== */}
-      <nav
-        aria-label="Navegación principal"
-        className="flex-1 overflow-y-auto px-3 py-4 space-y-5"
-      >
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label}>
-            <motion.p
-              variants={itemVariants}
-              className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80"
-            >
-              {group.label}
-            </motion.p>
-
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const Icon = item.icon
-                const active = isActive(item.href)
-
-                return (
-                  <motion.div key={item.href} variants={itemVariants}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "group relative flex items-center gap-2.5 rounded-md",
-                        "px-2.5 py-2 text-body-sm font-medium",
-                        "transition-all duration-base ease-standard",
-                        active
-                          ? "text-foreground bg-brand/8 dark:bg-brand/12"
-                          : "text-muted-foreground hover:text-foreground hover:bg-muted/70",
-                      )}
-                    >
-                      {/* Active indicator bar (scaled) */}
-                      {active && (
-                        <motion.span
-                          layoutId="sidebar-active"
-                          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-aurora shadow-glow"
-                          transition={{
-                            type: "spring",
-                            stiffness: 380,
-                            damping: 30,
-                          }}
-                        />
-                      )}
-
-                      <Icon
-                        aria-hidden="true"
-                        className={cn(
-                          "h-[18px] w-[18px] flex-shrink-0 transition-colors duration-fast",
-                          active
-                            ? "text-brand"
-                            : "text-muted-foreground/80 group-hover:text-foreground",
-                        )}
-                      />
-                      <span className="truncate">{item.label}</span>
-
-                      <ChevronRight
-                        aria-hidden="true"
-                        className={cn(
-                          "ml-auto h-3.5 w-3.5 flex-shrink-0",
-                          "opacity-0 -translate-x-1 transition-all duration-base",
-                          "group-hover:opacity-60 group-hover:translate-x-0",
-                          active && "opacity-0",
-                        )}
-                      />
-                    </Link>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* ======================== Footer ======================== */}
-      <motion.footer
-        variants={itemVariants}
-        className="border-t border-[hsl(var(--sidebar-border))] p-3 space-y-2"
-      >
-        {/* Notifications row */}
-        <Link
-          href="/notifications"
-          className={cn(
-            "group flex items-center gap-2.5 px-2.5 py-2 rounded-md",
-            "text-body-sm font-medium text-muted-foreground",
-            "hover:bg-muted/70 hover:text-foreground",
-            "transition-all duration-fast",
-          )}
-        >
-          <div className="relative">
-            <Bell className="h-[18px] w-[18px]" aria-hidden="true" />
-            {unreadNotifications > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 500, damping: 20 }}
-                className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-1 rounded-full bg-danger text-danger-foreground text-[9px] font-bold leading-[14px] text-center shadow-glow-danger"
-                aria-label={`${unreadNotifications} sin leer`}
-              >
-                {unreadNotifications > 99 ? "99+" : unreadNotifications}
-              </motion.span>
-            )}
-          </div>
-          <span className="flex-1">Notificaciones</span>
-        </Link>
-
-        {/* Theme toggle (compact) */}
-        <div className="flex items-center justify-between px-1 pb-1">
-          <span className="text-caption text-muted-foreground">Tema</span>
-          <ThemeDock variant="compact" />
-        </div>
-
-        {/* User row */}
-        <div
-          className={cn(
-            "flex items-center gap-2.5 rounded-md border border-border/60 bg-muted/30",
-            "px-2.5 py-2",
+            "relative flex h-[64px] items-center gap-3 border-b border-[hsl(var(--sidebar-border))]",
+            collapsed ? "justify-center px-2" : "px-4",
           )}
         >
           <div
             aria-hidden
-            className="relative flex h-8 w-8 items-center justify-center rounded-full bg-aurora text-white text-caption font-semibold shrink-0 shadow-glow"
+            className={cn(
+              "relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg",
+              "bg-brand text-brand-foreground text-sm font-semibold leading-none",
+            )}
           >
-            {userInitial}
-            <span className="absolute inset-0 rounded-full ring-1 ring-inset ring-white/15" />
+            {initial}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-caption font-medium text-foreground truncate">
-              {userName}
-            </p>
-            <p className="text-[11px] text-muted-foreground truncate">{userEmail}</p>
-          </div>
-          <form action="/auth/signout" method="post" className="flex">
-            <button
-              type="submit"
-              title="Cerrar sesión"
-              aria-label="Cerrar sesión"
+
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.div
+                key="brand-text"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="flex min-w-0 flex-1 flex-col"
+              >
+                <p className="truncate text-sm font-semibold text-foreground leading-tight">
+                  {studioName}
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground leading-tight">
+                  StudioFlow
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </header>
+
+        {/* ======================== Navigation ======================== */}
+        <nav
+          aria-label="Navegación principal"
+          className={cn(
+            "flex-1 overflow-y-auto overflow-x-hidden py-4",
+            collapsed ? "px-2 space-y-1" : "px-3 space-y-5",
+          )}
+        >
+          {NAV_GROUPS.map((group, gIdx) => {
+            const isGroupCollapsed = hydrated && collapsedGroups.has(group.label)
+            const hasActiveChild = group.items.some((i) => isActive(i.href))
+
+            return (
+              <div key={group.label}>
+                {/* Header collapsible (solo cuando sidebar está expandida) */}
+                {!collapsed && (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.label)}
+                    aria-expanded={!isGroupCollapsed}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-md px-3 pb-1.5 pt-1",
+                      "text-[10.5px] font-semibold uppercase tracking-[0.12em]",
+                      "transition-colors duration-fast",
+                      "hover:text-foreground",
+                      hasActiveChild
+                        ? "text-foreground/80"
+                        : "text-muted-foreground/70",
+                    )}
+                  >
+                    <span>{group.label}</span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className={cn(
+                        "h-3 w-3 transition-transform duration-base",
+                        isGroupCollapsed && "-rotate-90",
+                      )}
+                    />
+                  </button>
+                )}
+
+                {/* Divisor decorativo entre grupos cuando sidebar colapsada */}
+                {collapsed && gIdx > 0 && (
+                  <div
+                    aria-hidden
+                    className="mx-auto my-2 h-px w-6 bg-[hsl(var(--sidebar-border))]"
+                  />
+                )}
+
+                {/* Items — animados con AnimatePresence cuando expandido */}
+                <AnimatePresence initial={false}>
+                  {(collapsed || !isGroupCollapsed) && (
+                    <motion.div
+                      key={`items-${group.label}`}
+                      initial={
+                        collapsed ? false : { height: 0, opacity: 0 }
+                      }
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
+                      className="overflow-hidden"
+                    >
+                      <div className="space-y-0.5">
+                        {group.items.map((item) => {
+                          const Icon = item.icon
+                          const active = isActive(item.href)
+
+                          const linkContent = (
+                            <Link
+                              href={item.href}
+                              className={cn(
+                                "group relative flex items-center rounded-lg text-[13px] font-medium",
+                                "transition-colors duration-fast",
+                                collapsed
+                                  ? "h-10 w-full justify-center"
+                                  : "px-3 py-2",
+                                active
+                                  ? "bg-brand-soft text-brand"
+                                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                              )}
+                            >
+                              <Icon
+                                aria-hidden="true"
+                                className={cn(
+                                  "h-[18px] w-[18px] flex-shrink-0",
+                                  active ? "text-brand" : "text-muted-foreground/90",
+                                )}
+                              />
+                              <motion.span
+                                animate={collapsed ? "collapsed" : "expanded"}
+                                variants={labelVariants}
+                                transition={{
+                                  duration: 0.18,
+                                  ease: [0.32, 0.72, 0, 1],
+                                }}
+                                className="overflow-hidden whitespace-nowrap"
+                              >
+                                {item.label}
+                              </motion.span>
+                            </Link>
+                          )
+
+                          if (collapsed) {
+                            return (
+                              <Tooltip key={item.href}>
+                                <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
+                                <TooltipContent side="right" className="text-xs">
+                                  {item.label}
+                                </TooltipContent>
+                              </Tooltip>
+                            )
+                          }
+
+                          return <div key={item.href}>{linkContent}</div>
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )
+          })}
+        </nav>
+
+        {/* ======================== Footer ======================== */}
+        <footer
+          className={cn(
+            "border-t border-[hsl(var(--sidebar-border))]",
+            collapsed ? "px-2 py-3 space-y-2" : "p-3 space-y-2",
+          )}
+        >
+          {/* Notificaciones */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/notifications"
+                  className={cn(
+                    "group relative mx-auto flex h-10 w-10 items-center justify-center rounded-lg",
+                    "text-muted-foreground transition-colors duration-fast",
+                    "hover:bg-muted hover:text-foreground",
+                  )}
+                  aria-label={`Notificaciones${unreadNotifications > 0 ? ` (${unreadNotifications})` : ""}`}
+                >
+                  <Bell className="h-[18px] w-[18px]" aria-hidden="true" />
+                  {unreadNotifications > 0 && (
+                    <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-danger" />
+                  )}
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                Notificaciones
+                {unreadNotifications > 0 && (
+                  <span className="ml-1 text-danger">({unreadNotifications})</span>
+                )}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Link
+              href="/notifications"
               className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md",
-                "text-muted-foreground hover:text-danger hover:bg-danger/10",
-                "transition-colors duration-fast",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/30",
+                "group flex items-center gap-3 rounded-lg px-3 py-2",
+                "text-[13px] font-medium text-muted-foreground",
+                "hover:bg-muted hover:text-foreground transition-colors duration-fast",
               )}
             >
-              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          </form>
-        </div>
-      </motion.footer>
-    </motion.aside>
+              <div className="relative">
+                <Bell className="h-[18px] w-[18px]" aria-hidden="true" />
+                {unreadNotifications > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-[16px] rounded-full bg-danger px-1 text-[9px] font-bold leading-[16px] text-danger-foreground text-center">
+                    {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                  </span>
+                )}
+              </div>
+              <span className="flex-1">Notificaciones</span>
+            </Link>
+          )}
+
+          {/* Tema */}
+          {collapsed ? (
+            <div className="flex justify-center">
+              <ThemeDock variant="compact" />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between rounded-lg px-3 py-2">
+              <span className="text-[12px] text-muted-foreground">Tema</span>
+              <ThemeDock variant="compact" />
+            </div>
+          )}
+
+          {/* Toggle Hide/Expand — siempre presente */}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={collapsed ? "Expandir" : "Ocultar"}
+            className={cn(
+              "group flex items-center rounded-lg text-[13px] font-medium text-muted-foreground",
+              "transition-colors duration-fast hover:bg-muted hover:text-foreground",
+              collapsed
+                ? "mx-auto h-10 w-10 justify-center"
+                : "w-full gap-3 px-3 py-2",
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-[18px] w-[18px]" />
+            ) : (
+              <PanelLeftClose className="h-[18px] w-[18px]" />
+            )}
+            <motion.span
+              animate={collapsed ? "collapsed" : "expanded"}
+              variants={labelVariants}
+              transition={{ duration: 0.18 }}
+              className="overflow-hidden whitespace-nowrap"
+            >
+              Ocultar
+            </motion.span>
+          </button>
+
+          {/* Usuario */}
+          <div
+            className={cn(
+              "border-t border-[hsl(var(--sidebar-border))] pt-2",
+              collapsed ? "" : "",
+            )}
+          >
+            {collapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "mx-auto flex h-9 w-9 items-center justify-center rounded-full",
+                      "bg-brand text-xs font-semibold text-brand-foreground",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40",
+                    )}
+                    aria-label={userName}
+                  >
+                    {userInitial}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-[220px]">
+                  <div className="text-xs">
+                    <p className="font-semibold text-foreground">{userName}</p>
+                    <p className="truncate text-muted-foreground">{userEmail}</p>
+                    <form
+                      action="/auth/signout"
+                      method="post"
+                      className="mt-2 border-t border-border/60 pt-2"
+                    >
+                      <button
+                        type="submit"
+                        className="inline-flex items-center gap-1.5 text-[11px] font-medium text-danger hover:underline"
+                      >
+                        <LogOut className="h-3 w-3" /> Cerrar sesión
+                      </button>
+                    </form>
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+                <div
+                  aria-hidden
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-semibold text-brand-foreground"
+                >
+                  {userInitial}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium text-foreground leading-tight">
+                    {userName}
+                  </p>
+                  <p className="truncate text-[11px] text-muted-foreground leading-tight">
+                    {userEmail}
+                  </p>
+                </div>
+                <form action="/auth/signout" method="post" className="flex">
+                  <button
+                    type="submit"
+                    title="Cerrar sesión"
+                    aria-label="Cerrar sesión"
+                    className={cn(
+                      "inline-flex h-7 w-7 items-center justify-center rounded-md",
+                      "text-muted-foreground hover:bg-danger/10 hover:text-danger transition-colors duration-fast",
+                    )}
+                  >
+                    <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </footer>
+      </motion.aside>
+    </TooltipProvider>
   )
 }

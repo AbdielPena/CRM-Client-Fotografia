@@ -86,7 +86,7 @@ export default async function AvailabilityPage() {
                         className="px-5 py-3 flex items-center gap-3"
                       >
                         {isClosed ? (
-                          <CalendarX className="h-4 w-4 text-red-500 flex-shrink-0" />
+                          <CalendarX className="h-4 w-4 text-danger flex-shrink-0" />
                         ) : (
                           <CalendarCheck className="h-4 w-4 text-emerald-500 flex-shrink-0" />
                         )}
@@ -109,7 +109,7 @@ export default async function AvailabilityPage() {
                           <input type="hidden" name="id" value={r.id} />
                           <button
                             type="submit"
-                            className="p-1.5 text-muted-foreground hover:text-red-600 transition-colors"
+                            className="p-1.5 text-muted-foreground hover:text-danger transition-colors"
                             aria-label="Eliminar"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -152,7 +152,7 @@ export default async function AvailabilityPage() {
                       >
                         <Clock
                           className={`h-4 w-4 flex-shrink-0 ${
-                            isBooking ? "text-blue-500" : "text-amber-500"
+                            isBooking ? "text-brand" : "text-amber-500"
                           }`}
                         />
                         <div className="flex-1 min-w-0">
@@ -183,7 +183,7 @@ export default async function AvailabilityPage() {
                             <input type="hidden" name="id" value={b.id} />
                             <button
                               type="submit"
-                              className="p-1.5 text-muted-foreground hover:text-red-600 transition-colors"
+                              className="p-1.5 text-muted-foreground hover:text-danger transition-colors"
                               aria-label="Eliminar"
                             >
                               <Trash2 className="h-3.5 w-3.5" />

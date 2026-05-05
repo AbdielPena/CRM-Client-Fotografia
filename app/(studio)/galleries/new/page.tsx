@@ -1,55 +1,203 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
+import type { Metadata } from "next"
+
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
-import type { Metadata } from "next"
+import { createSupabaseServerClient } from "@/server/supabase/server"
+import { createGalleryAction } from "@/server/actions/gallery.actions"
 
-export const metadata: Metadata = { title: "Galerías — Próximamente" }
+export const metadata: Metadata = { title: "Nueva galería" }
 
-export default async function NewGalleryPage() {
+export default async function NewGalleryPage({
+  searchParams,
+}: {
+  searchParams: { clientId?: string; projectId?: string }
+}) {
   const session = await requireStudioAuth()
-  const unread = await countUnreadNotifications(session.studioId)
+  const supabase = createSupabaseServerClient()
+
+  const [clientsRes, projectsRes, unread] = await Promise.all([
+    supabase
+      .from("clients")
+      .select("id, name")
+      .eq("studio_id", session.studioId)
+      .is("deleted_at", null)
+      .order("name", { ascending: true }),
+    supabase
+      .from("projects")
+      .select("id, name, client_id")
+      .eq("studio_id", session.studioId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    countUnreadNotifications(session.studioId),
+  ])
+
+  const clients = (clientsRes.data ?? []) as Array<{ id: string; name: string }>
+  const projects = (projectsRes.data ?? []) as Array<{
+    id: string
+    name: string
+    client_id: string | null
+  }>
+
+  const inputCls =
+    "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
 
   return (
     <>
       <AppTopbar
-        eyebrow="Galerías"
-        title="Galerías"
-        description="Comparte selecciones de fotos con tus clientes"
+        title="Nueva galería"
+        description="Crea una colección nueva para entregarla a un cliente."
         unreadNotifications={unread}
       />
+
       <div className="px-6 py-6 lg:px-8 lg:py-8">
-        <div className="max-w-xl sf-card p-8 text-center">
-          <div className="w-12 h-12 bg-muted/60 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg
-              className="w-6 h-6 text-muted-foreground"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-4l-2-2H6a2 2 0 00-2 2z"
+        <form
+          action={async (formData: FormData) => {
+            "use server"
+            const result = await createGalleryAction(formData)
+            redirect(`/galleries/${result.id}`)
+          }}
+          className="max-w-2xl space-y-5"
+        >
+          <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-foreground">Información básica</h2>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Nombre de la galería <span className="text-danger">*</span>
+              </label>
+              <input
+                name="name"
+                required
+                placeholder="ej. Boda Andrea & Miguel — Sesión completa"
+                className={inputCls}
               />
-            </svg>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Descripción
+              </label>
+              <textarea
+                name="description"
+                rows={2}
+                placeholder="Notas o mensaje de bienvenida para el cliente"
+                className={`${inputCls} resize-none`}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Cliente
+                </label>
+                <select
+                  name="clientId"
+                  defaultValue={searchParams.clientId ?? ""}
+                  className={inputCls}
+                >
+                  <option value="">Sin cliente</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Vincular dispara automatización: el proyecto pasa a "Esperando selección".
+                </p>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">
+                  Proyecto (opcional)
+                </label>
+                <select
+                  name="projectId"
+                  defaultValue={searchParams.projectId ?? ""}
+                  className={inputCls}
+                >
+                  <option value="">Sin proyecto</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
-          <h2 className="text-base font-semibold text-foreground mb-2">
-            Galerías — próximamente
-          </h2>
-          <p className="text-sm text-muted-foreground mb-6">
-            Estamos rehaciendo el módulo de galerías sobre Supabase Storage.
-            Estará disponible en una fase posterior junto con las descargas
-            de alta resolución y la selección de favoritas.
-          </p>
-          <Link
-            href="/dashboard"
-            className="inline-block px-5 py-2.5 bg-foreground text-background text-sm font-medium rounded-lg hover:bg-foreground/90 transition-colors"
-          >
-            Volver al dashboard
-          </Link>
-        </div>
+
+          <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+            <h2 className="text-sm font-semibold text-foreground">Privacidad</h2>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Visibilidad
+              </label>
+              <select name="visibility" defaultValue="private" className={inputCls}>
+                <option value="private">Privada (solo con link directo)</option>
+                <option value="password">Con contraseña</option>
+                <option value="public">Pública (cualquiera con el link)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Contraseña (si aplica)
+              </label>
+              <input
+                name="password"
+                type="text"
+                placeholder="Dejar vacío para no requerir"
+                className={inputCls}
+              />
+            </div>
+
+            <div className="flex items-center gap-3 rounded-lg bg-muted/40 px-3 py-2">
+              <input
+                id="allowDownload"
+                name="allowDownload"
+                type="checkbox"
+                defaultChecked
+                value="true"
+                className="h-4 w-4 rounded border-border text-brand focus:ring-brand/30"
+              />
+              <label htmlFor="allowDownload" className="text-sm text-foreground">
+                Permitir descargas (con marca de agua si está activa)
+              </label>
+            </div>
+
+            <div className="flex items-center gap-3 rounded-lg bg-muted/40 px-3 py-2">
+              <input
+                id="requireEmail"
+                name="requireEmail"
+                type="checkbox"
+                value="true"
+                className="h-4 w-4 rounded border-border text-brand focus:ring-brand/30"
+              />
+              <label htmlFor="requireEmail" className="text-sm text-foreground">
+                Requerir email del cliente para ver la galería
+              </label>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              className="rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+            >
+              Crear galería
+            </button>
+            <Link
+              href="/galleries"
+              className="rounded-lg bg-muted/60 px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              Cancelar
+            </Link>
+          </div>
+        </form>
       </div>
     </>
   )

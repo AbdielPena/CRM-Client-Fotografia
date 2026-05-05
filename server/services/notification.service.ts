@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { cache } from 'react'
+
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
 import type { Database } from '@/types/supabase'
@@ -95,22 +97,26 @@ export async function listNotifications(
   return (data ?? []) as NotificationListItem[]
 }
 
-export async function countUnreadNotifications(
-  studioId: string,
-): Promise<number> {
-  const supabase = createSupabaseServerClient()
-  const { count, error } = await supabase
-    .from('notifications')
-    .select('*', { count: 'exact', head: true })
-    .eq('studio_id', studioId)
-    .eq('is_read', false)
+/**
+ * Cacheada por request con React `cache()`. Si el layout (sidebar) y una
+ * page la llaman ambas, solo se ejecuta UNA query.
+ */
+export const countUnreadNotifications = cache(
+  async (studioId: string): Promise<number> => {
+    const supabase = createSupabaseServerClient()
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('studio_id', studioId)
+      .eq('is_read', false)
 
-  if (error) {
-    console.error('[countUnreadNotifications]', error.message)
-    return 0
-  }
-  return count ?? 0
-}
+    if (error) {
+      console.error('[countUnreadNotifications]', error.message)
+      return 0
+    }
+    return count ?? 0
+  },
+)
 
 /**
  * Marca una notificación como leída. Solo el recipient (o platform admin)

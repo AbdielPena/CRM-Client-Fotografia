@@ -115,7 +115,7 @@ export default async function CalendarPage({
         actions={
           <Link
             href="/projects/new"
-            className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+            className="px-4 py-2 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors"
           >
             + Nuevo proyecto
           </Link>
@@ -167,13 +167,13 @@ export default async function CalendarPage({
                   <div
                     key={day}
                     className={`min-h-[80px] p-1.5 border-b border-r border-gray-50 ${
-                      isToday ? "bg-blue-50" : ""
+                      isToday ? "bg-brand-soft" : ""
                     } ${(day + firstDow - 1) % 7 === 0 || (day + firstDow - 1) % 7 === 6 ? "bg-muted/30/50" : ""}`}
                   >
                     <span
                       className={`text-xs font-medium block mb-1 ${
                         isToday
-                          ? "text-white bg-blue-500 rounded-full w-5 h-5 flex items-center justify-center"
+                          ? "text-white bg-brand rounded-full w-5 h-5 flex items-center justify-center"
                           : "text-foreground"
                       }`}
                     >
@@ -183,7 +183,7 @@ export default async function CalendarPage({
                       <Link
                         key={b.id}
                         href={`/projects/${b.id}`}
-                        className="block text-[10px] bg-blue-100 text-blue-700 rounded px-1 py-0.5 mb-0.5 truncate hover:bg-blue-200 transition-colors"
+                        className="block text-[10px] bg-blue-100 text-brand rounded px-1 py-0.5 mb-0.5 truncate hover:bg-blue-200 transition-colors"
                         title={`${b.name} · ${b.client?.name ?? ""}`}
                       >
                         {b.name}
@@ -211,7 +211,7 @@ export default async function CalendarPage({
 
             {upcoming.length === 0 ? (
               <div className="py-8 text-center">
-                <Calendar className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                <Calendar className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
                 <p className="text-sm text-muted-foreground">Sin sesiones próximas</p>
               </div>
             ) : (

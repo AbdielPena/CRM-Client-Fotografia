@@ -1,16 +1,9 @@
 import type { Metadata } from "next"
 import {
-  Users,
-  UserCheck,
-  FolderOpen,
-  CalendarDays,
-  TrendingUp,
-  BarChart3,
-  Filter,
-  Package,
-  PieChart,
   Receipt,
   ArrowRight,
+  Plus,
+  Download,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -18,24 +11,23 @@ import { requireStudioAuth } from "@/server/middleware/auth"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import {
   getMonthlyRevenue,
-  getBookingsFunnel,
   getTopPackages,
-  getLeadConversion,
-  getProjectsByStatus,
 } from "@/server/services/dashboard.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { formatCurrency } from "@/lib/utils/currency"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
+import { Button } from "@/components/ui/button"
 import { StatCard } from "@/components/shared/stat-card"
 import { DashboardCard } from "@/components/dashboard/dashboard-card"
-import { RevenueBarChart } from "@/components/dashboard/revenue-bar-chart"
-import { FunnelWidget } from "@/components/dashboard/funnel-widget"
+import { RevenueLineChart } from "@/components/dashboard/revenue-line-chart"
+import { GoalsProgress } from "@/components/dashboard/goals-progress"
+import {
+  RecentActivity,
+  type ActivityItem,
+} from "@/components/dashboard/recent-activity"
 import { TopPackagesList } from "@/components/dashboard/top-packages-list"
-import { ProjectsByStatus } from "@/components/dashboard/projects-by-status"
-import { LeadConversionDonut } from "@/components/dashboard/lead-conversion-donut"
 import { UpcomingSessions } from "@/components/dashboard/upcoming-sessions"
-import { RecentLeads } from "@/components/dashboard/recent-leads"
 
 export const metadata: Metadata = { title: "Dashboard" }
 
@@ -46,26 +38,14 @@ async function getDashboardData(studioId: string) {
   const startOfMonthIso = startOfMonth.toISOString()
 
   const [
-    totalLeadsRes,
-    newLeadsMonthRes,
     totalClientsRes,
     activeProjectsRes,
     pendingInvoicesRes,
     paymentsMonthRes,
     upcomingProjectsRes,
-    recentLeadsRes,
+    pendingBookingsRes,
+    recentClientsRes,
   ] = await Promise.all([
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("studio_id", studioId)
-      .is("deleted_at", null),
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .eq("studio_id", studioId)
-      .gte("created_at", startOfMonthIso)
-      .is("deleted_at", null),
     supabase
       .from("clients")
       .select("id", { count: "exact", head: true })
@@ -100,8 +80,13 @@ async function getDashboardData(studioId: string) {
       .order("event_date", { ascending: true })
       .limit(5),
     supabase
-      .from("leads")
-      .select("*")
+      .from("booking_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("studio_id", studioId)
+      .eq("status", "pending_review"),
+    supabase
+      .from("clients")
+      .select("id, name, email, created_at")
       .eq("studio_id", studioId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -120,173 +105,222 @@ async function getDashboardData(studioId: string) {
 
   return {
     stats: {
-      leads: { total: totalLeadsRes.count ?? 0, thisMonth: newLeadsMonthRes.count ?? 0 },
       clients: totalClientsRes.count ?? 0,
       activeProjects: activeProjectsRes.count ?? 0,
       revenue: revenueMonth,
       pending: pendingAmount,
+      pendingBookings: pendingBookingsRes.count ?? 0,
     },
     upcomingProjects: upcomingProjectsRes.data ?? [],
-    recentLeads: recentLeadsRes.data ?? [],
+    recentClients: recentClientsRes.data ?? [],
   }
+}
+
+function timeAgo(date: Date): string {
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return "ahora"
+  if (diffMin < 60) return `hace ${diffMin} min`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `hace ${diffH}h`
+  const diffD = Math.floor(diffH / 24)
+  if (diffD < 7) return `hace ${diffD}d`
+  return date.toLocaleDateString("es-DO", { day: "numeric", month: "short" })
 }
 
 export default async function DashboardPage() {
   const session = await requireStudioAuth()
 
-  const [
-    data,
-    monthlyRevenue,
-    funnel,
-    topPackages,
-    leadConversion,
-    projectsByStatus,
-    unreadNotifications,
-  ] = await Promise.all([
-    getDashboardData(session.studioId),
-    getMonthlyRevenue(session.studioId, 12),
-    getBookingsFunnel(session.studioId),
-    getTopPackages(session.studioId, 6, 5),
-    getLeadConversion(session.studioId, 3),
-    getProjectsByStatus(session.studioId),
-    countUnreadNotifications(session.studioId),
-  ])
+  const [data, monthlyRevenue, topPackages, unreadNotifications] =
+    await Promise.all([
+      getDashboardData(session.studioId),
+      getMonthlyRevenue(session.studioId, 12),
+      getTopPackages(session.studioId, 5, 5),
+      countUnreadNotifications(session.studioId),
+    ])
 
-  const hour = new Date().getHours()
-  const greeting =
-    hour < 12 ? "Buenos días" : hour < 18 ? "Buenas tardes" : "Buenas noches"
   const firstName = (session.name || session.email).split(" ")[0]
-  const today = new Date().toLocaleDateString("es-DO", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  })
+
+  // Trends — calculados a partir de monthlyRevenue (últimos 2 meses)
+  const lastMonth = monthlyRevenue.at(-2)?.revenue ?? 0
+  const thisMonth = monthlyRevenue.at(-1)?.revenue ?? 0
+  const revenueTrend =
+    lastMonth > 0
+      ? Number((((thisMonth - lastMonth) / lastMonth) * 100).toFixed(1))
+      : thisMonth > 0
+        ? 100
+        : 0
+
+  // Goals derivados de datos reales
+  const cobranzaPct =
+    data.stats.revenue + data.stats.pending > 0
+      ? (data.stats.revenue / (data.stats.revenue + data.stats.pending)) * 100
+      : 0
+
+  const ocupacionPct = Math.min(
+    100,
+    (data.upcomingProjects.length / 8) * 100,
+  )
+
+  // Capacidad activa: % de proyectos activos sobre clientes (rough proxy)
+  const capacidadPct =
+    data.stats.clients > 0
+      ? Math.min(100, (data.stats.activeProjects / data.stats.clients) * 100)
+      : 0
+
+  // Activity feed: clientes recientes + próximas sesiones
+  const activityItems: ActivityItem[] = [
+    ...data.recentClients.slice(0, 3).map((c: { id: string; name: string; email?: string | null; created_at: string }) => ({
+      id: `client-${c.id}`,
+      icon: "client" as const,
+      tone: "blue" as const,
+      title: "Nuevo cliente",
+      description: `${c.name}${c.email ? ` · ${c.email}` : ""}`,
+      timestamp: timeAgo(new Date(c.created_at)),
+      href: `/clients/${c.id}`,
+    })),
+    ...data.upcomingProjects.slice(0, 2).map((p) => {
+      const proj = p as { id: string; name: string; event_date: string; client?: { name?: string } | null }
+      return {
+        id: `proj-${proj.id}`,
+        icon: "session" as const,
+        tone: "violet" as const,
+        title: "Sesión próxima",
+        description: `${proj.name}${proj.client?.name ? ` · ${proj.client.name}` : ""}`,
+        timestamp: new Date(proj.event_date).toLocaleDateString("es-DO", {
+          day: "numeric",
+          month: "short",
+        }),
+        href: `/projects/${proj.id}`,
+      }
+    }),
+  ]
 
   return (
     <>
-      {/* Topbar mínimo — solo notificaciones */}
       <AppTopbar unreadNotifications={unreadNotifications} />
 
-      <div className="px-6 pb-12 pt-2 lg:px-8">
-
-        {/* ─── Hero greeting ──────────────────────────────────────────── */}
-        <div className="mb-8 mt-4">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-brand">
-            {today}
-          </p>
-          <h1 className="font-display text-[2.75rem] font-normal leading-tight text-foreground lg:text-[3.25rem]">
-            {greeting},{" "}
-            <span className="bg-gradient-to-br from-brand to-violet-400 bg-clip-text text-transparent">
-              {firstName}
-            </span>
+      {/* ─── Header de la página ───────────────────────────────────── */}
+      <div className="flex flex-col gap-3 px-6 pt-6 pb-2 lg:flex-row lg:items-end lg:justify-between lg:px-8">
+        <div className="min-w-0">
+          <h1 className="text-[22px] font-bold leading-tight tracking-tight text-foreground">
+            Dashboard
           </h1>
-          <p className="mt-1.5 text-base text-muted-foreground">
-            Este es el pulso de tu estudio hoy.
+          <p className="mt-1 text-[13.5px] text-muted-foreground">
+            Bienvenido de vuelta, {firstName}. Este es el pulso de tu estudio hoy.
           </p>
         </div>
 
-        <div className="space-y-6">
-          {/* ─── KPIs ───────────────────────────────────────────────── */}
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <Button variant="secondary" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />}>
+            Exportar
+          </Button>
+          <Button asChild size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>
+            <Link href="/projects/new">Nuevo proyecto</Link>
+          </Button>
+        </div>
+      </div>
+
+      <div className="px-6 pb-12 pt-4 lg:px-8">
+        <div className="space-y-5">
+          {/* ─── KPIs ─────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
               title="Ingresos del mes"
               value={formatCurrency(data.stats.revenue, "DOP")}
+              trend={
+                revenueTrend !== 0
+                  ? { value: revenueTrend, label: "vs mes anterior" }
+                  : undefined
+              }
               subtitle={
                 data.stats.pending > 0
                   ? `${formatCurrency(data.stats.pending, "DOP")} por cobrar`
                   : "Al día con los cobros"
               }
-              icon={<TrendingUp className="h-4 w-4" />}
-              accent
               delay={0}
             />
             <StatCard
-              title="Leads totales"
-              value={data.stats.leads.total}
+              title="Solicitudes nuevas"
+              value={data.stats.pendingBookings}
               subtitle={
-                data.stats.leads.thisMonth > 0
-                  ? `+${data.stats.leads.thisMonth} este mes`
-                  : "Sin leads nuevos aún"
+                data.stats.pendingBookings > 0
+                  ? "Pendientes de revisar"
+                  : "Sin solicitudes nuevas"
               }
-              icon={<UserCheck className="h-4 w-4" />}
               delay={0.05}
             />
             <StatCard
               title="Clientes"
               value={data.stats.clients}
               subtitle="Base activa"
-              icon={<Users className="h-4 w-4" />}
               delay={0.1}
             />
             <StatCard
               title="Proyectos activos"
               value={data.stats.activeProjects}
               subtitle="Reservados + en proceso"
-              icon={<FolderOpen className="h-4 w-4" />}
               delay={0.15}
             />
           </div>
 
-          {/* ─── Revenue chart ──────────────────────────────────────── */}
-          <DashboardCard
-            title="Ingresos mensuales"
-            icon={<BarChart3 className="h-3.5 w-3.5" />}
-            delay={0.2}
-          >
-            <RevenueBarChart buckets={monthlyRevenue} currency="DOP" />
-          </DashboardCard>
+          {/* ─── Main row: Revenue chart + Goals ────────────────────── */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <DashboardCard title="Tendencia de ingresos" delay={0.2}>
+                <RevenueLineChart buckets={monthlyRevenue} currency="DOP" />
+              </DashboardCard>
+            </div>
 
-          {/* ─── Funnel + Donut ─────────────────────────────────────── */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <DashboardCard
-              title="Embudo de reservas (mes actual)"
-              icon={<Filter className="h-3.5 w-3.5" />}
-              delay={0.25}
-            >
-              <FunnelWidget data={funnel} />
-            </DashboardCard>
-
-            <DashboardCard
-              title="Conversión de leads (3 meses)"
-              icon={<PieChart className="h-3.5 w-3.5" />}
-              delay={0.3}
-            >
-              <LeadConversionDonut data={leadConversion} />
-            </DashboardCard>
-          </div>
-
-          {/* ─── Packages + Projects by status ──────────────────────── */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <DashboardCard
-              title="Paquetes más vendidos (6 meses)"
-              icon={<Package className="h-3.5 w-3.5" />}
-              href="/settings/packages"
-              hrefLabel="Ver paquetes"
-              delay={0.35}
-            >
-              <TopPackagesList items={topPackages} currency="DOP" />
-            </DashboardCard>
-
-            <DashboardCard
-              title="Proyectos por estado"
-              icon={<FolderOpen className="h-3.5 w-3.5" />}
-              href="/projects"
-              hrefLabel="Ver proyectos"
-              delay={0.4}
-            >
-              <ProjectsByStatus rows={projectsByStatus} />
+            <DashboardCard title="Metas del mes" delay={0.25}>
+              <GoalsProgress
+                goals={[
+                  {
+                    label: "Cobranza",
+                    value: cobranzaPct,
+                    tone: "blue",
+                    hint:
+                      data.stats.pending > 0
+                        ? `${formatCurrency(data.stats.pending, "DOP")} pendiente`
+                        : "Al día",
+                  },
+                  {
+                    label: "Ocupación calendario",
+                    value: ocupacionPct,
+                    tone: "violet",
+                    hint: `${data.upcomingProjects.length} sesiones próximas`,
+                  },
+                  {
+                    label: "Capacidad activa",
+                    value: capacidadPct,
+                    tone: "emerald",
+                    hint: `${data.stats.activeProjects} de ${data.stats.clients} clientes`,
+                  },
+                ]}
+              />
             </DashboardCard>
           </div>
 
-          {/* ─── Upcoming + Recent leads ─────────────────────────────── */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* ─── Recent Activity + Upcoming sessions ────────────────── */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <DashboardCard
+                title="Actividad reciente"
+                href="/clients"
+                hrefLabel="Ver todo"
+                delay={0.3}
+              >
+                <RecentActivity items={activityItems} />
+              </DashboardCard>
+            </div>
+
             <DashboardCard
               title="Próximas sesiones"
-              icon={<CalendarDays className="h-3.5 w-3.5" />}
               href="/calendar"
               hrefLabel="Ver calendario"
               bodyClassName="px-0 pb-0"
-              delay={0.45}
+              delay={0.35}
             >
               <UpcomingSessions
                 projects={
@@ -296,44 +330,37 @@ export default async function DashboardPage() {
                 }
               />
             </DashboardCard>
-
-            <DashboardCard
-              title="Leads recientes"
-              icon={<UserCheck className="h-3.5 w-3.5" />}
-              href="/leads"
-              hrefLabel="Ver todos"
-              bodyClassName="px-0 pb-0"
-              delay={0.5}
-            >
-              <RecentLeads
-                leads={
-                  data.recentLeads as React.ComponentProps<
-                    typeof RecentLeads
-                  >["leads"]
-                }
-              />
-            </DashboardCard>
           </div>
 
-          {/* ─── Pending invoices banner ─────────────────────────────── */}
+          {/* ─── Top packages ─────────────────────────────────────── */}
+          <DashboardCard
+            title="Paquetes más vendidos"
+            href="/settings/packages"
+            hrefLabel="Ver paquetes"
+            delay={0.4}
+          >
+            <TopPackagesList items={topPackages} currency="DOP" />
+          </DashboardCard>
+
+          {/* ─── Pending banner ───────────────────────────────────── */}
           {data.stats.pending > 0 && (
-            <div className="flex items-center justify-between gap-4 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50 px-6 py-5 dark:border-amber-800/40 dark:bg-amber-900/20">
-              <div className="flex items-center gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400">
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800/40 dark:bg-amber-900/15">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
                   <Receipt className="h-4 w-4" />
-                </div>
+                </span>
                 <div>
-                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                  <p className="text-[13.5px] font-semibold text-amber-900 dark:text-amber-200">
                     {formatCurrency(data.stats.pending, "DOP")} por cobrar
                   </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                  <p className="text-[12px] text-amber-700 dark:text-amber-400">
                     Revisa tus facturas pendientes y acelera el flujo de caja.
                   </p>
                 </div>
               </div>
               <Link
                 href="/invoices?status=pending"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3.5 py-2 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-300 bg-card px-3 py-1.5 text-[12.5px] font-semibold text-amber-700 transition-colors hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
               >
                 Ver facturas
                 <ArrowRight className="h-3 w-3" />

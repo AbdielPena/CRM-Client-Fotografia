@@ -62,7 +62,7 @@ function SubmitButton({ label, disabledReason }: { label: string; disabledReason
       type="submit"
       disabled={disabled}
       title={disabledReason}
-      className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      className="inline-flex items-center gap-2 px-5 py-2.5 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
     >
       {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
       {pending ? "Creando cliente…" : label}
@@ -73,7 +73,7 @@ function SubmitButton({ label, disabledReason }: { label: string; disabledReason
 function FieldError({ errors }: { errors?: string[] }) {
   if (!errors || errors.length === 0) return null
   return (
-    <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
+    <p className="mt-1 flex items-center gap-1 text-xs text-danger">
       <AlertCircle className="h-3 w-3 flex-shrink-0" />
       {errors[0]}
     </p>
@@ -120,7 +120,7 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
     <form action={formAction} className="space-y-6" noValidate>
       {/* Aviso general */}
       {state.ok === false && state.message && (
-        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+        <div className="flex items-start gap-3 p-4 bg-danger/10 border border-red-200 rounded-xl text-sm text-danger">
           <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <div>
             <p className="font-medium">No pudimos crear el cliente</p>
@@ -156,22 +156,22 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
       )}
 
       {/* Información básica */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-900">Información del cliente</h2>
+      <section className="bg-card rounded-xl border border-border p-6 space-y-4">
+        <h2 className="text-sm font-semibold text-foreground">Información del cliente</h2>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre completo <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-foreground mb-1">
+            Nombre completo <span className="text-danger">*</span>
           </label>
           <input
             name="name"
             required
             defaultValue={values.name ?? ""}
             aria-invalid={!!fieldErrors.name}
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 ${
               fieldErrors.name
                 ? "border-red-400 focus:border-red-500"
-                : "border-gray-200 focus:border-blue-400"
+                : "border-border focus:border-brand"
             }`}
             placeholder="Ej. María Fernández"
           />
@@ -180,32 +180,32 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Email</label>
             <input
               name="email"
               type="email"
               defaultValue={values.email ?? ""}
               aria-invalid={!!fieldErrors.email}
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 ${
                 fieldErrors.email
                   ? "border-red-400 focus:border-red-500"
-                  : "border-gray-200 focus:border-blue-400"
+                  : "border-border focus:border-brand"
               }`}
               placeholder="correo@ejemplo.com"
             />
             <FieldError errors={fieldErrors.email} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Teléfono</label>
             <input
               name="phone"
               type="tel"
               defaultValue={values.phone ?? ""}
               aria-invalid={!!fieldErrors.phone}
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 ${
                 fieldErrors.phone
                   ? "border-red-400 focus:border-red-500"
-                  : "border-gray-200 focus:border-blue-400"
+                  : "border-border focus:border-brand"
               }`}
               placeholder="+1 809 555 0000"
             />
@@ -214,13 +214,13 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             ¿Cómo nos conoció?
           </label>
           <select
             name="source"
             defaultValue={values.source ?? ""}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
           >
             <option value="">No especificado</option>
             {SOURCES.map((s) => (
@@ -233,18 +233,18 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
       </section>
 
       {/* Paquete + sesión (obligatorio) */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+      <section className="bg-card rounded-xl border border-border p-6 space-y-4">
         <div>
-          <h2 className="text-sm font-semibold text-gray-900">Paquete y sesión</h2>
-          <p className="text-xs text-gray-500 mt-1">
+          <h2 className="text-sm font-semibold text-foreground">Paquete y sesión</h2>
+          <p className="text-xs text-muted-foreground mt-1">
             Obligatorio. Al guardar se generarán automáticamente el proyecto, el contrato y
             las facturas 50 / 50.
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Paquete <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-foreground mb-1">
+            Paquete <span className="text-danger">*</span>
           </label>
           <select
             name="packageId"
@@ -252,10 +252,10 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
             value={packageId}
             onChange={(e) => setPackageId(e.target.value)}
             aria-invalid={!!fieldErrors.packageId}
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white ${
+            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 bg-card ${
               fieldErrors.packageId
                 ? "border-red-400 focus:border-red-500"
-                : "border-gray-200 focus:border-blue-400"
+                : "border-border focus:border-brand"
             }`}
           >
             <option value="">— Selecciona un paquete —</option>
@@ -269,26 +269,26 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
         </div>
 
         {selectedPackage && (
-          <div className="rounded-lg border border-blue-100 bg-blue-50/60 p-4 text-sm text-blue-900">
+          <div className="rounded-lg border border-blue-100 bg-brand-soft/60 p-4 text-sm text-blue-900">
             <p className="font-medium">{selectedPackage.name}</p>
             {selectedPackage.description && (
               <p className="text-xs text-blue-800 mt-1">{selectedPackage.description}</p>
             )}
             <dl className="grid grid-cols-3 gap-2 mt-3 text-xs">
               <div>
-                <dt className="text-blue-700/70">Total</dt>
+                <dt className="text-brand/70">Total</dt>
                 <dd className="font-semibold text-blue-900">
                   {formatCurrency(total, currency)}
                 </dd>
               </div>
               <div>
-                <dt className="text-blue-700/70">Reserva (50 %)</dt>
+                <dt className="text-brand/70">Reserva (50 %)</dt>
                 <dd className="font-semibold text-blue-900">
                   {formatCurrency(half, currency)}
                 </dd>
               </div>
               <div>
-                <dt className="text-blue-700/70">Saldo (50 %)</dt>
+                <dt className="text-brand/70">Saldo (50 %)</dt>
                 <dd className="font-semibold text-blue-900">
                   {formatCurrency(remainder, currency)}
                 </dd>
@@ -299,18 +299,18 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tipo de sesión <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-foreground mb-1">
+              Tipo de sesión <span className="text-danger">*</span>
             </label>
             <select
               name="eventType"
               required
               defaultValue={values.eventType ?? "quinceañera"}
               aria-invalid={!!fieldErrors.eventType}
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white ${
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 bg-card ${
                 fieldErrors.eventType
                   ? "border-red-400 focus:border-red-500"
-                  : "border-gray-200 focus:border-blue-400"
+                  : "border-border focus:border-brand"
               }`}
             >
               {EVENT_TYPES.map((t) => (
@@ -323,8 +323,8 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Fecha de la sesión <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-foreground mb-1">
+              Fecha de la sesión <span className="text-danger">*</span>
             </label>
             <input
               type="date"
@@ -334,51 +334,51 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
               min={todayIso()}
               onChange={(e) => setEventDate(e.target.value)}
               aria-invalid={!!fieldErrors.eventDate}
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white ${
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 bg-card ${
                 fieldErrors.eventDate
                   ? "border-red-400 focus:border-red-500"
-                  : "border-gray-200 focus:border-blue-400"
+                  : "border-border focus:border-brand"
               }`}
             />
             <FieldError errors={fieldErrors.eventDate} />
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               El saldo del 50 % se facturará para esta fecha.
             </p>
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Locación de la sesión
           </label>
           <input
             name="location"
             defaultValue={values.location ?? ""}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
             placeholder="Estudio, Jardín Botánico, Casa del cliente…"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Nombre del proyecto (opcional)
           </label>
           <input
             name="projectName"
             defaultValue={values.projectName ?? ""}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
             placeholder="Si lo dejas vacío usaremos: Nombre del cliente — Paquete"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Vencimiento de la reserva
           </label>
           <select
             name="reserveDueInDays"
             defaultValue={values.reserveDueInDays ?? "3"}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
           >
             <option value="0">Hoy mismo</option>
             <option value="3">En 3 días</option>
@@ -389,66 +389,66 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
       </section>
 
       {/* Ubicación del cliente */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-900">Ubicación del cliente</h2>
+      <section className="bg-card rounded-xl border border-border p-6 space-y-4">
+        <h2 className="text-sm font-semibold text-foreground">Ubicación del cliente</h2>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+          <label className="block text-sm font-medium text-foreground mb-1">Dirección</label>
           <input
             name="address"
             defaultValue={values.address ?? ""}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
             placeholder="Calle y número"
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Ciudad</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Ciudad</label>
             <input
               name="city"
               defaultValue={values.city ?? "Santo Domingo"}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
               placeholder="Ciudad"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
+            <label className="block text-sm font-medium text-foreground mb-1">País</label>
             <input
               name="country"
               defaultValue={values.country ?? "República Dominicana"}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
             />
           </div>
         </div>
       </section>
 
       {/* Redes */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <h2 className="text-sm font-semibold text-gray-900">Redes sociales</h2>
+      <section className="bg-card rounded-xl border border-border p-6 space-y-4">
+        <h2 className="text-sm font-semibold text-foreground">Redes sociales</h2>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Instagram</label>
+          <label className="block text-sm font-medium text-foreground mb-1">Instagram</label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
               @
             </span>
             <input
               name="instagramHandle"
               defaultValue={values.instagramHandle ?? ""}
-              className="w-full pl-7 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className="w-full pl-7 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
               placeholder="usuario"
             />
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Sitio web</label>
+          <label className="block text-sm font-medium text-foreground mb-1">Sitio web</label>
           <input
             name="websiteUrl"
             type="url"
             defaultValue={values.websiteUrl ?? ""}
             aria-invalid={!!fieldErrors.websiteUrl}
-            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 ${
+            className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 ${
               fieldErrors.websiteUrl
                 ? "border-red-400 focus:border-red-500"
-                : "border-gray-200 focus:border-blue-400"
+                : "border-border focus:border-brand"
             }`}
             placeholder="https://ejemplo.com"
           />
@@ -457,13 +457,13 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
       </section>
 
       {/* Notas */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-sm font-semibold text-gray-900 mb-4">Notas internas</h2>
+      <section className="bg-card rounded-xl border border-border p-6">
+        <h2 className="text-sm font-semibold text-foreground mb-4">Notas internas</h2>
         <textarea
           name="notes"
           rows={3}
           defaultValue={values.notes ?? ""}
-          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+          className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none"
           placeholder="Referencias, detalles de la cliente, preferencias de estilo…"
         />
       </section>
@@ -497,7 +497,7 @@ export function NewClientForm({ packages, hasContractTemplate }: NewClientFormPr
         <SubmitButton label="Crear cliente" disabledReason={disabledReason} />
         <Link
           href="/clients"
-          className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          className="px-5 py-2.5 text-sm font-medium text-foreground bg-muted rounded-lg hover:bg-muted transition-colors"
         >
           Cancelar
         </Link>

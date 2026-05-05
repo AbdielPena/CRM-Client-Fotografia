@@ -2,6 +2,7 @@ import 'server-only'
 
 import { projectsRepo } from '@/server/repositories'
 import { createSupabaseServerClient } from '@/server/supabase/server'
+import { createSupabaseServiceClient } from '@/server/supabase/service'
 import type {
   CreateProjectInput,
   UpdateProjectInput,
@@ -213,9 +214,19 @@ export async function deleteProject(
     throw new Error('PROJECT_NOT_FOUND')
   }
 
-  await projectsRepo.update(projectId, {
-    deleted_at: new Date().toISOString(),
+  // Cascade real (SQL function): borra contratos, facturas, pagos, notas,
+  // galerías, form_responses, booking_requests, etc. asociados al proyecto.
+  const supabase = createSupabaseServiceClient()
+  const { error } = await supabase.rpc('cascade_delete_project', {
+    p_project_id: projectId,
+    p_studio_id: studioId,
   })
+  if (error) {
+    if (error.message?.includes('PROJECT_NOT_FOUND')) {
+      throw new Error('PROJECT_NOT_FOUND')
+    }
+    throw new Error(error.message)
+  }
 
   await logActivity({
     studioId,

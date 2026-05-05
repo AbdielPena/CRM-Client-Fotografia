@@ -213,20 +213,20 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Meta */}
-      <section className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+      <section className="bg-card rounded-xl border border-border p-6 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Nombre de la plantilla *
           </label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Cuestionario XV años"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Descripción interna
           </label>
           <textarea
@@ -234,10 +234,10 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             placeholder="Para qué tipo de sesión es este formulario"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
-        <div className="flex flex-wrap gap-4 text-sm text-gray-700">
+        <div className="flex flex-wrap gap-4 text-sm text-foreground">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
@@ -258,20 +258,20 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
       </section>
 
       {/* Fields */}
-      <section className="bg-white rounded-xl border border-gray-200">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-900">Campos</h2>
+      <section className="bg-card rounded-xl border border-border">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Campos</h2>
           <button
             type="button"
             onClick={addField}
-            className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+            className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-brand text-brand-foreground rounded-lg hover:bg-brand/90"
           >
             <Plus className="h-3 w-3" /> Agregar campo
           </button>
         </div>
 
         {fields.length === 0 ? (
-          <p className="px-5 py-8 text-sm text-gray-500 text-center">
+          <p className="px-5 py-8 text-sm text-muted-foreground text-center">
             Aún no hay campos. Comienza agregando uno.
           </p>
         ) : (
@@ -281,27 +281,27 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
               return (
                 <li key={field.key} className="px-5 py-3">
                   <div className="flex items-center gap-2">
-                    <GripVertical className="h-4 w-4 text-gray-300" />
+                    <GripVertical className="h-4 w-4 text-muted-foreground" />
                     <button
                       type="button"
                       onClick={() => setExpanded(open ? null : field.key)}
                       className="flex-1 text-left flex items-center justify-between"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
+                        <p className="text-sm font-medium text-foreground truncate">
                           {field.label}
                           {field.required && (
-                            <span className="text-red-500"> *</span>
+                            <span className="text-danger"> *</span>
                           )}
                         </p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-muted-foreground">
                           {field.type} · {field.key}
                         </p>
                       </div>
                       {open ? (
-                        <ChevronUp className="h-4 w-4 text-gray-400" />
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
                       ) : (
-                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
                       )}
                     </button>
 
@@ -310,7 +310,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                         type="button"
                         onClick={() => moveField(idx, -1)}
                         disabled={idx === 0}
-                        className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                        className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
                         title="Subir"
                       >
                         <ChevronUp className="h-4 w-4" />
@@ -319,7 +319,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                         type="button"
                         onClick={() => moveField(idx, 1)}
                         disabled={idx === fields.length - 1}
-                        className="p-1 text-gray-400 hover:text-gray-700 disabled:opacity-30"
+                        className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-30"
                         title="Bajar"
                       >
                         <ChevronDown className="h-4 w-4" />
@@ -327,7 +327,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                       <button
                         type="button"
                         onClick={() => duplicateField(idx)}
-                        className="p-1 text-gray-400 hover:text-gray-700"
+                        className="p-1 text-muted-foreground hover:text-foreground"
                         title="Duplicar"
                       >
                         <Copy className="h-4 w-4" />
@@ -335,7 +335,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                       <button
                         type="button"
                         onClick={() => removeField(idx)}
-                        className="p-1 text-gray-400 hover:text-red-600"
+                        className="p-1 text-muted-foreground hover:text-danger"
                         title="Eliminar"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -344,10 +344,10 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                   </div>
 
                   {open && (
-                    <div className="mt-3 ml-6 space-y-3 bg-gray-50 rounded-lg p-4">
+                    <div className="mt-3 ml-6 space-y-3 bg-muted rounded-lg p-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Etiqueta
                           </label>
                           <input
@@ -355,11 +355,11 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                             onChange={(e) =>
                               updateField(idx, { label: e.target.value })
                             }
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Clave (único, sin espacios)
                           </label>
                           <input
@@ -367,11 +367,11 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                             onChange={(e) =>
                               updateField(idx, { key: e.target.value })
                             }
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            className="w-full px-2 py-1.5 text-sm border border-border rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-brand/20"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Tipo
                           </label>
                           <select
@@ -381,7 +381,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                                 type: e.target.value as FormFieldType,
                               })
                             }
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20"
                           >
                             {FIELD_TYPES.map((t) => (
                               <option key={t.value} value={t.value}>
@@ -391,7 +391,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
                             Placeholder
                           </label>
                           <input
@@ -401,13 +401,13 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                                 placeholder: e.target.value || undefined,
                               })
                             }
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
                           Texto de ayuda
                         </label>
                         <input
@@ -417,11 +417,11 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                               help: e.target.value || undefined,
                             })
                           }
-                          className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                          className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20"
                         />
                       </div>
 
-                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <label className="flex items-center gap-2 text-sm text-foreground">
                         <input
                           type="checkbox"
                           checked={field.required ?? false}
@@ -442,7 +442,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                       {field.type === "number" && (
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
                               Mínimo
                             </label>
                             <input
@@ -456,11 +456,11 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                                       : Number(e.target.value),
                                 })
                               }
-                              className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                              className="w-full px-2 py-1.5 text-sm border border-border rounded-md"
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
                               Máximo
                             </label>
                             <input
@@ -474,7 +474,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                                       : Number(e.target.value),
                                 })
                               }
-                              className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                              className="w-full px-2 py-1.5 text-sm border border-border rounded-md"
                             />
                           </div>
                         </div>
@@ -503,7 +503,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
             type="button"
             onClick={handleDelete}
             disabled={isPending}
-            className="px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-40"
+            className="px-4 py-2 text-sm text-danger hover:bg-danger/10 rounded-lg disabled:opacity-40"
           >
             Eliminar plantilla
           </button>
@@ -512,7 +512,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
           <button
             type="button"
             onClick={() => router.push("/settings/forms")}
-            className="px-4 py-2 text-sm text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50"
+            className="px-4 py-2 text-sm text-foreground border border-border rounded-lg hover:bg-muted"
           >
             Cancelar
           </button>
@@ -520,7 +520,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
             type="button"
             onClick={handleSubmit}
             disabled={isPending}
-            className="px-4 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-40"
+            className="px-4 py-2 text-sm bg-brand text-brand-foreground rounded-lg hover:bg-brand/90 disabled:opacity-40"
           >
             {isPending
               ? "Guardando…"
@@ -553,19 +553,19 @@ function OptionsEditor({
   }
 
   return (
-    <div className="border-t border-gray-200 pt-3">
+    <div className="border-t border-border pt-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-gray-600">Opciones</span>
+        <span className="text-xs font-medium text-muted-foreground">Opciones</span>
         <button
           type="button"
           onClick={add}
-          className="text-xs text-blue-600 hover:text-blue-800"
+          className="text-xs text-brand hover:text-blue-800"
         >
           + Agregar opción
         </button>
       </div>
       {options.length === 0 ? (
-        <p className="text-xs text-gray-400">Aún no hay opciones</p>
+        <p className="text-xs text-muted-foreground">Aún no hay opciones</p>
       ) : (
         <ul className="space-y-2">
           {options.map((o, i) => (
@@ -574,18 +574,18 @@ function OptionsEditor({
                 value={o.label}
                 onChange={(e) => update(i, { label: e.target.value })}
                 placeholder="Etiqueta visible"
-                className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                className="flex-1 px-2 py-1.5 text-sm border border-border rounded-md"
               />
               <input
                 value={o.value}
                 onChange={(e) => update(i, { value: e.target.value })}
                 placeholder="valor_interno"
-                className="w-40 px-2 py-1.5 text-sm border border-gray-200 rounded-md font-mono"
+                className="w-40 px-2 py-1.5 text-sm border border-border rounded-md font-mono"
               />
               <button
                 type="button"
                 onClick={() => remove(i)}
-                className="p-1 text-gray-400 hover:text-red-600"
+                className="p-1 text-muted-foreground hover:text-danger"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -612,8 +612,8 @@ function VisibleIfEditor({
   )
 
   return (
-    <div className="border-t border-gray-200 pt-3">
-      <label className="flex items-center gap-2 text-xs font-medium text-gray-600 mb-2">
+    <div className="border-t border-border pt-3">
+      <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
         <input
           type="checkbox"
           checked={enabled}
@@ -640,7 +640,7 @@ function VisibleIfEditor({
                 equals: field.visibleIf?.equals ?? "",
               })
             }
-            className="px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+            className="px-2 py-1.5 text-sm border border-border rounded-md"
           >
             <option value="">— campo —</option>
             {eligibleSources.map((s) => (
@@ -658,7 +658,7 @@ function VisibleIfEditor({
               })
             }
             placeholder="igual a…"
-            className="px-2 py-1.5 text-sm border border-gray-200 rounded-md font-mono"
+            className="px-2 py-1.5 text-sm border border-border rounded-md font-mono"
           />
         </div>
       )}

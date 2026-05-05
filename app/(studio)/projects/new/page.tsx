@@ -2,6 +2,7 @@ import { requireStudioAuth } from "@/server/middleware/auth"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { countUnreadNotifications } from "@/server/services/notification.service"
+import { getProjectStatuses } from "@/server/services/project-status.service"
 import { createProjectAction } from "@/server/actions/project.actions"
 import Link from "next/link"
 import type { Metadata } from "next"
@@ -19,24 +20,15 @@ const PROJECT_TYPES = [
   { value: "other", label: "Otro" },
 ]
 
-const PROJECT_STATUSES = [
-  { value: "inquiry", label: "Consulta" },
-  { value: "booked", label: "Reservado" },
-  { value: "in_progress", label: "En progreso" },
-  { value: "editing", label: "Editando" },
-  { value: "delivered", label: "Entregado" },
-  { value: "archived", label: "Archivado" },
-]
-
 export default async function NewProjectPage({
   searchParams,
 }: {
-  searchParams: { clientId?: string }
+  searchParams: { clientId?: string; status?: string }
 }) {
   const session = await requireStudioAuth()
   const supabase = createSupabaseServerClient()
 
-  const [clientsRes, packagesRes, unread] = await Promise.all([
+  const [clientsRes, packagesRes, unread, projectStatuses] = await Promise.all([
     supabase
       .from("clients")
       .select("id, name")
@@ -50,10 +42,17 @@ export default async function NewProjectPage({
       .is("deleted_at", null)
       .order("name", { ascending: true }),
     countUnreadNotifications(session.studioId),
+    getProjectStatuses(session.studioId),
   ])
 
   const clients = clientsRes.data ?? []
   const packages = packagesRes.data ?? []
+  // Status default: viene del searchParam (kanban CTA) o el primero del studio.
+  const defaultStatus =
+    searchParams.status &&
+    projectStatuses.some((s) => s.label === searchParams.status)
+      ? searchParams.status
+      : (projectStatuses[0]?.label ?? "")
 
   return (
     <>
@@ -79,13 +78,13 @@ export default async function NewProjectPage({
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Cliente <span className="text-red-500">*</span>
+                  Cliente <span className="text-danger">*</span>
                 </label>
                 <select
                   name="clientId"
                   required
                   defaultValue={searchParams.clientId ?? ""}
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-white"
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-card"
                 >
                   <option value="">Seleccionar cliente...</option>
                   {(clients as Array<{ id: string; name: string }>).map((c) => (
@@ -104,7 +103,7 @@ export default async function NewProjectPage({
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Nombre del proyecto <span className="text-red-500">*</span>
+                  Nombre del proyecto <span className="text-danger">*</span>
                 </label>
                 <input
                   name="name"
@@ -117,12 +116,12 @@ export default async function NewProjectPage({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1">
-                    Tipo <span className="text-red-500">*</span>
+                    Tipo <span className="text-danger">*</span>
                   </label>
                   <select
                     name="eventType"
                     required
-                    className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-white"
+                    className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-card"
                   >
                     <option value="">Seleccionar tipo...</option>
                     {PROJECT_TYPES.map((t) => (
@@ -136,11 +135,14 @@ export default async function NewProjectPage({
                   <label className="block text-sm font-medium text-foreground mb-1">Estado</label>
                   <select
                     name="status"
-                    defaultValue="booked"
-                    className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-white"
+                    defaultValue={defaultStatus}
+                    className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-card"
                   >
-                    {PROJECT_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
+                    {projectStatuses.length === 0 && (
+                      <option value="">Sin estados configurados</option>
+                    )}
+                    {projectStatuses.map((s) => (
+                      <option key={s.id} value={s.label}>
                         {s.label}
                       </option>
                     ))}
@@ -199,7 +201,7 @@ export default async function NewProjectPage({
                 </label>
                 <select
                   name="packageId"
-                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-white"
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-card"
                 >
                   <option value="">Sin paquete</option>
                   {(packages as Array<{
@@ -239,13 +241,13 @@ export default async function NewProjectPage({
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                className="px-5 py-2.5 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors"
               >
                 Crear proyecto
               </button>
               <Link
                 href="/projects"
-                className="px-5 py-2.5 text-sm font-medium text-foreground bg-muted/60 rounded-lg hover:bg-gray-200 transition-colors"
+                className="px-5 py-2.5 text-sm font-medium text-foreground bg-muted/60 rounded-lg hover:bg-muted transition-colors"
               >
                 Cancelar
               </Link>

@@ -6,6 +6,7 @@ import { AppTopbar } from "@/components/layout/app-topbar"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { EmptyState } from "@/components/shared/empty-state"
 import { FileText, Star, Circle } from "lucide-react"
+import { StudioSignatureCard } from "@/components/settings/studio-signature-card"
 
 export const metadata: Metadata = { title: "Plantillas de contrato" }
 
@@ -26,14 +27,16 @@ export default async function ContractTemplatesPage() {
         actions={
           <Link
             href="/settings/contracts/new"
-            className="px-4 py-2 bg-foreground text-background text-sm font-medium rounded-lg hover:bg-foreground/90 transition-colors"
+            className="px-4 py-2 bg-foreground text-background text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors"
           >
             + Nueva plantilla
           </Link>
         }
       />
 
-      <div className="p-6">
+      <div className="space-y-5 p-6">
+        <StudioSignatureCard />
+
         {templates.length === 0 ? (
           <div className="sf-card">
             <EmptyState
@@ -43,7 +46,7 @@ export default async function ContractTemplatesPage() {
             >
               <Link
                 href="/settings/contracts/new"
-                className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                className="px-4 py-2 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors"
               >
                 + Nueva plantilla
               </Link>
@@ -51,6 +54,9 @@ export default async function ContractTemplatesPage() {
           </div>
         ) : (
           <div className="sf-card overflow-hidden">
+            <div className="px-5 py-3 border-b border-border/60 bg-muted/20">
+              <h2 className="text-sm font-semibold text-foreground">Plantillas</h2>
+            </div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/30">
@@ -82,7 +88,7 @@ export default async function ContractTemplatesPage() {
                           <FileText className="h-4 w-4 text-muted-foreground" />
                         )}
                         <div>
-                          <p className="font-medium text-foreground group-hover:text-blue-600 transition-colors">
+                          <p className="font-medium text-foreground group-hover:text-brand transition-colors">
                             {t.name}
                           </p>
                           {t.description && (

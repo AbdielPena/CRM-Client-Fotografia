@@ -11,6 +11,9 @@ out/
 dist/
 build/
 
+# Dev local uploads (cuando STORAGE_DRIVER=local)
+public/dev-uploads/
+
 # Environment variables — NUNCA commitear
 .env
 .env.local
@@ -43,3 +46,10 @@ coverage/
 
 # Misc
 .turbo/
+
+# Claude Code workspace + sesiones
+.claude/
+
+# TypeScript build cache
+tsconfig.tsbuildinfo
+*.tsbuildinfo

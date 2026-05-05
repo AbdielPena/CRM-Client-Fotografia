@@ -1,6 +1,5 @@
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getPackages } from "@/server/services/package.service"
-import { createSupabaseServerClient } from "@/server/supabase/server"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { PackageManager } from "@/components/settings/package-manager"
@@ -11,19 +10,14 @@ export const metadata: Metadata = { title: "Paquetes" }
 export default async function PackagesSettingsPage() {
   const session = await requireStudioAuth()
 
-  // Para construir el link público necesitamos el slug del studio
-  const supabase = createSupabaseServerClient()
-  const { data: studio } = await supabase
-    .from("studios")
-    .select("slug")
-    .eq("id", session.studioId)
-    .maybeSingle()
-
+  // Las 3 queries en paralelo. studioSlug ya viene en `session` (poblado
+  // por requireStudioAuth desde la tabla studios) — eliminamos query
+  // duplicada.
   const [packages, unread] = await Promise.all([
     getPackages(session.studioId),
     countUnreadNotifications(session.studioId),
   ])
-  const studioSlug = (studio as { slug?: string } | null)?.slug ?? ""
+  const studioSlug = session.studioSlug
 
   return (
     <>

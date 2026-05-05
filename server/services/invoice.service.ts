@@ -264,6 +264,7 @@ export async function markInvoicePaid(
   return {
     newStatus: updated?.status ?? 'pending',
     totalPaid: Number(updated?.amount_paid ?? 0),
+    projectId: existing.project_id ?? null,
   }
 }
 

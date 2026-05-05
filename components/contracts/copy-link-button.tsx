@@ -31,7 +31,7 @@ export function CopyLinkButton({ url }: CopyLinkButtonProps) {
   return (
     <button
       onClick={handleCopy}
-      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-medium text-brand hover:text-brand transition-colors"
     >
       {copied ? (
         <>

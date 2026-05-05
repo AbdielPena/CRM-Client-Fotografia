@@ -1,11 +1,28 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { createPackageAction, updatePackageAction, deletePackageAction } from "@/server/actions/package.actions"
+import {
+  createPackageAction,
+  updatePackageAction,
+  deletePackageAction,
+} from "@/server/actions/package.actions"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { formatCurrency } from "@/lib/utils/currency"
-import { Plus, Pencil, Trash2, Clock, Image, Check, X, Link as LinkIcon, Copy, ExternalLink } from "lucide-react"
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Clock,
+  Image as ImageIcon,
+  Check,
+  X,
+  Link as LinkIcon,
+  Copy,
+  ExternalLink,
+} from "lucide-react"
 import { toast } from "sonner"
+
+import { cn } from "@/lib/utils/cn"
 
 interface Package {
   id: string
@@ -71,7 +88,10 @@ export function PackageManager({
     })
   }
 
-  const handleUpdate = (packageId: string, e: React.FormEvent<HTMLFormElement>) => {
+  const handleUpdate = (
+    packageId: string,
+    e: React.FormEvent<HTMLFormElement>,
+  ) => {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     startTransition(async () => {
@@ -93,39 +113,46 @@ export function PackageManager({
   }
 
   return (
-    <div className="max-w-4xl space-y-4">
+    <div className="max-w-5xl space-y-4">
       {/* Package list */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {packages.map((pkg) => (
           <div
             key={pkg.id}
-            className={`bg-white rounded-xl border p-5 relative ${
-              pkg.isActive ? "border-gray-200" : "border-gray-100 opacity-60"
-            }`}
+            className={cn(
+              "relative rounded-xl border bg-card p-5 transition-colors duration-fast",
+              pkg.isActive
+                ? "border-border hover:border-border-strong"
+                : "border-border/60 opacity-60",
+            )}
           >
             {/* Active indicator */}
-            <div className="absolute top-3 right-3">
+            <div className="absolute right-3 top-3">
               {pkg.isActive ? (
-                <span className="inline-flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
                   <Check className="h-3 w-3" /> Activo
                 </span>
               ) : (
-                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
                   Inactivo
                 </span>
               )}
             </div>
 
-            <h3 className="font-semibold text-gray-900 pr-20 truncate">{pkg.name}</h3>
-            <p className="text-2xl font-bold text-gray-900 mt-2">
+            <h3 className="truncate pr-20 text-sm font-semibold text-foreground">
+              {pkg.name}
+            </h3>
+            <p className="mt-2 text-2xl font-bold text-foreground tabular-nums tracking-tight">
               {formatCurrency(pkg.price, pkg.currency)}
             </p>
 
             {pkg.description && (
-              <p className="text-xs text-gray-500 mt-2 line-clamp-2">{pkg.description}</p>
+              <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                {pkg.description}
+              </p>
             )}
 
-            <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500">
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
               {pkg.durationHours && (
                 <span className="flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />
@@ -134,38 +161,36 @@ export function PackageManager({
               )}
               {pkg.editedPhotos && (
                 <span className="flex items-center gap-1">
-                  <Image className="h-3.5 w-3.5" />
+                  <ImageIcon className="h-3.5 w-3.5" />
                   {pkg.editedPhotos} fotos
                 </span>
               )}
             </div>
 
             {pkg.includes && (
-              <div className="mt-3 pt-3 border-t border-gray-50">
-                <p className="text-xs text-gray-500 line-clamp-3 whitespace-pre-line">
+              <div className="mt-3 border-t border-border/60 pt-3">
+                <p className="line-clamp-3 whitespace-pre-line text-xs text-muted-foreground">
                   {pkg.includes}
                 </p>
               </div>
             )}
 
-            {/* Enlace público — solo si hay slug y studio */}
+            {/* Enlace público */}
             {pkg.slug && studioSlug && (
-              <div className="mt-3 pt-3 border-t border-gray-50">
-                <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mb-1">
+              <div className="mt-3 border-t border-border/60 pt-3">
+                <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground">
                   <LinkIcon className="h-3 w-3" />
-                  <span className="uppercase tracking-wide font-medium">
-                    Enlace público
-                  </span>
+                  <span>Enlace público</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <code className="flex-1 px-2 py-1 bg-gray-50 rounded text-[11px] text-gray-600 truncate font-mono">
+                  <code className="flex-1 truncate rounded-md bg-muted px-2 py-1 font-mono text-[11px] text-muted-foreground">
                     /p/{studioSlug}/{pkg.slug}
                   </code>
                   <button
                     type="button"
                     onClick={() => handleCopyUrl(pkg.slug)}
                     title="Copiar enlace"
-                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <Copy className="h-3.5 w-3.5" />
                   </button>
@@ -174,7 +199,7 @@ export function PackageManager({
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Abrir en nueva pestaña"
-                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                   </a>
@@ -188,7 +213,7 @@ export function PackageManager({
                   setEditingId(pkg.id)
                   setFormMode("edit")
                 }}
-                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-muted px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/70"
               >
                 <Pencil className="h-3.5 w-3.5" />
                 Editar
@@ -200,7 +225,7 @@ export function PackageManager({
                 danger
                 onConfirm={() => handleDelete(pkg.id)}
               >
-                <button className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                <button className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </ConfirmDialog>
@@ -212,12 +237,14 @@ export function PackageManager({
         {formMode !== "create" && (
           <button
             onClick={() => setFormMode("create")}
-            className="bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 p-5 hover:border-gray-300 hover:bg-gray-100 transition-all flex flex-col items-center justify-center gap-2 min-h-[160px]"
+            className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card/50 p-5 transition-colors hover:border-border-strong hover:bg-muted"
           >
-            <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center">
-              <Plus className="h-5 w-5 text-gray-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <Plus className="h-5 w-5 text-muted-foreground" />
             </div>
-            <p className="text-sm font-medium text-gray-600">Nuevo paquete</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              Nuevo paquete
+            </p>
           </button>
         )}
       </div>
@@ -236,7 +263,10 @@ export function PackageManager({
       {formMode === "edit" && editingPackage && (
         <PackageForm
           onSubmit={(e) => handleUpdate(editingPackage.id, e)}
-          onCancel={() => { setFormMode(null); setEditingId(null) }}
+          onCancel={() => {
+            setFormMode(null)
+            setEditingId(null)
+          }}
           isPending={isPending}
           title={`Editando: ${editingPackage.name}`}
           defaultValues={editingPackage}
@@ -259,37 +289,43 @@ function PackageForm({
   title: string
   defaultValues?: Package
 }) {
+  const inputCls =
+    "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-5">
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <button type="button" onClick={onCancel} className="p-1 text-gray-400 hover:text-gray-600">
+    <div className="rounded-xl border border-border bg-card p-6">
+      <div className="mb-5 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre <span className="text-red-500">*</span>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Nombre <span className="text-danger">*</span>
           </label>
           <input
             name="name"
             required
             defaultValue={defaultValues?.name}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className={inputCls}
             placeholder="ej. Paquete Premium"
           />
         </div>
 
-        {/* Slug solo en edición — en create se auto-genera del nombre */}
         {defaultValues && (
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="mb-1 block text-sm font-medium text-foreground">
               Slug (URL pública)
             </label>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 whitespace-nowrap">
+              <span className="whitespace-nowrap text-xs text-muted-foreground">
                 /p/…/
               </span>
               <input
@@ -297,22 +333,24 @@ function PackageForm({
                 defaultValue={defaultValues.slug ?? ""}
                 pattern="[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?"
                 title="Solo minúsculas, números y guiones (2–80 caracteres)"
-                className="flex-1 px-3 py-2 text-sm font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+                className={cn(inputCls, "flex-1 font-mono")}
                 placeholder="paquete-premium"
               />
             </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Cambiar el slug rompe enlaces previamente compartidos. Úsalo con cuidado.
+            <p className="mt-1 text-xs text-muted-foreground">
+              Cambiar el slug rompe enlaces previamente compartidos.
             </p>
           </div>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Precio <span className="text-red-500">*</span>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Precio <span className="text-danger">*</span>
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+              $
+            </span>
             <input
               name="price"
               type="number"
@@ -320,29 +358,32 @@ function PackageForm({
               step="0.01"
               required
               defaultValue={defaultValues?.price}
-              className="w-full pl-7 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              className={cn(inputCls, "pl-7")}
               placeholder="0.00"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Moneda</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Moneda
+          </label>
           <select
             name="currency"
             defaultValue={defaultValues?.currency ?? "USD"}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
+            className={inputCls}
           >
             <option value="USD">USD</option>
             <option value="MXN">MXN</option>
             <option value="EUR">EUR</option>
             <option value="COP">COP</option>
             <option value="ARS">ARS</option>
+            <option value="DOP">DOP</option>
           </select>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-sm font-medium text-foreground">
             Duración (horas)
           </label>
           <input
@@ -351,13 +392,13 @@ function PackageForm({
             min="0"
             step="0.5"
             defaultValue={defaultValues?.durationHours}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className={inputCls}
             placeholder="ej. 4"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-sm font-medium text-foreground">
             Fotos editadas
           </label>
           <input
@@ -365,46 +406,48 @@ function PackageForm({
             type="number"
             min="0"
             defaultValue={defaultValues?.editedPhotos}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className={inputCls}
             placeholder="ej. 100"
           />
         </div>
 
         <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Descripción
+          </label>
           <input
             name="description"
             defaultValue={defaultValues?.description}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className={inputCls}
             placeholder="Breve descripción del paquete"
           />
         </div>
 
         <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-sm font-medium text-foreground">
             ¿Qué incluye?
           </label>
           <textarea
             name="includes"
             rows={3}
             defaultValue={defaultValues?.includes}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none"
+            className={cn(inputCls, "resize-none")}
             placeholder="- Sesión en estudio&#10;- Galería digital privada&#10;- 1 impresión tamaño carta"
           />
         </div>
 
-        <div className="sm:col-span-2 flex items-center gap-3">
+        <div className="flex items-center gap-3 sm:col-span-2">
           <button
             type="submit"
             disabled={isPending}
-            className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+            className="rounded-lg bg-brand px-5 py-2.5 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 disabled:opacity-50"
           >
             {isPending ? "Guardando..." : defaultValues ? "Actualizar" : "Crear paquete"}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            className="rounded-lg bg-muted px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/70"
           >
             Cancelar
           </button>

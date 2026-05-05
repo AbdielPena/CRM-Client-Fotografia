@@ -141,13 +141,13 @@ export function WeeklyScheduleEditor({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">
+          <h3 className="text-sm font-semibold text-foreground">
             Horario semanal
           </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Define tus días y horas disponibles por defecto
           </p>
         </div>
@@ -155,7 +155,7 @@ export function WeeklyScheduleEditor({
           type="button"
           onClick={handleSave}
           disabled={isPending}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 disabled:opacity-50 transition-colors"
         >
           <Save className="h-4 w-4" />
           {isPending ? "Guardando..." : "Guardar"}
@@ -166,7 +166,7 @@ export function WeeklyScheduleEditor({
         {schedule.map((day, i) => (
           <div key={day.dayOfWeek} className="px-5 py-4 flex items-start gap-4">
             <div className="w-28 flex-shrink-0 pt-1">
-              <span className="text-sm font-medium text-gray-900">
+              <span className="text-sm font-medium text-foreground">
                 {DAY_NAMES[day.dayOfWeek]}
               </span>
             </div>
@@ -184,9 +184,9 @@ export function WeeklyScheduleEditor({
                         : day.windows,
                   })
                 }
-                className="h-4 w-4 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+                className="h-4 w-4 rounded border-border-strong text-foreground focus:ring-gray-900"
               />
-              <span className="text-xs text-gray-600">
+              <span className="text-xs text-muted-foreground">
                 {day.open ? "Abierto" : "Cerrado"}
               </span>
             </label>
@@ -201,21 +201,21 @@ export function WeeklyScheduleEditor({
                       onChange={(e) =>
                         updateWindow(i, wi, "startTime", e.target.value)
                       }
-                      className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
+                      className="px-3 py-1.5 border border-border rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
                     />
-                    <span className="text-xs text-gray-400">—</span>
+                    <span className="text-xs text-muted-foreground">—</span>
                     <input
                       type="time"
                       value={win.endTime}
                       onChange={(e) =>
                         updateWindow(i, wi, "endTime", e.target.value)
                       }
-                      className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
+                      className="px-3 py-1.5 border border-border rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
                     />
                     <button
                       type="button"
                       onClick={() => removeWindow(i, wi)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
+                      className="p-1.5 text-muted-foreground hover:text-danger transition-colors"
                       aria-label="Eliminar franja"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -226,7 +226,7 @@ export function WeeklyScheduleEditor({
                 <button
                   type="button"
                   onClick={() => addWindow(i)}
-                  className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 transition-colors"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                   Agregar franja

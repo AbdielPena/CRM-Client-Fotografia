@@ -5,7 +5,9 @@ import { AppTopbar } from "@/components/layout/app-topbar"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ContractDetailActions } from "@/components/contracts/contract-detail-actions"
+import { ContractPreviewAndSign } from "@/components/contracts/contract-preview-and-sign"
 import { CopyLinkButton } from "@/components/contracts/copy-link-button"
+import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { formatDate, formatDateShort } from "@/lib/utils/currency"
 import { FileText, User, Calendar, Link as LinkIcon } from "lucide-react"
 import Link from "next/link"
@@ -30,6 +32,18 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   const contract = contractRaw as Rec | null
 
   if (!contract) notFound()
+
+  // Cargar si el studio tiene firma reusable (para mostrar el modal correcto)
+  const supabase = createSupabaseServiceClient()
+  const { data: studioRow } = await supabase
+    .from("studios")
+    .select("signature_image_url")
+    .eq("id", session.studioId)
+    .maybeSingle()
+  const studioHasSignature = Boolean(
+    (studioRow as { signature_image_url?: string | null } | null)?.signature_image_url,
+  )
+  const studioAlreadySigned = Boolean(contract.studio_signed_at)
 
   const client = pickFirst(contract.client)
   const project = pickFirst(contract.project)
@@ -106,11 +120,14 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               </div>
             </div>
 
-            {/* Contract body */}
-            <div className="px-8 py-6">
-              <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed font-mono">
-                {bodyHtml}
-              </div>
+            {/* Contract body con vista previa renderizada + firma del studio */}
+            <div className="px-6 py-6">
+              <ContractPreviewAndSign
+                contractId={contract.id as string}
+                rawBody={bodyHtml}
+                studioHasSignature={studioHasSignature}
+                studioAlreadySigned={studioAlreadySigned}
+              />
             </div>
 
             {/* Signature block */}
@@ -139,15 +156,15 @@ export default async function ContractDetailPage({ params }: { params: { id: str
         <div className="space-y-6">
           {/* Signing link */}
           {signingUrl && status === "sent" && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+            <div className="bg-brand-soft border border-blue-200 rounded-xl p-5">
               <div className="flex items-center gap-2 mb-2">
-                <LinkIcon className="h-4 w-4 text-blue-600" />
+                <LinkIcon className="h-4 w-4 text-brand" />
                 <h2 className="text-sm font-semibold text-blue-900">Enlace de firma</h2>
               </div>
-              <p className="text-xs text-blue-700 mb-3">
+              <p className="text-xs text-brand mb-3">
                 Comparte este enlace con el cliente para que firme el contrato.
               </p>
-              <div className="bg-white border border-blue-200 rounded-lg px-3 py-2">
+              <div className="bg-card border border-blue-200 rounded-lg px-3 py-2">
                 <code className="text-xs text-blue-800 break-all">{signingUrl}</code>
               </div>
               <CopyLinkButton url={signingUrl} />
@@ -190,7 +207,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               )}
               {template && (
                 <div className="flex items-center gap-3">
-                  <FileText className="h-4 w-4 text-gray-300" />
+                  <FileText className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground text-xs">
                     Basado en: {String(template.name)}
                   </span>

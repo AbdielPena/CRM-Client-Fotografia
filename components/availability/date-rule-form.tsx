@@ -35,13 +35,13 @@ export function DateRuleForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white rounded-xl border border-gray-200 p-5 space-y-4"
+      className="bg-card rounded-xl border border-border p-5 space-y-4"
     >
       <div>
-        <h3 className="text-sm font-semibold text-gray-900">
+        <h3 className="text-sm font-semibold text-foreground">
           Agregar excepción de fecha
         </h3>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="text-xs text-muted-foreground mt-0.5">
           Vacaciones, feriados o aperturas fuera del horario habitual
         </p>
       </div>
@@ -52,8 +52,8 @@ export function DateRuleForm() {
           onClick={() => setRuleType("date_closed")}
           className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
             ruleType === "date_closed"
-              ? "border-red-300 bg-red-50 text-red-700"
-              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+              ? "border-red-300 bg-danger/10 text-danger"
+              : "border-border text-muted-foreground hover:bg-muted"
           }`}
         >
           <CalendarX className="h-4 w-4" />
@@ -65,7 +65,7 @@ export function DateRuleForm() {
           className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors ${
             ruleType === "date_open_override"
               ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+              : "border-border text-muted-foreground hover:bg-muted"
           }`}
         >
           <CalendarCheck className="h-4 w-4" />
@@ -75,23 +75,23 @@ export function DateRuleForm() {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-gray-600">Desde</label>
+          <label className="text-xs text-muted-foreground">Desde</label>
           <input
             type="date"
             name="startDate"
             required
-            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
+            className="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
           />
         </div>
         <div>
-          <label className="text-xs text-gray-600">
+          <label className="text-xs text-muted-foreground">
             Hasta {ruleType === "date_closed" ? "(opcional)" : ""}
           </label>
           <input
             type="date"
             name="endDate"
             disabled={ruleType === "date_open_override"}
-            className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none disabled:bg-gray-50 disabled:text-gray-400"
+            className="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none disabled:bg-muted disabled:text-muted-foreground"
           />
         </div>
       </div>
@@ -99,40 +99,40 @@ export function DateRuleForm() {
       {ruleType === "date_open_override" && (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-gray-600">Hora inicio</label>
+            <label className="text-xs text-muted-foreground">Hora inicio</label>
             <input
               type="time"
               name="startTime"
               required
-              className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
+              className="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
             />
           </div>
           <div>
-            <label className="text-xs text-gray-600">Hora fin</label>
+            <label className="text-xs text-muted-foreground">Hora fin</label>
             <input
               type="time"
               name="endTime"
               required
-              className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
+              className="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
             />
           </div>
         </div>
       )}
 
       <div>
-        <label className="text-xs text-gray-600">Notas (opcional)</label>
+        <label className="text-xs text-muted-foreground">Notas (opcional)</label>
         <input
           type="text"
           name="notes"
           placeholder="Ej: Vacaciones navideñas"
-          className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
+          className="mt-1 w-full px-3 py-2 border border-border rounded-lg text-sm focus:border-gray-900 focus:ring-0 outline-none"
         />
       </div>
 
       <button
         type="submit"
         disabled={isPending}
-        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+        className="flex items-center gap-2 px-4 py-2 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 disabled:opacity-50 transition-colors"
       >
         <Plus className="h-4 w-4" />
         {isPending ? "Agregando..." : "Agregar regla"}

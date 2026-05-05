@@ -4,6 +4,7 @@ import { contractsRepo, contractTemplatesRepo } from '@/server/repositories'
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
 import type { CreateContractInput } from '@/lib/validations/contract.schema'
+import type { Database } from '@/types/supabase'
 import { logActivity } from './activity.service'
 
 /** Replace {{variable}} placeholders in contract body with actual data */
@@ -167,6 +168,16 @@ export async function sendContract(
     action: 'contract.sent',
   })
 
+  // Email al cliente con link de firma (best-effort)
+  try {
+    void (async () => {
+      const { emailContractSent } = await import('./contract-emails.service')
+      await emailContractSent(contractId)
+    })()
+  } catch (err) {
+    console.error('[sendContract] email failed', err)
+  }
+
   return contract
 }
 
@@ -174,12 +185,18 @@ export async function sendContract(
  * Llamado desde la página pública de firma (/c/[token]).
  * Usa el client público con x-public-token para que las RLS lo dejen pasar.
  */
+/**
+ * Firma del contrato por el cliente desde la página pública /sign/[token].
+ * Permite firmar desde cualquier estado no-terminal (draft, sent, viewed) —
+ * el contrato está disponible si tiene token, no fue firmado/anulado/expirado.
+ */
 export async function signContract(
   signingToken: string,
   signerName: string,
   signerEmail?: string,
   signerIp?: string,
   signerUserAgent?: string,
+  signatureImageDataUrl?: string,
 ) {
   const supabase = createSupabaseServiceClient()
 
@@ -193,14 +210,38 @@ export async function signContract(
   if (findError) throw new Error(findError.message)
   if (!contract) throw new Error('Contrato inválido o ya firmado')
   if (contract.status === 'signed') throw new Error('Este contrato ya fue firmado')
-  if (contract.status !== 'sent' && contract.status !== 'viewed') {
-    throw new Error('Contrato no disponible para firma')
+
+  // Estados terminales que sí impiden firmar
+  if (
+    contract.status === 'voided' ||
+    contract.status === 'cancelled' ||
+    contract.status === 'expired'
+  ) {
+    throw new Error('Este contrato fue anulado o cancelado')
   }
   if (contract.expires_at && new Date() > new Date(contract.expires_at)) {
     throw new Error('El enlace de firma ha expirado')
   }
 
   const now = new Date().toISOString()
+
+  // Guardar la imagen de firma como data URL (suficientemente compacta para
+  // canvas pequeños). Para storage real, guardar en bucket `contract-signatures`.
+  const signatureUrl = signatureImageDataUrl ?? null
+
+  // Hash de evidencia: hash del payload firmable + firma + timestamp
+  const evidence = JSON.stringify({
+    contractId: contract.id,
+    bodyLen: (contract.body_html ?? '').length,
+    signedAt: now,
+    name: signerName,
+    email: signerEmail ?? null,
+    ip: signerIp ?? null,
+    userAgent: signerUserAgent ?? null,
+    hasSignatureImage: !!signatureUrl,
+  })
+  const { createHash } = await import('node:crypto')
+  const evidenceHash = createHash('sha256').update(evidence).digest('hex')
 
   const { data: signed, error: updateError } = await supabase
     .from('contracts')
@@ -211,13 +252,138 @@ export async function signContract(
       signed_email: signerEmail ?? null,
       signed_ip: signerIp ?? null,
       signed_user_agent: signerUserAgent ?? null,
+      signature_image_url: signatureUrl,
+      evidence_hash: evidenceHash,
+      // Snapshot inmutable del body al momento de firmar
+      body_snapshot: contract.body_html ?? null,
     })
     .eq('id', contract.id)
     .select('*')
     .single()
 
   if (updateError) throw new Error(updateError.message)
+
+  // Notificar al studio + email al cliente con copia (best-effort)
+  try {
+    void (async () => {
+      const { onContractSigned } = await import('./contract-post-sign.service')
+      await onContractSigned(signed.id as string)
+    })()
+  } catch (err) {
+    console.error('[signContract] post-sign hook failed', err)
+  }
+
   return signed
+}
+
+/**
+ * Firma del estudio (admin) sobre un contrato.
+ * Puede aplicarse antes o después de la firma del cliente.
+ * Si la firma del studio existe en `studios.signature_image_url`, se reusa.
+ */
+export async function signContractByStudio(
+  studioId: string,
+  actorUserId: string,
+  contractId: string,
+  options?: { signatureImageDataUrl?: string; signedName?: string },
+): Promise<void> {
+  const supabase = createSupabaseServiceClient()
+  const { data: contract } = await supabase
+    .from('contracts')
+    .select('id, studio_id, studio_signed_at, status')
+    .eq('id', contractId)
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (!contract) throw new Error('Contrato no encontrado')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c = contract as any
+  if (c.studio_signed_at) {
+    throw new Error('Este contrato ya tiene firma del estudio')
+  }
+
+  // Resolver firma: si viene en el body, úsala; sino usa la del studio guardada
+  let signatureUrl = options?.signatureImageDataUrl ?? null
+  let signedName = options?.signedName ?? null
+
+  if (!signatureUrl || !signedName) {
+    const { data: studio } = await supabase
+      .from('studios')
+      .select('name, signature_image_url')
+      .eq('id', studioId)
+      .maybeSingle()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = studio as any
+    if (!signatureUrl) signatureUrl = (s?.signature_image_url as string | null) ?? null
+    if (!signedName) signedName = (s?.name as string | null) ?? 'Estudio'
+  }
+
+  if (!signatureUrl) {
+    throw new Error(
+      'No hay firma del estudio guardada. Cargá una en Settings o pasá la firma manualmente.',
+    )
+  }
+
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('contracts')
+    .update({
+      studio_signed_at: now,
+      studio_signed_by_user_id: actorUserId,
+      studio_signed_name: signedName,
+      studio_signature_image_url: signatureUrl,
+    })
+    .eq('id', contractId)
+  if (error) throw new Error(error.message)
+
+  // Email final si ambas firmas presentes (best-effort)
+  try {
+    void (async () => {
+      const { onContractSigned } = await import('./contract-post-sign.service')
+      await onContractSigned(contractId)
+    })()
+  } catch (err) {
+    console.error('[signContractByStudio] post-sign hook failed', err)
+  }
+}
+
+/** Marca el contrato como "viewed" (best-effort) cuando el cliente abre la página. */
+export async function markContractViewed(
+  signingToken: string,
+  ip?: string,
+  userAgent?: string,
+): Promise<void> {
+  const supabase = createSupabaseServiceClient()
+  const { data: contract } = await supabase
+    .from('contracts')
+    .select('id, status, viewed_at')
+    .eq('signing_token', signingToken)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (!contract) return
+  // Solo actualizar si está en estados intermedios y no fue visto antes
+  if (contract.status === 'signed' || contract.status === 'voided') return
+  if (contract.viewed_at) return
+  type ContractsUpdate = Database['public']['Tables']['contracts']['Update']
+  const update: ContractsUpdate = {
+    viewed_at: new Date().toISOString(),
+    viewed_ip: ip ?? null,
+    viewed_user_agent: userAgent ?? null,
+  }
+  if (contract.status === 'draft' || contract.status === 'sent') {
+    update.status = 'viewed'
+  }
+  await supabase.from('contracts').update(update).eq('id', contract.id)
+
+  // Notificar al studio que el cliente abrió el contrato (best-effort)
+  try {
+    void (async () => {
+      const { emailContractViewed } = await import('./contract-emails.service')
+      await emailContractViewed(contract.id as string)
+    })()
+  } catch (err) {
+    console.error('[markContractViewed] email failed', err)
+  }
 }
 
 export async function voidContract(

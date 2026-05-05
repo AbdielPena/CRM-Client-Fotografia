@@ -16,6 +16,7 @@ import {
   updateClientSchema,
 } from "@/lib/validations/client.schema"
 import { sendAutoContractAndInvoiceEmails } from "@/server/services/post-booking-emails.service"
+import { onClientCreated } from "@/server/services/project-automation.service"
 
 // ---------------------------------------------------------------------------
 // Tipos de estado — usados por useActionState en el formulario
@@ -139,6 +140,15 @@ export async function createClientAction(
       })
     } catch (err) {
       console.error("[createClientAction] emails automáticos fallaron:", err)
+    }
+
+    // Automatización: mover el proyecto recién creado a "Consulta inicial".
+    // Best-effort — si el studio no tiene un status que matchee la keyword,
+    // el proyecto se queda con el status default del RPC.
+    try {
+      await onClientCreated(session.studioId, emailBundle.projectId)
+    } catch (err) {
+      console.error("[createClientAction] automation onClientCreated falló:", err)
     }
   }
 

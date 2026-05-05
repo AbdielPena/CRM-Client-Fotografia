@@ -73,17 +73,17 @@ export function ContractEditor({
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Project + Template */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="bg-card rounded-xl border border-border p-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Proyecto <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-foreground mb-1">
+            Proyecto <span className="text-danger">*</span>
           </label>
           <select
             name="projectId"
             required
             value={selectedProjectId}
             onChange={(e) => handleProjectChange(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
           >
             <option value="">Seleccionar proyecto...</option>
             {projects.map((p) => (
@@ -99,13 +99,13 @@ export function ContractEditor({
 
         {templates.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Plantilla
             </label>
             <select
               name="templateId"
               onChange={(e) => handleTemplateChange(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white"
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
             >
               <option value="">Sin plantilla</option>
               {templates.map((t) => (
@@ -118,39 +118,39 @@ export function ContractEditor({
         )}
 
         <div className="sm:col-span-2">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
+          <label className="block text-sm font-medium text-foreground mb-1">Título</label>
           <input
             name="title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-foreground mb-1">
             Fecha de expiración
           </label>
           <input
             name="expiresAt"
             type="date"
-            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
       </div>
 
       {/* Contract body editor */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
-          <h2 className="text-sm font-semibold text-gray-900">Contenido del contrato</h2>
+      <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-sm font-semibold text-foreground">Contenido del contrato</h2>
           <div className="flex flex-wrap gap-1">
             {VARIABLES.map((v) => (
               <button
                 key={v}
                 type="button"
                 onClick={() => insertVariable(v)}
-                className="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors font-mono"
+                className="px-2 py-0.5 text-xs bg-brand-soft text-brand rounded hover:bg-blue-100 transition-colors font-mono"
               >
                 {`{{${v}}}`}
               </button>
@@ -161,12 +161,12 @@ export function ContractEditor({
           value={body}
           onChange={(e) => setBody(e.target.value)}
           rows={28}
-          className="w-full px-5 py-4 text-sm font-mono text-gray-700 focus:outline-none resize-none"
+          className="w-full px-5 py-4 text-sm font-mono text-foreground focus:outline-none resize-none"
           placeholder="Escribe el contenido del contrato en Markdown..."
         />
-        <div className="px-5 py-2 border-t border-gray-100 bg-gray-50">
-          <p className="text-xs text-gray-400">
-            Usa Markdown para formatear. Las variables entre <code className="bg-gray-200 px-1 rounded">{"{{"}…{"}}"}</code> serán reemplazadas automáticamente.
+        <div className="px-5 py-2 border-t border-border bg-muted">
+          <p className="text-xs text-muted-foreground">
+            Usa Markdown para formatear. Las variables entre <code className="bg-muted px-1 rounded">{"{{"}…{"}}"}</code> serán reemplazadas automáticamente.
           </p>
         </div>
       </div>
@@ -175,13 +175,13 @@ export function ContractEditor({
         <button
           type="submit"
           disabled={isPending || !selectedProjectId}
-          className="px-5 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+          className="px-5 py-2.5 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50"
         >
           {isPending ? "Creando..." : "Crear contrato"}
         </button>
         <Link
           href="/contracts"
-          className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          className="px-5 py-2.5 text-sm font-medium text-foreground bg-muted rounded-lg hover:bg-muted transition-colors"
         >
           Cancelar
         </Link>

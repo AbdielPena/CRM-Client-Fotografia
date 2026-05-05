@@ -6,7 +6,8 @@ import { toast } from "sonner"
 
 interface Asset {
   id: string
-  thumbKey: string | null
+  thumbUrl: string | null
+  webUrl?: string | null
   originalName: string
   status: string
   isFavorite: boolean
@@ -26,14 +27,41 @@ export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProp
     new Set(assets.filter((a) => a.isFavorite).map((a) => a.id))
   )
   const [lightbox, setLightbox] = useState<Asset | null>(null)
+  // Anchor para selección por rango con shift+click
+  const [lastClickedIdx, setLastClickedIdx] = useState<number | null>(null)
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = (id: string, idx: number, shiftKey: boolean) => {
     setSelected((prev) => {
       const next = new Set(prev)
+
+      // Shift+click → seleccionar rango desde lastClickedIdx hasta idx
+      if (shiftKey && lastClickedIdx !== null && lastClickedIdx !== idx) {
+        const [start, end] =
+          lastClickedIdx < idx ? [lastClickedIdx, idx] : [idx, lastClickedIdx]
+        // Si el ancla estaba seleccionada, agregamos rango. Si no, quitamos.
+        const anchorSelected = prev.has(assets[lastClickedIdx].id)
+        for (let i = start; i <= end; i++) {
+          if (anchorSelected) next.add(assets[i].id)
+          else next.delete(assets[i].id)
+        }
+        return next
+      }
+
+      // Click normal → toggle individual + actualizar ancla
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
+    setLastClickedIdx(idx)
+  }
+
+  const selectAll = () => {
+    setSelected(new Set(assets.map((a) => a.id)))
+  }
+
+  const clearSelection = () => {
+    setSelected(new Set())
+    setLastClickedIdx(null)
   }
 
   const toggleFavorite = async (assetId: string, e: React.MouseEvent) => {
@@ -85,53 +113,75 @@ export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProp
   return (
     <div>
       {/* Selection toolbar */}
-      {!readOnly && selected.size > 0 && (
-        <div className="mb-4 flex items-center gap-3 bg-gray-900 text-white px-4 py-2.5 rounded-xl">
-          <span className="text-sm font-medium">{selected.size} seleccionadas</span>
-          <div className="flex gap-2 ml-auto">
-            <button
-              onClick={() => setSelected(new Set())}
-              className="text-xs text-gray-300 hover:text-white"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={deleteSelected}
-              className="flex items-center gap-1.5 text-xs font-medium bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Eliminar
-            </button>
+      {!readOnly && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5">
+          <span className="text-sm font-medium text-foreground">
+            {selected.size === 0
+              ? `${assets.length} foto${assets.length === 1 ? "" : "s"}`
+              : `${selected.size} seleccionada${selected.size === 1 ? "" : "s"}`}
+          </span>
+          <span className="hidden text-xs text-muted-foreground sm:inline">
+            · <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">Shift</kbd>+click para rango
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {selected.size === 0 ? (
+              <button
+                onClick={selectAll}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                Seleccionar todas
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={clearSelection}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={deleteSelected}
+                  className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Eliminar ({selected.size})
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
 
       {/* Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-        {assets.map((asset) => {
+        {assets.map((asset, idx) => {
           const isSelected = selected.has(asset.id)
           const isFav = favorites.has(asset.id)
 
           return (
             <div
               key={asset.id}
-              onClick={() => !readOnly ? toggleSelect(asset.id) : setLightbox(asset)}
+              onClick={(e) =>
+                !readOnly ? toggleSelect(asset.id, idx, e.shiftKey) : setLightbox(asset)
+              }
               className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer group transition-all ${
                 isSelected ? "ring-2 ring-blue-500 ring-offset-2" : "hover:ring-2 hover:ring-gray-300"
               }`}
             >
-              {/* Thumbnail */}
-              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                {asset.thumbKey ? (
+              {/* Thumbnail — URL pública resuelta en server (local fs o Supabase CDN) */}
+              <div className="w-full h-full bg-muted flex items-center justify-center">
+                {asset.thumbUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={`/api/galleries/${galleryId}/assets/${asset.id}/thumb`}
+                    src={asset.thumbUrl}
                     alt={asset.originalName}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    draggable={false}
                   />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                    <span className="text-gray-400 text-xs">Procesando</span>
+                    <span className="text-muted-foreground text-xs">Procesando</span>
                   </div>
                 )}
               </div>
@@ -163,7 +213,7 @@ export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProp
 
               {/* Select indicator */}
               {isSelected && (
-                <div className="absolute top-1.5 left-1.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                <div className="absolute top-1.5 left-1.5 w-5 h-5 bg-brand rounded-full flex items-center justify-center">
                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
@@ -174,25 +224,28 @@ export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProp
         })}
       </div>
 
-      {/* Lightbox */}
+      {/* Lightbox — tamaño contenido, no full screen */}
       {lightbox && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6"
           onClick={() => setLightbox(null)}
         >
           <button
-            className="absolute top-4 right-4 text-white p-2 hover:bg-white/10 rounded-lg"
+            className="absolute top-4 right-4 text-white/90 p-2 hover:bg-white/10 rounded-lg z-10"
             onClick={() => setLightbox(null)}
+            aria-label="Cerrar"
           >
             ✕
           </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`/api/galleries/${galleryId}/assets/${lightbox.id}/thumb`}
+            src={lightbox.webUrl ?? lightbox.thumbUrl ?? ""}
             alt={lightbox.originalName}
-            className="max-h-full max-w-full object-contain rounded-lg"
+            className="max-h-[80vh] max-w-[60vw] w-auto h-auto object-contain rounded-lg shadow-2xl"
             onClick={(e) => e.stopPropagation()}
+            draggable={false}
           />
-          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-sm">
+          <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white/70 text-sm font-medium">
             {lightbox.originalName}
           </p>
         </div>

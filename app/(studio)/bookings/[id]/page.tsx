@@ -226,7 +226,7 @@ export default async function BookingRequestDetailPage({
         {actionError && (
           <div
             role="alert"
-            className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 flex items-start gap-2"
+            className="bg-danger/10 border border-red-200 rounded-xl px-4 py-3 text-sm text-danger flex items-start gap-2"
           >
             <XCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>{actionError}</span>
@@ -249,7 +249,7 @@ export default async function BookingRequestDetailPage({
                 <Row icon={<Phone className="h-5 w-5" />} label="Teléfono">
                   <a
                     href={`tel:${req.client_phone}`}
-                    className="text-gray-700 hover:underline"
+                    className="text-foreground hover:underline"
                   >
                     {req.client_phone}
                   </a>
@@ -274,7 +274,7 @@ export default async function BookingRequestDetailPage({
               <Row icon={<Calendar className="h-5 w-5" />} label="Fecha">
                 {formatDateShort(new Date(req.event_date))}
                 {req.event_time && (
-                  <span className="text-xs text-gray-400 ml-2">
+                  <span className="text-xs text-muted-foreground ml-2">
                     · {req.event_time.slice(0, 5)}
                   </span>
                 )}
@@ -295,11 +295,11 @@ export default async function BookingRequestDetailPage({
                 </Row>
               )}
               {req.additional_notes && (
-                <div className="pt-3 mt-3 border-t border-gray-100">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                <div className="pt-3 mt-3 border-t border-border">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                     Notas
                   </p>
-                  <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+                  <p className="text-sm text-foreground whitespace-pre-line leading-relaxed">
                     {req.additional_notes}
                   </p>
                 </div>
@@ -309,7 +309,7 @@ export default async function BookingRequestDetailPage({
             {/* Motivos */}
             {req.status === "rejected" && req.rejection_reason && (
               <Section title="Motivo del rechazo" tone="red">
-                <p className="text-sm text-red-700 whitespace-pre-line">
+                <p className="text-sm text-danger whitespace-pre-line">
                   {req.rejection_reason}
                 </p>
                 {req.rejected_at && (
@@ -321,7 +321,7 @@ export default async function BookingRequestDetailPage({
             )}
             {req.status === "cancelled" && req.cancellation_reason && (
               <Section title="Motivo de cancelación" tone="gray">
-                <p className="text-sm text-gray-700 whitespace-pre-line">
+                <p className="text-sm text-foreground whitespace-pre-line">
                   {req.cancellation_reason}
                 </p>
               </Section>
@@ -351,14 +351,14 @@ export default async function BookingRequestDetailPage({
                   </form>
                   <details className="relative">
                     <summary className="list-none cursor-pointer">
-                      <div className="w-full flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="w-full flex items-center justify-center gap-2 py-2.5 bg-card border border-border text-foreground text-sm font-medium rounded-lg hover:bg-muted transition-colors">
                         <XCircle className="h-4 w-4" />
                         Rechazar
                       </div>
                     </summary>
                     <form
                       action={rejectAction}
-                      className="mt-2 bg-white rounded-lg border border-gray-200 p-3 space-y-2"
+                      className="mt-2 bg-card rounded-lg border border-border p-3 space-y-2"
                     >
                       <input type="hidden" name="id" value={req.id} />
                       <textarea
@@ -366,7 +366,7 @@ export default async function BookingRequestDetailPage({
                         rows={3}
                         maxLength={500}
                         placeholder="Motivo (opcional pero recomendado)"
-                        className="w-full px-3 py-2 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        className="w-full px-3 py-2 text-xs border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
                       />
                       <button
                         type="submit"
@@ -397,7 +397,7 @@ export default async function BookingRequestDetailPage({
 
             {canCancel && (
               <details className="sf-card p-5">
-                <summary className="list-none cursor-pointer flex items-center gap-2 text-sm font-medium text-gray-700">
+                <summary className="list-none cursor-pointer flex items-center gap-2 text-sm font-medium text-foreground">
                   <Ban className="h-4 w-4" />
                   Cancelar esta reserva
                 </summary>
@@ -413,7 +413,7 @@ export default async function BookingRequestDetailPage({
                     rows={3}
                     maxLength={500}
                     placeholder="Motivo de la cancelación"
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full px-3 py-2 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
                   />
                   <button
                     type="submit"
@@ -524,7 +524,7 @@ function Section({
 }) {
   const styles = {
     white: "sf-card",
-    red: "sf-card bg-red-50 border-red-200",
+    red: "sf-card bg-danger/10 border-red-200",
     gray: "sf-card bg-muted/30",
   }[tone]
   return (

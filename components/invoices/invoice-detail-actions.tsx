@@ -31,7 +31,7 @@ export function InvoiceDetailActions({ invoice }: InvoiceDetailActionsProps) {
         <button
           onClick={handleSend}
           disabled={isSending}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
           {isSending ? "Enviando..." : "Marcar enviada"}
@@ -41,7 +41,7 @@ export function InvoiceDetailActions({ invoice }: InvoiceDetailActionsProps) {
       <div className="relative">
         <button
           onClick={() => setOpen(!open)}
-          className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          className="p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
         >
           <MoreHorizontal className="h-5 w-5" />
         </button>
@@ -49,18 +49,18 @@ export function InvoiceDetailActions({ invoice }: InvoiceDetailActionsProps) {
         {open && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg border border-gray-200 shadow-lg z-20 py-1">
+            <div className="absolute right-0 top-full mt-1 w-48 bg-card rounded-lg border border-border shadow-lg z-20 py-1">
               <button
                 onClick={() => {
                   setOpen(false)
                   window.print()
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
               >
                 <Download className="h-4 w-4" />
                 Exportar / Imprimir
               </button>
-              <hr className="my-1 border-gray-100" />
+              <hr className="my-1 border-border" />
               <ConfirmDialog
                 title="Eliminar factura"
                 description={`¿Eliminar la factura ${invoice.invoice_number}? Esta acción no se puede deshacer.`}
@@ -70,7 +70,7 @@ export function InvoiceDetailActions({ invoice }: InvoiceDetailActionsProps) {
               >
                 <button
                   onClick={() => setOpen(false)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
                 >
                   <Trash2 className="h-4 w-4" />
                   Eliminar factura
