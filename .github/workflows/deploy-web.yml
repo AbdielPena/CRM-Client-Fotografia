@@ -57,19 +57,18 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://kbrcqyjnrbjlzfolpcsx.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_Nh-ot-oVKy46FpSiF7UASA_FIcHMeOk
 
-      # Armamos un directorio limpio con SOLO lo que va al server.
-      # Así evitamos los bugs de exclude/include de FTP-Deploy-Action.
+      # Deploy atómico: .next/ va a .next.staging/ para no romper la app
+      # corriendo. El endpoint /api/deploy/finalize hace el swap final.
+      # public/ y server.js van directo (no son críticos para el runtime).
       - name: Build deploy package
         run: |
-          mkdir -p deploy-package
-          cp -r .next deploy-package/.next
+          mkdir -p deploy-package/.next.staging
+          cp -r .next/. deploy-package/.next.staging/
           cp -r public deploy-package/public
           cp server.js deploy-package/server.js
-          mkdir -p deploy-package/tmp
-          date -u +"%Y-%m-%dT%H:%M:%SZ" > deploy-package/tmp/restart.txt
           echo "--- deploy-package contents ---"
           ls -la deploy-package/
-          du -sh deploy-package/.next deploy-package/public
+          du -sh deploy-package/.next.staging deploy-package/public
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
