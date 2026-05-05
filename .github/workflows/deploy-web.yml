@@ -83,8 +83,29 @@ jobs:
           server-dir: ./my/
           log-level: standard
 
+      # El FTP no setea permisos correctos en .next/, lo que causa EACCES
+      # en Phusion Passenger. Llamamos al endpoint /api/deploy/finalize
+      # que hace chmod recursivo y toca tmp/restart.txt.
+      - name: Finalize deploy (chmod + restart)
+        shell: bash
+        env:
+          HOOK_TOKEN: ${{ secrets.DEPLOY_HOOK_TOKEN }}
+        run: |
+          # Esperamos 6s a que Phusion levante la app con el código nuevo
+          sleep 6
+          response=$(curl -sS -w "\n%{http_code}" \
+            --request POST \
+            --max-time 60 \
+            --header "Authorization: Bearer $HOOK_TOKEN" \
+            "https://my.abbypixel.com/api/deploy/finalize")
+          status="${response##*$'\n'}"
+          body="${response%$'\n'*}"
+          echo "Finalize status: $status"
+          echo "Finalize body: $body"
+          [ "$status" = "200" ] || exit 1
+
       - name: Health check
         run: |
-          # Esperamos 12s para que Phusion Passenger reinicie
-          sleep 12
+          # Después del finalize Phusion reinicia. Esperamos y verificamos.
+          sleep 8
           curl -f -sS -m 30 https://my.abbypixel.com/api/health
