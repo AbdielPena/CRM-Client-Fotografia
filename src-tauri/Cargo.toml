@@ -1,6 +1,6 @@
 [package]
 name = "studioflow"
-version = "0.1.2"
+version = "0.1.3"
 description = "StudioFlow desktop wrapper"
 authors = ["Abdiel Peña <soyabdielpena@gmail.com>"]
 edition = "2021"
