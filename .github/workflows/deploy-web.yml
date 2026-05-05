@@ -76,7 +76,7 @@ jobs:
           password: ${{ secrets.BH_FTP_PASS }}
           local-dir: ./.next/
           server-dir: ./.next/
-          dangerous-clean-slate: true
+          log-level: verbose
 
       - name: Deploy public/ via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
