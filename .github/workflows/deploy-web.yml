@@ -75,7 +75,7 @@ jobs:
           username: ${{ secrets.BH_FTP_USER }}
           password: ${{ secrets.BH_FTP_PASS }}
           local-dir: ./.next/
-          server-dir: my/.next/
+          server-dir: ./.next/
           dangerous-clean-slate: true
 
       - name: Deploy public/ via FTP
@@ -85,7 +85,7 @@ jobs:
           username: ${{ secrets.BH_FTP_USER }}
           password: ${{ secrets.BH_FTP_PASS }}
           local-dir: ./public/
-          server-dir: my/public/
+          server-dir: ./public/
 
       - name: Deploy server.js via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -94,7 +94,7 @@ jobs:
           username: ${{ secrets.BH_FTP_USER }}
           password: ${{ secrets.BH_FTP_PASS }}
           local-dir: ./
-          server-dir: my/
+          server-dir: ./
           exclude: |
             **/*
             !server.js
@@ -106,7 +106,7 @@ jobs:
           username: ${{ secrets.BH_FTP_USER }}
           password: ${{ secrets.BH_FTP_PASS }}
           local-dir: ./tmp/
-          server-dir: my/tmp/
+          server-dir: ./tmp/
 
       - name: Health check
         run: |
