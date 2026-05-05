@@ -78,7 +78,9 @@ jobs:
           username: ${{ secrets.BH_FTP_USER }}
           password: ${{ secrets.BH_FTP_PASS }}
           local-dir: ./deploy-package/
-          server-dir: ./
+          # La cuenta FTP está chrooted al home (~/), no a ~/my/.
+          # Por eso prefijamos con "my/".
+          server-dir: ./my/
           log-level: standard
 
       - name: Health check
