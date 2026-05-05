@@ -52,6 +52,10 @@ studioflow-updater.key
 studioflow-updater.key.pub
 *.pem
 
+# SSH deploy keys (NUNCA van al repo)
+studioflow-deploy-key
+studioflow-deploy-key.pub
+
 # Tauri build artifacts
 src-tauri/target/
 src-tauri/gen/
