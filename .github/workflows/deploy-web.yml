@@ -1,0 +1,103 @@
+name: Deploy Web to BanaHosting
+
+# Trigger: push a main que toque archivos del código web.
+# El workflow buildea Next.js, sube el .next/ via rsync al server
+# y hace touch tmp/restart.txt para reiniciar la app.
+#
+# No corre cuando solo cambian docs, scripts o configs de Tauri/Capacitor.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "server/**"
+      - "emails/**"
+      - "supabase/migrations/**"
+      - "middleware.ts"
+      - "instrumentation.ts"
+      - "next.config.mjs"
+      - "next-env.d.ts"
+      - "tailwind.config.ts"
+      - "postcss.config.js"
+      - "tsconfig.json"
+      - "package.json"
+      - "package-lock.json"
+      - "public/**"
+      - "server.js"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-prod
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NODE_ENV: production
+          NEXT_PUBLIC_APP_URL: https://my.abbypixel.com
+          NEXTAUTH_URL: https://my.abbypixel.com
+          NEXT_PUBLIC_SUPABASE_URL: https://kbrcqyjnrbjlzfolpcsx.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_Nh-ot-oVKy46FpSiF7UASA_FIcHMeOk
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.BH_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.BH_SSH_PORT || 22 }} -H ${{ secrets.BH_SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Sync .next/ to server via rsync
+        run: |
+          rsync -avz --delete \
+            -e "ssh -p ${{ secrets.BH_SSH_PORT || 22 }}" \
+            ./.next/ \
+            ${{ secrets.BH_SSH_USER }}@${{ secrets.BH_SSH_HOST }}:~/my/.next/
+
+      - name: Sync public/ to server via rsync
+        run: |
+          rsync -avz \
+            -e "ssh -p ${{ secrets.BH_SSH_PORT || 22 }}" \
+            ./public/ \
+            ${{ secrets.BH_SSH_USER }}@${{ secrets.BH_SSH_HOST }}:~/my/public/
+
+      - name: Sync server.js to server
+        run: |
+          rsync -avz \
+            -e "ssh -p ${{ secrets.BH_SSH_PORT || 22 }}" \
+            ./server.js \
+            ${{ secrets.BH_SSH_USER }}@${{ secrets.BH_SSH_HOST }}:~/my/server.js
+
+      - name: Fix permissions and restart app
+        run: |
+          ssh -p ${{ secrets.BH_SSH_PORT || 22 }} \
+            ${{ secrets.BH_SSH_USER }}@${{ secrets.BH_SSH_HOST }} \
+            "chmod -R 755 ~/my/.next && mkdir -p ~/my/tmp && touch ~/my/tmp/restart.txt"
+
+      - name: Health check
+        run: |
+          # Esperamos 8s para que la app reinicie y verificamos que responda 200
+          sleep 8
+          curl -f -sS -m 30 https://my.abbypixel.com/api/health
