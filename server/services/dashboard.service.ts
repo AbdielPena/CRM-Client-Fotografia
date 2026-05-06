@@ -47,6 +47,7 @@ export async function getMonthlyRevenue(
     .select('amount, received_at')
     .eq('studio_id', studioId)
     .eq('status', 'completed')
+    .is('deleted_at', null)
     .gte('received_at', start.toISOString())
 
   if (error) throw new Error(`[getMonthlyRevenue] ${error.message}`)

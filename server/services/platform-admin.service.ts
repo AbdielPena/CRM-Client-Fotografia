@@ -116,7 +116,7 @@ export async function getPlatformGlobalStats(): Promise<PlatformGlobalStats> {
     supabase.from('studios').select('id', { count: 'exact', head: true }),
     supabase.from('studios').select('id, plan_id, is_suspended, plans(slug, name)'),
     supabase.from('studio_members').select('user_id', { count: 'exact', head: true }),
-    supabase.from('payments').select('amount').eq('status', 'completed'),
+    supabase.from('payments').select('amount').eq('status', 'completed').is('deleted_at', null),
     supabase.from('booking_requests').select('id', { count: 'exact', head: true }),
     supabase
       .from('studios')
@@ -203,7 +203,8 @@ export async function listPlatformStudios(opts?: {
       .from('payments')
       .select('studio_id, amount')
       .in('studio_id', studioIds)
-      .eq('status', 'completed'),
+      .eq('status', 'completed')
+      .is('deleted_at', null),
   ])
 
   const memberCounts = new Map<string, number>()
@@ -298,7 +299,8 @@ export async function getPlatformStudioDetail(
       .from('payments')
       .select('amount')
       .eq('studio_id', studioId)
-      .eq('status', 'completed'),
+      .eq('status', 'completed')
+      .is('deleted_at', null),
   ])
 
   let owner: PlatformStudioDetail['owner'] = null

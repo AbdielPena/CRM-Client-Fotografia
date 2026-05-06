@@ -66,6 +66,7 @@ async function getDashboardData(studioId: string) {
       .select("amount")
       .eq("studio_id", studioId)
       .eq("status", "completed")
+      .is("deleted_at", null)
       .gte("received_at", startOfMonthIso),
     supabase
       .from("projects")
