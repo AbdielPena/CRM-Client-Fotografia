@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { formatCurrency } from "@/lib/utils/currency"
 
@@ -21,7 +22,13 @@ type Props = {
  * smooth curve (cardinal spline), tooltip on hover, draw-in animation.
  */
 export function RevenueLineChart({ buckets, currency = "DOP" }: Props) {
+  const router = useRouter()
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+
+  const handleClick = (monthKey: string) => {
+    // Navega al listado de facturas filtrado por ese mes
+    router.push(`/invoices?month=${monthKey}`)
+  }
 
   const { max, total, avg } = useMemo(() => {
     const values = buckets.map((b) => b.revenue)
@@ -164,7 +171,7 @@ export function RevenueLineChart({ buckets, currency = "DOP" }: Props) {
                   animate={{ r: isHover ? 5 : 0 }}
                   transition={{ duration: 0.15 }}
                 />
-                {/* Hitbox vertical generosa */}
+                {/* Hitbox vertical generosa con click → /invoices?month=YYYY-MM */}
                 <rect
                   x={p.x - plotW / buckets.length / 2}
                   y={0}
@@ -173,7 +180,14 @@ export function RevenueLineChart({ buckets, currency = "DOP" }: Props) {
                   fill="transparent"
                   onMouseEnter={() => setHoverIdx(i)}
                   onMouseLeave={() => setHoverIdx(null)}
-                  style={{ cursor: "pointer" }}
+                  onClick={() => handleClick(b.month)}
+                  style={{ cursor: b.revenue > 0 ? "pointer" : "default" }}
+                  role={b.revenue > 0 ? "button" : undefined}
+                  aria-label={
+                    b.revenue > 0
+                      ? `Ver facturas de ${b.label}: ${formatCurrency(b.revenue, currency)} en ${b.paymentsCount} pago${b.paymentsCount === 1 ? "" : "s"}`
+                      : undefined
+                  }
                 />
                 {/* Etiquetas X */}
                 <text
@@ -209,13 +223,13 @@ export function RevenueLineChart({ buckets, currency = "DOP" }: Props) {
           )}
         </svg>
 
-        {/* Tooltip flotante */}
+        {/* Tooltip flotante con detalle + hint de click */}
         {hoverIdx !== null && buckets[hoverIdx] && points[hoverIdx] && (
           <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.15 }}
-            className="pointer-events-none absolute rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-md"
+            className="pointer-events-none absolute z-10 min-w-[180px] rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg"
             style={{
               left: `${(points[hoverIdx]!.x / W) * 100}%`,
               top: `${(points[hoverIdx]!.y / H) * 100}%`,
@@ -223,14 +237,19 @@ export function RevenueLineChart({ buckets, currency = "DOP" }: Props) {
               whiteSpace: "nowrap",
             }}
           >
-            <div className="font-semibold text-popover-foreground tabular-nums">
+            <div className="font-semibold text-popover-foreground tabular-nums text-[13px]">
               {formatCurrency(buckets[hoverIdx]!.revenue, currency)}
             </div>
-            <div className="text-muted-foreground">
+            <div className="mt-0.5 text-muted-foreground">
               {buckets[hoverIdx]!.paymentsCount} pago
               {buckets[hoverIdx]!.paymentsCount === 1 ? "" : "s"} ·{" "}
-              {buckets[hoverIdx]!.label}
+              {buckets[hoverIdx]!.label.charAt(0).toUpperCase() + buckets[hoverIdx]!.label.slice(1)}
             </div>
+            {buckets[hoverIdx]!.revenue > 0 && (
+              <div className="mt-1.5 border-t border-border pt-1.5 text-[10.5px] text-brand">
+                Click para ver facturas →
+              </div>
+            )}
           </motion.div>
         )}
       </div>

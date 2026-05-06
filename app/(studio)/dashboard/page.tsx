@@ -12,6 +12,7 @@ import { createSupabaseServerClient } from "@/server/supabase/server"
 import {
   getMonthlyRevenue,
   getTopPackages,
+  getRecentActivity,
 } from "@/server/services/dashboard.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { formatCurrency } from "@/lib/utils/currency"
@@ -22,10 +23,7 @@ import { StatCard } from "@/components/shared/stat-card"
 import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import { RevenueLineChart } from "@/components/dashboard/revenue-line-chart"
 import { GoalsProgress } from "@/components/dashboard/goals-progress"
-import {
-  RecentActivity,
-  type ActivityItem,
-} from "@/components/dashboard/recent-activity"
+import { RecentActivityRich } from "@/components/dashboard/recent-activity-rich"
 import { TopPackagesList } from "@/components/dashboard/top-packages-list"
 import { UpcomingSessions } from "@/components/dashboard/upcoming-sessions"
 
@@ -116,28 +114,16 @@ async function getDashboardData(studioId: string) {
   }
 }
 
-function timeAgo(date: Date): string {
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return "ahora"
-  if (diffMin < 60) return `hace ${diffMin} min`
-  const diffH = Math.floor(diffMin / 60)
-  if (diffH < 24) return `hace ${diffH}h`
-  const diffD = Math.floor(diffH / 24)
-  if (diffD < 7) return `hace ${diffD}d`
-  return date.toLocaleDateString("es-DO", { day: "numeric", month: "short" })
-}
-
 export default async function DashboardPage() {
   const session = await requireStudioAuth()
 
-  const [data, monthlyRevenue, topPackages, unreadNotifications] =
+  const [data, monthlyRevenue, topPackages, unreadNotifications, recentActivity] =
     await Promise.all([
       getDashboardData(session.studioId),
       getMonthlyRevenue(session.studioId, 12),
       getTopPackages(session.studioId, 5, 5),
       countUnreadNotifications(session.studioId),
+      getRecentActivity(session.studioId, 12).catch(() => []),
     ])
 
   const firstName = (session.name || session.email).split(" ")[0]
@@ -169,33 +155,7 @@ export default async function DashboardPage() {
       ? Math.min(100, (data.stats.activeProjects / data.stats.clients) * 100)
       : 0
 
-  // Activity feed: clientes recientes + próximas sesiones
-  const activityItems: ActivityItem[] = [
-    ...data.recentClients.slice(0, 3).map((c: { id: string; name: string; email?: string | null; created_at: string }) => ({
-      id: `client-${c.id}`,
-      icon: "client" as const,
-      tone: "blue" as const,
-      title: "Nuevo cliente",
-      description: `${c.name}${c.email ? ` · ${c.email}` : ""}`,
-      timestamp: timeAgo(new Date(c.created_at)),
-      href: `/clients/${c.id}`,
-    })),
-    ...data.upcomingProjects.slice(0, 2).map((p) => {
-      const proj = p as { id: string; name: string; event_date: string; client?: { name?: string } | null }
-      return {
-        id: `proj-${proj.id}`,
-        icon: "session" as const,
-        tone: "violet" as const,
-        title: "Sesión próxima",
-        description: `${proj.name}${proj.client?.name ? ` · ${proj.client.name}` : ""}`,
-        timestamp: new Date(proj.event_date).toLocaleDateString("es-DO", {
-          day: "numeric",
-          month: "short",
-        }),
-        href: `/projects/${proj.id}`,
-      }
-    }),
-  ]
+  // Activity feed: lectura real del activity_log con metadata + href + flag huérfano
 
   return (
     <>
@@ -307,11 +267,11 @@ export default async function DashboardPage() {
             <div className="lg:col-span-2">
               <DashboardCard
                 title="Actividad reciente"
-                href="/clients"
+                href="/notifications"
                 hrefLabel="Ver todo"
                 delay={0.3}
               >
-                <RecentActivity items={activityItems} />
+                <RecentActivityRich items={recentActivity} />
               </DashboardCard>
             </div>
 
