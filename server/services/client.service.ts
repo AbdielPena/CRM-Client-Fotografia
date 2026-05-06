@@ -261,15 +261,17 @@ export async function deleteClient(
   studioId: string,
   actorId: string,
   clientId: string,
+  reason?: string | null,
 ) {
-  // Usa la función SQL que elimina en cascada (proyectos, contratos, facturas,
-  // pagos, notas, booking_requests, contactos, etiquetas) en una sola
-  // transacción atómica. Tablas con deleted_at → soft delete.
-  // Tablas sin deleted_at → hard delete.
+  // Soft delete con cascada via RPC. El cliente y todas sus entidades
+  // (proyectos, contratos, facturas, pagos, notas, galerías, bookings)
+  // pasan al estado "trashed" (deleted_at = now()). Restaurable desde /trash.
   const supabase = createSupabaseServiceClient()
+  // @ts-ignore - tipos generados por supabase pueden no incluir el nuevo arg
   const { error } = await supabase.rpc('cascade_delete_client', {
     p_client_id: clientId,
     p_studio_id: studioId,
+    p_reason: reason ?? null,
   })
 
   if (error) {
@@ -285,7 +287,152 @@ export async function deleteClient(
     entityType: 'client',
     entityId: clientId,
     action: 'client.deleted',
+    metadata: reason ? { reason } : undefined,
   })
+}
+
+// ----------------------------------------------------------------------------
+// Trash module: restore + hard delete + listado
+// ----------------------------------------------------------------------------
+
+/**
+ * Restaura un cliente del trash y todas sus entidades asociadas.
+ * Reversa de cascade_delete_client.
+ */
+export async function restoreClient(
+  studioId: string,
+  actorId: string,
+  clientId: string,
+) {
+  const supabase = createSupabaseServiceClient()
+  // @ts-ignore - RPC nueva, tipos pueden no estar generados aun
+  const { error } = await supabase.rpc('cascade_restore_client', {
+    p_client_id: clientId,
+    p_studio_id: studioId,
+  })
+
+  if (error) {
+    if (error.message?.includes('CLIENT_NOT_TRASHED')) {
+      throw new Error('CLIENT_NOT_TRASHED')
+    }
+    throw new Error(error.message)
+  }
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: 'client',
+    entityId: clientId,
+    action: 'client.restored',
+  })
+}
+
+/**
+ * Elimina PERMANENTEMENTE un cliente del trash. Borra todas sus entidades
+ * dependientes de la base de datos. Irreversible.
+ * Solo debe llamarse desde /trash con doble confirmación.
+ */
+export async function permanentlyDeleteClient(
+  studioId: string,
+  actorId: string,
+  clientId: string,
+) {
+  const supabase = createSupabaseServiceClient()
+  // Capturamos snapshot del cliente antes para el audit log
+  const { data: snapshot } = await supabase
+    .from('clients')
+    .select('id, name, email, phone, deleted_at')
+    .eq('id', clientId)
+    .eq('studio_id', studioId)
+    .maybeSingle()
+
+  // @ts-ignore - RPC nueva, tipos pueden no estar generados aun
+  const { error } = await supabase.rpc('cascade_hard_delete_client', {
+    p_client_id: clientId,
+    p_studio_id: studioId,
+  })
+
+  if (error) {
+    if (error.message?.includes('CLIENT_NOT_TRASHED')) {
+      throw new Error('CLIENT_NOT_TRASHED')
+    }
+    throw new Error(error.message)
+  }
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: 'client',
+    entityId: clientId,
+    action: 'client.purged',
+    description: snapshot?.name ? `Eliminado permanente: ${snapshot.name}` : null,
+    beforeState: snapshot ?? undefined,
+  })
+}
+
+export type TrashedClient = {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  deleted_at: string | null
+  deletion_reason: string | null
+  created_at: string
+}
+
+/**
+ * Lista los clientes en trash (soft-deleted) del studio, paginado.
+ */
+export async function getTrashedClients(
+  studioId: string,
+  opts: { search?: string; page?: number; pageSize?: number } = {},
+) {
+  const { search, page = 1, pageSize = 50 } = opts
+  const supabase = createSupabaseServerClient()
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  // Select con string genérico — los tipos de supabase no incluyen
+  // deletion_reason aún (columna recién agregada por migration).
+  let query = supabase
+    .from('clients')
+    .select('*', { count: 'exact' })
+    .eq('studio_id', studioId)
+    .not('deleted_at', 'is', null)
+    .order('deleted_at', { ascending: false })
+    .range(from, to)
+
+  if (search && search.trim()) {
+    const term = `%${search.trim()}%`
+    query = query.or(
+      `name.ilike.${term},email.ilike.${term},phone.ilike.${term}`,
+    )
+  }
+
+  const { data, count, error } = await query
+  if (error) throw new Error(error.message)
+
+  // Cast explícito al tipo TrashedClient (deletion_reason no está en tipos generados)
+  const items = (data ?? []).map((row) => {
+    const r = row as Record<string, unknown>
+    return {
+      id: r.id as string,
+      name: r.name as string,
+      email: (r.email as string | null) ?? null,
+      phone: (r.phone as string | null) ?? null,
+      deleted_at: (r.deleted_at as string | null) ?? null,
+      deletion_reason: (r.deletion_reason as string | null) ?? null,
+      created_at: r.created_at as string,
+    } satisfies TrashedClient
+  })
+
+  return {
+    items,
+    total: count ?? 0,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil((count ?? 0) / pageSize)),
+  }
 }
 
 // ----------------------------------------------------------------------------

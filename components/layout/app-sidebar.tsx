@@ -27,6 +27,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
+  Trash2,
   type LucideIcon,
 } from "lucide-react"
 
@@ -113,6 +114,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: CalendarClock,
       },
       { type: "link", href: "/settings", label: "Ajustes generales", icon: Settings },
+      { type: "link", href: "/trash", label: "Papelera", icon: Trash2 },
     ],
   },
 ]

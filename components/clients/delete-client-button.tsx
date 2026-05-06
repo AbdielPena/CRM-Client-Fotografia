@@ -16,7 +16,9 @@ export function DeleteClientButton({ clientId, clientName }: DeleteClientButtonP
       description={`¿Eliminar a "${clientName}"? Esta acción no se puede deshacer. Sus proyectos, contratos y facturas no se eliminarán.`}
       confirmLabel="Sí, eliminar"
       danger
-      onConfirm={() => deleteClientAction(clientId)}
+      onConfirm={async () => {
+        await deleteClientAction(clientId)
+      }}
     >
       <button
         type="button"

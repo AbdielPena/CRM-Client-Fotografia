@@ -45,11 +45,14 @@ export function ClientDetailActions({ client }: ClientDetailActionsProps) {
             </button>
             <hr className="my-1 border-border" />
             <ConfirmDialog
-              title="Eliminar cliente"
-              description={`¿Eliminar a "${client.name}"? Sus proyectos no serán eliminados.`}
-              confirmLabel="Eliminar"
+              title="Mover a la Papelera"
+              description={`¿Mover a "${client.name}" a la Papelera? Sus proyectos, contratos, facturas y galerías también se ocultarán. Podés restaurarlo en cualquier momento desde /trash.`}
+              confirmLabel="Mover a Papelera"
               danger
-              onConfirm={() => deleteClientAction(client.id)}
+              onConfirm={async () => {
+                await deleteClientAction(client.id)
+                router.push("/clients")
+              }}
             >
               <button
                 onClick={() => setOpen(false)}

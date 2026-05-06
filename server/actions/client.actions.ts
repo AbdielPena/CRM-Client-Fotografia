@@ -8,6 +8,8 @@ import {
   createClientWithBooking,
   updateClient,
   deleteClient,
+  restoreClient,
+  permanentlyDeleteClient,
   ClientCreationError,
 } from "@/server/services/client.service"
 import {
@@ -224,9 +226,44 @@ export async function updateClientAction(clientId: string, formData: FormData) {
   return { success: true }
 }
 
-export async function deleteClientAction(clientId: string) {
+/**
+ * Soft delete del cliente (lo manda a /trash). Acepta motivo opcional.
+ * Retorna { ok: true } en éxito, sin redirect, para que el caller decida.
+ */
+export async function deleteClientAction(
+  clientId: string,
+  reason?: string | null,
+) {
   const session = await requireStudioAuth()
-  await deleteClient(session.studioId, session.userId, clientId)
+  await deleteClient(session.studioId, session.userId, clientId, reason)
   revalidatePath("/clients")
-  redirect("/clients")
+  revalidatePath("/trash")
+  return { ok: true as const }
+}
+
+/**
+ * Restaura cliente desde /trash. Vuelve al listado principal con todos
+ * sus proyectos, contratos, facturas, galerías, notas y bookings.
+ */
+export async function restoreClientAction(clientId: string) {
+  const session = await requireStudioAuth()
+  await restoreClient(session.studioId, session.userId, clientId)
+  revalidatePath("/clients")
+  revalidatePath("/trash")
+  return { ok: true as const }
+}
+
+/**
+ * ELIMINA PERMANENTEMENTE un cliente del trash. Requiere rol admin u owner.
+ * Borra de la base de datos al cliente y todas sus entidades dependientes.
+ * Acción irreversible — solo se debe llamar desde /trash con doble confirmación.
+ */
+export async function permanentlyDeleteClientAction(clientId: string) {
+  const session = await requireStudioAuth()
+  if (session.role !== "admin" && session.role !== "owner") {
+    throw new Error("FORBIDDEN_ROLE")
+  }
+  await permanentlyDeleteClient(session.studioId, session.userId, clientId)
+  revalidatePath("/trash")
+  return { ok: true as const }
 }
