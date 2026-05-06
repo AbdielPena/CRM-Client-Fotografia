@@ -14,13 +14,26 @@ interface ConfirmDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   onConfirm: () => void | Promise<void>
-  children: React.ReactNode
+  /**
+   * Trigger element. Solo requerido en modo "uncontrolled" (sin open/onOpenChange).
+   * En modo controlado, se omite y el componente padre maneja la apertura.
+   */
+  children?: React.ReactNode
   danger?: boolean
+  /** Modo controlado: si se pasa, el componente padre maneja el estado de apertura. */
+  open?: boolean
+  /** Callback del modo controlado. Requerido si `open` se pasa. */
+  onOpenChange?: (open: boolean) => void
 }
 
 /**
  * Confirm dialog — con portal, focus trap básico, animación spring y tokens.
- * Compat: envuelve el trigger en un <span> con onClick; la API pública no cambia.
+ *
+ * Soporta dos modos:
+ *  1. **Uncontrolled** (default): pasás `children` como trigger y el dialog
+ *     maneja su propio estado al click.
+ *  2. **Controlled**: pasás `open` + `onOpenChange` desde el padre. Útil
+ *     cuando el trigger vive en otro componente (ej. dropdown menu).
  */
 export function ConfirmDialog({
   title,
@@ -30,8 +43,22 @@ export function ConfirmDialog({
   onConfirm,
   children,
   danger = false,
+  open: openProp,
+  onOpenChange,
 }: ConfirmDialogProps) {
-  const [open, setOpen] = React.useState(false)
+  const isControlled = openProp !== undefined
+  const [openInternal, setOpenInternal] = React.useState(false)
+  const open = isControlled ? openProp : openInternal
+  const setOpen = React.useCallback(
+    (next: boolean) => {
+      if (isControlled) {
+        onOpenChange?.(next)
+      } else {
+        setOpenInternal(next)
+      }
+    },
+    [isControlled, onOpenChange],
+  )
   const [loading, setLoading] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
   const confirmBtnRef = React.useRef<HTMLButtonElement | null>(null)
@@ -66,12 +93,11 @@ export function ConfirmDialog({
 
   return (
     <>
-      <span
-        onClick={() => setOpen(true)}
-        className="contents"
-      >
-        {children}
-      </span>
+      {children && (
+        <span onClick={() => setOpen(true)} className="contents">
+          {children}
+        </span>
+      )}
 
       {mounted &&
         createPortal(

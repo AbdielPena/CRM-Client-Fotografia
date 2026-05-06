@@ -10,6 +10,7 @@ import { formatDateShort } from "@/lib/utils/currency"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
 import { ShareRegisterLinkButton } from "@/components/clients/share-register-link-button"
+import { ClientRowActions } from "@/components/clients/client-row-actions"
 import { SearchInput } from "@/components/shared/search-input"
 import { EmptyState } from "@/components/shared/empty-state"
 import { Pagination } from "@/components/shared/pagination"
@@ -141,6 +142,9 @@ export default async function ClientsPage({
               >
                 Desde
               </DataTableColumn>
+              <DataTableColumn align="right" className="w-[60px]">
+                <span className="sr-only">Acciones</span>
+              </DataTableColumn>
             </DataTableHeader>
             <DataTableBody>
               {(data.items as ClientRow[]).map((client) => {
@@ -199,6 +203,12 @@ export default async function ClientsPage({
                       className="hidden text-muted-foreground tabular-nums lg:table-cell"
                     >
                       {formatDateShort(new Date(client.created_at))}
+                    </DataTableCell>
+                    <DataTableCell align="right">
+                      <ClientRowActions
+                        clientId={client.id}
+                        clientName={client.name}
+                      />
                     </DataTableCell>
                   </DataTableRow>
                 )
