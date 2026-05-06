@@ -7,6 +7,7 @@ import {
   SignaturePad,
   type SignaturePadHandle,
 } from "@/components/public/signature-pad"
+import { sanitizeHtml } from "@/lib/utils/sanitize-html"
 
 interface ContractSigningViewProps {
   token: string
@@ -164,7 +165,7 @@ export function ContractSigningView({ token, contract }: ContractSigningViewProp
         <div className="rounded-xl border border-zinc-200 bg-white p-8 dark:border-zinc-800 dark:bg-zinc-900">
           <div
             className="contract-body prose prose-sm max-w-none text-zinc-800 dark:prose-invert dark:text-zinc-200"
-            dangerouslySetInnerHTML={{ __html: contract.bodyHtml }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(contract.bodyHtml) }}
           />
         </div>
 

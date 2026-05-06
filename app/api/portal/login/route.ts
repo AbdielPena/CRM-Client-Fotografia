@@ -8,6 +8,11 @@ import {
   validatePortalLogin,
 } from "@/server/services/client-portal.service"
 import { apiError } from "@/lib/utils/api-error"
+import {
+  rateLimit,
+  rateLimitResponse,
+  getClientIp,
+} from "@/lib/utils/rate-limit"
 
 const schema = z.object({
   email: z.string().email(),
@@ -15,6 +20,15 @@ const schema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  // Rate limit: 8 intentos / 5 min por IP (defensa anti brute-force de códigos)
+  const ip = getClientIp(req)
+  const limitCheck = rateLimit({
+    key: `portal-login:${ip}`,
+    max: 8,
+    windowMs: 5 * 60_000,
+  })
+  if (limitCheck.blocked) return rateLimitResponse(limitCheck)
+
   try {
     const body = schema.parse(await req.json())
     const session = await validatePortalLogin(body.email, body.code)

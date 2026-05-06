@@ -356,7 +356,7 @@ export async function markContractViewed(
   const supabase = createSupabaseServiceClient()
   const { data: contract } = await supabase
     .from('contracts')
-    .select('id, status, viewed_at')
+    .select('id, status, viewed_at, expires_at')
     .eq('signing_token', signingToken)
     .is('deleted_at', null)
     .maybeSingle()
@@ -364,6 +364,8 @@ export async function markContractViewed(
   // Solo actualizar si está en estados intermedios y no fue visto antes
   if (contract.status === 'signed' || contract.status === 'voided') return
   if (contract.viewed_at) return
+  // Bloquear si el contrato expiró (consistencia con signContract)
+  if (contract.expires_at && new Date() > new Date(contract.expires_at)) return
   type ContractsUpdate = Database['public']['Tables']['contracts']['Update']
   const update: ContractsUpdate = {
     viewed_at: new Date().toISOString(),

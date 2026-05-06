@@ -2,6 +2,8 @@ import 'server-only'
 
 import nodemailer, { type Transporter } from 'nodemailer'
 
+import { sanitizeEmailHeader } from '@/lib/utils/sanitize-html'
+
 /**
  * SMTP service — envía emails vía SMTP genérico (nodemailer).
  *
@@ -88,14 +90,26 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     input.fromEmail ?? process.env.SMTP_FROM_EMAIL ?? process.env.SMTP_USER ?? ''
   const fromName = input.fromName ?? process.env.SMTP_FROM_NAME ?? 'StudioFlow'
 
+  // Sanitización de headers SMTP — bloquea CRLF injection (Bcc/Cc smuggling).
+  // Cualquier valor que llegue desde la DB o input del usuario debe pasar por
+  // sanitizeEmailHeader antes de meterse en headers (subject, from, to, replyTo).
+  const safeSubject = sanitizeEmailHeader(input.subject)
+  const safeFromName = sanitizeEmailHeader(fromName)
+  const safeFromEmail = sanitizeEmailHeader(fromEmail)
+  const safeTo = sanitizeEmailHeader(input.to)
+  const safeToName = input.toName ? sanitizeEmailHeader(input.toName) : null
+  const safeReplyTo = input.replyTo
+    ? sanitizeEmailHeader(input.replyTo)
+    : undefined
+
   try {
     const info = await transporter.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
-      to: input.toName ? `"${input.toName}" <${input.to}>` : input.to,
-      subject: input.subject,
+      from: `"${safeFromName}" <${safeFromEmail}>`,
+      to: safeToName ? `"${safeToName}" <${safeTo}>` : safeTo,
+      subject: safeSubject,
       html: input.html,
       text: input.text ?? stripHtml(input.html),
-      replyTo: input.replyTo ?? undefined,
+      replyTo: safeReplyTo,
     })
     console.log(`[smtp.sendEmail] ✉️  enviado a ${input.to} — id=${info.messageId}`)
     return { ok: true, messageId: info.messageId }

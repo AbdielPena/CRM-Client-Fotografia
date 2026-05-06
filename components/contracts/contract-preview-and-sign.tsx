@@ -10,6 +10,7 @@ import {
   SignaturePad,
   type SignaturePadHandle,
 } from "@/components/public/signature-pad"
+import { sanitizeHtml } from "@/lib/utils/sanitize-html"
 
 type Mode = "preview" | "raw"
 
@@ -156,7 +157,7 @@ export function ContractPreviewAndSign({
           ) : (
             <div
               className="prose prose-sm max-w-none text-foreground dark:prose-invert"
-              dangerouslySetInnerHTML={{ __html: previewHtml ?? "" }}
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewHtml) }}
             />
           )
         ) : (

@@ -475,13 +475,28 @@ async function processAssetSafely(
 
     const meta = await sharp(buffer).metadata()
 
-    const thumbBuf = await sharp(buffer)
+    // Decompression bomb defense: rechazar imágenes con dimensiones absurdas
+    // que podrían tumbar el servidor al descomprimir (ej: 50000x50000 px).
+    // Cap: 100 megapixels (suficiente para fotos 100MP de cámara modernas).
+    const MAX_PIXELS = 100_000_000
+    const totalPixels = (meta.width ?? 0) * (meta.height ?? 0)
+    if (totalPixels > MAX_PIXELS) {
+      throw new Error(
+        `IMAGE_TOO_LARGE: ${meta.width}x${meta.height} (${totalPixels} px) excede el límite de ${MAX_PIXELS} px`,
+      )
+    }
+
+    // Sharp options con limit de input pixels — defensa adicional contra
+    // decompression bombs en el procesamiento mismo.
+    const sharpOpts = { limitInputPixels: MAX_PIXELS }
+
+    const thumbBuf = await sharp(buffer, sharpOpts)
       .rotate()
       .resize({ width: 400, height: 400, fit: "cover", withoutEnlargement: true })
       .webp({ quality: 75 })
       .toBuffer()
 
-    let webBuf = await sharp(buffer)
+    let webBuf = await sharp(buffer, sharpOpts)
       .rotate()
       .resize({ width: 1600, withoutEnlargement: true })
       .webp({ quality: 82 })

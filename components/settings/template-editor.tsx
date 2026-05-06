@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { Loader2, Save, Eye, RotateCcw, Variable } from "lucide-react"
 import { toast } from "sonner"
 
+import { sanitizeHtml } from "@/lib/utils/sanitize-html"
+
 type CatalogEntry = {
   label: string
   description: string
@@ -222,7 +224,7 @@ export function TemplateEditor({
             <div className="rounded-md border border-border bg-background p-4">
               <div
                 className="prose prose-sm max-w-none text-foreground"
-                dangerouslySetInnerHTML={{ __html: previewBody }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBody) }}
               />
             </div>
           </div>

@@ -37,6 +37,23 @@ async function handle(
   try {
     const ctx = await requireStudioAuth()
 
+    // Solo admin/owner pueden regenerar codes (puerta de entrada al portal)
+    if (regenerate && ctx.studioRole !== "admin" && ctx.studioRole !== "owner") {
+      return NextResponse.json(
+        { error: "Tu rol no permite regenerar códigos de acceso." },
+        { status: 403 },
+      )
+    }
+
+    // Validar que el cliente pertenece al studio antes de cualquier mutation
+    const clientCheck = await fetchClient(ctx.studioId, params.id)
+    if (!clientCheck) {
+      return NextResponse.json(
+        { error: "Cliente no encontrado en este studio." },
+        { status: 404 },
+      )
+    }
+
     const body = (await req.json().catch(() => ({}))) as { send?: boolean }
     const send = body.send === true
 

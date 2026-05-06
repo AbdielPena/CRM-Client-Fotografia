@@ -13,6 +13,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 
 import { createSupabaseServiceClient } from "@/server/supabase/service"
+import { sanitizeHtml } from "@/lib/utils/sanitize-html"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import {
   PORTAL_COOKIE_NAME,
@@ -211,7 +212,7 @@ export default async function ContractPrintPage({
 
         <div
           className="contract-body"
-          dangerouslySetInnerHTML={{ __html: finalHtml }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(finalHtml) }}
         />
 
         <footer className="contract-footer">
