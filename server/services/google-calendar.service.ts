@@ -949,12 +949,14 @@ export async function listCalendarEvents(
       q = q.in('origin', ['studioflow', 'synced'])
       break
     case 'google_calendar':
-      q = q.eq('origin', 'google_calendar')
+      // Todo lo que vino de Google: importados (external) + ya vinculados (google_calendar)
+      q = q.in('origin', ['google_calendar', 'external'])
       break
     case 'with_client':
       q = q.not('client_id', 'is', null)
       break
     case 'external':
+      // Solo los personales puros (sin vínculo a cliente/proyecto)
       q = q.eq('origin', 'external')
       break
     case 'all':

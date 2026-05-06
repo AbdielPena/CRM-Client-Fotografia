@@ -214,7 +214,8 @@ function countByOrigin(
   }
   for (const e of events) {
     if (e.origin === "studioflow" || e.origin === "synced") out.studioflow++
-    if (e.origin === "google_calendar") out.google_calendar++
+    if (e.origin === "google_calendar" || e.origin === "external")
+      out.google_calendar++
     if (e.origin === "external") out.external++
     if (e.clientId) out.with_client++
   }
