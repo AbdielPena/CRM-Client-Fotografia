@@ -5,17 +5,37 @@ import { listFormTemplates } from "@/server/services/form.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { EmptyState } from "@/components/shared/empty-state"
-import { ClipboardList, Star, Circle } from "lucide-react"
+import { ClipboardList, Star, Circle, AlertTriangle } from "lucide-react"
 import type { FormSchema } from "@/lib/forms/types"
 
 export const metadata: Metadata = { title: "Formularios" }
 
+// Render dinámico — esta página depende de auth + RLS por studio.
+export const dynamic = "force-dynamic"
+
 export default async function FormTemplatesPage() {
   const session = await requireStudioAuth()
-  const [templates, unread] = await Promise.all([
-    listFormTemplates(session.studioId),
-    countUnreadNotifications(session.studioId),
-  ])
+
+  // Defensa: cualquier error en services no debe romper la página completa.
+  // Mostramos UI controlada con fallback en lugar de 500.
+  let templates: Awaited<ReturnType<typeof listFormTemplates>> = []
+  let unread = 0
+  let loadError: string | null = null
+
+  try {
+    const [t, u] = await Promise.all([
+      listFormTemplates(session.studioId),
+      countUnreadNotifications(session.studioId).catch(() => 0),
+    ])
+    templates = t
+    unread = u
+  } catch (err) {
+    console.error("[settings/forms] load failed", err)
+    loadError =
+      err instanceof Error
+        ? err.message
+        : "No se pudieron cargar las plantillas de formularios."
+  }
 
   return (
     <>
@@ -35,7 +55,22 @@ export default async function FormTemplatesPage() {
       />
 
       <div className="p-6">
-        {templates.length === 0 ? (
+        {loadError ? (
+          <div className="sf-card p-6">
+            <div className="flex items-start gap-3 rounded-md border border-danger/30 bg-danger-soft px-4 py-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-danger" />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-danger">
+                  No pudimos cargar las plantillas
+                </p>
+                <p className="mt-1 text-body-sm text-danger/80">{loadError}</p>
+                <p className="mt-2 text-caption text-muted-foreground">
+                  Probá recargar la página o contactá soporte si el problema persiste.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : templates.length === 0 ? (
           <div className="sf-card">
             <EmptyState
               icon={<ClipboardList className="h-5 w-5" />}

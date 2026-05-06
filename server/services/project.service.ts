@@ -118,11 +118,36 @@ export async function getProjectById(studioId: string, projectId: string) {
 // Crear / actualizar / borrar
 // ----------------------------------------------------------------------------
 
+/**
+ * Valida que el cliente exista, sea del studio y NO esté en trash.
+ * Lanza error semántico (CLIENT_NOT_FOUND / CLIENT_TRASHED).
+ */
+async function assertClientActive(
+  studioId: string,
+  clientId: string,
+  context: string,
+): Promise<void> {
+  const supabase = createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, deleted_at')
+    .eq('id', clientId)
+    .eq('studio_id', studioId)
+    .maybeSingle()
+  if (error) throw new Error(`[${context}] ${error.message}`)
+  if (!data) throw new Error('CLIENT_NOT_FOUND')
+  if (data.deleted_at) throw new Error('CLIENT_TRASHED')
+}
+
 export async function createProject(
   studioId: string,
   actorId: string,
   data: CreateProjectInput,
 ) {
+  // Integridad: cliente debe existir, ser del studio y NO estar en trash.
+  if (!data.clientId) throw new Error('CLIENT_REQUIRED')
+  await assertClientActive(studioId, data.clientId, 'createProject')
+
   const project = await projectsRepo.create({
     studio_id: studioId,
     client_id: data.clientId,

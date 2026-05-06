@@ -114,11 +114,36 @@ export async function getInvoiceById(studioId: string, invoiceId: string) {
 // Crear
 // ----------------------------------------------------------------------------
 
+/**
+ * Valida que el cliente exista, pertenezca al studio y NO esté en trash.
+ * Lanza error con código semántico para que el caller lo traduzca.
+ */
+async function assertClientActive(
+  studioId: string,
+  clientId: string,
+  context: string,
+): Promise<void> {
+  const supabase = createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('clients')
+    .select('id, deleted_at')
+    .eq('id', clientId)
+    .eq('studio_id', studioId)
+    .maybeSingle()
+  if (error) throw new Error(`[${context}] ${error.message}`)
+  if (!data) throw new Error('CLIENT_NOT_FOUND')
+  if (data.deleted_at) throw new Error('CLIENT_TRASHED')
+}
+
 export async function createInvoice(
   studioId: string,
   actorId: string,
   data: CreateInvoiceInput,
 ) {
+  // Integridad: cliente debe existir, ser del studio y NO estar en trash
+  if (!data.clientId) throw new Error('CLIENT_REQUIRED')
+  await assertClientActive(studioId, data.clientId, 'createInvoice')
+
   const invoiceNumber = await invoicesRepo.nextInvoiceNumber(studioId)
   const sequenceNumber = parseInt(
     invoiceNumber.replace(/^.*-/, '').replace(/^0+/, '') || '0',

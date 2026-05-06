@@ -206,11 +206,50 @@ export type CreateGalleryInput = {
   expiresAt?: string | null
 }
 
+/**
+ * Valida que el cliente / proyecto referenciado exista y NO esté en trash.
+ * No falla si ambos son null (galería sin cliente/proyecto es válida en el modelo).
+ */
+async function assertGalleryParentsActive(
+  studioId: string,
+  clientId: string | null | undefined,
+  projectId: string | null | undefined,
+): Promise<void> {
+  const supabase = srvc()
+  if (clientId) {
+    const { data, error } = await supabase
+      .from('clients')
+      .select('id, deleted_at')
+      .eq('id', clientId)
+      .eq('studio_id', studioId)
+      .maybeSingle()
+    if (error) throw new Error(`[createGallery] ${error.message}`)
+    if (!data) throw new Error('CLIENT_NOT_FOUND')
+    if (data.deleted_at) throw new Error('CLIENT_TRASHED')
+  }
+  if (projectId) {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, deleted_at, client_id, client:clients(id, deleted_at)')
+      .eq('id', projectId)
+      .eq('studio_id', studioId)
+      .maybeSingle()
+    if (error) throw new Error(`[createGallery] ${error.message}`)
+    if (!data) throw new Error('PROJECT_NOT_FOUND')
+    if (data.deleted_at) throw new Error('PROJECT_TRASHED')
+    const projClient = Array.isArray(data.client) ? data.client[0] : data.client
+    if (projClient?.deleted_at) throw new Error('CLIENT_TRASHED')
+  }
+}
+
 export async function createGallery(
   studioId: string,
   actorId: string,
   data: CreateGalleryInput,
 ): Promise<GalleryRow> {
+  // Integridad: si la galería referencia cliente/proyecto, deben existir y estar activos.
+  await assertGalleryParentsActive(studioId, data.clientId, data.projectId)
+
   const supabase = srvc()
   const slug = uniqueSlug(data.name)
 

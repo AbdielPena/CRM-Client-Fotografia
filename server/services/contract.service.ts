@@ -113,11 +113,40 @@ export async function getContractTemplates(studioId: string) {
 // Crear / enviar / firmar / anular / borrar
 // ----------------------------------------------------------------------------
 
+/**
+ * Valida que el proyecto exista, sea del studio, no esté en trash y
+ * que su cliente exista y NO esté en trash. Lanza error semántico.
+ */
+async function assertProjectAndClientActive(
+  studioId: string,
+  projectId: string,
+  context: string,
+): Promise<void> {
+  const supabase = createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('projects')
+    .select('id, deleted_at, client:clients(id, deleted_at)')
+    .eq('id', projectId)
+    .eq('studio_id', studioId)
+    .maybeSingle()
+  if (error) throw new Error(`[${context}] ${error.message}`)
+  if (!data) throw new Error('PROJECT_NOT_FOUND')
+  if (data.deleted_at) throw new Error('PROJECT_TRASHED')
+  const client = Array.isArray(data.client) ? data.client[0] : data.client
+  if (!client) throw new Error('CLIENT_NOT_FOUND')
+  if (client.deleted_at) throw new Error('CLIENT_TRASHED')
+}
+
 export async function createContract(
   studioId: string,
   actorId: string,
   data: CreateContractInput,
 ) {
+  // Integridad: el proyecto debe existir, ser del studio, estar activo, y
+  // su cliente debe existir y NO estar en trash.
+  if (!data.projectId) throw new Error('PROJECT_REQUIRED')
+  await assertProjectAndClientActive(studioId, data.projectId, 'createContract')
+
   const contract = await contractsRepo.create({
     studio_id: studioId,
     project_id: data.projectId,
