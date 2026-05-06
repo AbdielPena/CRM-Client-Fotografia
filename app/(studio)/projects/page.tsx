@@ -101,7 +101,7 @@ export default async function ProjectsPage({
             <Button asChild size="sm" variant="ghost">
               <Link href="/settings/project-statuses">
                 <Settings2 className="mr-1 h-4 w-4" />
-                Estados
+                Personalizar estados
               </Link>
             </Button>
             <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>

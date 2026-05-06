@@ -98,7 +98,6 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/settings/forms", label: "Formularios", icon: ClipboardList },
       { type: "link", href: "/settings/contracts", label: "Contratos", icon: FileStack },
       { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },
-      { type: "link", href: "/settings/project-statuses", label: "Estados", icon: Layers },
       { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },
     ],
   },
