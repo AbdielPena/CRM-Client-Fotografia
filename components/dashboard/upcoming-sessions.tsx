@@ -62,6 +62,7 @@ export function UpcomingSessions({ projects }: Props) {
           >
             <Link
               href={`/projects/${p.id}`}
+              title={`${clientName ?? "Sin cliente"}\n${p.name}${p.event_time ? `\n${String(p.event_time).slice(0, 5)}` : ""}\n${date ? date.toLocaleDateString("es-DO", { weekday: "long", day: "numeric", month: "long" }) : ""}`}
               className={cn(
                 "flex items-center gap-3.5 px-5 py-3.5 transition-colors duration-fast",
                 "hover:bg-muted/60",

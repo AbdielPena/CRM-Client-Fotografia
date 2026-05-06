@@ -76,7 +76,7 @@ export default async function FormTemplatesPage() {
                 <p className="font-medium text-danger">No pudimos cargar las plantillas</p>
                 <p className="mt-1 text-body-sm text-danger/80">{loadError}</p>
                 <p className="mt-2 text-caption text-muted-foreground">
-                  Probá recargar la página. Si el problema persiste, abrí <code>/api/_debug/forms</code> para ver detalles.
+                  Probá recargar la página. Si el problema persiste, abrí <code>/api/debug/forms</code> para ver detalles.
                 </p>
               </div>
             </div>

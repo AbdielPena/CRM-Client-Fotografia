@@ -184,7 +184,7 @@ export default async function DashboardPage() {
 
       <div className="px-6 pb-12 pt-4 lg:px-8">
         <div className="space-y-5">
-          {/* ─── KPIs ─────────────────────────────────────────────── */}
+          {/* ─── KPIs (todos clickables) ──────────────────────────── */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
               title="Ingresos del mes"
@@ -199,6 +199,8 @@ export default async function DashboardPage() {
                   ? `${formatCurrency(data.stats.pending, "DOP")} por cobrar`
                   : "Al día con los cobros"
               }
+              href={`/invoices?month=${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
+              tooltip="Ver facturas y pagos del mes"
               delay={0}
             />
             <StatCard
@@ -209,18 +211,24 @@ export default async function DashboardPage() {
                   ? "Pendientes de revisar"
                   : "Sin solicitudes nuevas"
               }
+              href="/bookings?status=pending_review"
+              tooltip="Ver solicitudes pendientes"
               delay={0.05}
             />
             <StatCard
               title="Clientes"
               value={data.stats.clients}
               subtitle="Base activa"
+              href="/clients"
+              tooltip="Ver lista de clientes"
               delay={0.1}
             />
             <StatCard
               title="Proyectos activos"
               value={data.stats.activeProjects}
               subtitle="Reservados + en proceso"
+              href="/projects?status=in_progress"
+              tooltip="Ver proyectos activos"
               delay={0.15}
             />
           </div>

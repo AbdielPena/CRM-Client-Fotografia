@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { motion } from "framer-motion"
 import { Package } from "lucide-react"
 import { formatCurrency } from "@/lib/utils/currency"
@@ -36,16 +37,20 @@ export function TopPackagesList({ items, currency = "DOP" }: Props) {
     <div className="space-y-3.5">
       {items.map((item, idx) => {
         const pct = (item.bookings / max) * 100
+        const tooltip = `${item.name} — ${item.bookings} proyectos · ${formatCurrency(item.revenue, currency)}`
         return (
-          <div key={item.packageId}>
+          <Link
+            key={item.packageId}
+            href={`/projects?package=${item.packageId}`}
+            title={tooltip}
+            className="group block rounded-md transition-colors hover:bg-muted/30 -mx-2 px-2 py-1"
+          >
             <div className="mb-1.5 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
-                <span
-                  className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-border bg-muted text-[10px] font-semibold text-muted-foreground tabular-nums"
-                >
+                <span className="inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-border bg-muted text-[10px] font-semibold text-muted-foreground tabular-nums">
                   {idx + 1}
                 </span>
-                <span className="truncate text-body-sm text-foreground">
+                <span className="truncate text-body-sm text-foreground group-hover:text-brand transition-colors">
                   {item.name}
                 </span>
               </div>
@@ -71,7 +76,7 @@ export function TopPackagesList({ items, currency = "DOP" }: Props) {
                 className="h-full rounded-full bg-aurora"
               />
             </div>
-          </div>
+          </Link>
         )
       })}
     </div>

@@ -1,8 +1,12 @@
-import DOMPurify from "isomorphic-dompurify"
+import sanitize from "sanitize-html"
 
 /**
  * Sanitiza HTML para uso seguro con dangerouslySetInnerHTML.
- * Usa allowlist conservadora: tags de formato + links + imágenes,
+ * Usamos `sanitize-html` (server-friendly, sin jsdom) en vez de
+ * `isomorphic-dompurify` para evitar el bundling de jsdom (~5MB) y
+ * runtime errors en hosting cPanel/Passenger donde jsdom no se resuelve.
+ *
+ * Allowlist conservadora: tags de formato + links + imágenes,
  * sin scripts, iframes, event handlers ni estilos inline.
  */
 const SAFE_TAGS = [
@@ -35,19 +39,16 @@ const SAFE_TAGS = [
   "td",
   "div",
   "span",
-] as const
+]
 
-const SAFE_ATTRS = [
-  "href",
-  "title",
-  "target",
-  "rel",
-  "src",
-  "alt",
-  "width",
-  "height",
-  "class",
-] as const
+const ALLOWED_ATTRS: Record<string, string[]> = {
+  a: ["href", "title", "target", "rel"],
+  img: ["src", "alt", "width", "height", "title"],
+  // Atributos de formato compartidos
+  "*": ["class"],
+  th: ["colspan", "rowspan", "scope"],
+  td: ["colspan", "rowspan"],
+}
 
 /**
  * Sanitiza HTML proveniente del usuario (plantillas, contratos, emails)
@@ -60,17 +61,29 @@ const SAFE_ATTRS = [
  */
 export function sanitizeHtml(html: string | null | undefined): string {
   if (!html) return ""
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: [...SAFE_TAGS],
-    ALLOWED_ATTR: [...SAFE_ATTRS],
-    ALLOW_DATA_ATTR: false,
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "style"],
-    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "style"],
-    // Forzar rel="noopener noreferrer" en links externos
-    ADD_ATTR: ["target"],
-    // No permitir javascript: ni data: en hrefs (excepto imágenes via src)
-    ALLOWED_URI_REGEXP:
-      /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  return sanitize(html, {
+    allowedTags: SAFE_TAGS,
+    allowedAttributes: ALLOWED_ATTRS,
+    allowedSchemes: ["http", "https", "mailto", "tel", "callto", "cid", "xmpp"],
+    allowedSchemesByTag: {
+      img: ["http", "https", "data"], // data: ok solo en imágenes
+    },
+    allowProtocolRelative: true,
+    transformTags: {
+      // Forzar rel="noopener noreferrer" en links externos
+      a: (tagName, attribs) => ({
+        tagName,
+        attribs: {
+          ...attribs,
+          ...(attribs.target === "_blank"
+            ? { rel: "noopener noreferrer" }
+            : attribs.rel
+              ? { rel: attribs.rel }
+              : {}),
+        },
+      }),
+    },
+    disallowedTagsMode: "discard",
   })
 }
 
