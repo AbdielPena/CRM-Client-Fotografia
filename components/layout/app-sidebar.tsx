@@ -28,6 +28,7 @@ import {
   PanelLeftOpen,
   ChevronDown,
   Trash2,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react"
 
@@ -113,6 +114,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: CalendarClock,
       },
       { type: "link", href: "/settings", label: "Ajustes generales", icon: Settings },
+      { type: "link", href: "/settings/security", label: "Seguridad (2FA)", icon: ShieldCheck },
       { type: "link", href: "/trash", label: "Papelera", icon: Trash2 },
     ],
   },
