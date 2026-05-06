@@ -80,6 +80,9 @@ jobs:
           # La cuenta FTP está chrooted al home (~/), no a ~/my/.
           # Por eso prefijamos con "my/".
           server-dir: ./my/
+          # State file único por run para forzar full sync de .next.staging
+          # (sino solo sube diffs y el staging queda incompleto).
+          state-name: ".deploy-state-${{ github.run_id }}.json"
           log-level: standard
 
       # El FTP no setea permisos correctos en .next/, lo que causa EACCES
