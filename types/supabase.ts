@@ -405,6 +405,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          deletion_reason: string | null
           delivered_at: string | null
           description: string | null
           external_links: Json
@@ -423,6 +424,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          deletion_reason?: string | null
           delivered_at?: string | null
           description?: string | null
           external_links?: Json
@@ -441,6 +443,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          deletion_reason?: string | null
           delivered_at?: string | null
           description?: string | null
           external_links?: Json
@@ -554,6 +557,7 @@ export type Database = {
           country: string | null
           created_at: string
           deleted_at: string | null
+          deletion_reason: string | null
           email: string | null
           id: string
           instagram_handle: string | null
@@ -576,6 +580,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           deleted_at?: string | null
+          deletion_reason?: string | null
           email?: string | null
           id?: string
           instagram_handle?: string | null
@@ -598,6 +603,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           deleted_at?: string | null
+          deletion_reason?: string | null
           email?: string | null
           id?: string
           instagram_handle?: string | null
@@ -848,6 +854,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          deletion_reason: string | null
           evidence_hash: string | null
           expires_at: string | null
           id: string
@@ -882,6 +889,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          deletion_reason?: string | null
           evidence_hash?: string | null
           expires_at?: string | null
           id?: string
@@ -916,6 +924,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          deletion_reason?: string | null
           evidence_hash?: string | null
           expires_at?: string | null
           id?: string
@@ -1386,6 +1395,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deleted_at: string | null
+          deletion_reason: string | null
           description: string | null
           download_pin_required: boolean
           event_date: string | null
@@ -1424,6 +1434,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          deletion_reason?: string | null
           description?: string | null
           download_pin_required?: boolean
           event_date?: string | null
@@ -1462,6 +1473,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
+          deletion_reason?: string | null
           description?: string | null
           download_pin_required?: boolean
           event_date?: string | null
@@ -2182,6 +2194,163 @@ export type Database = {
           },
         ]
       }
+      google_events: {
+        Row: {
+          attendees: Json | null
+          booking_request_id: string | null
+          client_id: string | null
+          color_override: string | null
+          contract_id: string | null
+          created_at: string | null
+          delivery_id: string | null
+          description: string | null
+          ends_at: string | null
+          gallery_id: string | null
+          google_calendar_id: string
+          google_event_id: string
+          html_link: string | null
+          id: string
+          invoice_id: string | null
+          is_all_day: boolean | null
+          is_hidden: boolean | null
+          last_synced_at: string | null
+          location: string | null
+          origin: string
+          project_id: string | null
+          starts_at: string | null
+          status: string | null
+          studio_id: string
+          summary: string | null
+          sync_error: string | null
+          sync_status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          attendees?: Json | null
+          booking_request_id?: string | null
+          client_id?: string | null
+          color_override?: string | null
+          contract_id?: string | null
+          created_at?: string | null
+          delivery_id?: string | null
+          description?: string | null
+          ends_at?: string | null
+          gallery_id?: string | null
+          google_calendar_id: string
+          google_event_id: string
+          html_link?: string | null
+          id?: string
+          invoice_id?: string | null
+          is_all_day?: boolean | null
+          is_hidden?: boolean | null
+          last_synced_at?: string | null
+          location?: string | null
+          origin?: string
+          project_id?: string | null
+          starts_at?: string | null
+          status?: string | null
+          studio_id: string
+          summary?: string | null
+          sync_error?: string | null
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          attendees?: Json | null
+          booking_request_id?: string | null
+          client_id?: string | null
+          color_override?: string | null
+          contract_id?: string | null
+          created_at?: string | null
+          delivery_id?: string | null
+          description?: string | null
+          ends_at?: string | null
+          gallery_id?: string | null
+          google_calendar_id?: string
+          google_event_id?: string
+          html_link?: string | null
+          id?: string
+          invoice_id?: string | null
+          is_all_day?: boolean | null
+          is_hidden?: boolean | null
+          last_synced_at?: string | null
+          location?: string | null
+          origin?: string
+          project_id?: string | null
+          starts_at?: string | null
+          status?: string | null
+          studio_id?: string
+          summary?: string | null
+          sync_error?: string | null
+          sync_status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_events_booking_request_id_fkey"
+            columns: ["booking_request_id"]
+            isOneToOne: false
+            referencedRelation: "booking_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_events_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_events_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_events_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "client_deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_events_gallery_id_fkey"
+            columns: ["gallery_id"]
+            isOneToOne: false
+            referencedRelation: "galleries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_events_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_events_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_events_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_events_studio_id_fkey"
+            columns: ["studio_id"]
+            isOneToOne: false
+            referencedRelation: "studios_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoice_items: {
         Row: {
           amount: number | null
@@ -2286,6 +2455,7 @@ export type Database = {
           created_by: string | null
           currency: string
           deleted_at: string | null
+          deletion_reason: string | null
           description: string | null
           discount_amount: number
           due_date: string | null
@@ -2320,6 +2490,7 @@ export type Database = {
           created_by?: string | null
           currency?: string
           deleted_at?: string | null
+          deletion_reason?: string | null
           description?: string | null
           discount_amount?: number
           due_date?: string | null
@@ -2354,6 +2525,7 @@ export type Database = {
           created_by?: string | null
           currency?: string
           deleted_at?: string | null
+          deletion_reason?: string | null
           description?: string | null
           discount_amount?: number
           due_date?: string | null
@@ -2728,6 +2900,7 @@ export type Database = {
           duration_hours: number | null
           edited_photos: number | null
           event_type: string | null
+          extra_photo_price: number | null
           gallery_images: Json | null
           id: string
           includes: Json | null
@@ -2753,6 +2926,7 @@ export type Database = {
           duration_hours?: number | null
           edited_photos?: number | null
           event_type?: string | null
+          extra_photo_price?: number | null
           gallery_images?: Json | null
           id?: string
           includes?: Json | null
@@ -2778,6 +2952,7 @@ export type Database = {
           duration_hours?: number | null
           edited_photos?: number | null
           event_type?: string | null
+          extra_photo_price?: number | null
           gallery_images?: Json | null
           id?: string
           includes?: Json | null
@@ -3093,6 +3268,7 @@ export type Database = {
           created_at: string
           currency: string
           deleted_at: string | null
+          deletion_reason: string | null
           event_date: string | null
           event_end_time: string | null
           event_time: string | null
@@ -3117,6 +3293,7 @@ export type Database = {
           created_at?: string
           currency?: string
           deleted_at?: string | null
+          deletion_reason?: string | null
           event_date?: string | null
           event_end_time?: string | null
           event_time?: string | null
@@ -3141,6 +3318,7 @@ export type Database = {
           created_at?: string
           currency?: string
           deleted_at?: string | null
+          deletion_reason?: string | null
           event_date?: string | null
           event_end_time?: string | null
           event_time?: string | null
@@ -3983,6 +4161,13 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["studio_role"]
       }
+      auto_purge_trash_30d: {
+        Args: never
+        Returns: {
+          entity_type: string
+          purged_count: number
+        }[]
+      }
       bootstrap_studio_for_current_user: {
         Args: {
           p_currency?: string
@@ -3995,7 +4180,7 @@ export type Database = {
         Returns: Json
       }
       cascade_delete_client: {
-        Args: { p_client_id: string; p_studio_id: string }
+        Args: { p_client_id: string; p_reason?: string; p_studio_id: string }
         Returns: undefined
       }
       cascade_delete_package: {
@@ -4006,11 +4191,39 @@ export type Database = {
         Args: { p_project_id: string; p_studio_id: string }
         Returns: undefined
       }
+      cascade_hard_delete_client: {
+        Args: { p_client_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      cascade_restore_client: {
+        Args: { p_client_id: string; p_studio_id: string }
+        Returns: undefined
+      }
       create_client_with_booking: {
         Args: { p_payload: Json; p_studio_id: string }
         Returns: Json
       }
       get_current_user_context: { Args: never; Returns: Json }
+      hard_delete_contract: {
+        Args: { p_contract_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      hard_delete_delivery: {
+        Args: { p_delivery_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      hard_delete_gallery: {
+        Args: { p_gallery_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      hard_delete_invoice: {
+        Args: { p_invoice_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      hard_delete_project: {
+        Args: { p_project_id: string; p_studio_id: string }
+        Returns: undefined
+      }
       has_availability_conflict: {
         Args: {
           p_ends_at: string
@@ -4036,6 +4249,47 @@ export type Database = {
         Returns: Json
       }
       request_has_valid_token: { Args: { p_token: string }; Returns: boolean }
+      restore_contract: {
+        Args: { p_contract_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      restore_delivery: {
+        Args: { p_delivery_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      restore_gallery: {
+        Args: { p_gallery_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      restore_invoice: {
+        Args: { p_invoice_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      restore_project: {
+        Args: { p_project_id: string; p_studio_id: string }
+        Returns: undefined
+      }
+      retry_failed_emails: { Args: never; Returns: number }
+      soft_delete_contract: {
+        Args: { p_contract_id: string; p_reason?: string; p_studio_id: string }
+        Returns: undefined
+      }
+      soft_delete_delivery: {
+        Args: { p_delivery_id: string; p_reason?: string; p_studio_id: string }
+        Returns: undefined
+      }
+      soft_delete_gallery: {
+        Args: { p_gallery_id: string; p_reason?: string; p_studio_id: string }
+        Returns: undefined
+      }
+      soft_delete_invoice: {
+        Args: { p_invoice_id: string; p_reason?: string; p_studio_id: string }
+        Returns: undefined
+      }
+      soft_delete_project: {
+        Args: { p_project_id: string; p_reason?: string; p_studio_id: string }
+        Returns: undefined
+      }
       storage_studio_id_from_path: { Args: { p_name: string }; Returns: string }
       studio_has_feature: {
         Args: { p_feature_key: string; p_studio_id: string }
@@ -4159,6 +4413,7 @@ export type Database = {
         | "client_portal_login"
         | "delivery_ready"
         | "delivery_reviewed"
+        | "gallery_selection_over_limit"
       payment_method:
         | "cash"
         | "bank_transfer"
@@ -4440,6 +4695,7 @@ export const Constants = {
         "client_portal_login",
         "delivery_ready",
         "delivery_reviewed",
+        "gallery_selection_over_limit",
       ],
       payment_method: [
         "cash",

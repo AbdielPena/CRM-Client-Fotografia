@@ -486,7 +486,12 @@ export async function syncProjectToEvent(
     throw new Error(`Google sync failed: ${res.status} ${errorText}`)
   }
 
-  const event = (await res.json()) as { id: string }
+  const event = (await res.json()) as {
+    id: string
+    htmlLink?: string
+    start?: { date?: string; dateTime?: string }
+    end?: { date?: string; dateTime?: string }
+  }
 
   await supabase
     .from('projects')
@@ -497,6 +502,36 @@ export async function syncProjectToEvent(
       google_sync_error: null,
     })
     .eq('id', payload.projectId)
+
+  // Espejo en google_events para que el calendar UI lo muestre como
+  // 'studioflow' origin con relación al proyecto.
+  const startDt =
+    event.start?.dateTime ?? (event.start?.date ? `${event.start.date}T00:00:00Z` : null)
+  const endDt =
+    event.end?.dateTime ?? (event.end?.date ? `${event.end.date}T23:59:59Z` : null)
+  const isAllDay = !!event.start?.date && !event.start?.dateTime
+
+  await supabase.from('google_events').upsert(
+    {
+      studio_id: payload.studioId,
+      google_event_id: event.id,
+      google_calendar_id: existingCalId,
+      summary: payload.title,
+      description: payload.description ?? null,
+      location: payload.location ?? null,
+      starts_at: startDt,
+      ends_at: endDt,
+      is_all_day: isAllDay,
+      html_link: event.htmlLink ?? null,
+      status: 'confirmed',
+      origin: 'studioflow',
+      project_id: payload.projectId,
+      sync_status: 'synced',
+      last_synced_at: new Date().toISOString(),
+      sync_error: null,
+    },
+    { onConflict: 'studio_id,google_event_id' },
+  )
 
   return { eventId: event.id, calendarId: existingCalId }
 }
@@ -608,6 +643,15 @@ export async function deleteProjectEvent(
       google_sync_error: null,
     })
     .eq('id', projectId)
+
+  // Limpia también el espejo local
+  if (project.google_event_id) {
+    await supabase
+      .from('google_events')
+      .delete()
+      .eq('studio_id', studioId)
+      .eq('google_event_id', project.google_event_id)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -620,9 +664,23 @@ export async function deleteProjectEvent(
  *
  * Retorna los eventos con sus IDs; el caller decide qué hacer con cada uno.
  */
+type GoogleEventApi = {
+  id: string
+  status?: string
+  summary?: string
+  description?: string
+  location?: string
+  htmlLink?: string
+  start?: { date?: string; dateTime?: string; timeZone?: string }
+  end?: { date?: string; dateTime?: string; timeZone?: string }
+  attendees?: Array<{ email: string; displayName?: string; responseStatus?: string }>
+  source?: { title?: string; url?: string }
+  organizer?: { email?: string; self?: boolean }
+}
+
 export async function pullIncrementalChanges(
   studioId: string,
-): Promise<{ events: any[]; newSyncToken: string | null }> {
+): Promise<{ events: GoogleEventApi[]; newSyncToken: string | null }> {
   const integration = await loadIntegration(studioId)
   if (!integration || !integration.config.calendarId) {
     return { events: [], newSyncToken: null }
@@ -635,7 +693,7 @@ export async function pullIncrementalChanges(
   if (integration.config.syncToken) {
     params.set('syncToken', integration.config.syncToken)
   } else {
-    // Primera vez: traer ventana reciente (últimos 30 días)
+    // Primera vez: traer ventana reciente (últimos 30 días + próximos 365)
     const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     params.set('timeMin', from)
   }
@@ -656,7 +714,7 @@ export async function pullIncrementalChanges(
   }
 
   const body = (await res.json()) as {
-    items?: any[]
+    items?: GoogleEventApi[]
     nextSyncToken?: string
   }
 
@@ -665,4 +723,356 @@ export async function pullIncrementalChanges(
   }
 
   return { events: body.items ?? [], newSyncToken: body.nextSyncToken ?? null }
+}
+
+// ============================================================================
+// IMPORT bidireccional: persiste eventos de Google en `google_events`
+// ============================================================================
+
+/**
+ * Importa eventos de Google Calendar a la tabla local `google_events`.
+ * - Inicial: trae los últimos 30 días + próximos 12 meses.
+ * - Incremental: usa syncToken (vía pullIncrementalChanges).
+ * Detecta si el evento ya existe (por google_event_id) → upsert sin duplicar.
+ * Marca origen automáticamente:
+ *   - Si tiene source.title="StudioFlow" → "synced"
+ *   - Si no → "external" (personal del usuario)
+ */
+export async function importGoogleEvents(
+  studioId: string,
+  opts: { fullSync?: boolean } = {},
+): Promise<{ imported: number; updated: number; deleted: number; calendarId: string | null }> {
+  const supabase = createSupabaseServiceClient()
+  const integration = await loadIntegration(studioId)
+  if (!integration || !integration.config.calendarId) {
+    return { imported: 0, updated: 0, deleted: 0, calendarId: null }
+  }
+  const calendarId = integration.config.calendarId
+
+  // Si fullSync, limpiamos el syncToken para arrancar de cero
+  if (opts.fullSync) {
+    await updateIntegrationConfig(integration.id, { syncToken: undefined })
+  }
+
+  // Para el sync incremental usamos pullIncrementalChanges (con syncToken).
+  // Para el sync inicial (sin syncToken) trae ventana ±12 meses.
+  const token = await getAccessToken(studioId)
+  if (!token) {
+    return { imported: 0, updated: 0, deleted: 0, calendarId }
+  }
+
+  const params = new URLSearchParams({
+    showDeleted: 'true',
+    singleEvents: 'true',
+    maxResults: '2500',
+  })
+  if (integration.config.syncToken && !opts.fullSync) {
+    params.set('syncToken', integration.config.syncToken)
+  } else {
+    const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const to = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+    params.set('timeMin', from)
+    params.set('timeMax', to)
+  }
+
+  const url = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+
+  if (res.status === 410) {
+    await updateIntegrationConfig(integration.id, { syncToken: undefined })
+    return { imported: 0, updated: 0, deleted: 0, calendarId }
+  }
+  if (!res.ok) {
+    throw new Error(`Google import failed: ${res.status} ${await res.text()}`)
+  }
+
+  const body = (await res.json()) as {
+    items?: GoogleEventApi[]
+    nextSyncToken?: string
+  }
+
+  if (body.nextSyncToken) {
+    await updateIntegrationConfig(integration.id, { syncToken: body.nextSyncToken })
+  }
+
+  let imported = 0
+  let updated = 0
+  let deleted = 0
+
+  for (const evt of body.items ?? []) {
+    if (!evt.id) continue
+
+    // Cancelado/eliminado en Google
+    if (evt.status === 'cancelled') {
+      const { error: delErr } = await supabase
+        .from('google_events')
+        .delete()
+        .eq('studio_id', studioId)
+        .eq('google_event_id', evt.id)
+      if (!delErr) deleted++
+      continue
+    }
+
+    // Determinar origen
+    const isFromStudioflow = evt.source?.title === 'StudioFlow'
+
+    // Buscar existente
+    const { data: existing } = await supabase
+      .from('google_events')
+      .select('id, origin, project_id')
+      .eq('studio_id', studioId)
+      .eq('google_event_id', evt.id)
+      .maybeSingle()
+
+    const existingRow = existing as { id: string; origin: string; project_id: string | null } | null
+
+    let origin: 'studioflow' | 'google_calendar' | 'synced' | 'external'
+    if (isFromStudioflow) {
+      // Vino de StudioFlow originalmente
+      origin = existingRow?.origin === 'studioflow' ? 'studioflow' : 'synced'
+    } else if (existingRow?.project_id) {
+      // Tiene un proyecto vinculado → conserva su origen
+      origin = (existingRow.origin as typeof origin) ?? 'external'
+    } else {
+      // Externo (personal del usuario)
+      origin = 'external'
+    }
+
+    const startDt = evt.start?.dateTime ?? (evt.start?.date ? `${evt.start.date}T00:00:00Z` : null)
+    const endDt = evt.end?.dateTime ?? (evt.end?.date ? `${evt.end.date}T23:59:59Z` : null)
+    const isAllDay = !!evt.start?.date && !evt.start?.dateTime
+
+    const payload = {
+      studio_id: studioId,
+      google_event_id: evt.id,
+      google_calendar_id: calendarId,
+      summary: evt.summary ?? null,
+      description: evt.description ?? null,
+      location: evt.location ?? null,
+      starts_at: startDt,
+      ends_at: endDt,
+      is_all_day: isAllDay,
+      attendees: evt.attendees ?? [],
+      html_link: evt.htmlLink ?? null,
+      status: evt.status ?? 'confirmed',
+      origin,
+      sync_status: 'synced' as const,
+      last_synced_at: new Date().toISOString(),
+      sync_error: null,
+    }
+
+    if (existingRow) {
+      const { error: upErr } = await supabase
+        .from('google_events')
+        .update(payload)
+        .eq('id', existingRow.id)
+      if (!upErr) updated++
+    } else {
+      const { error: insErr } = await supabase
+        .from('google_events')
+        .insert(payload)
+      if (!insErr) imported++
+    }
+  }
+
+  return { imported, updated, deleted, calendarId }
+}
+
+// ============================================================================
+// QUERY: lectura unificada para el calendar UI
+// ============================================================================
+
+export type CalendarEventRow = {
+  id: string
+  googleEventId: string
+  googleCalendarId: string
+  summary: string | null
+  description: string | null
+  location: string | null
+  startsAt: string | null
+  endsAt: string | null
+  isAllDay: boolean
+  htmlLink: string | null
+  status: string
+  origin: 'studioflow' | 'google_calendar' | 'synced' | 'external'
+  projectId: string | null
+  clientId: string | null
+  bookingRequestId: string | null
+  contractId: string | null
+  invoiceId: string | null
+  galleryId: string | null
+  deliveryId: string | null
+  syncStatus: string
+  lastSyncedAt: string | null
+  /** Cliente nombre resuelto (join). */
+  clientName: string | null
+  projectName: string | null
+}
+
+export type CalendarOriginFilter =
+  | 'all'
+  | 'studioflow'
+  | 'google_calendar'
+  | 'with_client'
+  | 'external'
+
+export async function listCalendarEvents(
+  studioId: string,
+  opts: {
+    from?: string // ISO
+    to?: string   // ISO
+    origin?: CalendarOriginFilter
+  } = {},
+): Promise<CalendarEventRow[]> {
+  const supabase = createSupabaseServerClient()
+
+  let q = supabase
+    .from('google_events')
+    .select(`
+      id, google_event_id, google_calendar_id, summary, description, location,
+      starts_at, ends_at, is_all_day, html_link, status, origin,
+      project_id, client_id, booking_request_id, contract_id, invoice_id,
+      gallery_id, delivery_id, sync_status, last_synced_at,
+      project:projects(name),
+      client:clients(name)
+    `)
+    .eq('studio_id', studioId)
+    .eq('is_hidden', false)
+    .order('starts_at', { ascending: true })
+
+  if (opts.from) q = q.gte('starts_at', opts.from)
+  if (opts.to) q = q.lte('starts_at', opts.to)
+
+  // Filtro por origen
+  switch (opts.origin) {
+    case 'studioflow':
+      q = q.in('origin', ['studioflow', 'synced'])
+      break
+    case 'google_calendar':
+      q = q.eq('origin', 'google_calendar')
+      break
+    case 'with_client':
+      q = q.not('client_id', 'is', null)
+      break
+    case 'external':
+      q = q.eq('origin', 'external')
+      break
+    case 'all':
+    default:
+      break
+  }
+
+  const { data, error } = await q
+  if (error) throw new Error(`[listCalendarEvents] ${error.message}`)
+
+  type Row = {
+    id: string
+    google_event_id: string
+    google_calendar_id: string
+    summary: string | null
+    description: string | null
+    location: string | null
+    starts_at: string | null
+    ends_at: string | null
+    is_all_day: boolean
+    html_link: string | null
+    status: string
+    origin: 'studioflow' | 'google_calendar' | 'synced' | 'external'
+    project_id: string | null
+    client_id: string | null
+    booking_request_id: string | null
+    contract_id: string | null
+    invoice_id: string | null
+    gallery_id: string | null
+    delivery_id: string | null
+    sync_status: string
+    last_synced_at: string | null
+    project: { name: string } | { name: string }[] | null
+    client: { name: string } | { name: string }[] | null
+  }
+
+  return ((data as Row[] | null) ?? []).map((r) => {
+    const proj = Array.isArray(r.project) ? r.project[0] ?? null : r.project
+    const cli = Array.isArray(r.client) ? r.client[0] ?? null : r.client
+    return {
+      id: r.id,
+      googleEventId: r.google_event_id,
+      googleCalendarId: r.google_calendar_id,
+      summary: r.summary,
+      description: r.description,
+      location: r.location,
+      startsAt: r.starts_at,
+      endsAt: r.ends_at,
+      isAllDay: r.is_all_day,
+      htmlLink: r.html_link,
+      status: r.status,
+      origin: r.origin,
+      projectId: r.project_id,
+      clientId: r.client_id,
+      bookingRequestId: r.booking_request_id,
+      contractId: r.contract_id,
+      invoiceId: r.invoice_id,
+      galleryId: r.gallery_id,
+      deliveryId: r.delivery_id,
+      syncStatus: r.sync_status,
+      lastSyncedAt: r.last_synced_at,
+      projectName: proj?.name ?? null,
+      clientName: cli?.name ?? null,
+    }
+  })
+}
+
+/**
+ * Vincula manualmente un evento externo a un cliente/proyecto/etc.
+ * Conserva el google_event_id pero cambia el origin a "synced" si era "external".
+ */
+export async function linkCalendarEventToEntity(
+  studioId: string,
+  eventId: string,
+  links: {
+    projectId?: string | null
+    clientId?: string | null
+    bookingRequestId?: string | null
+    contractId?: string | null
+    invoiceId?: string | null
+    galleryId?: string | null
+    deliveryId?: string | null
+  },
+): Promise<void> {
+  const supabase = createSupabaseServiceClient()
+
+  const { data: existing } = await supabase
+    .from('google_events')
+    .select('id, origin')
+    .eq('id', eventId)
+    .eq('studio_id', studioId)
+    .maybeSingle()
+
+  if (!existing) throw new Error('EVENT_NOT_FOUND')
+
+  const row = existing as { id: string; origin: string }
+  const newOrigin =
+    row.origin === 'external' && (links.clientId || links.projectId)
+      ? 'synced'
+      : row.origin
+
+  const patch = {
+    project_id: links.projectId ?? undefined,
+    client_id: links.clientId ?? undefined,
+    booking_request_id: links.bookingRequestId ?? undefined,
+    contract_id: links.contractId ?? undefined,
+    invoice_id: links.invoiceId ?? undefined,
+    gallery_id: links.galleryId ?? undefined,
+    delivery_id: links.deliveryId ?? undefined,
+    origin: newOrigin,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { error } = await supabase
+    .from('google_events')
+    .update(patch)
+    .eq('id', eventId)
+    .eq('studio_id', studioId)
+
+  if (error) throw new Error(`[linkCalendarEventToEntity] ${error.message}`)
 }

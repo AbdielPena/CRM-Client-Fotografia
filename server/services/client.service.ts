@@ -271,7 +271,7 @@ export async function deleteClient(
   const { error } = await supabase.rpc('cascade_delete_client', {
     p_client_id: clientId,
     p_studio_id: studioId,
-    p_reason: reason ?? null,
+    p_reason: reason ?? undefined,
   })
 
   if (error) {

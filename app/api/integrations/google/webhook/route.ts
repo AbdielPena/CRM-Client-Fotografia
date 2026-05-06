@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
 
 import { createSupabaseServiceClient } from '@/server/supabase/service'
-import { pullIncrementalChanges } from '@/server/services/google-calendar.service'
+import {
+  pullIncrementalChanges,
+  importGoogleEvents,
+} from '@/server/services/google-calendar.service'
 import type { Database } from '@/types/supabase'
 
 type ProjectsUpdate = Database['public']['Tables']['projects']['Update']
@@ -43,6 +46,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // 1) Espejo COMPLETO en google_events (incluye personales/externos)
+    await importGoogleEvents(watch.studio_id).catch((err) => {
+      console.error('[google webhook] importGoogleEvents failed', err)
+    })
+
+    // 2) Sincronización con `projects` (eventos creados desde StudioFlow)
     const { events } = await pullIncrementalChanges(watch.studio_id)
 
     for (const ev of events) {
@@ -75,7 +84,10 @@ export async function POST(req: NextRequest) {
 
       if (!project) continue
 
-      const googleUpdatedAt = ev.updated ? new Date(ev.updated).getTime() : 0
+      const evWithUpdated = ev as { updated?: string }
+      const googleUpdatedAt = evWithUpdated.updated
+        ? new Date(evWithUpdated.updated).getTime()
+        : 0
       const lastSyncedAt = project.google_synced_at
         ? new Date(project.google_synced_at).getTime()
         : 0
