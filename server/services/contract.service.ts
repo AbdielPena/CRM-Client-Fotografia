@@ -272,6 +272,9 @@ export async function signContract(
   const { createHash } = await import('node:crypto')
   const evidenceHash = createHash('sha256').update(evidence).digest('hex')
 
+  // UPDATE atómico: solo si el contrato sigue sin firmar.
+  // Evita race condition: dos firmas concurrentes ya no pueden sobrescribirse —
+  // la segunda recibe 0 filas afectadas y vemos contract_already_signed.
   const { data: signed, error: updateError } = await supabase
     .from('contracts')
     .update({
@@ -283,14 +286,21 @@ export async function signContract(
       signed_user_agent: signerUserAgent ?? null,
       signature_image_url: signatureUrl,
       evidence_hash: evidenceHash,
-      // Snapshot inmutable del body al momento de firmar
       body_snapshot: contract.body_html ?? null,
     })
     .eq('id', contract.id)
+    .neq('status', 'signed')
+    .neq('status', 'voided')
+    .neq('status', 'cancelled')
+    .neq('status', 'expired')
     .select('*')
-    .single()
+    .maybeSingle()
 
   if (updateError) throw new Error(updateError.message)
+  if (!signed) {
+    // Otra request (o doble click) ya firmó este contrato. Idempotente.
+    throw new Error('Este contrato ya fue firmado')
+  }
 
   // Notificar al studio + email al cliente con copia (best-effort)
   try {
@@ -354,7 +364,9 @@ export async function signContractByStudio(
   }
 
   const now = new Date().toISOString()
-  const { error } = await supabase
+  // UPDATE atómico: solo si studio_signed_at sigue null. Si dos clicks
+  // concurrentes intentan firmar, el segundo recibe 0 filas y rechazamos.
+  const { data: updated, error } = await supabase
     .from('contracts')
     .update({
       studio_signed_at: now,
@@ -363,7 +375,11 @@ export async function signContractByStudio(
       studio_signature_image_url: signatureUrl,
     })
     .eq('id', contractId)
+    .is('studio_signed_at', null)
+    .select('id')
+    .maybeSingle()
   if (error) throw new Error(error.message)
+  if (!updated) throw new Error('Este contrato ya tiene firma del estudio')
 
   // Email final si ambas firmas presentes (best-effort)
   try {

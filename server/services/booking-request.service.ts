@@ -497,7 +497,13 @@ async function convertBookingToClientBundle(params: {
 } | null> {
   const { row } = params
 
-  // Idempotencia: si ya se convirtió antes, no duplicar.
+  // Idempotencia: si ya se convirtió, skip. Tiene una pequeña race window
+  // (dos requests concurrentes pueden ambos pasar el check). En la práctica
+  // está protegida porque approveBookingRequest ya hizo `transition` con
+  // un UPDATE atómico de status que sólo el primer request gana.
+  // TODO: agregar columna `conversion_started_at` como advisory lock para
+  // cubrir el caso patológico de dos llamadas directas a este service sin
+  // pasar por approveBookingRequest.
   if (row.client_id || row.project_id) {
     console.log(
       `[convertBookingToClientBundle] booking ${params.requestId} ya tiene client/project — skip`,
