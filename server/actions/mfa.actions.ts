@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/server/supabase/server"
+import { throwServiceError } from "@/lib/utils/api-error"
 
 /**
  * Lista los factores MFA del usuario actual.
@@ -14,7 +15,7 @@ export async function listMfaFactorsAction() {
   if (!user) throw new Error("UNAUTHORIZED")
 
   const { data, error } = await supabase.auth.mfa.listFactors()
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("MFA_LIST_FAILED", error, { userId: user.id })
 
   // Solo factores TOTP verificados (los pending no nos interesan en el listado)
   const totpFactors = (data?.totp ?? []).filter(
@@ -54,7 +55,7 @@ export async function enrollMfaFactorAction(friendlyName: string) {
     factorType: "totp",
     friendlyName: friendlyName?.trim() || "Authenticator App",
   })
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("MFA_ENROLL_FAILED", error, { userId: user.id })
 
   return {
     factorId: data.id,
@@ -86,7 +87,10 @@ export async function verifyMfaFactorAction(
   const { data: challenge, error: chErr } =
     await supabase.auth.mfa.challenge({ factorId })
   if (chErr || !challenge) {
-    throw new Error(chErr?.message ?? "CHALLENGE_FAILED")
+    throwServiceError("MFA_CHALLENGE_FAILED", chErr ?? new Error("no challenge"), {
+      userId: user.id,
+      factorId,
+    })
   }
 
   const { error: verifyErr } = await supabase.auth.mfa.verify({
@@ -98,7 +102,7 @@ export async function verifyMfaFactorAction(
     if (verifyErr.message.includes("Invalid")) {
       throw new Error("CODE_INCORRECT")
     }
-    throw new Error(verifyErr.message)
+    throwServiceError("MFA_VERIFY_FAILED", verifyErr, { userId: user.id, factorId })
   }
 
   revalidatePath("/settings/security")
@@ -117,7 +121,7 @@ export async function unenrollMfaFactorAction(factorId: string) {
   if (!user) throw new Error("UNAUTHORIZED")
 
   const { error } = await supabase.auth.mfa.unenroll({ factorId })
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("MFA_UNENROLL_FAILED", error, { userId: user.id, factorId })
 
   revalidatePath("/settings/security")
   return { ok: true as const }

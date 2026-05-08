@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
 import type { CreateContractInput } from '@/lib/validations/contract.schema'
 import type { Database } from '@/types/supabase'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
 
 /** Replace {{variable}} placeholders in contract body with actual data */
@@ -46,7 +47,7 @@ export async function getContracts(
   if (status) query = query.eq('status', status as any)
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("CONTRACT_LIST_FAILED", error, { studioId })
 
   // Aplanar: cliente va embebido vía project.client (no hay FK directa
   // contracts→clients). Exponemos `client` a nivel raíz para compat con UI.
@@ -88,7 +89,7 @@ export async function getContractById(studioId: string, contractId: string) {
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("CONTRACT_GET_FAILED", error, { studioId, contractId })
   if (!data) return null
 
   // Aplanar client al nivel raíz (no hay FK contracts→clients)
@@ -105,7 +106,7 @@ export async function getContractTemplates(studioId: string) {
     .eq('studio_id', studioId)
     .is('deleted_at', null)
     .order('name', { ascending: true })
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("CONTRACT_TEMPLATES_LIST_FAILED", error, { studioId })
   return data ?? []
 }
 
@@ -236,7 +237,7 @@ export async function signContract(
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (findError) throw new Error(findError.message)
+  if (findError) throwServiceError("CONTRACT_FIND_FAILED", findError, { signingToken: signingToken.slice(0, 8) })
   if (!contract) throw new Error('Contrato inválido o ya firmado')
   if (contract.status === 'signed') throw new Error('Este contrato ya fue firmado')
 
@@ -296,7 +297,7 @@ export async function signContract(
     .select('*')
     .maybeSingle()
 
-  if (updateError) throw new Error(updateError.message)
+  if (updateError) throwServiceError("CONTRACT_SIGN_FAILED", updateError, { contractId: contract.id })
   if (!signed) {
     // Otra request (o doble click) ya firmó este contrato. Idempotente.
     throw new Error('Este contrato ya fue firmado')
@@ -378,7 +379,7 @@ export async function signContractByStudio(
     .is('studio_signed_at', null)
     .select('id')
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("CONTRACT_STUDIO_SIGN_FAILED", error, { contractId, studioId })
   if (!updated) throw new Error('Este contrato ya tiene firma del estudio')
 
   // Email final si ambas firmas presentes (best-effort)

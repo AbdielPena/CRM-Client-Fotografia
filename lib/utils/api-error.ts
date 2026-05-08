@@ -82,3 +82,75 @@ export function apiError(err: unknown, context?: string): NextResponse {
   log(400, msg)
   return NextResponse.json({ error: msg }, { status: 400 })
 }
+
+// ============================================================================
+// serviceError: helper para services. Loguea el error completo (con detalles
+// de Postgres) en server, pero re-lanza un Error con código semántico que
+// el caller (action / route handler) puede mapear a UI sin filtrar internals.
+//
+// Uso:
+//   const { error } = await supabase.from('clients').insert(...)
+//   if (error) throwServiceError('CLIENT_CREATE_FAILED', error, { studioId })
+//
+// El caller atrapa con catch (err) { ... err.message es 'CLIENT_CREATE_FAILED' }
+// y puede hacer un switch para traducir a mensajes user-facing.
+// ============================================================================
+
+type ServiceErrorContext = Record<string, unknown> | undefined
+
+/**
+ * Lanza un Error con código semántico, loguea el detalle real server-side.
+ * NUNCA usa el `error.message` de Postgres como mensaje del Error final
+ * — eso filtraba constraints, schemas, hints al cliente.
+ */
+export function throwServiceError(
+  code: string,
+  cause: unknown,
+  context?: ServiceErrorContext,
+): never {
+  const ctxStr = context ? ` ${JSON.stringify(context)}` : ""
+  if (cause && typeof cause === "object") {
+    const c = cause as {
+      message?: string
+      code?: string
+      details?: string
+      hint?: string
+    }
+    console.error(
+      `[service:${code}]${ctxStr} ${c.code ?? ""} ${c.message ?? ""} ${c.details ?? ""} ${c.hint ?? ""}`.trim(),
+    )
+  } else {
+    console.error(`[service:${code}]${ctxStr}`, cause)
+  }
+
+  // Lanza solo el código semántico — el mensaje crudo NO sale del server.
+  throw new Error(code)
+}
+
+/**
+ * Variante para errors de Supabase específicamente — detecta códigos comunes
+ * y los mapea a códigos semánticos.
+ *
+ * Códigos PG relevantes:
+ *   23505 → unique_violation       → 'DUPLICATE'
+ *   23503 → foreign_key_violation  → 'FK_VIOLATION'
+ *   23502 → not_null_violation     → 'MISSING_FIELD'
+ *   23514 → check_violation        → 'CONSTRAINT_FAILED'
+ *   42501 → insufficient_privilege → 'FORBIDDEN'
+ *   PGRST116 → not found
+ */
+export function throwSupabaseError(
+  fallbackCode: string,
+  error: { code?: string; message?: string; details?: string; hint?: string },
+  context?: ServiceErrorContext,
+): never {
+  let semanticCode = fallbackCode
+  if (error.code === "23505") semanticCode = "DUPLICATE"
+  else if (error.code === "23503") semanticCode = "FK_VIOLATION"
+  else if (error.code === "23502") semanticCode = "MISSING_FIELD"
+  else if (error.code === "23514") semanticCode = "CONSTRAINT_FAILED"
+  else if (error.code === "42501") semanticCode = "FORBIDDEN"
+  else if (error.code === "PGRST116") semanticCode = "NOT_FOUND"
+
+  throwServiceError(semanticCode, error, context)
+}
