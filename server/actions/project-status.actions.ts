@@ -1,5 +1,8 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
+
 import { requireStudioAuth } from '@/server/middleware/auth'
 import {
   createProjectStatus,
@@ -8,15 +11,56 @@ import {
   reorderProjectStatuses,
   setProjectStatus,
 } from '@/server/services/project-status.service'
-import { revalidatePath } from 'next/cache'
+
+// ─── Validation schemas ─────────────────────────────────────────────────────
+
+const uuidSchema = z.string().uuid('ID inválido')
+
+const hexColorSchema = z
+  .string()
+  .regex(/^#[0-9A-Fa-f]{6}$/, 'Color inválido (debe ser hex #RRGGBB)')
+
+const labelSchema = z
+  .string()
+  .trim()
+  .min(1, 'El nombre es requerido')
+  .max(60, 'Nombre demasiado largo')
+
+const createProjectStatusSchema = z.object({
+  label: labelSchema,
+  color: hexColorSchema.default('#6b7280'),
+})
+
+const updateProjectStatusSchema = z.object({
+  label: labelSchema.optional(),
+  color: hexColorSchema.optional(),
+})
+
+const reorderSchema = z.object({
+  orderedIds: z.array(uuidSchema).min(1, 'Debe haber al menos un estado'),
+})
+
+const setStatusSchema = z.object({
+  projectId: uuidSchema,
+  newStatusLabel: labelSchema,
+})
 
 export async function createProjectStatusAction(formData: FormData) {
   const session = await requireStudioAuth()
-  const label = String(formData.get('label') ?? '').trim()
-  const color = String(formData.get('color') ?? '#6b7280')
-  if (!label) return { error: 'El nombre es requerido' }
+
+  const rawColor = String(formData.get('color') ?? '#6b7280')
+  const parseRes = createProjectStatusSchema.safeParse({
+    label: String(formData.get('label') ?? ''),
+    color: rawColor,
+  })
+  if (!parseRes.success) {
+    const first = parseRes.error.issues[0]
+    return { error: first?.message ?? 'Datos inválidos' }
+  }
+  const data = parseRes.data
+
   try {
-    const status = await createProjectStatus(session.studioId, label, color)
+    const status = await createProjectStatus(session.studioId, data.label, data.color)
     revalidatePath('/projects')
     revalidatePath('/settings/project-statuses')
     return { success: true, status }
@@ -30,10 +74,24 @@ export async function updateProjectStatusAction(
   formData: FormData,
 ) {
   const session = await requireStudioAuth()
-  const label = String(formData.get('label') ?? '').trim() || undefined
-  const color = String(formData.get('color') ?? '').trim() || undefined
+  const validStatusId = uuidSchema.parse(statusId)
+
+  const rawLabel = String(formData.get('label') ?? '').trim()
+  const rawColor = String(formData.get('color') ?? '').trim()
+
+  const raw: { label?: string; color?: string } = {}
+  if (rawLabel) raw.label = rawLabel
+  if (rawColor) raw.color = rawColor
+
+  const parseRes = updateProjectStatusSchema.safeParse(raw)
+  if (!parseRes.success) {
+    const first = parseRes.error.issues[0]
+    return { error: first?.message ?? 'Datos inválidos' }
+  }
+  const data = parseRes.data
+
   try {
-    await updateProjectStatus(session.studioId, statusId, { label, color })
+    await updateProjectStatus(session.studioId, validStatusId, data)
     revalidatePath('/projects')
     revalidatePath('/settings/project-statuses')
     return { success: true }
@@ -44,8 +102,10 @@ export async function updateProjectStatusAction(
 
 export async function deleteProjectStatusAction(statusId: string) {
   const session = await requireStudioAuth()
+  const validStatusId = uuidSchema.parse(statusId)
+
   try {
-    await deleteProjectStatus(session.studioId, statusId)
+    await deleteProjectStatus(session.studioId, validStatusId)
     revalidatePath('/projects')
     revalidatePath('/settings/project-statuses')
     return { success: true }
@@ -56,8 +116,10 @@ export async function deleteProjectStatusAction(statusId: string) {
 
 export async function reorderProjectStatusesAction(orderedIds: string[]) {
   const session = await requireStudioAuth()
+  const data = reorderSchema.parse({ orderedIds })
+
   try {
-    await reorderProjectStatuses(session.studioId, orderedIds)
+    await reorderProjectStatuses(session.studioId, data.orderedIds)
     revalidatePath('/projects')
     revalidatePath('/settings/project-statuses')
     return { success: true }
@@ -68,10 +130,12 @@ export async function reorderProjectStatusesAction(orderedIds: string[]) {
 
 export async function setProjectStatusAction(projectId: string, newStatusLabel: string) {
   const session = await requireStudioAuth()
+  const data = setStatusSchema.parse({ projectId, newStatusLabel })
+
   try {
-    await setProjectStatus(session.studioId, projectId, newStatusLabel)
+    await setProjectStatus(session.studioId, data.projectId, data.newStatusLabel)
     revalidatePath('/projects')
-    revalidatePath(`/projects/${projectId}`)
+    revalidatePath(`/projects/${data.projectId}`)
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Error al cambiar estado' }

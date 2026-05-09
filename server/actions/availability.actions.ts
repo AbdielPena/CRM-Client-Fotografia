@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { z } from "zod"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { availabilityRepo } from "@/server/repositories"
@@ -9,6 +10,63 @@ import { logActivity } from "@/server/services/activity.service"
 type ActionResult =
   | { ok: true }
   | { ok: false; error: string }
+
+// ─── Validation schemas ─────────────────────────────────────────────────────
+
+const uuidSchema = z.string().uuid("ID inválido")
+
+// HH:MM o HH:MM:SS
+const timeStringSchema = z
+  .string()
+  .regex(/^\d{2}:\d{2}(:\d{2})?$/, "Formato de hora inválido")
+
+// YYYY-MM-DD (input type="date")
+const dateStringSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Formato de fecha inválido")
+
+const weeklyWindowSchema = z.object({
+  startTime: timeStringSchema,
+  endTime: timeStringSchema,
+})
+
+const weeklyDaySchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  open: z.boolean(),
+  windows: z.array(weeklyWindowSchema),
+})
+
+const weekScheduleSchema = z.array(weeklyDaySchema).max(20)
+
+const dateRuleSchema = z
+  .object({
+    ruleType: z.enum(["date_closed", "date_open_override"]),
+    startDate: dateStringSchema,
+    endDate: dateStringSchema.nullable().optional(),
+    startTime: timeStringSchema.nullable().optional(),
+    endTime: timeStringSchema.nullable().optional(),
+    notes: z.string().trim().max(500).nullable().optional(),
+  })
+  .refine(
+    (d) =>
+      !d.endDate || d.endDate >= d.startDate,
+    { message: "La fecha fin no puede ser anterior al inicio", path: ["endDate"] },
+  )
+
+const manualBlockSchema = z
+  .object({
+    startDate: dateStringSchema,
+    endDate: dateStringSchema.nullable().optional(),
+    startTime: timeStringSchema.nullable().optional(),
+    endTime: timeStringSchema.nullable().optional(),
+    title: z.string().trim().min(1).max(200).default("Bloqueo"),
+    notes: z.string().trim().max(500).nullable().optional(),
+    blockType: z.enum(["personal", "manual"]).default("manual"),
+  })
+
+const deleteIdSchema = z.object({
+  id: uuidSchema,
+})
 
 function asTimeOrNull(v: FormDataEntryValue | null): string | null {
   if (!v) return null
@@ -21,13 +79,6 @@ function asTimeOrNull(v: FormDataEntryValue | null): string | null {
   const mm = parts[1]!.padStart(2, "0")
   const ss = (parts[2] ?? "00").padStart(2, "0")
   return `${hh}:${mm}:${ss}`
-}
-
-function asDateOrNull(v: FormDataEntryValue | null): string | null {
-  if (!v) return null
-  const s = String(v).trim()
-  // Asumimos YYYY-MM-DD (input type="date")
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null
 }
 
 /**
@@ -53,22 +104,25 @@ export async function saveWeeklyScheduleAction(
   const raw = formData.get("schedule")
   if (!raw) return { ok: false, error: "Payload vacío" }
 
-  let payload: Array<{
-    dayOfWeek: number
-    open: boolean
-    windows: Array<{ startTime: string; endTime: string }>
-  }>
+  let parsedJson: unknown
   try {
-    payload = JSON.parse(String(raw))
+    parsedJson = JSON.parse(String(raw))
   } catch {
     return { ok: false, error: "Payload inválido (JSON)" }
   }
 
-  // Validación mínima
-  for (const d of payload) {
-    if (typeof d.dayOfWeek !== "number" || d.dayOfWeek < 0 || d.dayOfWeek > 6) {
-      return { ok: false, error: `Día inválido: ${d.dayOfWeek}` }
+  const scheduleResult = weekScheduleSchema.safeParse(parsedJson)
+  if (!scheduleResult.success) {
+    const first = scheduleResult.error.issues[0]
+    return {
+      ok: false,
+      error: first?.message ?? "Schedule inválido",
     }
+  }
+  const payload = scheduleResult.data
+
+  // Validación adicional de negocio (open requiere windows, start < end)
+  for (const d of payload) {
     if (d.open && d.windows.length === 0) {
       return {
         ok: false,
@@ -174,37 +228,61 @@ export async function addDateRuleAction(
     return { ok: false, error: "No tienes permiso para editar horarios" }
   }
 
-  const ruleType = String(formData.get("ruleType") ?? "")
-  if (ruleType !== "date_closed" && ruleType !== "date_open_override") {
-    return { ok: false, error: "Tipo de regla inválido" }
+  const rawObj = {
+    ruleType: String(formData.get("ruleType") ?? ""),
+    startDate: String(formData.get("startDate") ?? ""),
+    endDate: (() => {
+      const v = formData.get("endDate")
+      const s = v ? String(v).trim() : ""
+      return s.length > 0 ? s : null
+    })(),
+    startTime: (() => {
+      const v = formData.get("startTime")
+      const s = v ? String(v).trim() : ""
+      return s.length > 0 ? s : null
+    })(),
+    endTime: (() => {
+      const v = formData.get("endTime")
+      const s = v ? String(v).trim() : ""
+      return s.length > 0 ? s : null
+    })(),
+    notes: (() => {
+      const v = formData.get("notes")
+      const s = v ? String(v).trim() : ""
+      return s.length > 0 ? s : null
+    })(),
   }
 
-  const startDate = asDateOrNull(formData.get("startDate"))
-  const endDate = asDateOrNull(formData.get("endDate"))
-  if (!startDate) {
-    return { ok: false, error: "Fecha de inicio inválida" }
+  const parseRes = dateRuleSchema.safeParse(rawObj)
+  if (!parseRes.success) {
+    const first = parseRes.error.issues[0]
+    return { ok: false, error: first?.message ?? "Datos inválidos" }
   }
-  if (endDate && endDate < startDate) {
-    return { ok: false, error: "La fecha fin no puede ser anterior al inicio" }
-  }
+  const data = parseRes.data
 
-  let startTime: string | null = null
-  let endTime: string | null = null
-  if (ruleType === "date_open_override") {
-    startTime = asTimeOrNull(formData.get("startTime"))
-    endTime = asTimeOrNull(formData.get("endTime"))
-    if (!startTime || !endTime) {
+  // Para date_open_override: requiere startTime y endTime
+  if (data.ruleType === "date_open_override") {
+    if (!data.startTime || !data.endTime) {
       return { ok: false, error: "Horario requerido para apertura excepcional" }
     }
-    if (startTime >= endTime) {
+    const start = asTimeOrNull(data.startTime)
+    const end = asTimeOrNull(data.endTime)
+    if (!start || !end) {
+      return { ok: false, error: "Horario inválido" }
+    }
+    if (start >= end) {
       return { ok: false, error: "El inicio debe ser antes que el fin" }
     }
   }
 
-  const notes = String(formData.get("notes") ?? "").trim() || null
+  const startDate = data.startDate
+  const endDate = data.endDate ?? null
+  const startTime = data.startTime ? asTimeOrNull(data.startTime) : null
+  const endTime = data.endTime ? asTimeOrNull(data.endTime) : null
+  const notes = data.notes ?? null
 
   const defaultName =
-    ruleType === "date_closed"
+    data.ruleType === "date_closed"
       ? `Cerrado ${startDate}${endDate && endDate !== startDate ? ` → ${endDate}` : ""}`
       : `Apertura ${startDate} ${startTime}–${endTime}`
 
@@ -212,7 +290,7 @@ export async function addDateRuleAction(
     await availabilityRepo.upsertRule({
       studio_id: session.studioId,
       name: notes ?? defaultName,
-      rule_type: ruleType,
+      rule_type: data.ruleType,
       start_date: startDate,
       end_date: endDate,
       start_time: startTime,
@@ -230,10 +308,10 @@ export async function addDateRuleAction(
       entityType: "availability_rule",
       actorId: session.userId,
       description:
-        ruleType === "date_closed"
+        data.ruleType === "date_closed"
           ? `Fecha cerrada: ${startDate}${endDate ? ` → ${endDate}` : ""}`
           : `Apertura excepcional: ${startDate} ${startTime}–${endTime}`,
-      metadata: { ruleType, startDate, endDate },
+      metadata: { ruleType: data.ruleType, startDate, endDate },
     })
 
     revalidatePath("/settings/availability")
@@ -248,8 +326,11 @@ export async function deleteRuleAction(formData: FormData): Promise<void> {
   const session = await requireStudioAuth()
   if (session.role === "viewer") return
 
-  const id = String(formData.get("id") ?? "")
-  if (!id) return
+  const parseRes = deleteIdSchema.safeParse({
+    id: String(formData.get("id") ?? ""),
+  })
+  if (!parseRes.success) return
+  const { id } = parseRes.data
 
   try {
     await availabilityRepo.deleteRule(id)
@@ -279,15 +360,46 @@ export async function addManualBlockAction(
     return { ok: false, error: "No tienes permiso para bloquear la agenda" }
   }
 
-  const startDate = asDateOrNull(formData.get("startDate"))
-  const endDate = asDateOrNull(formData.get("endDate"))
-  const startTime = asTimeOrNull(formData.get("startTime"))
-  const endTime = asTimeOrNull(formData.get("endTime"))
-  const title = String(formData.get("title") ?? "").trim() || "Bloqueo"
-  const blockType = String(formData.get("blockType") ?? "manual")
+  const rawObj = {
+    startDate: String(formData.get("startDate") ?? ""),
+    endDate: (() => {
+      const v = formData.get("endDate")
+      const s = v ? String(v).trim() : ""
+      return s.length > 0 ? s : null
+    })(),
+    startTime: (() => {
+      const v = formData.get("startTime")
+      const s = v ? String(v).trim() : ""
+      return s.length > 0 ? s : null
+    })(),
+    endTime: (() => {
+      const v = formData.get("endTime")
+      const s = v ? String(v).trim() : ""
+      return s.length > 0 ? s : null
+    })(),
+    title: String(formData.get("title") ?? "").trim() || "Bloqueo",
+    notes: (() => {
+      const v = formData.get("notes")
+      const s = v ? String(v).trim() : ""
+      return s.length > 0 ? s : null
+    })(),
+    blockType:
+      String(formData.get("blockType") ?? "manual") === "personal"
+        ? ("personal" as const)
+        : ("manual" as const),
+  }
 
-  if (!startDate) return { ok: false, error: "Fecha de inicio inválida" }
-  const finalEndDate = endDate ?? startDate
+  const parseRes = manualBlockSchema.safeParse(rawObj)
+  if (!parseRes.success) {
+    const first = parseRes.error.issues[0]
+    return { ok: false, error: first?.message ?? "Datos inválidos" }
+  }
+  const data = parseRes.data
+
+  const startDate = data.startDate
+  const finalEndDate = data.endDate ?? startDate
+  const startTime = data.startTime ? asTimeOrNull(data.startTime) : null
+  const endTime = data.endTime ? asTimeOrNull(data.endTime) : null
 
   // Santo Domingo: UTC-4 sin DST
   const OFFSET = "-04:00"
@@ -309,9 +421,9 @@ export async function addManualBlockAction(
       studio_id: session.studioId,
       starts_at: startIso,
       ends_at: endIso,
-      block_type: blockType === "personal" ? "personal" : "manual",
-      title,
-      notes: String(formData.get("notes") ?? "").trim() || null,
+      block_type: data.blockType,
+      title: data.title,
+      notes: data.notes ?? null,
       is_confirmed: true,
       metadata: { created_by: session.userId },
     })
@@ -321,8 +433,8 @@ export async function addManualBlockAction(
       action: "availability.block_created",
       entityType: "availability_block",
       actorId: session.userId,
-      description: `Bloque manual: ${title}`,
-      metadata: { startIso, endIso, blockType },
+      description: `Bloque manual: ${data.title}`,
+      metadata: { startIso, endIso, blockType: data.blockType },
     })
 
     revalidatePath("/settings/availability")
@@ -337,8 +449,11 @@ export async function deleteBlockAction(formData: FormData): Promise<void> {
   const session = await requireStudioAuth()
   if (session.role === "viewer") return
 
-  const id = String(formData.get("id") ?? "")
-  if (!id) return
+  const parseRes = deleteIdSchema.safeParse({
+    id: String(formData.get("id") ?? ""),
+  })
+  if (!parseRes.success) return
+  const { id } = parseRes.data
 
   try {
     await availabilityRepo.deleteBlock(id)

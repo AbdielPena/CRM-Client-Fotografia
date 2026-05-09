@@ -1,6 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { z } from "zod"
+
 import { requireStudioAuth } from "@/server/middleware/auth"
 import {
   createFormTemplate,
@@ -19,10 +21,59 @@ import { assertFormSchema, type FormSchema } from "@/lib/forms/types"
  * sin tener que firmar todo como un objeto plano.
  */
 
+// ─── Validation schemas ─────────────────────────────────────────────────────
+
+const uuidSchema = z.string().uuid("ID inválido")
+
+const templateNameSchema = z
+  .string()
+  .trim()
+  .min(1, "El nombre es requerido")
+  .max(120, "Nombre demasiado largo")
+
+const templateDescriptionSchema = z
+  .string()
+  .trim()
+  .max(2000, "Descripción demasiado larga")
+
+const createFormTemplateSchema = z.object({
+  name: templateNameSchema,
+  description: templateDescriptionSchema
+    .nullable()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+  isDefault: z.boolean(),
+})
+
+const updateFormTemplatePatchSchema = z.object({
+  name: templateNameSchema.optional(),
+  description: templateDescriptionSchema
+    .nullable()
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined
+      if (v === null) return null
+      return v.length > 0 ? v : null
+    }),
+  isActive: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+})
+
+const setPackagesSchema = z.object({
+  templateId: uuidSchema,
+  packageIds: z.array(uuidSchema).max(500),
+})
+
+const sendFormSchema = z.object({
+  responseId: uuidSchema,
+  bookingId: uuidSchema.nullable().optional(),
+})
+
 function parseSchema(raw: FormDataEntryValue | null): FormSchema {
   if (typeof raw !== "string" || !raw.trim()) {
     throw new Error("Schema inválido")
   }
+  // Limit incoming JSON payload (HTML user-input)
+  z.string().max(200_000).parse(raw)
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
@@ -36,13 +87,25 @@ function parseSchema(raw: FormDataEntryValue | null): FormSchema {
 export async function createFormTemplateAction(formData: FormData) {
   const session = await requireStudioAuth()
 
-  const name = String(formData.get("name") ?? "").trim()
-  const description = String(formData.get("description") ?? "").trim() || null
-  const isDefault = formData.get("isDefault") === "true"
-
-  if (!name) {
-    return { error: { name: ["El nombre es requerido"] } }
+  const rawIsDefault = formData.get("isDefault")
+  const parseRes = createFormTemplateSchema.safeParse({
+    name: String(formData.get("name") ?? ""),
+    description: String(formData.get("description") ?? ""),
+    isDefault: rawIsDefault === "true" || rawIsDefault === "on",
+  })
+  if (!parseRes.success) {
+    const issues = parseRes.error.issues
+    const nameIssue = issues.find((i) => i.path[0] === "name")
+    if (nameIssue) {
+      return { error: { name: [nameIssue.message] } }
+    }
+    return {
+      error: {
+        name: [issues[0]?.message ?? "Datos inválidos"],
+      },
+    }
   }
+  const data = parseRes.data
 
   let schema: FormSchema
   try {
@@ -58,10 +121,10 @@ export async function createFormTemplateAction(formData: FormData) {
   const template = await createFormTemplate({
     studioId: session.studioId,
     actorId: session.userId,
-    name,
-    description,
+    name: data.name,
+    description: data.description,
     schema,
-    isDefault,
+    isDefault: data.isDefault,
   })
 
   revalidatePath("/settings/forms")
@@ -73,29 +136,47 @@ export async function updateFormTemplateAction(
   formData: FormData,
 ) {
   const session = await requireStudioAuth()
+  const validTemplateId = uuidSchema.parse(templateId)
 
-  const patch: {
+  const raw: {
     name?: string
     description?: string | null
-    schema?: FormSchema
     isActive?: boolean
     isDefault?: boolean
   } = {}
 
   if (formData.has("name")) {
-    const name = String(formData.get("name") ?? "").trim()
-    if (!name) return { error: { name: ["El nombre es requerido"] } }
-    patch.name = name
+    raw.name = String(formData.get("name") ?? "")
   }
-
   if (formData.has("description")) {
-    const desc = String(formData.get("description") ?? "").trim()
-    patch.description = desc || null
+    const v = String(formData.get("description") ?? "").trim()
+    raw.description = v.length > 0 ? v : null
+  }
+  if (formData.has("isActive")) {
+    raw.isActive = formData.get("isActive") === "true"
+  }
+  if (formData.has("isDefault")) {
+    raw.isDefault = formData.get("isDefault") === "true"
   }
 
+  const parseRes = updateFormTemplatePatchSchema.safeParse(raw)
+  if (!parseRes.success) {
+    const nameIssue = parseRes.error.issues.find((i) => i.path[0] === "name")
+    if (nameIssue) {
+      return { error: { name: [nameIssue.message] } }
+    }
+    return {
+      error: {
+        name: [parseRes.error.issues[0]?.message ?? "Datos inválidos"],
+      },
+    }
+  }
+  const patchBase = parseRes.data
+
+  let schemaPatch: FormSchema | undefined
   if (formData.has("schema")) {
     try {
-      patch.schema = parseSchema(formData.get("schema"))
+      schemaPatch = parseSchema(formData.get("schema"))
     } catch (err) {
       return {
         error: {
@@ -105,23 +186,16 @@ export async function updateFormTemplateAction(
     }
   }
 
-  if (formData.has("isActive")) {
-    patch.isActive = formData.get("isActive") === "true"
-  }
-
-  if (formData.has("isDefault")) {
-    patch.isDefault = formData.get("isDefault") === "true"
-  }
-
   await updateFormTemplate({
     studioId: session.studioId,
     actorId: session.userId,
-    templateId,
-    ...patch,
+    templateId: validTemplateId,
+    ...patchBase,
+    ...(schemaPatch ? { schema: schemaPatch } : {}),
   })
 
   revalidatePath("/settings/forms")
-  revalidatePath(`/settings/forms/${templateId}`)
+  revalidatePath(`/settings/forms/${validTemplateId}`)
   return { success: true }
 }
 
@@ -130,13 +204,15 @@ export async function setFormTemplatePackagesAction(
   packageIds: string[],
 ) {
   const session = await requireStudioAuth()
+  const data = setPackagesSchema.parse({ templateId, packageIds })
+
   await setPackagesLinkedToTemplate({
     studioId: session.studioId,
     actorId: session.userId,
-    templateId,
-    packageIds,
+    templateId: data.templateId,
+    packageIds: data.packageIds,
   })
-  revalidatePath(`/settings/forms/${templateId}`)
+  revalidatePath(`/settings/forms/${data.templateId}`)
   return { success: true }
 }
 
@@ -145,6 +221,10 @@ export async function sendFormToClientAction(
   options?: { bookingId?: string | null },
 ) {
   const session = await requireStudioAuth()
+  const data = sendFormSchema.parse({
+    responseId,
+    bookingId: options?.bookingId ?? null,
+  })
 
   const appBaseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
@@ -153,7 +233,7 @@ export async function sendFormToClientAction(
     await sendFormToClient({
       studioId: session.studioId,
       actorId: session.userId,
-      responseId,
+      responseId: data.responseId,
       appBaseUrl,
     })
   } catch (err) {
@@ -162,18 +242,20 @@ export async function sendFormToClientAction(
     }
   }
 
-  if (options?.bookingId) {
-    revalidatePath(`/bookings/${options.bookingId}`)
+  if (data.bookingId) {
+    revalidatePath(`/bookings/${data.bookingId}`)
   }
   return { success: true }
 }
 
 export async function deleteFormTemplateAction(templateId: string) {
   const session = await requireStudioAuth()
+  const validTemplateId = uuidSchema.parse(templateId)
+
   await deleteFormTemplate({
     studioId: session.studioId,
     actorId: session.userId,
-    templateId,
+    templateId: validTemplateId,
   })
   revalidatePath("/settings/forms")
   return { success: true }

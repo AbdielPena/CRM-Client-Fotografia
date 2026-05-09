@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { z } from "zod"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import {
@@ -11,22 +12,60 @@ import {
   updateSet,
 } from "@/server/services/gallery-set.service"
 
+// ─── Validation schemas ─────────────────────────────────────────────────────
+
+const uuidSchema = z.string().uuid("ID inválido")
+
+const createSetSchema = z.object({
+  name: z.string().trim().min(1, "Nombre requerido").max(120, "Nombre muy largo"),
+  description: z
+    .string()
+    .trim()
+    .max(2000)
+    .nullable()
+    .transform((v) => (v && v.length > 0 ? v : null)),
+  isPrivate: z.boolean(),
+})
+
+const updateSetSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z
+    .string()
+    .trim()
+    .max(2000)
+    .optional()
+    .transform((v) => (typeof v === "string" ? v : undefined)),
+  isPrivate: z.boolean().optional(),
+  coverAssetId: uuidSchema.nullable().optional(),
+})
+
+const moveAssetsToSetSchema = z.object({
+  galleryId: uuidSchema,
+  assetIds: z.array(uuidSchema).min(1, "Debe haber al menos un asset"),
+  setId: uuidSchema.nullable(),
+})
+
+const reorderSetsSchema = z.object({
+  galleryId: uuidSchema,
+  orderedIds: z.array(uuidSchema).min(1, "Debe haber al menos un set"),
+})
+
 export async function createSetAction(
   galleryId: string,
   formData: FormData,
 ): Promise<{ id: string }> {
   const session = await requireStudioAuth()
-  const name = String(formData.get("name") ?? "").trim()
-  if (!name) throw new Error("Nombre requerido")
-  const description = String(formData.get("description") ?? "").trim() || null
-  const isPrivate = formData.get("isPrivate") === "true"
+  const validGalleryId = uuidSchema.parse(galleryId)
 
-  const row = await createSet(session.studioId, galleryId, {
-    name,
-    description,
-    isPrivate,
+  const rawIsPrivate = formData.get("isPrivate")
+  const data = createSetSchema.parse({
+    name: String(formData.get("name") ?? ""),
+    description: String(formData.get("description") ?? ""),
+    isPrivate: rawIsPrivate === "true" || rawIsPrivate === "on",
   })
-  revalidatePath(`/galleries/${galleryId}`)
+
+  const row = await createSet(session.studioId, validGalleryId, data)
+  revalidatePath(`/galleries/${validGalleryId}`)
   return { id: row.id }
 }
 
@@ -36,22 +75,36 @@ export async function updateSetAction(
   formData: FormData,
 ): Promise<{ success: true }> {
   const session = await requireStudioAuth()
-  const name = formData.get("name")
-  const description = formData.get("description")
-  const isPrivate = formData.get("isPrivate")
-  const coverAssetId = formData.get("coverAssetId")
+  const validSetId = uuidSchema.parse(setId)
+  const validGalleryId = uuidSchema.parse(galleryId)
 
-  await updateSet(session.studioId, setId, {
-    name: typeof name === "string" ? name : undefined,
-    description: typeof description === "string" ? description : undefined,
-    isPrivate:
-      isPrivate === "true" ? true : isPrivate === "false" ? false : undefined,
-    coverAssetId:
-      typeof coverAssetId === "string"
-        ? coverAssetId || null
-        : undefined,
-  })
-  revalidatePath(`/galleries/${galleryId}`)
+  const rawName = formData.get("name")
+  const rawDescription = formData.get("description")
+  const rawIsPrivate = formData.get("isPrivate")
+  const rawCoverAssetId = formData.get("coverAssetId")
+
+  const raw: {
+    name?: string
+    description?: string
+    isPrivate?: boolean
+    coverAssetId?: string | null
+  } = {}
+
+  if (typeof rawName === "string") raw.name = rawName
+  if (typeof rawDescription === "string") raw.description = rawDescription
+  if (rawIsPrivate === "true" || rawIsPrivate === "on") {
+    raw.isPrivate = true
+  } else if (rawIsPrivate === "false" || rawIsPrivate === "off") {
+    raw.isPrivate = false
+  }
+  if (typeof rawCoverAssetId === "string") {
+    raw.coverAssetId = rawCoverAssetId.length > 0 ? rawCoverAssetId : null
+  }
+
+  const data = updateSetSchema.parse(raw)
+
+  await updateSet(session.studioId, validSetId, data)
+  revalidatePath(`/galleries/${validGalleryId}`)
   return { success: true }
 }
 
@@ -61,8 +114,12 @@ export async function deleteSetAction(
   keepAssets: boolean = true,
 ): Promise<{ success: true }> {
   const session = await requireStudioAuth()
-  await deleteSet(session.studioId, setId, { keepAssets })
-  revalidatePath(`/galleries/${galleryId}`)
+  const validSetId = uuidSchema.parse(setId)
+  const validGalleryId = uuidSchema.parse(galleryId)
+  const validKeepAssets = z.boolean().parse(keepAssets)
+
+  await deleteSet(session.studioId, validSetId, { keepAssets: validKeepAssets })
+  revalidatePath(`/galleries/${validGalleryId}`)
   return { success: true }
 }
 
@@ -72,13 +129,15 @@ export async function moveAssetsToSetAction(input: {
   setId: string | null
 }): Promise<{ moved: number }> {
   const session = await requireStudioAuth()
+  const data = moveAssetsToSetSchema.parse(input)
+
   const result = await moveAssetsToSet(
     session.studioId,
-    input.galleryId,
-    input.assetIds,
-    input.setId,
+    data.galleryId,
+    data.assetIds,
+    data.setId,
   )
-  revalidatePath(`/galleries/${input.galleryId}`)
+  revalidatePath(`/galleries/${data.galleryId}`)
   return result
 }
 
@@ -87,7 +146,9 @@ export async function reorderSetsAction(input: {
   orderedIds: string[]
 }): Promise<{ success: true }> {
   const session = await requireStudioAuth()
-  await reorderSets(session.studioId, input.galleryId, input.orderedIds)
-  revalidatePath(`/galleries/${input.galleryId}`)
+  const data = reorderSetsSchema.parse(input)
+
+  await reorderSets(session.studioId, data.galleryId, data.orderedIds)
+  revalidatePath(`/galleries/${data.galleryId}`)
   return { success: true }
 }
