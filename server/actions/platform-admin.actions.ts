@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 
 import { requirePlatformAdmin } from '@/server/supabase/auth-context'
 import {
@@ -15,72 +16,106 @@ import {
  * no es super admin, lanza NOT_PLATFORM_ADMIN.
  */
 
+const uuidSchema = z.string().uuid('ID inválido')
+// Slug de plan: lowercase, kebab-case, max 40 chars
+const planSlugSchema = z
+  .string()
+  .regex(/^[a-z0-9](-?[a-z0-9])*$/, 'Slug de plan inválido')
+  .max(40)
+// FeatureKey: snake_case ASCII, max 60
+const featureKeySchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]*$/, 'Feature key debe ser snake_case ASCII')
+  .max(60)
+
+const changePlanSchema = z.object({
+  studioId: uuidSchema,
+  planSlug: planSlugSchema.nullable(),
+})
+
+const suspensionSchema = z.object({
+  studioId: uuidSchema,
+  suspend: z.boolean(),
+  reason: z.string().max(500).nullable(),
+})
+
+const featureOverrideSchema = z.object({
+  studioId: uuidSchema,
+  featureKey: featureKeySchema,
+  isEnabled: z.boolean(),
+  limitValue: z.number().int().min(0).max(1_000_000).nullable(),
+  reason: z.string().max(500).nullable(),
+  expiresAt: z.string().datetime().nullable(),
+})
+
+const removeOverrideSchema = z.object({
+  overrideId: uuidSchema,
+  studioId: uuidSchema.optional(),
+})
+
 export async function changeStudioPlanAction(formData: FormData) {
   const ctx = await requirePlatformAdmin()
-  const studioId = String(formData.get('studioId') ?? '')
-  const planSlugRaw = String(formData.get('planSlug') ?? '')
-  const planSlug = planSlugRaw || null
+  const planSlugRaw = String(formData.get('planSlug') ?? '').trim()
+  const data = changePlanSchema.parse({
+    studioId: String(formData.get('studioId') ?? ''),
+    planSlug: planSlugRaw || null,
+  })
 
-  if (!studioId) throw new Error('studioId requerido')
-
-  await setStudioPlan(studioId, planSlug)
-
-  // void uso — garantiza que no quede ctx sin uso (lint) y deja la
-  // posibilidad futura de loggear quién hizo el cambio.
+  await setStudioPlan(data.studioId, data.planSlug)
   void ctx.userId
 
-  revalidatePath(`/platform/studios/${studioId}`)
+  revalidatePath(`/platform/studios/${data.studioId}`)
   revalidatePath('/platform/studios')
   revalidatePath('/platform')
 }
 
 export async function toggleStudioSuspensionAction(formData: FormData) {
   await requirePlatformAdmin()
-  const studioId = String(formData.get('studioId') ?? '')
-  const suspend = formData.get('suspend') === '1'
-  const reason = (formData.get('reason') as string | null)?.trim() || null
+  const reasonRaw = (formData.get('reason') as string | null)?.trim() || null
+  const data = suspensionSchema.parse({
+    studioId: String(formData.get('studioId') ?? ''),
+    suspend: formData.get('suspend') === '1',
+    reason: reasonRaw,
+  })
 
-  if (!studioId) throw new Error('studioId requerido')
+  await setStudioSuspended(data.studioId, data.suspend, data.reason)
 
-  await setStudioSuspended(studioId, suspend, reason)
-
-  revalidatePath(`/platform/studios/${studioId}`)
+  revalidatePath(`/platform/studios/${data.studioId}`)
   revalidatePath('/platform/studios')
   revalidatePath('/platform')
 }
 
 export async function grantFeatureOverrideAction(formData: FormData) {
   const ctx = await requirePlatformAdmin()
-  const studioId = String(formData.get('studioId') ?? '')
-  const featureKey = String(formData.get('featureKey') ?? '').trim()
-  const isEnabled = formData.get('isEnabled') === '1'
-  const limitRaw = String(formData.get('limitValue') ?? '').trim()
-  const reason = String(formData.get('reason') ?? '').trim() || null
-  const expires = String(formData.get('expiresAt') ?? '').trim() || null
 
-  if (!studioId) throw new Error('studioId requerido')
-  if (!featureKey) throw new Error('featureKey requerido')
+  const limitRaw = String(formData.get('limitValue') ?? '').trim()
+  const expiresRaw = String(formData.get('expiresAt') ?? '').trim()
+  const data = featureOverrideSchema.parse({
+    studioId: String(formData.get('studioId') ?? ''),
+    featureKey: String(formData.get('featureKey') ?? '').trim(),
+    isEnabled: formData.get('isEnabled') === '1',
+    limitValue: limitRaw ? Number(limitRaw) : null,
+    reason: String(formData.get('reason') ?? '').trim() || null,
+    expiresAt: expiresRaw ? new Date(expiresRaw).toISOString() : null,
+  })
 
   await grantStudioFeatureOverride({
-    studioId,
-    featureKey,
-    isEnabled,
-    limitValue: limitRaw ? Number(limitRaw) : null,
-    reason,
-    expiresAt: expires ? new Date(expires).toISOString() : null,
+    ...data,
     grantedBy: ctx.userId,
   })
 
-  revalidatePath(`/platform/studios/${studioId}`)
+  revalidatePath(`/platform/studios/${data.studioId}`)
 }
 
 export async function removeFeatureOverrideAction(formData: FormData) {
   await requirePlatformAdmin()
-  const overrideId = String(formData.get('overrideId') ?? '')
-  const studioId = String(formData.get('studioId') ?? '')
-  if (!overrideId) throw new Error('overrideId requerido')
+  const studioIdRaw = String(formData.get('studioId') ?? '')
+  const data = removeOverrideSchema.parse({
+    overrideId: String(formData.get('overrideId') ?? ''),
+    studioId: studioIdRaw || undefined,
+  })
 
-  await removeStudioFeatureOverride(overrideId)
+  await removeStudioFeatureOverride(data.overrideId)
 
-  if (studioId) revalidatePath(`/platform/studios/${studioId}`)
+  if (data.studioId) revalidatePath(`/platform/studios/${data.studioId}`)
 }
