@@ -4156,6 +4156,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_asset_to_collection_atomic: {
+        Args: { p_asset_id: string; p_collection_id: string }
+        Returns: string
+      }
       auth_is_admin_or_owner: { Args: never; Returns: boolean }
       auth_is_platform_admin: { Args: never; Returns: boolean }
       auth_is_staff_or_above: { Args: never; Returns: boolean }
