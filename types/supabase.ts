@@ -251,6 +251,7 @@ export type Database = {
           client_name: string
           client_phone: string | null
           client_whatsapp: string | null
+          conversion_started_at: string | null
           created_at: string
           event_date: string
           event_end_time: string | null
@@ -287,6 +288,7 @@ export type Database = {
           client_name: string
           client_phone?: string | null
           client_whatsapp?: string | null
+          conversion_started_at?: string | null
           created_at?: string
           event_date: string
           event_end_time?: string | null
@@ -323,6 +325,7 @@ export type Database = {
           client_name?: string
           client_phone?: string | null
           client_whatsapp?: string | null
+          conversion_started_at?: string | null
           created_at?: string
           event_date?: string
           event_end_time?: string | null

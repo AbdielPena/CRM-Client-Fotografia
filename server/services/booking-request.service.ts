@@ -497,16 +497,40 @@ async function convertBookingToClientBundle(params: {
 } | null> {
   const { row } = params
 
-  // Idempotencia: si ya se convirtió, skip. Tiene una pequeña race window
-  // (dos requests concurrentes pueden ambos pasar el check). En la práctica
-  // está protegida porque approveBookingRequest ya hizo `transition` con
-  // un UPDATE atómico de status que sólo el primer request gana.
-  // TODO: agregar columna `conversion_started_at` como advisory lock para
-  // cubrir el caso patológico de dos llamadas directas a este service sin
-  // pasar por approveBookingRequest.
+  // ─── Advisory lock atómico ──────────────────────────────────────────────
+  // Previene doble conversión:
+  //   - doble click en el botón "Aprobar"
+  //   - dos requests concurrentes a este service sin pasar por approveBookingRequest
+  //
+  // El primer request hace UPDATE conversion_started_at = now() WHERE
+  // conversion_started_at IS NULL. Solo uno gana. Los demás reciben 0 filas
+  // y devuelven null. Si la conversión falla, conversion_started_at queda
+  // set pero client_id null — un reset manual o cleanup cron lo libera.
   if (row.client_id || row.project_id) {
     console.log(
       `[convertBookingToClientBundle] booking ${params.requestId} ya tiene client/project — skip`,
+    )
+    return null
+  }
+
+  const lockSvc = createSupabaseServiceClient()
+  const { data: lockResult, error: lockErr } = await lockSvc
+    .from('booking_requests')
+    .update({ conversion_started_at: new Date().toISOString() })
+    .eq('id', params.requestId)
+    .is('conversion_started_at', null)
+    .is('client_id', null)
+    .select('id')
+    .maybeSingle()
+
+  if (lockErr) {
+    console.error('[convertBookingToClientBundle] lock failed', lockErr)
+    throw lockErr
+  }
+  if (!lockResult) {
+    // Otra request ya está convirtiendo (o ya convirtió y dejó client_id set).
+    console.log(
+      `[convertBookingToClientBundle] booking ${params.requestId} conversion en progreso o completada por otro request — skip`,
     )
     return null
   }
