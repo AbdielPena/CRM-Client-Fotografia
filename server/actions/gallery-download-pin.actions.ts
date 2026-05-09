@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { z } from "zod"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import {
@@ -11,6 +12,26 @@ import {
   validatePin,
 } from "@/server/services/gallery-download-pin.service"
 
+// Schemas
+const uuidSchema = z.string().uuid("ID inválido")
+
+const createPinSchema = z.object({
+  label: z.string().max(80).nullable(),
+  resolution: z.enum(["original", "web"]).default("original"),
+  maxDownloads: z.number().int().min(0).max(10000).default(0),
+  expiresAt: z.string().datetime().nullable(),
+})
+
+const validatePinSchema = z.object({
+  galleryId: uuidSchema,
+  // PIN: 4-12 dígitos. Sanitizamos antes de la regex para resistir
+  // espacios o copy-paste con junk.
+  rawPin: z
+    .string()
+    .transform((s) => s.replace(/\s/g, "").trim())
+    .pipe(z.string().regex(/^\d{4,12}$/, "PIN debe ser 4-12 dígitos")),
+})
+
 // ─── Admin actions ──────────────────────────────────────────────────────────
 
 export async function createPinAction(
@@ -18,18 +39,18 @@ export async function createPinAction(
   formData: FormData,
 ): Promise<{ id: string; rawPin: string; last4: string }> {
   const session = await requireStudioAuth()
-  const label = String(formData.get("label") ?? "").trim() || null
-  const resolution =
-    String(formData.get("resolution") ?? "original") === "web" ? "web" : "original"
-  const maxDownloads = Math.max(0, Number(formData.get("maxDownloads") ?? 0))
+  uuidSchema.parse(galleryId)
+
   const expiresRaw = String(formData.get("expiresAt") ?? "").trim()
-  const expiresAt = expiresRaw ? new Date(expiresRaw).toISOString() : null
+  const data = createPinSchema.parse({
+    label: String(formData.get("label") ?? "").trim() || null,
+    resolution: String(formData.get("resolution") ?? "original"),
+    maxDownloads: Number(formData.get("maxDownloads") ?? 0),
+    expiresAt: expiresRaw ? new Date(expiresRaw).toISOString() : null,
+  })
 
   const result = await createPin(session.studioId, galleryId, {
-    label,
-    resolution,
-    maxDownloads,
-    expiresAt,
+    ...data,
     createdBy: session.userId,
   })
 
@@ -72,10 +93,10 @@ export async function validatePinAndConsumeAction(input: {
   resolution: "original" | "web"
   remaining: number | null
 }> {
-  const validated = await validatePin(input.galleryId, input.rawPin)
-  // Consumimos al validar (cada validación cuenta como un uso). Para que solo
-  // cuente cuando efectivamente descarga, llamar consumePin desde el endpoint
-  // de descarga después de servir el archivo.
+  // Acción pública: validación zod estricta resiste UUIDs malformados,
+  // PINs no numéricos, payloads gigantes y otros vectores de abuse.
+  const data = validatePinSchema.parse(input)
+  const validated = await validatePin(data.galleryId, data.rawPin)
   await consumePin(validated.pinId)
   return {
     ok: true as const,

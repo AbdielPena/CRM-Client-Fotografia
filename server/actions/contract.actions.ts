@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
+import { z } from "zod"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import {
   createContract,
@@ -13,6 +14,24 @@ import {
   deleteContractTemplate,
 } from "@/server/services/contract.service"
 import { createContractSchema } from "@/lib/validations/contract.schema"
+
+// Schemas para templates (HTML user-input — limitar tamaño y validar tipos)
+const MAX_BODY_HTML = 200_000 // ~200KB suficiente para contratos largos
+
+const templateBaseSchema = z.object({
+  name: z.string().min(1, "Nombre requerido").max(120, "Máximo 120 caracteres"),
+  description: z.string().max(500).nullable(),
+  bodyHtml: z
+    .string()
+    .min(1, "El cuerpo no puede estar vacío")
+    .max(MAX_BODY_HTML, "El contrato es demasiado largo"),
+  isDefault: z.boolean(),
+  defaultValidityDays: z.number().int().min(0).max(3650).nullable(),
+})
+
+const templateUpdateSchema = templateBaseSchema.partial().extend({
+  isActive: z.boolean().optional(),
+})
 
 export async function createContractAction(formData: FormData) {
   const session = await requireStudioAuth()
@@ -72,20 +91,23 @@ function parseValidityDays(raw: FormDataEntryValue | null): number | null {
 
 export async function createContractTemplateAction(formData: FormData) {
   const session = await requireStudioAuth()
-  const name = String(formData.get("name") ?? "").trim()
-  const description = String(formData.get("description") ?? "").trim() || null
-  const bodyHtml = String(formData.get("bodyHtml") ?? "")
-  const isDefault = formData.get("isDefault") === "true"
-  const defaultValidityDays = parseValidityDays(formData.get("defaultValidityDays"))
 
-  if (!name) return { error: { name: ["El nombre es requerido"] } }
-  if (!bodyHtml.trim()) return { error: { bodyHtml: ["El cuerpo no puede estar vacío"] } }
+  const parsed = templateBaseSchema.safeParse({
+    name: String(formData.get("name") ?? "").trim(),
+    description: String(formData.get("description") ?? "").trim() || null,
+    bodyHtml: String(formData.get("bodyHtml") ?? ""),
+    isDefault: formData.get("isDefault") === "true",
+    defaultValidityDays: parseValidityDays(formData.get("defaultValidityDays")),
+  })
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors }
+  }
 
   try {
     const tpl = await createContractTemplate({
       studioId: session.studioId,
       actorId: session.userId,
-      data: { name, description, bodyHtml, isDefault, defaultValidityDays },
+      data: parsed.data,
     })
     revalidatePath("/settings/contracts")
     return { success: true, templateId: tpl.id }
@@ -99,15 +121,26 @@ export async function updateContractTemplateAction(
   formData: FormData,
 ) {
   const session = await requireStudioAuth()
+  if (!z.string().uuid().safeParse(templateId).success) {
+    return { error: { _: ["templateId inválido"] } }
+  }
 
-  const patch: Parameters<typeof updateContractTemplate>[0]["patch"] = {}
-  if (formData.has("name")) patch.name = String(formData.get("name") ?? "")
-  if (formData.has("description")) patch.description = String(formData.get("description") ?? "")
-  if (formData.has("bodyHtml")) patch.bodyHtml = String(formData.get("bodyHtml") ?? "")
-  if (formData.has("isDefault")) patch.isDefault = formData.get("isDefault") === "true"
-  if (formData.has("isActive")) patch.isActive = formData.get("isActive") === "true"
+  // Construir solo los campos presentes en formData
+  const raw: Record<string, unknown> = {}
+  if (formData.has("name")) raw.name = String(formData.get("name") ?? "").trim()
+  if (formData.has("description")) {
+    raw.description = String(formData.get("description") ?? "").trim() || null
+  }
+  if (formData.has("bodyHtml")) raw.bodyHtml = String(formData.get("bodyHtml") ?? "")
+  if (formData.has("isDefault")) raw.isDefault = formData.get("isDefault") === "true"
+  if (formData.has("isActive")) raw.isActive = formData.get("isActive") === "true"
   if (formData.has("defaultValidityDays")) {
-    patch.defaultValidityDays = parseValidityDays(formData.get("defaultValidityDays"))
+    raw.defaultValidityDays = parseValidityDays(formData.get("defaultValidityDays"))
+  }
+
+  const parsed = templateUpdateSchema.safeParse(raw)
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors }
   }
 
   try {
@@ -115,7 +148,7 @@ export async function updateContractTemplateAction(
       studioId: session.studioId,
       actorId: session.userId,
       id: templateId,
-      patch,
+      patch: parsed.data,
     })
     revalidatePath("/settings/contracts")
     revalidatePath(`/settings/contracts/${templateId}`)
