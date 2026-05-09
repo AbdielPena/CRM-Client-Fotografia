@@ -3,6 +3,7 @@ import 'server-only'
 import { invoicesRepo } from '@/server/repositories'
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import type { CreateInvoiceInput } from '@/lib/validations/invoice.schema'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
 
 // ----------------------------------------------------------------------------
@@ -61,7 +62,7 @@ export async function getInvoices(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("INVOICE_LIST_FAILED", error, { studioId })
 
   const total = count ?? 0
   return {
@@ -91,7 +92,7 @@ export async function getInvoiceById(studioId: string, invoiceId: string) {
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("INVOICE_GET_FAILED", error, { studioId, invoiceId })
   if (!data) return null
 
   // Ordenar items por sort_order y payments por received_at desc en JS
@@ -130,7 +131,7 @@ async function assertClientActive(
     .eq('id', clientId)
     .eq('studio_id', studioId)
     .maybeSingle()
-  if (error) throw new Error(`[${context}] ${error.message}`)
+  if (error) throwServiceError("CLIENT_LOOKUP_FAILED", error, { context, clientId, studioId })
   if (!data) throw new Error('CLIENT_NOT_FOUND')
   if (data.deleted_at) throw new Error('CLIENT_TRASHED')
 }
@@ -270,10 +271,7 @@ export async function markInvoicePaid(
     confirmed_by: actorId || null,
   })
 
-  if (error) {
-    console.error('[markInvoicePaid] failed', error)
-    throw new Error(error.message)
-  }
+  if (error) throwServiceError("PAYMENT_RECORD_FAILED", error, { studioId, invoiceId })
 
   await logActivity({
     studioId,
@@ -337,8 +335,8 @@ export async function getFinanceSummary(studioId: string) {
       .is('deleted_at', null),
   ])
 
-  if (invoicesResult.error) throw new Error(invoicesResult.error.message)
-  if (paymentsResult.error) throw new Error(paymentsResult.error.message)
+  if (invoicesResult.error) throwServiceError("FINANCE_INVOICES_FAILED", invoicesResult.error, { studioId })
+  if (paymentsResult.error) throwServiceError("FINANCE_PAYMENTS_FAILED", paymentsResult.error, { studioId })
 
   type InvoiceRow = { status: string | null; total: number | string; currency: string | null }
   type PaymentRow = { amount: number | string; received_at: string | null; status: string | null }

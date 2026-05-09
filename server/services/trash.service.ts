@@ -2,6 +2,7 @@ import 'server-only'
 
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
 
 // ----------------------------------------------------------------------------
@@ -70,7 +71,7 @@ export async function getTrashedProjects(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("TRASH_OP_FAILED", error)
 
   const items = (data ?? []).map((row) => {
     const r = row as Record<string, unknown>
@@ -130,7 +131,7 @@ export async function getTrashedContracts(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("TRASH_OP_FAILED", error)
 
   const items = (data ?? []).map((row) => {
     const r = row as Record<string, unknown>
@@ -191,7 +192,7 @@ export async function getTrashedInvoices(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("TRASH_OP_FAILED", error)
 
   const items = (data ?? []).map((row) => {
     const r = row as Record<string, unknown>
@@ -251,7 +252,7 @@ export async function getTrashedGalleries(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("TRASH_OP_FAILED", error)
 
   const items = (data ?? []).map((row) => {
     const r = row as Record<string, unknown>
@@ -309,7 +310,7 @@ export async function getTrashedDeliveries(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("TRASH_OP_FAILED", error)
 
   const items = (data ?? []).map((row) => {
     const r = row as Record<string, unknown>
@@ -438,7 +439,7 @@ export async function restoreEntity(
   }
   // @ts-ignore - RPCs nuevas, tipos no generados
   const { error } = await supabase.rpc(cfg.restore, args)
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("TRASH_OP_FAILED", error)
 
   await logActivity({
     studioId,
@@ -463,7 +464,7 @@ export async function permanentlyDeleteEntity(
   }
   // @ts-ignore - RPCs nuevas, tipos no generados
   const { error } = await supabase.rpc(cfg.hardDelete, args)
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("TRASH_OP_FAILED", error)
 
   await logActivity({
     studioId,

@@ -3,6 +3,7 @@ import 'server-only'
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
 import { clientsRepo } from '@/server/repositories'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
 import type { Database } from '@/types/supabase'
 import type {
@@ -48,7 +49,7 @@ export async function getClients(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("CLIENT_OP_FAILED", error)
 
   const items = (data ?? []).map((c: ClientRow & { projects?: { deleted_at: string | null }[] }) => ({
     ...c,
@@ -86,7 +87,7 @@ export async function getClientById(studioId: string, clientId: string) {
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("CLIENT_OP_FAILED", error)
   if (!data) return null
 
   // Filtrar relaciones soft-deleted en cliente-side para respetar la semántica previa
@@ -278,7 +279,7 @@ export async function deleteClient(
     if (error.message?.includes('CLIENT_NOT_FOUND')) {
       throw new Error('CLIENT_NOT_FOUND')
     }
-    throw new Error(error.message)
+    throwServiceError("CLIENT_DELETE_FAILED", error, { studioId, clientId })
   }
 
   await logActivity({
@@ -315,7 +316,7 @@ export async function restoreClient(
     if (error.message?.includes('CLIENT_NOT_TRASHED')) {
       throw new Error('CLIENT_NOT_TRASHED')
     }
-    throw new Error(error.message)
+    throwServiceError("CLIENT_RESTORE_FAILED", error, { studioId, clientId })
   }
 
   await logActivity({
@@ -356,7 +357,7 @@ export async function permanentlyDeleteClient(
     if (error.message?.includes('CLIENT_NOT_TRASHED')) {
       throw new Error('CLIENT_NOT_TRASHED')
     }
-    throw new Error(error.message)
+    throwServiceError("CLIENT_RESTORE_FAILED", error, { studioId, clientId })
   }
 
   await logActivity({
@@ -410,7 +411,7 @@ export async function getTrashedClients(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("CLIENT_OP_FAILED", error)
 
   // Cast explícito al tipo TrashedClient (deletion_reason no está en tipos generados)
   const items = (data ?? []).map((row) => {

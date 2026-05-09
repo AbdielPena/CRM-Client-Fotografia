@@ -7,6 +7,7 @@ import type {
   CreateProjectInput,
   UpdateProjectInput,
 } from '@/lib/validations/project.schema'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
 import {
   syncProjectById,
@@ -53,7 +54,7 @@ export async function getProjects(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("PROJECT_OP_FAILED", error)
 
   const total = count ?? 0
   return {
@@ -84,7 +85,7 @@ export async function getProjectById(studioId: string, projectId: string) {
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("PROJECT_OP_FAILED", error)
   if (!data) return null
 
   // Filtrar y ordenar relaciones en JS para no depender de joins anidados complejos
@@ -134,7 +135,7 @@ async function assertClientActive(
     .eq('id', clientId)
     .eq('studio_id', studioId)
     .maybeSingle()
-  if (error) throw new Error(`[${context}] ${error.message}`)
+  if (error) throwServiceError("CLIENT_LOOKUP_FAILED", error, { context })
   if (!data) throw new Error('CLIENT_NOT_FOUND')
   if (data.deleted_at) throw new Error('CLIENT_TRASHED')
 }
@@ -250,7 +251,7 @@ export async function deleteProject(
     if (error.message?.includes('PROJECT_NOT_FOUND')) {
       throw new Error('PROJECT_NOT_FOUND')
     }
-    throw new Error(error.message)
+    throwServiceError("PROJECT_DELETE_FAILED", error, { studioId, projectId })
   }
 
   await logActivity({

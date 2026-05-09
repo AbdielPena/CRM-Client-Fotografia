@@ -3,6 +3,7 @@ import 'server-only'
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { clientsRepo } from '@/server/repositories'
 import type { CreateLeadInput, UpdateLeadInput } from '@/lib/validations/lead.schema'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
 
 export type LeadRow = Awaited<ReturnType<typeof getLeadById>>
@@ -41,7 +42,7 @@ export async function getLeads(
   }
 
   const { data, count, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("LEAD_OP_FAILED", error)
 
   const total = count ?? 0
   return {
@@ -63,7 +64,7 @@ export async function getLeadsByStatus(studioId: string) {
     .order('status', { ascending: true })
     .order('created_at', { ascending: false })
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("LEAD_OP_FAILED", error)
 
   const grouped: Record<string, typeof data> = {}
   for (const lead of data ?? []) {
@@ -89,7 +90,7 @@ export async function getLeadById(studioId: string, leadId: string) {
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("LEAD_OP_FAILED", error)
   if (!data) return null
 
   return {
@@ -134,7 +135,7 @@ export async function createLead(
     .select('*')
     .single()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("LEAD_OP_FAILED", error)
 
   await logActivity({
     studioId,
@@ -189,7 +190,7 @@ export async function updateLead(
     .select('*')
     .single()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("LEAD_OP_FAILED", error)
 
   await logActivity({
     studioId,
@@ -228,7 +229,7 @@ export async function updateLeadStatus(
     .select('*')
     .single()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("LEAD_OP_FAILED", error)
 
   await logActivity({
     studioId,
@@ -263,7 +264,7 @@ export async function deleteLead(
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', leadId)
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("LEAD_OP_FAILED", error)
 
   await logActivity({
     studioId,
@@ -289,7 +290,7 @@ export async function convertLeadToClient(
     .is('deleted_at', null)
     .maybeSingle()
 
-  if (findError) throw new Error(findError.message)
+  if (findError) throwServiceError("LEAD_FIND_FAILED", findError)
   if (!lead) throw new Error('Lead no encontrado')
 
   const client = await clientsRepo.create({
@@ -311,7 +312,7 @@ export async function convertLeadToClient(
     })
     .eq('id', leadId)
 
-  if (updateError) throw new Error(updateError.message)
+  if (updateError) throwServiceError("LEAD_UPDATE_FAILED", updateError)
 
   await logActivity({
     studioId,
