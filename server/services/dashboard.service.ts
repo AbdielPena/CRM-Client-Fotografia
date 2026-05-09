@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createSupabaseServerClient } from '@/server/supabase/server'
+import { throwServiceError } from '@/lib/utils/api-error'
 
 /**
  * Métricas del dashboard. Todo lo que vive aquí se usa solo desde
@@ -50,7 +51,7 @@ export async function getMonthlyRevenue(
     .is('deleted_at', null)
     .gte('received_at', start.toISOString())
 
-  if (error) throw new Error(`[getMonthlyRevenue] ${error.message}`)
+  if (error) throwServiceError("DASHBOARD_REVENUE_FAILED", error)
 
   // Pre-inicializa los buckets para evitar huecos en el gráfico.
   const buckets = new Map<string, MonthlyRevenueBucket>()
@@ -160,7 +161,7 @@ export async function getTopPackages(
     .not('package_id', 'is', null)
     .gte('created_at', start.toISOString())
 
-  if (error) throw new Error(`[getTopPackages] ${error.message}`)
+  if (error) throwServiceError("DASHBOARD_TOP_PACKAGES_FAILED", error)
 
   type Row = {
     package_id: string | null
@@ -215,7 +216,7 @@ export async function getLeadConversion(
     .is('deleted_at', null)
     .gte('created_at', start.toISOString())
 
-  if (error) throw new Error(`[getLeadConversion] ${error.message}`)
+  if (error) throwServiceError("DASHBOARD_LEAD_CONVERSION_FAILED", error)
 
   const rows = (data as Array<{ status: string }> | null) ?? []
   const total = rows.length
@@ -236,7 +237,7 @@ export async function getProjectsByStatus(studioId: string): Promise<ProjectsByS
     .eq('studio_id', studioId)
     .is('deleted_at', null)
 
-  if (error) throw new Error(`[getProjectsByStatus] ${error.message}`)
+  if (error) throwServiceError("DASHBOARD_PROJECTS_BY_STATUS_FAILED", error)
 
   const rows = (data as Array<{ status: string }> | null) ?? []
   const map = new Map<string, number>()
@@ -283,7 +284,7 @@ export async function getRecentActivity(
     .order('created_at', { ascending: false })
     .limit(limit)
 
-  if (error) throw new Error(`[getRecentActivity] ${error.message}`)
+  if (error) throwServiceError("DASHBOARD_RECENT_ACTIVITY_FAILED", error)
 
   type Row = {
     id: string
@@ -450,7 +451,7 @@ export async function getMonthPayments(
     .order('received_at', { ascending: false })
     .limit(limit)
 
-  if (error) throw new Error(`[getMonthPayments] ${error.message}`)
+  if (error) throwServiceError("DASHBOARD_MONTH_PAYMENTS_FAILED", error)
 
   type Row = {
     id: string

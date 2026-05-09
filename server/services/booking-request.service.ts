@@ -6,6 +6,7 @@ import {
   createSupabaseServerClient,
 } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
+import { throwServiceError } from '@/lib/utils/api-error'
 import {
   enqueueEmail,
   renderBookingApprovedForClient,
@@ -318,7 +319,7 @@ export async function listBookingRequestsForStudio(
   if (opts.limit) query = query.limit(opts.limit)
 
   const { data, error } = await query
-  if (error) throw new Error(`[listBookingRequestsForStudio] ${error.message}`)
+  if (error) throwServiceError("BOOKING_LIST_FAILED", error)
 
   // Supabase retorna `package` como array en joins; lo normalizamos.
   const rows = (data ?? []) as unknown as Array<Record<string, unknown>>
@@ -349,7 +350,7 @@ export async function getBookingRequestById(
     .eq('studio_id', studioId)
     .maybeSingle()
 
-  if (error) throw new Error(`[getBookingRequestById] ${error.message}`)
+  if (error) throwServiceError("BOOKING_GET_FAILED", error)
   if (!data) return null
 
   const pkgRaw = (data as { package: unknown }).package
@@ -366,7 +367,7 @@ export async function countPendingBookingRequests(
     .select('*', { count: 'exact', head: true })
     .eq('studio_id', studioId)
     .eq('status', 'pending_review')
-  if (error) throw new Error(`[countPendingBookingRequests] ${error.message}`)
+  if (error) throwServiceError("BOOKING_COUNT_FAILED", error)
   return count ?? 0
 }
 

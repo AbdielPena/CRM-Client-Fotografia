@@ -2,6 +2,7 @@
 
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
+import { throwServiceError } from '@/lib/utils/api-error'
 
 export type ProjectStatus = {
   id: string
@@ -22,7 +23,7 @@ export async function getProjectStatuses(studioId: string): Promise<ProjectStatu
     .eq('studio_id', studioId)
     .order('position', { ascending: true })
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
   return (data ?? []) as ProjectStatus[]
 }
 
@@ -51,7 +52,7 @@ export async function createProjectStatus(
     .select()
     .single()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
   return data as ProjectStatus
 }
 
@@ -68,7 +69,7 @@ export async function updateProjectStatus(
     .eq('id', statusId)
     .eq('studio_id', studioId)
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
 }
 
 /** Reordena los estados (recibe array de IDs en nuevo orden). */
@@ -121,7 +122,7 @@ export async function deleteProjectStatus(
     .eq('id', statusId)
     .eq('studio_id', studioId)
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
 }
 
 /** Cambia el estado de un proyecto (por label). */
@@ -138,5 +139,5 @@ export async function setProjectStatus(
     .eq('studio_id', studioId)
     .is('deleted_at', null)
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
 }

@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createSupabaseServerClient } from '@/server/supabase/server'
+import { throwServiceError } from '@/lib/utils/api-error'
 
 type NoteEntity = 'lead' | 'client' | 'project' | 'booking_request'
 
@@ -35,7 +36,7 @@ export async function createNote(
     .select('*')
     .single()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("NOTE_OP_FAILED", error)
   return data
 }
 
@@ -57,5 +58,5 @@ export async function deleteNote(studioId: string, noteId: string) {
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', noteId)
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("NOTE_OP_FAILED", error)
 }

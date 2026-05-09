@@ -3,6 +3,7 @@ import 'server-only'
 import slugify from 'slugify'
 
 import { packagesRepo } from '@/server/repositories'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import type {
   CreatePackageInput,
@@ -154,6 +155,6 @@ export async function deletePackage(studioId: string, packageId: string) {
     if (error.message?.includes('PACKAGE_NOT_FOUND')) {
       throw new Error('PACKAGE_NOT_FOUND')
     }
-    throw new Error(error.message)
+    throwServiceError("PACKAGE_DELETE_FAILED", error)
   }
 }

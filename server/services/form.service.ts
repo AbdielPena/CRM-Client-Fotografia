@@ -9,6 +9,7 @@ import {
   validateFormData,
   type FormSchema,
 } from '@/lib/forms/types'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
 import { notify } from './notification.service'
 import {
@@ -154,7 +155,7 @@ export async function listPackagesLinkedToTemplate(params: {
     .select('package_id')
     .eq('studio_id', params.studioId)
     .eq('form_template_id', params.templateId)
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("FORM_OP_FAILED", error)
   return (data as Array<{ package_id: string }> | null ?? []).map((r) => r.package_id)
 }
 
@@ -176,7 +177,7 @@ export async function setPackagesLinkedToTemplate(params: {
     .select('id, package_id')
     .eq('studio_id', params.studioId)
     .eq('form_template_id', params.templateId)
-  if (readErr) throw new Error(readErr.message)
+  if (readErr) throwServiceError("FORM_PACKAGES_READ_FAILED", readErr)
 
   const currentRows =
     (current as Array<{ id: string; package_id: string }> | null) ?? []
@@ -198,7 +199,7 @@ export async function setPackagesLinkedToTemplate(params: {
         sort_order: i,
       })),
     )
-    if (insErr) throw new Error(insErr.message)
+    if (insErr) throwServiceError("FORM_PACKAGES_INSERT_FAILED", insErr)
   }
 
   if (toRemove.length > 0) {
@@ -206,7 +207,7 @@ export async function setPackagesLinkedToTemplate(params: {
       .from('package_forms')
       .delete()
       .in('id', toRemove)
-    if (delErr) throw new Error(delErr.message)
+    if (delErr) throwServiceError("FORM_PACKAGES_DELETE_FAILED", delErr)
   }
 
   await logActivity({
@@ -262,7 +263,7 @@ export async function listFormResponsesForBooking(params: {
     .eq('booking_request_id', params.bookingRequestId)
     .order('created_at', { ascending: true })
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("FORM_OP_FAILED", error)
 
   type Row = {
     id: string
@@ -329,7 +330,7 @@ export async function listFormResponsesForProject(params: {
     .or(orFilter)
     .order('created_at', { ascending: true })
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("FORM_OP_FAILED", error)
 
   type Row = {
     id: string
@@ -403,7 +404,7 @@ export async function createFormResponsesForBooking(params: {
     .eq('package_id', params.packageId)
     .order('sort_order', { ascending: true })
 
-  if (linksErr) throw new Error(`[createFormResponsesForBooking] ${linksErr.message}`)
+  if (linksErr) throwServiceError("FORM_BOOKING_LINKS_FAILED", linksErr)
   if (!links || links.length === 0) return []
 
   // Ya existentes para idempotencia
@@ -513,7 +514,7 @@ export async function sendFormToClient(params: {
     .eq('id', params.responseId)
     .eq('studio_id', params.studioId)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("FORM_OP_FAILED", error)
   if (!data) throw new Error('FORM_RESPONSE_NOT_FOUND')
 
   const row = data as {
@@ -540,7 +541,7 @@ export async function sendFormToClient(params: {
     .select('name, email, primary_color')
     .eq('id', params.studioId)
     .maybeSingle()
-  if (studioErr) throw new Error(studioErr.message)
+  if (studioErr) throwServiceError("STUDIO_LOOKUP_FAILED", studioErr)
   if (!studio) throw new Error('STUDIO_NOT_FOUND')
 
   const studioRow = studio as {
@@ -634,7 +635,7 @@ export async function getPublicFormResponse(accessToken: string): Promise<{
     .eq('access_token', accessToken)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("FORM_OP_FAILED", error)
   if (!response) return null
 
   const templateRaw = (response as { template: unknown }).template
@@ -704,7 +705,7 @@ export async function saveFormProgress(
     .select('id, status, schema_snapshot')
     .eq('access_token', accessToken)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("FORM_OP_FAILED", error)
   if (!response) throw new Error('Formulario no encontrado')
   if (response.status === 'completed' || response.status === 'expired') {
     throw new Error('Este formulario ya no acepta cambios')
@@ -721,7 +722,7 @@ export async function saveFormProgress(
     .eq('access_token', accessToken)
     .in('status', ['sent', 'in_progress'])
 
-  if (updateErr) throw new Error(updateErr.message)
+  if (updateErr) throwServiceError("FORM_UPDATE_FAILED", updateErr)
 }
 
 /** Submit final del formulario. Valida contra schema_snapshot. */
@@ -736,7 +737,7 @@ export async function submitPublicForm(
     .select('id, studio_id, status, schema_snapshot, booking_request_id, form_template_id')
     .eq('access_token', accessToken)
     .maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) throwServiceError("FORM_OP_FAILED", error)
   if (!response) throw new Error('Formulario no encontrado')
   if (response.status === 'completed') {
     throw new Error('Este formulario ya fue enviado')
@@ -768,7 +769,7 @@ export async function submitPublicForm(
     .eq('access_token', accessToken)
     .in('status', ['sent', 'in_progress', 'pending'])
 
-  if (updateErr) throw new Error(updateErr.message)
+  if (updateErr) throwServiceError("FORM_UPDATE_FAILED", updateErr)
 
   // Notificar al studio (best-effort)
   try {

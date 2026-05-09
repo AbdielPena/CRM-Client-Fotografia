@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createSupabaseServiceClient } from '@/server/supabase/service'
+import { throwServiceError } from '@/lib/utils/api-error'
 import { sendEmail as sendViaSmtp } from './smtp.service'
 import type { Database } from '@/types/supabase'
 
@@ -59,7 +60,7 @@ export async function enqueueEmail(input: EnqueueEmailInput): Promise<string> {
     .select('id')
     .single()
 
-  if (error) throw new Error(`[enqueueEmail] ${error.message}`)
+  if (error) throwServiceError("EMAIL_ENQUEUE_FAILED", error)
   const queueId = (data as { id: string }).id
 
   // En dev o cuando SMTP está configurado: intentar envío inmediato.
