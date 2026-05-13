@@ -20,6 +20,8 @@ public/dev-uploads/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.hub.local
+.env.*.local
 
 # Prisma
 prisma/migrations/*.sql.bak
