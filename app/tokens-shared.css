@@ -1,0 +1,71 @@
+/* ============================================================
+ * @studio/design-tokens — versión SHARED-ONLY
+ *
+ * Para los 4 módulos del ecosistema (CRM, Facturación, Finanzas,
+ * Inventario) que ya tienen su propio design system interno.
+ *
+ * SOLO expone los tokens cross-system (--studio-*) usados por:
+ *   - AppSwitcher (colores por subapp)
+ *   - Cualquier widget compartido (badges, cards de cross-link)
+ *
+ * NO sobreescribe los tokens internos del módulo (--brand, --primary,
+ * --background, etc.). Cada módulo mantiene su estética propia mientras
+ * gana coherencia visual donde es necesaria (switcher, branding).
+ *
+ * Source of truth completo: studio-hub/src/app/tokens.css
+ * ============================================================ */
+
+:root {
+  /* Marca global del Suite */
+  --studio-brand-50:  246 99% 97%;
+  --studio-brand-100: 244 100% 94%;
+  --studio-brand-200: 243 100% 88%;
+  --studio-brand-300: 244 100% 78%;
+  --studio-brand-400: 247 96% 67%;
+  --studio-brand-500: 250 92% 60%;
+  --studio-brand-600: 252 84% 53%;
+  --studio-brand-700: 252 73% 47%;
+  --studio-brand-800: 252 67% 39%;
+  --studio-brand-900: 251 57% 32%;
+  --studio-brand-950: 254 60% 20%;
+
+  /* Acentos por subapp (consistentes entre todos los frontends) */
+  --studio-hub:       250 92% 60%;
+  --studio-crm:       273 76% 60%;
+  --studio-billing:   199 89% 48%;
+  --studio-finance:   158 64% 48%;
+  --studio-inventory: 38 95% 56%;
+
+  /* Sombras del Suite (consistente al renderizar surfaces premium) */
+  --studio-shadow-sm: 0 1px 2px 0 hsl(240 5% 10% / 0.05);
+  --studio-shadow-md: 0 4px 6px -1px hsl(240 5% 10% / 0.07), 0 2px 4px -2px hsl(240 5% 10% / 0.04);
+  --studio-shadow-lg: 0 10px 30px -10px hsl(240 5% 10% / 0.12), 0 4px 12px -4px hsl(240 5% 10% / 0.06);
+  --studio-shadow-xl: 0 25px 50px -12px hsl(240 5% 10% / 0.20);
+
+  /* Radii armónicos */
+  --studio-radius-sm: 8px;
+  --studio-radius-md: 12px;
+  --studio-radius-lg: 16px;
+  --studio-radius-xl: 20px;
+  --studio-radius-2xl: 28px;
+
+  /* Ease premium */
+  --studio-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme='dark'], .dark {
+  --studio-shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.4);
+  --studio-shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.45), 0 2px 4px -2px hsl(0 0% 0% / 0.3);
+  --studio-shadow-lg: 0 10px 30px -10px hsl(0 0% 0% / 0.55), 0 4px 12px -4px hsl(0 0% 0% / 0.3);
+  --studio-shadow-xl: 0 25px 50px -12px hsl(0 0% 0% / 0.7);
+}
+
+/* Reduce motion respect (accesibilidad cross-system) */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
