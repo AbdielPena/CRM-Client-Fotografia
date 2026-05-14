@@ -1,27 +1,27 @@
 name: Deploy to VPS (StudioFlow CRM)
 
 # Despliega a IONOS VPS (CloudPanel) vía SSH:
-#   1. Conecta como root y sudo -u studioflow al directorio del sitio.
-#   2. git pull origin <BRANCH>
+#   1. Conecta directo como `studioflow` (no como root — least privilege).
+#   2. git fetch + reset --hard origin/<branch>
 #   3. npm ci
-#   4. prisma generate + (opcional) prisma migrate deploy
+#   4. prisma generate (best-effort si aplica)
 #   5. npm run build (Next.js)
 #   6. pm2 restart studioflow --update-env
+#   7. Smoke check /api/healthz (200 = OK).
 #
-# IMPORTANTE: este workflow está DISABLED hasta que se merge feat/hub-adapter → main.
-# Para activarlo:
-#   mv .github/workflows/deploy-vps.yml.disabled .github/workflows/deploy-vps.yml
-#
-# Secrets requeridos en el repo (Settings → Secrets and variables → Actions):
+# Secrets requeridos:
 #   SSH_HOST           = 108.175.15.195
-#   SSH_USER           = root
-#   SSH_PRIVATE_KEY    = contenido completo de la private key (~/.ssh/abbypixel_vps)
+#   SSH_USER           = studioflow
+#   SSH_PRIVATE_KEY    = contenido de /root/gha-deploy/id_ed25519 en el VPS
 #   SSH_PORT           = 22  (opcional)
-#   DEPLOY_BRANCH      = feat/hub-adapter (o main cuando se merge)
+#
+# La key SSH_PRIVATE_KEY está restringida al user `studioflow` del VPS
+# (authorized_keys), NO da acceso a root. Si se filtra, el atacante solo
+# puede tocar /home/studioflow/ y ejecutar pm2 restart del CRM.
 
 on:
   push:
-    branches: [main, feat/hub-adapter]
+    branches: [main]
     paths:
       - 'app/**'
       - 'components/**'
@@ -38,9 +38,9 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch a deployar (default: feat/hub-adapter)'
+        description: 'Branch a deployar'
         required: false
-        default: 'feat/hub-adapter'
+        default: 'main'
 
 concurrency:
   group: vps-deploy-studioflow
@@ -48,7 +48,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: SSH deploy to abbypixel-vps (studioflow)
+    name: SSH deploy → studioflow@abbypixel-vps
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +68,6 @@ jobs:
             echo "Configurar en: https://github.com/${{ github.repository }}/settings/secrets/actions"
             exit 1
           fi
-          echo "Secrets OK: SSH_HOST=$(echo $SSH_HOST | cut -c1-3)... SSH_USER=$SSH_USER"
 
       - name: Setup SSH key
         env:
@@ -88,41 +87,38 @@ jobs:
           SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
           DEPLOY_BRANCH: ${{ github.event.inputs.branch || github.ref_name }}
         run: |
-          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no "$SSH_USER@$SSH_HOST" "BRANCH=$DEPLOY_BRANCH bash -se" <<'REMOTE'
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no \
+            "$SSH_USER@$SSH_HOST" "BRANCH=$DEPLOY_BRANCH bash -lse" <<'REMOTE'
             set -e
-            sudo -u studioflow -H bash -lc "
-              cd /home/studioflow/htdocs/my.abbypixel.com
-              export NVM_DIR=\$HOME/.nvm
-              [ -s \$NVM_DIR/nvm.sh ] && . \$NVM_DIR/nvm.sh
+            cd ~/htdocs/my.abbypixel.com
+            export NVM_DIR=$HOME/.nvm
+            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" || true
 
-              echo === git pull origin \$BRANCH ===
-              git fetch origin
-              git checkout \$BRANCH
-              git pull origin \$BRANCH
+            echo "=== git fetch + reset --hard origin/$BRANCH ==="
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
 
-              echo === npm ci ===
-              npm ci --no-audit --no-fund
+            echo "=== npm ci ==="
+            npm ci --no-audit --no-fund --silent
 
-              echo === prisma generate ===
-              npx prisma generate
+            echo "=== prisma generate (best-effort) ==="
+            npx --no-install prisma generate 2>/dev/null || echo "(prisma no aplica o ya generado)"
 
-              echo === next build ===
-              npm run build
+            echo "=== next build ==="
+            npm run build
 
-              echo === pm2 restart ===
-              pm2 restart studioflow --update-env
+            echo "=== pm2 restart studioflow ==="
+            pm2 restart studioflow --update-env
 
-              echo === status ===
-              pm2 status studioflow
-            "
+            echo "=== status ==="
+            pm2 status studioflow
           REMOTE
 
       - name: Health check
         run: |
           sleep 8
-          code=$(curl -s -o /dev/null -w "%{http_code}" https://my.abbypixel.com/api/health)
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://my.abbypixel.com/api/healthz)
           echo "Health endpoint returned: $code"
           if [ "$code" != "200" ]; then
             echo "::warning::Health check non-200 (got $code) — verificar logs en VPS"
-            # No exit 1: el health puede tomar tiempo en levantar tras restart
           fi
