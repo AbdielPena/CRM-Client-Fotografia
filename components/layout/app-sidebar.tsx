@@ -33,6 +33,7 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
+import { AppSwitcher } from "@/components/app-switcher"
 import { ThemeDock } from "@/components/shared/theme-dock"
 import {
   Tooltip,
@@ -249,42 +250,21 @@ export function AppSidebar({
           "text-[hsl(var(--sidebar-foreground))]",
         )}
       >
-        {/* ======================== Header ======================== */}
+        {/* ======================== Header ========================
+            AppSwitcher: componente compartido del Studio Suite. Reemplaza el
+            brand custom del CRM por una versión consistente cross-system con
+            dropdown de los 5 destinos. currentSystem="crm" destaca este.
+            Toques `initial`/`studioName` quedan disponibles si se requiere
+            tooltip o sub-label en el futuro. */}
         <header
           className={cn(
-            "relative flex h-[64px] items-center gap-3 border-b border-[hsl(var(--sidebar-border))]",
-            collapsed ? "justify-center px-2" : "px-4",
+            "relative flex h-[64px] items-center border-b border-[hsl(var(--sidebar-border))]",
+            collapsed ? "justify-center px-2" : "px-3",
           )}
         >
-          <div
-            aria-hidden
-            className={cn(
-              "relative flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg",
-              "bg-brand text-brand-foreground text-sm font-semibold leading-none",
-            )}
-          >
-            {initial}
+          <div className="w-full">
+            <AppSwitcher currentSystem="crm" collapsed={collapsed} />
           </div>
-
-          <AnimatePresence initial={false}>
-            {!collapsed && (
-              <motion.div
-                key="brand-text"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}
-                className="flex min-w-0 flex-1 flex-col"
-              >
-                <p className="truncate text-sm font-semibold text-foreground leading-tight">
-                  {studioName}
-                </p>
-                <p className="truncate text-[11px] text-muted-foreground leading-tight">
-                  StudioFlow
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </header>
 
         {/* ======================== Navigation ======================== */}
