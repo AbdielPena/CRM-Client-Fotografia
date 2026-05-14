@@ -1,3 +1,8 @@
+/* Studio Suite — tokens compartidos cross-system (--studio-* vars).
+ * Cargado ANTES del Lumen design system propio del CRM para que no
+ * sobreescriba sus --brand/--primary internos. */
+@import "./tokens-shared.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
