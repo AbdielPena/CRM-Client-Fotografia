@@ -33,7 +33,6 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
-import { AppSwitcher } from "@/components/app-switcher"
 import { ThemeDock } from "@/components/shared/theme-dock"
 import {
   Tooltip,
@@ -251,20 +250,35 @@ export function AppSidebar({
         )}
       >
         {/* ======================== Header ========================
-            AppSwitcher: componente compartido del Studio Suite. Reemplaza el
-            brand custom del CRM por una versión consistente cross-system con
-            dropdown de los 5 destinos. currentSystem="crm" destaca este.
-            Toques `initial`/`studioName` quedan disponibles si se requiere
-            tooltip o sub-label en el futuro. */}
+            Brand simple del studio. Antes vivía el AppSwitcher cross-system
+            del hub federado (5 destinos, JWT corto). Tras la unificación a
+            monolito (F8 hub-kill), solo necesitamos identificar el studio. */}
         <header
           className={cn(
             "relative flex h-[64px] items-center border-b border-[hsl(var(--sidebar-border))]",
-            collapsed ? "justify-center px-2" : "px-3",
+            collapsed ? "justify-center px-2" : "gap-3 px-3",
           )}
         >
-          <div className="w-full">
-            <AppSwitcher currentSystem="crm" collapsed={collapsed} />
-          </div>
+          <Link
+            href="/dashboard"
+            className={cn(
+              "flex items-center gap-3 rounded-lg transition-colors hover:bg-[hsl(var(--sidebar-accent))/50]",
+              collapsed ? "size-10 justify-center" : "min-w-0 flex-1 px-2 py-1.5",
+            )}
+            title={studioName}
+          >
+            <span
+              aria-hidden
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-brand/70 text-sm font-bold text-brand-foreground shadow-sm"
+            >
+              {initial}
+            </span>
+            {!collapsed && (
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none text-foreground">
+                {studioName}
+              </span>
+            )}
+          </Link>
         </header>
 
         {/* ======================== Navigation ======================== */}
