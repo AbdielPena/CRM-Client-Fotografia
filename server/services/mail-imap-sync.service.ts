@@ -98,7 +98,7 @@ export async function syncMailAccount(
   // 2. Conectar IMAP + fetch
   let messages: FetchedMessage[] = []
   try {
-    const imapConfig = decryptAccountForImap(account)
+    const imapConfig = await decryptAccountForImap(account)
     const client = await connectImap(imapConfig)
     try {
       messages = await fetchNewMessages(client, {

@@ -128,7 +128,7 @@ export async function sendMail(
   // 5. Send via SMTP
   let smtpResult: { messageId: string; accepted: string[]; rejected: string[] }
   try {
-    const smtpConfig = decryptAccountForSmtp(account)
+    const smtpConfig = await decryptAccountForSmtp(account)
     const transporter = createSmtpTransport(smtpConfig)
 
     // Convertir attachments base64 → Buffer

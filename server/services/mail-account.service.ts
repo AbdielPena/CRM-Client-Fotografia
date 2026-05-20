@@ -59,25 +59,63 @@ export type MailAccountRow = {
 }
 
 // ============================================================================
-// Secret encryption (MVP: passthrough con prefix; futuro: Vault/pgsodium)
+// Secret encryption (V2: pgsodium AEAD via RPC mail_encrypt_password)
 // ============================================================================
 
 /**
- * MVP: almacena el password con prefijo "v1:" indicando version del schema.
- * Cuando se implemente Vault, este function cifrará con pgsodium.encrypt_aead
- * y devolverá un secret_id (UUID), no el password en sí.
+ * Encripta password usando pgsodium con studio_id como associated data (AAD).
  *
- * TODO F6 v2: integrar con `vault.create_secret(plaintext_value, name?, description?)`
- * que devuelve UUID. Cambiar columna a UUID FK a vault.secrets.
+ * Output formato: `v2:base64(nonce||ciphertext||tag)` cuando la migration
+ * 20260520001100_mail_pgsodium_encryption.sql está aplicada.
+ *
+ * Fallback: si la RPC no existe (migration no aplicada) usa el formato legacy
+ * v1: (plaintext con prefix). El system sigue funcionando pero sin cifrado.
+ *
+ * El cliente usa SERVICE ROLE (untypedService) porque la RPC tiene
+ * SECURITY DEFINER + grants restringidos.
  */
-function encryptPassword(plaintext: string): string {
+async function encryptPassword(
+  studioId: string,
+  plaintext: string,
+): Promise<string> {
+  const sb = untypedService()
+  try {
+    const { data, error } = await sb.rpc("mail_encrypt_password", {
+      p_plaintext: plaintext,
+      p_studio_id: studioId,
+    })
+    if (error) throw error
+    if (typeof data === "string" && data.length > 0) return data
+  } catch (err) {
+    console.warn(
+      "[mail-crypto] encrypt_password RPC failed, falling back to v1:",
+      err,
+    )
+  }
   return `v1:${plaintext}`
 }
 
-function decryptPassword(stored: string): string {
+async function decryptPassword(
+  studioId: string,
+  stored: string,
+): Promise<string> {
+  // Fast path v1 (legacy)
   if (stored.startsWith("v1:")) return stored.slice(3)
-  // Compat: si no tiene prefix, asumir plaintext (no debería ocurrir en prod)
-  return stored
+  if (!stored.startsWith("v2:")) return stored // raw plaintext (no debería ocurrir)
+
+  const sb = untypedService()
+  try {
+    const { data, error } = await sb.rpc("mail_decrypt_password", {
+      p_ciphertext: stored,
+      p_studio_id: studioId,
+    })
+    if (error) throw error
+    if (typeof data === "string") return data
+  } catch (err) {
+    console.error("[mail-crypto] decrypt_password RPC failed:", err)
+    throw new Error("MAIL_CREDENTIAL_DECRYPT_FAILED")
+  }
+  throw new Error("MAIL_CREDENTIAL_DECRYPT_EMPTY")
 }
 
 // ============================================================================
@@ -137,6 +175,11 @@ export async function createMailAccount(
       .is("deleted_at", null)
   }
 
+  const [imapEnc, smtpEnc] = await Promise.all([
+    encryptPassword(studioId, data.imapPassword),
+    encryptPassword(studioId, data.smtpPassword),
+  ])
+
   const payload = {
     studio_id: studioId,
     email: data.email,
@@ -145,12 +188,12 @@ export async function createMailAccount(
     imap_port: data.imapPort,
     imap_secure: data.imapSecure,
     imap_username: data.imapUsername,
-    imap_password_secret_id: encryptPassword(data.imapPassword),
+    imap_password_secret_id: imapEnc,
     smtp_host: data.smtpHost,
     smtp_port: data.smtpPort,
     smtp_secure: data.smtpSecure,
     smtp_username: data.smtpUsername,
-    smtp_password_secret_id: encryptPassword(data.smtpPassword),
+    smtp_password_secret_id: smtpEnc,
     is_active: true,
     is_default: data.isDefault ?? false,
     sync_status: "ok",
@@ -208,13 +251,19 @@ export async function updateMailAccount(
   if (data.imapSecure !== undefined) patch.imap_secure = data.imapSecure
   if (data.imapUsername !== undefined) patch.imap_username = data.imapUsername
   if (data.imapPassword !== undefined && data.imapPassword)
-    patch.imap_password_secret_id = encryptPassword(data.imapPassword)
+    patch.imap_password_secret_id = await encryptPassword(
+      studioId,
+      data.imapPassword,
+    )
   if (data.smtpHost !== undefined) patch.smtp_host = data.smtpHost
   if (data.smtpPort !== undefined) patch.smtp_port = data.smtpPort
   if (data.smtpSecure !== undefined) patch.smtp_secure = data.smtpSecure
   if (data.smtpUsername !== undefined) patch.smtp_username = data.smtpUsername
   if (data.smtpPassword !== undefined && data.smtpPassword)
-    patch.smtp_password_secret_id = encryptPassword(data.smtpPassword)
+    patch.smtp_password_secret_id = await encryptPassword(
+      studioId,
+      data.smtpPassword,
+    )
   if (data.isActive !== undefined) patch.is_active = data.isActive
   if (data.isDefault !== undefined) patch.is_default = data.isDefault
 
@@ -331,23 +380,31 @@ export async function testMailcowConnection(
 /**
  * Helper para uso del sync service: descifra el password y devuelve config
  * IMAP-listo. NUNCA expongas el resultado al cliente browser.
+ *
+ * AHORA async porque pgsodium RPC requiere ida-y-vuelta a la DB.
  */
-export function decryptAccountForImap(account: MailAccountRow) {
+export async function decryptAccountForImap(account: MailAccountRow) {
   return {
     host: account.imap_host,
     port: account.imap_port,
     secure: account.imap_secure,
     username: account.imap_username,
-    password: decryptPassword(account.imap_password_secret_id),
+    password: await decryptPassword(
+      account.studio_id,
+      account.imap_password_secret_id,
+    ),
   }
 }
 
-export function decryptAccountForSmtp(account: MailAccountRow) {
+export async function decryptAccountForSmtp(account: MailAccountRow) {
   return {
     host: account.smtp_host,
     port: account.smtp_port,
     secure: account.smtp_secure,
     username: account.smtp_username,
-    password: decryptPassword(account.smtp_password_secret_id),
+    password: await decryptPassword(
+      account.studio_id,
+      account.smtp_password_secret_id,
+    ),
   }
 }
