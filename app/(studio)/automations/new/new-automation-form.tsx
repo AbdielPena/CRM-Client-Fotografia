@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import {
   AlertCircle,
   Save,
@@ -70,7 +71,7 @@ const ACTION_CONFIG_TEMPLATES: Record<(typeof actionKinds)[number], string> = {
 }
 
 export function NewAutomationForm() {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     createAutomationAction,
     initialState,
   )
@@ -241,20 +242,27 @@ export function NewAutomationForm() {
       </section>
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        <Button type="submit" disabled={pending}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Creando...
-            </>
-          ) : (
-            <>
-              <Save className="mr-1 size-4" />
-              Crear regla
-            </>
-          )}
-        </Button>
+        <SubmitButton />
       </div>
     </form>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Creando...
+        </>
+      ) : (
+        <>
+          <Save className="mr-1 size-4" />
+          Crear regla
+        </>
+      )}
+    </Button>
   )
 }
