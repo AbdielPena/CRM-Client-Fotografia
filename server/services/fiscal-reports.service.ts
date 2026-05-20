@@ -195,12 +195,16 @@ export async function generateReport607(
 /**
  * Genera reporte 606 (Compras) — gastos con NCF de proveedores en el periodo.
  *
- * Basa el reporte en `fin_payables` que tengan NCF (TODO V2: agregar columna
- * ncf_proveedor a fin_payables) o en `fin_transactions tipo='gasto'` que
- * tengan external_reference apuntando a un payable con NCF.
+ * Lee de `fin_payables` filtrando por:
+ *   - ncf_proveedor IS NOT NULL (solo gastos con NCF registrado)
+ *   - paid_at en el rango del periodo (o issued_at si paid_at es null —
+ *     algunos studios reportan por fecha de comprobante en vez de pago)
+ *   - studio_id + deleted_at IS NULL
  *
- * En MVP devolvemos rows vacíos — F4 V2 agregará la columna fin_payables.ncf
- * y este service hará la query real.
+ * Requiere migration 20260520000500_payables_dgii_606_compat.sql aplicada
+ * (agrega columnas ncf_proveedor, rnc_proveedor, tipo_bienes_servicios,
+ * monto_servicios, monto_bienes, itbis_facturado, itbis_retenido,
+ * retencion_renta, forma_pago).
  */
 export async function generateReport606(
   studioId: string,
@@ -210,15 +214,92 @@ export async function generateReport606(
     throw new Error("INVALID_PERIOD_FORMAT")
   }
 
-  // MVP: rows vacíos. V2 implementará la query real cuando fin_payables
-  // tenga columna ncf + rnc del proveedor.
+  const sb = untypedServer()
+  const periodStart = `${period}-01`
+  const [year, month] = period.split("-").map(Number)
+  const nextMonth =
+    month === 12
+      ? `${year + 1}-01-01`
+      : `${year}-${String(month + 1).padStart(2, "0")}-01`
+
+  // Query principal: payables con NCF en el periodo (por issued_at del comprobante)
+  const { data: payables, error } = await sb
+    .from("fin_payables")
+    .select(
+      `id, ncf_proveedor, ncf_modificado, rnc_proveedor, provider_name,
+       tipo_bienes_servicios, monto_servicios, monto_bienes,
+       amount, currency, itbis_facturado, itbis_retenido, retencion_renta,
+       forma_pago, issued_at, paid_at, status`,
+    )
+    .eq("studio_id", studioId)
+    .not("ncf_proveedor", "is", null)
+    .gte("issued_at", periodStart)
+    .lt("issued_at", nextMonth)
+    .is("deleted_at", null)
+    .order("issued_at", { ascending: true })
+
+  if (error)
+    throwServiceError("FISCAL_REPORT_606_FAILED", error, { studioId, period })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const items = (payables ?? []) as any[]
+
+  const rows: Report606Row[] = items.map((p) => {
+    const rnc = String(p.rnc_proveedor ?? "").replace(/\D/g, "")
+
+    const fechaComp = p.issued_at
+      ? new Date(p.issued_at).toISOString().slice(0, 10).replace(/-/g, "")
+      : ""
+    const fechaPago = p.paid_at
+      ? new Date(p.paid_at).toISOString().slice(0, 10).replace(/-/g, "")
+      : ""
+
+    const montoServ = Number(p.monto_servicios ?? 0).toFixed(2)
+    const montoBien = Number(p.monto_bienes ?? 0).toFixed(2)
+    const total = Number(p.amount ?? 0).toFixed(2)
+    const itbisFac = Number(p.itbis_facturado ?? 0).toFixed(2)
+    const itbisRet = Number(p.itbis_retenido ?? 0).toFixed(2)
+    const retencionR = Number(p.retencion_renta ?? 0).toFixed(2)
+
+    return {
+      rnc: rnc || "",
+      tipoBienesServicios: p.tipo_bienes_servicios ?? "09", // default "Compras y Gastos que formarán parte del Costo de Venta"
+      ncf: p.ncf_proveedor,
+      ncfModificado: p.ncf_modificado ?? "",
+      fechaComprobante: fechaComp,
+      fechaPago,
+      montoServicios: montoServ,
+      montoBienes: montoBien,
+      montoTotal: total,
+      itbisFacturado: itbisFac,
+      itbisRetenido: itbisRet,
+      itbisSujetoProporcionalidad: "0.00",
+      itbisLlevadoCosto: "0.00",
+      itbisPorAdelantar: "0.00",
+      itbisPercibido: "0.00",
+      retencionRenta: retencionR,
+      isrPercibido: "0.00",
+      selectivoConsumo: "0.00",
+      otrosImpuestos: "0.00",
+      propinaLegal: "0.00",
+      formaPago: p.forma_pago ?? "01",
+    }
+  })
+
+  const totalAmount = rows
+    .reduce((acc, r) => acc + Number(r.montoTotal), 0)
+    .toFixed(2)
+  const totalItbis = rows
+    .reduce((acc, r) => acc + Number(r.itbisFacturado), 0)
+    .toFixed(2)
+
   return {
-    rows: [],
+    rows,
     summary: {
       period,
-      rows: 0,
-      totalAmount: "0.00",
-      totalItbis: "0.00",
+      rows: rows.length,
+      totalAmount,
+      totalItbis,
     },
   }
 }
