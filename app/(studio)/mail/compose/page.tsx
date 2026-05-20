@@ -5,6 +5,7 @@ import type { Metadata } from "next"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { getMailAccounts } from "@/server/services/mail-account.service"
+import { getMailDraftById } from "@/server/services/mail-draft.service"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { EmptyState } from "@/components/shared/empty-state"
@@ -18,11 +19,21 @@ export const metadata: Metadata = { title: "Redactar · Correo" }
 export default async function ComposePage({
   searchParams,
 }: {
-  searchParams?: { to?: string; subject?: string; client?: string; project?: string; invoice?: string }
+  searchParams?: {
+    to?: string
+    subject?: string
+    client?: string
+    project?: string
+    invoice?: string
+    draftId?: string
+  }
 }) {
   const session = await requireStudioAuth()
-  const [accounts, unread] = await Promise.all([
+  const [accounts, draft, unread] = await Promise.all([
     getMailAccounts(session.studioId),
+    searchParams?.draftId
+      ? getMailDraftById(session.studioId, searchParams.draftId)
+      : Promise.resolve(null),
     countUnreadNotifications(session.studioId),
   ])
 
@@ -51,16 +62,36 @@ export default async function ComposePage({
 
   const defaultAccount = accounts.find((a) => a.is_default) ?? accounts[0]
 
+  // Si retomamos un draft, usar sus valores
+  type DraftLoaded = {
+    id: string
+    account_id: string
+    subject: string | null
+    body_text: string | null
+    to_recipients: Array<{ email: string; name: string | null }>
+    client_id: string | null
+    project_id: string | null
+    invoice_id: string | null
+  } | null
+  const d = draft as DraftLoaded
+  const draftPrefillTo = d?.to_recipients
+    ?.map((r) => (r.name ? `"${r.name}" <${r.email}>` : r.email))
+    .join(", ")
+
   return (
     <>
       <AppTopbar
         eyebrow="Correo"
-        title="Redactar"
-        description="Compose un nuevo email. La cuenta default emite outbound por defecto."
+        title={d ? "Retomar borrador" : "Redactar"}
+        description={
+          d
+            ? "Auto-save activo. Tu borrador se guarda cada 5s."
+            : "Compose un nuevo email. La cuenta default emite outbound por defecto."
+        }
         unreadNotifications={unread}
         actions={
           <Button variant="outline" size="sm" asChild>
-            <Link href="/mail/inbox">
+            <Link href={d ? "/mail/drafts" : "/mail/inbox"}>
               <ArrowLeft className="mr-1 size-3.5" />
               Cancelar
             </Link>
@@ -76,12 +107,14 @@ export default async function ComposePage({
             display_name: a.display_name,
             is_default: a.is_default,
           }))}
-          defaultAccountId={defaultAccount.id}
-          prefillTo={searchParams?.to}
-          prefillSubject={searchParams?.subject}
-          prefillClientId={searchParams?.client}
-          prefillProjectId={searchParams?.project}
-          prefillInvoiceId={searchParams?.invoice}
+          defaultAccountId={d?.account_id ?? defaultAccount.id}
+          prefillTo={draftPrefillTo ?? searchParams?.to}
+          prefillSubject={d?.subject ?? searchParams?.subject}
+          prefillClientId={d?.client_id ?? searchParams?.client}
+          prefillProjectId={d?.project_id ?? searchParams?.project}
+          prefillInvoiceId={d?.invoice_id ?? searchParams?.invoice}
+          initialDraftId={d?.id ?? searchParams?.draftId}
+          initialBody={d?.body_text ?? undefined}
         />
       </main>
     </>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Send, Loader2, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react"
 
@@ -9,6 +9,7 @@ import {
   type SendMailActionState,
 } from "@/server/actions/mail-thread.actions"
 import { Button } from "@/components/ui/button"
+import { DraftAutoSaveIndicator } from "./draft-autosave"
 
 const initialState: SendMailActionState = {}
 
@@ -27,6 +28,8 @@ export function ComposeForm({
   prefillClientId,
   prefillProjectId,
   prefillInvoiceId,
+  initialDraftId,
+  initialBody,
 }: {
   accounts: Account[]
   defaultAccountId: string
@@ -35,10 +38,13 @@ export function ComposeForm({
   prefillClientId?: string
   prefillProjectId?: string
   prefillInvoiceId?: string
+  initialDraftId?: string
+  initialBody?: string
 }) {
   const [state, action, pending] = useActionState(sendMailAction, initialState)
   const router = useRouter()
   const [showCcBcc, setShowCcBcc] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   // Si succeed, redirect al thread del mensaje enviado
   if (state.ok && state.threadId && typeof window !== "undefined") {
@@ -46,7 +52,7 @@ export function ComposeForm({
   }
 
   return (
-    <form action={action} className="sf-card space-y-4 p-5">
+    <form ref={formRef} action={action} className="sf-card space-y-4 p-5">
       {state.ok === false && state.message && (
         <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
@@ -179,7 +185,7 @@ export function ComposeForm({
           name="textBody"
           required
           rows={12}
-          defaultValue={state.values?.textBody}
+          defaultValue={state.values?.textBody ?? initialBody}
           placeholder="Escribe el cuerpo del mensaje..."
           className="block w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
@@ -210,8 +216,12 @@ export function ComposeForm({
         </p>
       )}
 
-      {/* Submit */}
-      <div className="flex items-center justify-end gap-3 border-t border-border pt-3">
+      {/* Auto-save + Submit */}
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+        <DraftAutoSaveIndicator
+          formRef={formRef}
+          initialDraftId={initialDraftId}
+        />
         <Button type="submit" disabled={pending || state.ok === true}>
           {pending ? (
             <>

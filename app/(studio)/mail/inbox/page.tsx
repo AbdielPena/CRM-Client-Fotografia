@@ -102,6 +102,9 @@ export default async function MailInboxPage({
       />
 
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* Tab nav entre Inbox/Sent/Drafts */}
+        <MailTabs current="inbox" />
+
         {/* Search + filtros */}
         <div className="mb-6 flex flex-wrap items-center gap-2">
           <SearchInput placeholder="Buscar en subject..." />
@@ -286,6 +289,32 @@ export default async function MailInboxPage({
         )}
       </main>
     </>
+  )
+}
+
+function MailTabs({ current }: { current: "inbox" | "sent" | "drafts" }) {
+  const tabs = [
+    { key: "inbox", label: "Bandeja", href: "/mail/inbox" },
+    { key: "sent", label: "Enviados", href: "/mail/sent" },
+    { key: "drafts", label: "Borradores", href: "/mail/drafts" },
+  ] as const
+  return (
+    <div className="mb-6 inline-flex gap-1 rounded-xl bg-muted p-1">
+      {tabs.map((t) => (
+        <Link
+          key={t.key}
+          href={t.href}
+          className={
+            "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors " +
+            (current === t.key
+              ? "bg-background shadow-sm"
+              : "text-muted-foreground hover:text-foreground")
+          }
+        >
+          {t.label}
+        </Link>
+      ))}
+    </div>
   )
 }
 
