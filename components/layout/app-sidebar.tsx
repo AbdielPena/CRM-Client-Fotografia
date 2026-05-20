@@ -33,6 +33,8 @@ import {
   CreditCard,
   CheckSquare,
   BarChart3,
+  Key,
+  Webhook,
   type LucideIcon,
 } from "lucide-react"
 
@@ -109,6 +111,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Automatización",
     items: [
       { type: "link", href: "/automations", label: "Automatizaciones", icon: Sparkles },
+      { type: "link", href: "/settings/webhooks", label: "Webhooks salientes", icon: Webhook },
+      { type: "link", href: "/settings/api", label: "API y tokens", icon: Key },
     ],
   },
   {
