@@ -6,6 +6,8 @@ import {
   AlertCircle,
   Crown,
   ArrowRight,
+  Telescope,
+  Download,
 } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -17,6 +19,7 @@ import {
   getPLReport,
   getTopClients,
 } from "@/server/services/reports.service"
+import { getForecast } from "@/server/services/reports-forecast.service"
 import { formatCurrency, formatDate } from "@/lib/utils/currency"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
@@ -31,12 +34,13 @@ export default async function ReportsPage({
   const session = await requireStudioAuth()
   const year = Number(searchParams?.year) || new Date().getFullYear()
 
-  const [unread, pl, cashFlow, aging, topClients] = await Promise.all([
+  const [unread, pl, cashFlow, aging, topClients, forecast] = await Promise.all([
     countUnreadNotifications(session.studioId),
     getPLReport(session.studioId, { year }),
     getCashFlow(session.studioId, { months: 12 }),
     getARAging(session.studioId),
     getTopClients(session.studioId, { limit: 10, year }),
+    getForecast(session.studioId, { months: 6 }).catch(() => []),
   ])
 
   const totalOutstanding = aging.reduce((s, b) => s + b.total, 0)
@@ -296,13 +300,120 @@ export default async function ReportsPage({
           )}
         </section>
 
-        <div className="rounded-xl border border-input bg-card p-4 text-xs text-muted-foreground">
-          <p>
-            <BarChart3 className="mr-1 inline size-3.5" />
-            Próximamente: forecast 6 meses, comparativo año vs año, exportar
-            a CSV/Excel, reportes custom configurables.
-          </p>
-        </div>
+        {/* Forecast 6 meses */}
+        {forecast.length > 0 && (
+          <section className="sf-card p-6">
+            <h2 className="mb-4 flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              <span>
+                <Telescope className="mr-1 inline size-3.5" />
+                Forecast 6 meses (proyección)
+              </span>
+              <a
+                href="/api/reports/export?type=forecast&months=6"
+                className="inline-flex items-center gap-1 rounded-lg border border-input bg-background px-2 py-1 text-[10px] font-medium text-muted-foreground normal-case hover:bg-accent"
+              >
+                <Download className="size-3" />
+                CSV
+              </a>
+            </h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Basado en receivables pendientes, pending invoices, upcoming
+              projects, subscriptions activas y payables.
+            </p>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                    <th className="py-2">Mes</th>
+                    <th className="py-2 text-right">Ingresos</th>
+                    <th className="py-2 text-right">Gastos</th>
+                    <th className="py-2 text-right">Neto</th>
+                    <th className="py-2 text-right">Acumulado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecast.map((f) => (
+                    <tr key={f.month} className="border-b border-border/50">
+                      <td className="py-2 font-mono">{f.month}</td>
+                      <td className="py-2 text-right tabular-nums text-emerald-600">
+                        {formatCurrency(f.expectedIncome)}
+                      </td>
+                      <td className="py-2 text-right tabular-nums text-red-600">
+                        {formatCurrency(f.expectedExpenses)}
+                      </td>
+                      <td
+                        className={
+                          "py-2 text-right font-semibold tabular-nums " +
+                          (f.netProjected >= 0
+                            ? "text-emerald-600"
+                            : "text-red-600")
+                        }
+                      >
+                        {formatCurrency(f.netProjected)}
+                      </td>
+                      <td
+                        className={
+                          "py-2 text-right tabular-nums " +
+                          (f.cumulativeProjected >= 0
+                            ? "text-emerald-600"
+                            : "text-red-600")
+                        }
+                      >
+                        {formatCurrency(f.cumulativeProjected)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {/* Export buttons */}
+        <section className="sf-card p-4">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Download className="mr-1 inline size-3.5" />
+            Exportar a CSV (compatible Excel)
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`/api/reports/export?type=pl&year=${year}`}
+              className="inline-flex items-center gap-1 rounded-xl border border-input bg-background px-3 py-1.5 text-xs hover:bg-accent"
+            >
+              <Download className="size-3" />
+              P&L {year}
+            </a>
+            <a
+              href="/api/reports/export?type=cashflow&months=12"
+              className="inline-flex items-center gap-1 rounded-xl border border-input bg-background px-3 py-1.5 text-xs hover:bg-accent"
+            >
+              <Download className="size-3" />
+              Cash Flow 12m
+            </a>
+            <a
+              href="/api/reports/export?type=ar_aging"
+              className="inline-flex items-center gap-1 rounded-xl border border-input bg-background px-3 py-1.5 text-xs hover:bg-accent"
+            >
+              <Download className="size-3" />
+              AR Aging
+            </a>
+            <a
+              href={`/api/reports/export?type=top_clients&year=${year}`}
+              className="inline-flex items-center gap-1 rounded-xl border border-input bg-background px-3 py-1.5 text-xs hover:bg-accent"
+            >
+              <Download className="size-3" />
+              Top clientes {year}
+            </a>
+            <a
+              href="/api/reports/export?type=forecast&months=6"
+              className="inline-flex items-center gap-1 rounded-xl border border-input bg-background px-3 py-1.5 text-xs hover:bg-accent"
+            >
+              <Download className="size-3" />
+              Forecast 6m
+            </a>
+          </div>
+        </section>
       </main>
     </>
   )
