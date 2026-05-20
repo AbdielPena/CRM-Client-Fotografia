@@ -30,6 +30,7 @@ import {
   Trash2,
   ShieldCheck,
   Sparkles,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react"
 
@@ -123,6 +124,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: CalendarClock,
       },
       { type: "link", href: "/settings", label: "Ajustes generales", icon: Settings },
+      { type: "link", href: "/settings/billing", label: "Plan y facturación", icon: CreditCard },
       { type: "link", href: "/settings/security", label: "Seguridad (2FA)", icon: ShieldCheck },
       { type: "link", href: "/trash", label: "Papelera", icon: Trash2 },
     ],
