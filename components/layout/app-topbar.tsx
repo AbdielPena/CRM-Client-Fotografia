@@ -34,6 +34,9 @@ const QUICK_ACTIONS = [
   { href: "/invoices/new", label: "Nueva factura", icon: Receipt },
   { href: "/contracts/new", label: "Nuevo contrato", icon: FileText },
   { href: "/packages/new", label: "Nuevo paquete", icon: Package },
+  // Módulos del monolito unificado — el quick action permite atajos cross-módulo
+  { href: "/finance/transactions/new", label: "Nueva transacción", icon: Package },
+  { href: "/inventory/items/new", label: "Nuevo equipo", icon: Package },
 ] as const
 
 /**
