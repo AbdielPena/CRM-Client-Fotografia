@@ -1,7 +1,7 @@
 "use client"
 
-import { useActionState } from "react"
-import { CheckCircle2, AlertCircle, Save } from "lucide-react"
+import { useFormState, useFormStatus } from "react-dom"
+import { CheckCircle2, AlertCircle, Save, Loader2 } from "lucide-react"
 
 import { upsertTaxConfigAction, type FiscalActionState } from "@/server/actions/fiscal-ncf.actions"
 import { NCF_TYPE_LABELS, NCF_TYPES, type NcfType } from "@/lib/fiscal"
@@ -18,7 +18,7 @@ type Initial = {
 const initialState: FiscalActionState = {}
 
 export function TaxConfigForm({ initial }: { initial: Initial }) {
-  const [state, formAction, pending] = useActionState(upsertTaxConfigAction, initialState)
+  const [state, formAction] = useFormState(upsertTaxConfigAction, initialState)
 
   return (
     <form action={formAction} className="space-y-4">
@@ -93,12 +93,23 @@ export function TaxConfigForm({ initial }: { initial: Initial }) {
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={pending}>
-          <Save className="mr-1 size-4" />
-          {pending ? "Guardando..." : "Guardar configuración"}
-        </Button>
+        <SubmitButton />
       </div>
     </form>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <Loader2 className="mr-1 size-4 animate-spin" />
+      ) : (
+        <Save className="mr-1 size-4" />
+      )}
+      {pending ? "Guardando..." : "Guardar configuración"}
+    </Button>
   )
 }
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useActionState } from "react"
-import { CheckCircle2, AlertCircle, Plus } from "lucide-react"
+import { useFormState, useFormStatus } from "react-dom"
+import { CheckCircle2, AlertCircle, Plus, Loader2 } from "lucide-react"
 
 import { createNcfSequenceAction, type FiscalActionState } from "@/server/actions/fiscal-ncf.actions"
 import { NCF_TYPE_LABELS, type NcfType } from "@/lib/fiscal"
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 const initialState: FiscalActionState = {}
 
 export function NcfSequenceForm({ availableTypes }: { availableTypes: NcfType[] }) {
-  const [state, formAction, pending] = useActionState(createNcfSequenceAction, initialState)
+  const [state, formAction] = useFormState(createNcfSequenceAction, initialState)
 
   if (availableTypes.length === 0) {
     return (
@@ -83,12 +83,23 @@ export function NcfSequenceForm({ availableTypes }: { availableTypes: NcfType[] 
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit" size="sm" disabled={pending}>
-          <Plus className="mr-1 size-4" />
-          {pending ? "Creando..." : "Crear secuencia"}
-        </Button>
+        <SubmitButton />
       </div>
     </form>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" size="sm" disabled={pending}>
+      {pending ? (
+        <Loader2 className="mr-1 size-4 animate-spin" />
+      ) : (
+        <Plus className="mr-1 size-4" />
+      )}
+      {pending ? "Creando..." : "Crear secuencia"}
+    </Button>
   )
 }
 
