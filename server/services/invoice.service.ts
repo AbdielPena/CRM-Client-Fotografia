@@ -228,6 +228,43 @@ export async function sendInvoice(
     action: 'invoice.sent',
   })
 
+  // F4: auto-emit NCF si el studio tiene tax_config.default_ncf_type configurado
+  // y la invoice no tenía NCF asignado todavía. Best-effort: si falla
+  // (sin secuencia activa, sin RNC del cliente para tipos restrictivos),
+  // log warning pero NO bloquea el send — el user puede emitir NCF manualmente
+  // después desde el botón "Emitir NCF" en /invoices/[id].
+  //
+  // Esto cumple el flujo DGII: en RD, la factura formal se "emite" al enviarla
+  // al cliente (sent_at). Automatizar la asignación de NCF en este momento
+  // reduce fricción operacional para 90% de invoices.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const invoiceAsAny = invoice as any
+  if (!invoiceAsAny?.ncf) {
+    try {
+      // Import dinámico para evitar circular dependency (fiscal service
+      // importa types del invoice schema)
+      const { getTaxConfig, issueNcfForInvoice } = await import(
+        "./fiscal-ncf.service"
+      )
+      const taxConfig = await getTaxConfig(studioId)
+      if (taxConfig?.default_ncf_type) {
+        await issueNcfForInvoice(studioId, actorId, invoiceId)
+        console.log(`[invoice.sent] NCF auto-asignado a invoice ${invoiceId}`)
+      }
+    } catch (err) {
+      // Errores conocidos no fatales:
+      //   - INVOICE_NCF_ALREADY_SET (already had NCF)
+      //   - NCF_RNC_REQUIRED (default type requires RNC, client doesn't have)
+      //   - NO_ACTIVE_NCF_SEQUENCE (no hay rangos cargados)
+      // Cualquiera de estos NO bloquea el send. El user puede arreglar y
+      // emitir manualmente desde el botón.
+      console.warn(
+        `[invoice.sent] auto-NCF falló (non-fatal):`,
+        err instanceof Error ? err.message : err,
+      )
+    }
+  }
+
   return invoice
 }
 
