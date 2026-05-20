@@ -31,6 +31,7 @@ import {
   ShieldCheck,
   Sparkles,
   CreditCard,
+  CheckSquare,
   type LucideIcon,
 } from "lucide-react"
 
@@ -74,6 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: "link", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
+      { type: "link", href: "/tasks", label: "Tareas", icon: CheckSquare },
     ],
   },
   {
