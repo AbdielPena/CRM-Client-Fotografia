@@ -245,15 +245,37 @@ git push origin v2.0.0-monolith
 
 ## Pendientes V2 (no bloquean release MVP)
 
-- **F0**: Audit + `pg_dump` snapshots reales (requiere credentials)
-- **F2 restante**: Automations UI, Calendar bidireccional Google, theme-toggle
-- **F3 extras**: UI /loans/new + /loans/[id] + /reservations + /maintenance + /units
-- **F4 extras**: Cron de notificación al 90% de NCF consumo + reporte 606/607 DGII
-- **F5 extras**: Detail pages debts/loans/goals/payables + subscriptions + tithe
-- **F6 extras**: Signed URLs auto en attachments + drafts auto-save + bandejas
-  separadas (Enviados/Borradores) + bounce webhook DSN + pgsodium real
-- **General**: e2e tests Playwright para los 7 cross-módulo wire-ups
-- **General**: dashboard widgets cross-módulo en /dashboard principal
+### ✅ Completados en sesión V2
+
+- **F0** ✅ `docs/f0-pg-dump-runbook.md` + `scripts/pre-migration-audit.ts`
+  con counts/sums comparables pre/post-ETL
+- **F3 extras** ✅ UI /loans/new + /loans/[id] + /reservations/new + /[id]
+  + /maintenance/new + /[id] + /items/[id]/units lista + /units/new
+  + /units/[unitId] detail con movements ledger
+- **F4 extras** ✅ Reporte 606 (Compras) real via fin_payables con
+  migration 20260520000500_payables_dgii_606_compat (11 columnas DGII).
+  Reporte 607 (Ventas) ya estaba real
+- **F5 extras** ✅ Detail pages debts/loans/goals/payables ya estaban
+  hechos. Subscriptions: service completo con cron processor +
+  /subscriptions list/new/[id] con pause/resume. Tithe (diezmo):
+  auto-compute 10% mensual + UI list/[id] con mark-paid form. Endpoint
+  /api/cron/finance-jobs único para ambos cron daily/monthly
+- **F6 extras** ✅ Migration 20260520000800_mail_drafts_bounces (status
+  'draft' + mail_bounce_events). Service mail-draft con auto-save.
+  Endpoint /api/mail/drafts (POST/DELETE). Webhook /api/webhooks/
+  mailcow-bounce. Signed URLs auto en /api/mail/attachments/[id]
+  (60s + content-disposition). UI /mail/sent + /mail/drafts + MailTabs
+  + DraftAutoSaveIndicator client cada 5s
+
+### 🔜 Quedan para V3
+
+- **F2 restante**: Automations UI (requiere schema workflow_* nuevo),
+  Calendar bidireccional Google (requiere Google API setup)
+- **pgsodium real**: Encriptación de credentials IMAP en mail_accounts
+  (actual: prefix v1: básico)
+- **e2e tests Playwright** para los 7 cross-módulo wire-ups
+- **dashboard widgets cross-módulo** en /dashboard principal usando
+  CrossModuleActivity + ModuleCard que ya existen en components/dashboard/
 
 ---
 
