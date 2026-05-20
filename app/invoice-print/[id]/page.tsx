@@ -95,6 +95,29 @@ export default async function InvoicePrintPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const studio = studioRow as any
 
+  // F4 Fiscal RD: cargar tax_config si existe (RNC + razón social DGII).
+  // Si la migration fiscal_init no se aplicó aún, esto devuelve null y la
+  // factura se renderiza sin sección DGII (compatibilidad backward).
+  // Cast a any porque types no conocen fiscal_tax_configs hasta regenerar.
+  type TaxConfigShape = {
+    rnc: string | null
+    business_name: string | null
+    itbis_rate: number | string
+  }
+  let taxConfig: TaxConfigShape | null = null
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sbAny = supabase as any
+    const { data: tc } = await sbAny
+      .from("fiscal_tax_configs")
+      .select("rnc, business_name, itbis_rate")
+      .eq("studio_id", inv.studio_id as string)
+      .maybeSingle()
+    taxConfig = (tc as TaxConfigShape | null) ?? null
+  } catch {
+    // tabla no existe (migration no aplicada) — render sin DGII info
+  }
+
   // Pagos asociados
   const { data: paymentsRaw } = await supabase
     .from("payments")
@@ -177,6 +200,41 @@ export default async function InvoicePrintPage({
               <strong>#{inv.invoice_number ?? String(inv.id).slice(0, 8)}</strong>
               {inv.installment_total ? ` · cuota ${inv.installment_number}/${inv.installment_total}` : ""}
             </p>
+
+            {/* F4 Fiscal RD: NCF prominente arriba para cumplir reglamento DGII.
+                El NCF debe ser visible y único por documento. */}
+            {inv.ncf && (
+              <p
+                className="ncf-display"
+                style={{
+                  marginTop: 8,
+                  padding: "6px 10px",
+                  background: "#fef3c7",
+                  border: "1px solid #f59e0b",
+                  borderRadius: 4,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: "#92400e",
+                  display: "inline-block",
+                }}
+              >
+                NCF: {inv.ncf}
+                {inv.ncf_type && (
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 10,
+                      fontWeight: 400,
+                      color: "#78350f",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Tipo {inv.ncf_type}
+                  </span>
+                )}
+              </p>
+            )}
             <p className="invoice-meta" style={{ marginTop: 2 }}>
               {inv.issued_at && <>Emitida {fmtDate(inv.issued_at)}</>}
               {inv.due_date && <> · vence {fmtDate(inv.due_date)}</>}
@@ -214,9 +272,16 @@ export default async function InvoicePrintPage({
                 {studio.address}
               </p>
             )}
-            {studio?.tax_id && (
+            {/* F4: RNC del tax_config tiene prioridad (configuración DGII formal),
+                fallback a tax_id legacy. business_name es la razón social fiscal. */}
+            {taxConfig?.business_name && (
+              <p style={{ margin: "1px 0", fontSize: 11, color: "#71717a", fontWeight: 600 }}>
+                {taxConfig.business_name}
+              </p>
+            )}
+            {(taxConfig?.rnc || studio?.tax_id) && (
               <p style={{ margin: "1px 0", fontSize: 11, color: "#71717a" }}>
-                RFC/RUT: {studio.tax_id}
+                RNC: {taxConfig?.rnc ?? studio.tax_id}
               </p>
             )}
           </div>
@@ -310,6 +375,17 @@ export default async function InvoicePrintPage({
               <span>{fmt(inv.tax_amount, inv.currency)}</span>
             </div>
           )}
+          {/* F4: ITBIS DGII desglose si la invoice tiene itbis_amount/rate
+              de la migration fiscal_init (columnas agregadas en F1). */}
+          {Number(inv.itbis_amount ?? 0) > 0 && (
+            <div className="row" style={{ color: "#92400e" }}>
+              <span>
+                ITBIS
+                {inv.itbis_rate ? ` (${Number(inv.itbis_rate)}%)` : ""}
+              </span>
+              <span>{fmt(inv.itbis_amount, inv.currency)}</span>
+            </div>
+          )}
           <div className="row total">
             <span>Total</span>
             <span>{fmt(inv.total, inv.currency)}</span>
@@ -361,6 +437,35 @@ export default async function InvoicePrintPage({
         )}
 
         <footer className="invoice-footer">
+          {/* F4: Leyenda DGII si el invoice tiene NCF asignado.
+              Texto reglamentado para comprobantes fiscales en RD. */}
+          {inv.ncf && (
+            <div
+              style={{
+                marginBottom: 8,
+                padding: "8px 10px",
+                background: "#fef3c7",
+                border: "1px solid #fbbf24",
+                borderRadius: 4,
+                color: "#92400e",
+                fontSize: 10,
+                fontWeight: 600,
+                lineHeight: 1.5,
+              }}
+            >
+              <p style={{ margin: 0 }}>
+                COMPROBANTE FISCAL · DGII República Dominicana
+              </p>
+              <p style={{ margin: "2px 0 0", fontFamily: "ui-monospace, monospace" }}>
+                NCF: {inv.ncf} · Tipo {inv.ncf_type ?? "B02"}
+                {taxConfig?.rnc && ` · RNC Emisor: ${taxConfig.rnc}`}
+              </p>
+              <p style={{ margin: "2px 0 0", fontWeight: 400, fontSize: 9 }}>
+                Este comprobante es válido como factura fiscal. Conserve este
+                documento para deducir gastos según normativa DGII.
+              </p>
+            </div>
+          )}
           {studio?.invoice_footer ?? `${studio?.name ?? ""} · ${studio?.email ?? ""}`}
         </footer>
       </article>
