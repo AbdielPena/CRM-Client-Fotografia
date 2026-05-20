@@ -24,6 +24,9 @@ import {
   CalendarClock,
   Layers,
   Mail,
+  Wallet,
+  Boxes,
+  Landmark,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -86,10 +89,21 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     type: "group",
-    label: "Finanzas",
+    label: "Documentos",
     items: [
       { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
       { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
+    ],
+  },
+  // Módulos del monolito unificado (F3, F5, F6). Aparecen como sección dedicada
+  // — antes vivían en sistemas separados con SSO federado, ahora son nativos.
+  {
+    type: "group",
+    label: "Módulos",
+    items: [
+      { type: "link", href: "/finance/transactions", label: "Finanzas", icon: Wallet },
+      { type: "link", href: "/inventory/items", label: "Inventario", icon: Boxes },
+      { type: "link", href: "/mail/inbox", label: "Correo", icon: Mail },
     ],
   },
   {
@@ -101,6 +115,7 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/settings/contracts", label: "Contratos", icon: FileStack },
       { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },
       { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },
+      { type: "link", href: "/settings/fiscal", label: "Fiscal RD (NCF/ITBIS)", icon: Landmark },
     ],
   },
   {
