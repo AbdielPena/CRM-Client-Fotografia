@@ -1,12 +1,15 @@
 import { notFound } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getInvoiceById } from "@/server/services/invoice.service"
+import { getTaxConfig } from "@/server/services/fiscal-ncf.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { InvoiceDetailActions } from "@/components/invoices/invoice-detail-actions"
+import { IssueNcfButton } from "@/components/invoices/issue-ncf-button"
 import { RecordPaymentForm } from "@/components/invoices/record-payment-form"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
+import type { NcfType } from "@/lib/fiscal"
 import { Receipt, CreditCard, Printer } from "lucide-react"
 import Link from "next/link"
 import type { Metadata } from "next"
@@ -23,9 +26,10 @@ function pickFirst(v: unknown): Rec | null {
 
 export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
   const session = await requireStudioAuth()
-  const [invoiceRaw, unread] = await Promise.all([
+  const [invoiceRaw, unread, taxConfig] = await Promise.all([
     getInvoiceById(session.studioId, params.id),
     countUnreadNotifications(session.studioId),
+    getTaxConfig(session.studioId).catch(() => null),
   ])
   const invoice = invoiceRaw as Rec | null
 
@@ -35,6 +39,15 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   const project = pickFirst(invoice.project)
   const items = (invoice.items ?? []) as Rec[]
   const payments = (invoice.payments ?? []) as Rec[]
+
+  // Fiscal NCF state (campos agregados por migration 20260520000100_fiscal_init.sql)
+  const ncf = (invoice.ncf as string | null) ?? null
+  const ncfType = (invoice.ncf_type as NcfType | null) ?? null
+  const clientDocNumber =
+    (client?.document_number as string | undefined) ??
+    (client?.rnc as string | undefined) ??
+    null
+  const hasClientRnc = !!clientDocNumber
 
   const currency = (invoice.currency as string | null) ?? "DOP"
   const fmt = (n: number) => formatCurrency(n, currency)
@@ -63,6 +76,13 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         actions={
           <>
             <StatusBadge status={status} />
+            <IssueNcfButton
+              invoiceId={invoice.id as string}
+              currentNcf={ncf}
+              currentNcfType={ncfType}
+              defaultNcfType={(taxConfig?.default_ncf_type as NcfType | null) ?? undefined}
+              hasClientRnc={hasClientRnc}
+            />
             <Link
               href={`/invoice-print/${invoice.id}`}
               target="_blank"
