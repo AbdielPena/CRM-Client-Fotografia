@@ -32,6 +32,7 @@ import {
   Sparkles,
   CreditCard,
   CheckSquare,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react"
 
@@ -94,6 +95,13 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
       { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
+    ],
+  },
+  {
+    type: "group",
+    label: "Análisis",
+    items: [
+      { type: "link", href: "/reports", label: "Reportes", icon: BarChart3 },
     ],
   },
   {
