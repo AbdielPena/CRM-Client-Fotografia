@@ -228,6 +228,43 @@ export async function sendInvoice(
     action: 'invoice.sent',
   })
 
+  // Dispatch automation + outbound webhook (best-effort)
+  void (async () => {
+    const payload = {
+      client_id: existing.client_id,
+      total: Number(invoice?.total ?? 0),
+      currency: invoice?.currency,
+    }
+
+    try {
+      const { dispatchAutomationEvent } = await import('./automation.service')
+      await dispatchAutomationEvent({
+        studioId,
+        event: 'invoice.sent',
+        entityType: 'invoice',
+        entityId: invoiceId,
+        payload,
+      })
+    } catch (err) {
+      console.error('[invoice] automation dispatch (sent) failed:', err)
+    }
+
+    try {
+      const { dispatchOutboundWebhook } = await import(
+        './outbound-webhook.service'
+      )
+      await dispatchOutboundWebhook({
+        studioId,
+        eventType: 'invoice.sent',
+        payload,
+        entityType: 'invoice',
+        entityId: invoiceId,
+      })
+    } catch (err) {
+      console.error('[invoice] outbound webhook (sent) failed:', err)
+    }
+  })()
+
   return invoice
 }
 
@@ -284,6 +321,57 @@ export async function markInvoicePaid(
 
   // El trigger ya actualizó el invoice; devolvemos el estado nuevo
   const updated = await invoicesRepo.findById(invoiceId)
+
+  // Si el invoice quedó totalmente pagado, dispatch invoice.paid
+  if (updated?.status === 'paid') {
+    void (async () => {
+      const payload = {
+        client_id: existing.client_id,
+        total: Number(updated.total ?? 0),
+        payment_method: paymentData.method,
+      }
+
+      try {
+        const { dispatchAutomationEvent } = await import('./automation.service')
+        await dispatchAutomationEvent({
+          studioId,
+          event: 'invoice.paid',
+          entityType: 'invoice',
+          entityId: invoiceId,
+          payload,
+        })
+      } catch (err) {
+        console.error('[invoice] automation dispatch (paid) failed:', err)
+      }
+
+      try {
+        const { dispatchOutboundWebhook } = await import(
+          './outbound-webhook.service'
+        )
+        await dispatchOutboundWebhook({
+          studioId,
+          eventType: 'invoice.paid',
+          payload,
+          entityType: 'invoice',
+          entityId: invoiceId,
+        })
+        await dispatchOutboundWebhook({
+          studioId,
+          eventType: 'payment.received',
+          payload: {
+            ...payload,
+            amount: paymentData.amount,
+            method: paymentData.method,
+          },
+          entityType: 'invoice',
+          entityId: invoiceId,
+        })
+      } catch (err) {
+        console.error('[invoice] outbound webhook (paid) failed:', err)
+      }
+    })()
+  }
+
   return {
     newStatus: updated?.status ?? 'pending',
     totalPaid: Number(updated?.amount_paid ?? 0),

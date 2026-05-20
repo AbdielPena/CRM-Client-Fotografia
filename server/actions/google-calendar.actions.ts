@@ -11,6 +11,7 @@ import {
   disconnectGoogleCalendar,
   importGoogleEvents,
   linkCalendarEventToEntity,
+  registerCalendarWatch,
 } from '@/server/services/google-calendar.service'
 
 function signState(studioId: string): string {
@@ -53,8 +54,26 @@ export async function setActiveCalendarAction(formData: FormData) {
     console.error('[setActiveCalendar] initial import failed', err)
   })
 
+  // Registrar watch para que Google nos notifique cambios (push notifications
+  // bidireccionales). Best-effort: si NEXT_PUBLIC_APP_URL es localhost,
+  // Google rechazará el HTTPS requerido — no rompe el flow.
+  await registerCalendarWatch(session.studioId).catch((err) => {
+    console.error('[setActiveCalendar] watch registration failed', err)
+  })
+
   revalidatePath('/settings/integrations/google')
   revalidatePath('/calendar')
+}
+
+/**
+ * Re-registra el watch del calendario (útil si el watch expiró y el cron
+ * de renovación no corrió aún, o para forzar restart después de error).
+ */
+export async function registerWatchAction() {
+  const session = await requireRole('admin')
+  const result = await registerCalendarWatch(session.studioId)
+  revalidatePath('/settings/integrations/google')
+  return result
 }
 
 /**

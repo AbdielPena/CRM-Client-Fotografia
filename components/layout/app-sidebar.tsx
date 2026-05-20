@@ -29,6 +29,14 @@ import {
   ChevronDown,
   Trash2,
   ShieldCheck,
+  Sparkles,
+  CreditCard,
+  CheckSquare,
+  BarChart3,
+  Key,
+  Webhook,
+  Rocket,
+  MessageCircle,
   type LucideIcon,
 } from "lucide-react"
 
@@ -71,7 +79,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Principal",
     items: [
       { type: "link", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
       { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
+      { type: "link", href: "/tasks", label: "Tareas", icon: CheckSquare },
+      { type: "link", href: "/chat", label: "Chat interno", icon: MessageCircle },
     ],
   },
   {
@@ -94,13 +105,31 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     type: "group",
+    label: "Análisis",
+    items: [
+      { type: "link", href: "/reports", label: "Reportes", icon: BarChart3 },
+    ],
+  },
+  {
+    type: "group",
+    label: "Automatización",
+    items: [
+      { type: "link", href: "/automations", label: "Automatizaciones", icon: Sparkles },
+      { type: "link", href: "/settings/webhooks", label: "Webhooks salientes", icon: Webhook },
+      { type: "link", href: "/settings/api", label: "API y tokens", icon: Key },
+    ],
+  },
+  {
+    type: "group",
     label: "Configuración",
     items: [
       { type: "link", href: "/settings/packages", label: "Paquetes", icon: Package },
       { type: "link", href: "/settings/forms", label: "Formularios", icon: ClipboardList },
       { type: "link", href: "/settings/contracts", label: "Contratos", icon: FileStack },
+      { type: "link", href: "/settings/project-templates", label: "Plantillas de proyecto", icon: Layers },
       { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },
       { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },
+      { type: "link", href: "/settings/branding", label: "Marca y personalización", icon: Layers },
     ],
   },
   {
@@ -115,6 +144,8 @@ const NAV_GROUPS: NavGroup[] = [
         icon: CalendarClock,
       },
       { type: "link", href: "/settings", label: "Ajustes generales", icon: Settings },
+      { type: "link", href: "/settings/billing", label: "Plan y facturación", icon: CreditCard },
+      { type: "link", href: "/settings/members", label: "Miembros del studio", icon: Users },
       { type: "link", href: "/settings/security", label: "Seguridad (2FA)", icon: ShieldCheck },
       { type: "link", href: "/trash", label: "Papelera", icon: Trash2 },
     ],
