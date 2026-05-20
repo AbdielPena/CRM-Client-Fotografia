@@ -98,6 +98,67 @@ export async function getInvReservations(
   }
 }
 
+export async function getInvReservationById(
+  studioId: string,
+  reservationId: string,
+) {
+  const sb = untypedServer()
+  const { data, error } = await sb
+    .from("inv_reservations")
+    .select(
+      `*,
+       client:clients(id, name, email, phone),
+       responsible:inv_internal_responsibles(id, full_name, department, position),
+       items:inv_reservation_items(
+         id, quantity, item_id, item_unit_id,
+         item:inv_items(id, name, brand, kind),
+         unit:inv_item_units(id, serial_number, internal_code)
+       )`,
+    )
+    .eq("id", reservationId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+
+  if (error)
+    throwServiceError("INV_RESERVATION_GET_FAILED", error, {
+      studioId,
+      reservationId,
+    })
+
+  if (!data) return null
+  return data as InvReservationRow & {
+    client?: {
+      id: string
+      name: string
+      email: string | null
+      phone: string | null
+    } | null
+    responsible?: {
+      id: string
+      full_name: string
+      department: string | null
+      position: string | null
+    } | null
+    items?: Array<{
+      id: string
+      quantity: number
+      item_id: string | null
+      item_unit_id: string | null
+      item?: {
+        id: string
+        name: string
+        brand: string | null
+        kind: string
+      } | null
+      unit?: {
+        id: string
+        serial_number: string | null
+        internal_code: string | null
+      } | null
+    }>
+  }
+}
+
 export async function createInvReservation(
   studioId: string,
   actorId: string,
