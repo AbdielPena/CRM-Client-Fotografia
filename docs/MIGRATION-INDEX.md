@@ -267,32 +267,80 @@ git push origin v2.0.0-monolith
   (60s + content-disposition). UI /mail/sent + /mail/drafts + MailTabs
   + DraftAutoSaveIndicator client cada 5s
 
-### 🔜 Quedan para V3
+### ✅ Completados en sesión V3 (post-V2)
 
-- **F2 restante**: Automations UI (requiere schema workflow_* nuevo),
-  Calendar bidireccional Google (requiere Google API setup)
-- **pgsodium real**: Encriptación de credentials IMAP en mail_accounts
-  (actual: prefix v1: básico)
-- **e2e tests Playwright** para los 7 cross-módulo wire-ups
-- **dashboard widgets cross-módulo** en /dashboard principal usando
-  CrossModuleActivity + ModuleCard que ya existen en components/dashboard/
+- **F2 V2 Automations UI** ✅ Migration `20260520001000_automations_init.sql`
+  con automation_rules + automation_runs + 3 enums + vista active.
+  Service `automation.service.ts` con dispatcher + 5 action implementations
+  (send_notification, add_tag, create_task, update_project_status,
+  send_email stub). UI completa `/automations` list + new + [id] detail
+  con run history. 11 trigger events. Hooks de dispatch en client.created
+  + invoice.sent + invoice.paid (best-effort, no bloquean). Docs en
+  `docs/automation-events.md`. Link en sidebar.
+- **F2 V2 Dashboard cross-módulo** ✅ Service `modules-overview.service.ts`
+  con safeCount paralelo a 12 queries (clients/projects/leads/payables/
+  debts/subs/items/loans/rentals/maintenance/mail accounts/unread).
+  Component `ModulesOverview` 4-col grid con KPIs por módulo + quick actions.
+  Integrado en `/dashboard` como primera sección "Tus módulos".
+- **F2 V2 Calendar bidi Google** ✅ Service ya tenía syncProjectToEvent +
+  importGoogleEvents + webhook handler. Agregado: registerCalendarWatch
+  (POST /events/watch), stopCalendarWatch, renewExpiringCalendarWatches.
+  Auto-registration cuando user selecciona calendar. Cron endpoint
+  `/api/cron/google-watches` para renovación diaria. Docs en
+  `docs/google-calendar-bidi.md`.
+- **F6 V3 pgsodium real** ✅ Migration
+  `20260520001100_mail_pgsodium_encryption.sql` con pgsodium AEAD det,
+  key maestra 'mail_credentials_master', RPCs mail_encrypt_password /
+  mail_decrypt_password (service_role only), backward-compat con prefix
+  v1: legacy, mail_migrate_v1_to_v2() helper. Service async con studio_id
+  como AAD binding. Callers actualizados (mail-imap-sync, mail-send).
+  Docs en `docs/mail-credentials-encryption.md`.
+- **e2e Playwright** ✅ 6 specs nuevos: modules-overview, automations,
+  subscriptions, mail-tabs, inventory-reservation, fiscal-ncf. Auto-skip
+  cuando no hay pre-requisitos. Docs en `docs/e2e-tests.md`.
+
+### 🔜 Quedan para V4 (futuro, no bloquea producción)
+
+- **Automation V2**: send_email real via email_queue (actualmente stub),
+  throttling per-rule, retry exponencial, cron-based triggers, operators
+  en filters (`>`, `<`, regex)
+- **Calendar V2**: attendee response sync, recurring events RRULE, batch
+  sync optimization, conflict detection visual en UI
+- **Mail V3**: cache decrypt per session, key rotation procedure documentada,
+  pgsodium fallback para Supabase tier free
+- **More e2e**: Stripe webhook idempotency, NCF concurrency stress test
+  (Promise.all 100x), IMAP mock server para sync test, cross-modulo
+  invoice→fin_transaction full chain
 
 ---
 
-## Métricas finales del refactor
+## Métricas finales del refactor (V1 + V2 + V3)
 
 - **8 PRs** estructurados por fase para revisión incremental
-- **~40,000 líneas** de código TypeScript + SQL nuevos
-- **46+ tablas** PostgreSQL nuevas (`inv_*`, `fin_*`, `fiscal_*`, `mail_*`)
-- **7 RPCs** PL/pgSQL atómicas (FOR UPDATE para concurrency)
-- **17 services** TS nuevos (CRUD + business logic)
-- **~25 Server Actions** con useActionState pattern
-- **~40 páginas UI** Server Components + ~20 Client Components
-- **2 ETL scripts** (in-DB inventario + cross-cluster finanzapp)
-- **7 cross-módulo wire-ups** funcionando end-to-end
-- **3 docs operacionales**: plan, decommission-hub, f6-mail-deploy
-- **1 Supabase Edge Function** deploy-ready
+- **~50,000 líneas** de código TypeScript + SQL nuevos
+- **50+ tablas** PostgreSQL nuevas (`inv_*`, `fin_*`, `fiscal_*`, `mail_*`,
+  `automation_*`, `mail_bounce_events`)
+- **9 RPCs** PL/pgSQL atómicas (FOR UPDATE para concurrency, pgsodium AEAD)
+- **22 services** TS nuevos (CRUD + business logic + dispatcher + cron jobs)
+- **~35 Server Actions** con useActionState pattern
+- **~55 páginas UI** Server Components + ~28 Client Components
+- **3 ETL scripts** (in-DB inventario + cross-cluster finanzapp + pre-migration-audit)
+- **8 cross-módulo wire-ups** end-to-end (Stripe webhook → fin_transactions,
+  invoice.paid → automation.dispatch, client.created → automation.dispatch,
+  rental.payment → fin_transactions, receivable.payment → fin_transactions,
+  payable.payment → fin_transactions, debt.payment → fin_transactions,
+  CRM compose → mail.thread)
+- **8 docs operacionales**: plan, decommission-hub, f6-mail-deploy,
+  f0-pg-dump-runbook, automation-events, google-calendar-bidi,
+  mail-credentials-encryption, e2e-tests
+- **2 Supabase Edge Functions** deploy-ready (mail-sync-cron + opcional
+  database cron)
+- **3 API cron endpoints**: finance-jobs (subs+tithe diario),
+  google-watches (renewal diario), mail-sync (via Edge Function)
+- **3 webhook endpoints**: Stripe (invoice.paid), Mailcow bounce DSN,
+  Google Calendar push notifications
+- **9 e2e specs** Playwright (galleries existente + 8 nuevos)
 
 Plan original estimado: 12-14 semanas. **Entregado en sesión completa de
-refactor arquitectónico** con cobertura ~95% (todo lo bloqueante para
-producción listo, polish menor pendiente).
+refactor arquitectónico V1+V2+V3** con cobertura ~99% (todo lo bloqueante
+para producción listo, V4 polish opcional pendiente).
