@@ -109,6 +109,74 @@ export async function getInvMaintenanceRecords(
   }
 }
 
+export async function getInvMaintenanceById(
+  studioId: string,
+  maintenanceId: string,
+) {
+  const sb = untypedServer()
+  const { data, error } = await sb
+    .from("inv_maintenance_records")
+    .select(
+      `*,
+       item:inv_items(id, name, brand, kind),
+       unit:inv_item_units(id, serial_number, internal_code)`,
+    )
+    .eq("id", maintenanceId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+
+  if (error)
+    throwServiceError("INV_MAINT_GET_FAILED", error, {
+      studioId,
+      maintenanceId,
+    })
+
+  if (!data) return null
+  return data as InvMaintenanceRow & {
+    item?: {
+      id: string
+      name: string
+      brand: string | null
+      kind: string
+    } | null
+    unit?: {
+      id: string
+      serial_number: string | null
+      internal_code: string | null
+    } | null
+  }
+}
+
+export async function cancelInvMaintenance(
+  studioId: string,
+  actorId: string,
+  maintenanceId: string,
+  reason?: string,
+) {
+  const sb = untypedService()
+  const { error } = await sb
+    .from("inv_maintenance_records")
+    .update({ status: "cancelado", end_date: new Date().toISOString() })
+    .eq("id", maintenanceId)
+    .eq("studio_id", studioId)
+    .in("status", ["pendiente", "en_proceso"])
+
+  if (error)
+    throwServiceError("INV_MAINT_CANCEL_FAILED", error, {
+      studioId,
+      maintenanceId,
+    })
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: "inv_maintenance",
+    entityId: maintenanceId,
+    action: "inv_maintenance.cancelled",
+    metadata: reason ? { reason } : undefined,
+  })
+}
+
 export async function createInvMaintenance(
   studioId: string,
   actorId: string,
