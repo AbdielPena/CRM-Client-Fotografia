@@ -35,6 +35,7 @@ import {
   BarChart3,
   Key,
   Webhook,
+  Rocket,
   type LucideIcon,
 } from "lucide-react"
 
@@ -77,6 +78,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Principal",
     items: [
       { type: "link", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
       { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
       { type: "link", href: "/tasks", label: "Tareas", icon: CheckSquare },
     ],
