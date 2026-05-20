@@ -655,6 +655,168 @@ export async function deleteProjectEvent(
 }
 
 // ---------------------------------------------------------------------------
+// Watch subscription (Google push notifications → /api/integrations/google/webhook)
+// ---------------------------------------------------------------------------
+
+/**
+ * Registra un canal de push notifications para que Google avise cuando
+ * el calendario cambie.
+ *
+ * Google envía POST a `webhook_url` con headers `x-goog-channel-id`
+ * (que matchea el `channel_id` que pasamos aquí) cuando hay un cambio.
+ *
+ * Los canales expiran. Por defecto Google asigna ~7 días pero podemos
+ * pedir hasta 30 días via expiration ms unix.
+ *
+ * Persiste en `google_calendar_watches` para que el webhook handler pueda
+ * mapear channel_id → studio_id.
+ */
+export async function registerCalendarWatch(
+  studioId: string,
+  opts: { expirationDays?: number } = {},
+): Promise<{ channelId: string; resourceId: string; expiration: string } | null> {
+  const integration = await loadIntegration(studioId)
+  if (!integration || !integration.config.calendarId) return null
+
+  const token = await getAccessToken(studioId)
+  if (!token) return null
+
+  const calendarId = integration.config.calendarId
+  const channelId = crypto.randomUUID()
+  const expirationDays = Math.min(opts.expirationDays ?? 7, 30)
+  const expirationMs = Date.now() + expirationDays * 24 * 60 * 60 * 1000
+  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/integrations/google/webhook`
+
+  const res = await fetch(
+    `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/watch`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: channelId,
+        type: "web_hook",
+        address: webhookUrl,
+        expiration: String(expirationMs),
+      }),
+    },
+  )
+
+  if (!res.ok) {
+    const errorText = await res.text()
+    throw new Error(`Google watch registration failed: ${res.status} ${errorText}`)
+  }
+
+  const body = (await res.json()) as {
+    id: string
+    resourceId: string
+    resourceUri?: string
+    expiration?: string
+  }
+
+  // Persistir el watch para que el webhook handler pueda mapear channel→studio
+  const sb = createSupabaseServiceClient()
+  await sb.from("google_calendar_watches").insert({
+    studio_id: studioId,
+    calendar_id: calendarId,
+    channel_id: body.id,
+    resource_id: body.resourceId,
+    expires_at: new Date(Number(body.expiration ?? expirationMs)).toISOString(),
+  })
+
+  return {
+    channelId: body.id,
+    resourceId: body.resourceId,
+    expiration: new Date(Number(body.expiration ?? expirationMs)).toISOString(),
+  }
+}
+
+/**
+ * Detiene un canal de notifications (cuando el user desconecta o renueva).
+ */
+export async function stopCalendarWatch(
+  studioId: string,
+  channelId: string,
+  resourceId: string,
+): Promise<void> {
+  const token = await getAccessToken(studioId)
+  if (!token) return
+
+  try {
+    await fetch(`${GOOGLE_CALENDAR_API}/channels/stop`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: channelId, resourceId }),
+    })
+  } catch {
+    // best-effort
+  }
+
+  const sb = createSupabaseServiceClient()
+  await sb
+    .from("google_calendar_watches")
+    .delete()
+    .eq("studio_id", studioId)
+    .eq("channel_id", channelId)
+}
+
+/**
+ * Renueva canales que están a punto de expirar (<24h).
+ * Llamar desde cron diario para mantener el push notifications activo.
+ */
+export async function renewExpiringCalendarWatches(opts: { studioId?: string } = {}): Promise<{
+  renewed: number
+  failed: number
+  errors: Array<{ studioId: string; error: string }>
+}> {
+  const sb = createSupabaseServiceClient()
+  const inOneDay = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+
+  let query = sb
+    .from("google_calendar_watches")
+    .select("id, studio_id, calendar_id, channel_id, resource_id")
+    .lt("expires_at", inOneDay)
+
+  if (opts.studioId) query = query.eq("studio_id", opts.studioId)
+
+  const { data: expiring, error } = await query
+  if (error) throw new Error(`renewExpiringCalendarWatches: ${error.message}`)
+
+  type Watch = {
+    id: string
+    studio_id: string
+    calendar_id: string
+    channel_id: string
+    resource_id: string
+  }
+
+  const results = { renewed: 0, failed: 0, errors: [] as Array<{ studioId: string; error: string }> }
+
+  for (const w of (expiring ?? []) as Watch[]) {
+    try {
+      // Stop old
+      await stopCalendarWatch(w.studio_id, w.channel_id, w.resource_id)
+      // Register new (auto-persiste nuevo row)
+      await registerCalendarWatch(w.studio_id, { expirationDays: 7 })
+      results.renewed++
+    } catch (err) {
+      results.failed++
+      results.errors.push({
+        studioId: w.studio_id,
+        error: err instanceof Error ? err.message : "Unknown",
+      })
+    }
+  }
+
+  return results
+}
+
+// ---------------------------------------------------------------------------
 // Incoming webhook (Google → StudioFlow)
 // ---------------------------------------------------------------------------
 
