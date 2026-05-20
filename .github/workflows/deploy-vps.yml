@@ -4,10 +4,9 @@ name: Deploy to VPS (StudioFlow CRM)
 #   1. Conecta directo como `studioflow` (no como root — least privilege).
 #   2. git fetch + reset --hard origin/<branch>
 #   3. npm ci
-#   4. prisma generate (best-effort si aplica)
-#   5. npm run build (Next.js)
-#   6. pm2 restart studioflow --update-env
-#   7. Smoke check /api/healthz (200 = OK).
+#   4. npm run build (Next.js)
+#   5. pm2 restart studioflow --update-env
+#   6. Smoke check /api/healthz (200 = OK).
 #
 # Secrets requeridos:
 #   SSH_HOST           = 108.175.15.195
@@ -28,7 +27,7 @@ on:
       - 'lib/**'
       - 'server/**'
       - 'public/**'
-      - 'prisma/**'
+      - 'supabase/migrations/**'
       - 'types/**'
       - 'middleware.ts'
       - 'next.config.mjs'
@@ -100,9 +99,6 @@ jobs:
 
             echo "=== npm ci ==="
             npm ci --no-audit --no-fund --silent
-
-            echo "=== prisma generate (best-effort) ==="
-            npx --no-install prisma generate 2>/dev/null || echo "(prisma no aplica o ya generado)"
 
             echo "=== next build ==="
             npm run build
