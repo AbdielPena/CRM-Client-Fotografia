@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import {
   AlertCircle,
   Save,
@@ -49,7 +50,7 @@ export function NewLoanForm({
   projects: Array<{ id: string; name: string }>
   bookings: Array<{ id: string; event_date: string; event_type: string }>
 }) {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     createInvLoanAction,
     initialState,
   )
@@ -314,20 +315,27 @@ export function NewLoanForm({
       </div>
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        <Button type="submit" disabled={pending || responsibles.length === 0}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Creando...
-            </>
-          ) : (
-            <>
-              <Save className="mr-1 size-4" />
-              Registrar préstamo
-            </>
-          )}
-        </Button>
+        <SubmitButton disabled={responsibles.length === 0} />
       </div>
     </form>
+  )
+}
+
+function SubmitButton({ disabled = false }: { disabled?: boolean }) {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending || disabled}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Creando...
+        </>
+      ) : (
+        <>
+          <Save className="mr-1 size-4" />
+          Registrar préstamo
+        </>
+      )}
+    </Button>
   )
 }

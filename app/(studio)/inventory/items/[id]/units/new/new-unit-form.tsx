@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import {
   AlertCircle,
   Save,
@@ -29,7 +29,7 @@ export function NewUnitForm({
   itemName: string
   locations: Array<{ id: string; name: string }>
 }) {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     createInvItemUnitAction,
     initialState,
   )
@@ -253,20 +253,27 @@ export function NewUnitForm({
       </div>
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        <Button type="submit" disabled={pending}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Creando...
-            </>
-          ) : (
-            <>
-              <Save className="mr-1 size-4" />
-              Agregar unidad
-            </>
-          )}
-        </Button>
+        <SubmitButton />
       </div>
     </form>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Creando...
+        </>
+      ) : (
+        <>
+          <Save className="mr-1 size-4" />
+          Agregar unidad
+        </>
+      )}
+    </Button>
   )
 }

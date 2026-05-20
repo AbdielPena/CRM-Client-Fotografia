@@ -1,7 +1,8 @@
 "use client"
 
-import { useActionState, useState } from "react"
-import { AlertCircle, Save } from "lucide-react"
+import { useState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
+import { AlertCircle, Save, Loader2 } from "lucide-react"
 
 import {
   createInvItemAction,
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button"
 const initialState: InvItemActionState = {}
 
 export function NewItemForm() {
-  const [state, formAction, pending] = useActionState(createInvItemAction, initialState)
+  const [state, formAction] = useFormState(createInvItemAction, initialState)
   const [kind, setKind] = useState<"serialized" | "bulk">("bulk")
 
   return (
@@ -190,12 +191,23 @@ export function NewItemForm() {
 
       {/* Submit */}
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        <Button type="submit" disabled={pending}>
-          <Save className="mr-1 size-4" />
-          {pending ? "Guardando..." : "Crear item"}
-        </Button>
+        <SubmitButton />
       </div>
     </form>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <Loader2 className="mr-1 size-4 animate-spin" />
+      ) : (
+        <Save className="mr-1 size-4" />
+      )}
+      {pending ? "Guardando..." : "Crear item"}
+    </Button>
   )
 }
 
