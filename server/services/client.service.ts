@@ -134,6 +134,26 @@ export async function createClient(
     metadata: { name: client.name },
   })
 
+  // Disparar automatizaciones (best-effort, no bloquea creación si falla)
+  void (async () => {
+    try {
+      const { dispatchAutomationEvent } = await import('./automation.service')
+      await dispatchAutomationEvent({
+        studioId,
+        event: 'client.created',
+        entityType: 'client',
+        entityId: client.id,
+        payload: {
+          name: client.name,
+          email: client.email,
+          source: client.source ?? null,
+        },
+      })
+    } catch (err) {
+      console.error('[client] automation dispatch failed:', err)
+    }
+  })()
+
   // Generar código de acceso al portal y enviárselo por email (best-effort).
   // No queremos bloquear la creación si el email falla.
   if (client.email) {

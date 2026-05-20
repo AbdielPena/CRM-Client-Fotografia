@@ -29,6 +29,7 @@ import {
   ChevronDown,
   Trash2,
   ShieldCheck,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react"
 
@@ -90,6 +91,13 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
       { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
+    ],
+  },
+  {
+    type: "group",
+    label: "Automatización",
+    items: [
+      { type: "link", href: "/automations", label: "Automatizaciones", icon: Sparkles },
     ],
   },
   {

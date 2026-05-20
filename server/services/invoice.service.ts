@@ -228,6 +228,26 @@ export async function sendInvoice(
     action: 'invoice.sent',
   })
 
+  // Dispatch automation event (best-effort)
+  void (async () => {
+    try {
+      const { dispatchAutomationEvent } = await import('./automation.service')
+      await dispatchAutomationEvent({
+        studioId,
+        event: 'invoice.sent',
+        entityType: 'invoice',
+        entityId: invoiceId,
+        payload: {
+          client_id: existing.client_id,
+          total: Number(invoice?.total ?? 0),
+          currency: invoice?.currency,
+        },
+      })
+    } catch (err) {
+      console.error('[invoice] automation dispatch (sent) failed:', err)
+    }
+  })()
+
   return invoice
 }
 
@@ -284,6 +304,29 @@ export async function markInvoicePaid(
 
   // El trigger ya actualizó el invoice; devolvemos el estado nuevo
   const updated = await invoicesRepo.findById(invoiceId)
+
+  // Si el invoice quedó totalmente pagado, dispatch invoice.paid
+  if (updated?.status === 'paid') {
+    void (async () => {
+      try {
+        const { dispatchAutomationEvent } = await import('./automation.service')
+        await dispatchAutomationEvent({
+          studioId,
+          event: 'invoice.paid',
+          entityType: 'invoice',
+          entityId: invoiceId,
+          payload: {
+            client_id: existing.client_id,
+            total: Number(updated.total ?? 0),
+            payment_method: paymentData.method,
+          },
+        })
+      } catch (err) {
+        console.error('[invoice] automation dispatch (paid) failed:', err)
+      }
+    })()
+  }
+
   return {
     newStatus: updated?.status ?? 'pending',
     totalPaid: Number(updated?.amount_paid ?? 0),
