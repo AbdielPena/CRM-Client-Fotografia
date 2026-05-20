@@ -16,6 +16,7 @@ import { countUnreadNotifications } from "@/server/services/notification.service
 import { getMailThreadById } from "@/server/services/mail-thread.service"
 import { markMailThreadReadAction } from "@/server/actions/mail-thread.actions"
 import { formatDate, formatDateShort } from "@/lib/utils/currency"
+import { sanitizeEmailHtml } from "@/lib/mail-html"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
@@ -173,9 +174,18 @@ export default async function MailThreadDetailPage({
                   </time>
                 </header>
 
-                {/* Body */}
+                {/* Body — preferimos HTML (con sanitización) sobre text para
+                    preservar formato del email original (negritas, listas,
+                    tablas de layout, etc.). Si solo hay text, render mono. */}
                 <div className="p-4 text-sm leading-relaxed text-foreground">
-                  {msg.body_text ? (
+                  {msg.body_html ? (
+                    <div
+                      className="mail-body prose prose-sm max-w-none dark:prose-invert"
+                      dangerouslySetInnerHTML={{
+                        __html: sanitizeEmailHtml(msg.body_html),
+                      }}
+                    />
+                  ) : msg.body_text ? (
                     <pre className="whitespace-pre-wrap break-words font-sans">
                       {msg.body_text}
                     </pre>
