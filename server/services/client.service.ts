@@ -134,8 +134,14 @@ export async function createClient(
     metadata: { name: client.name },
   })
 
-  // Disparar automatizaciones (best-effort, no bloquea creación si falla)
+  // Disparar automatizaciones + outbound webhook (best-effort, no bloquea)
   void (async () => {
+    const payload = {
+      name: client.name,
+      email: client.email,
+      source: client.source ?? null,
+    }
+
     try {
       const { dispatchAutomationEvent } = await import('./automation.service')
       await dispatchAutomationEvent({
@@ -143,14 +149,25 @@ export async function createClient(
         event: 'client.created',
         entityType: 'client',
         entityId: client.id,
-        payload: {
-          name: client.name,
-          email: client.email,
-          source: client.source ?? null,
-        },
+        payload,
       })
     } catch (err) {
       console.error('[client] automation dispatch failed:', err)
+    }
+
+    try {
+      const { dispatchOutboundWebhook } = await import(
+        './outbound-webhook.service'
+      )
+      await dispatchOutboundWebhook({
+        studioId,
+        eventType: 'client.created',
+        payload,
+        entityType: 'client',
+        entityId: client.id,
+      })
+    } catch (err) {
+      console.error('[client] outbound webhook failed:', err)
     }
   })()
 

@@ -8,32 +8,29 @@ import {
 } from "@/lib/api-v1-auth"
 import { untypedServer } from "@/server/supabase/untyped"
 
-/**
- * GET/POST /api/v1/clients
- */
 export async function GET(req: NextRequest) {
   const auth = await apiV1Authenticate(req, "read")
   if (auth.error) return auth.error
 
   const url = new URL(req.url)
   const { page, pageSize, from, to } = paginationFromUrl(url)
-  const search = url.searchParams.get("q") ?? undefined
+  const status = url.searchParams.get("status")
+  const clientId = url.searchParams.get("client_id")
 
   const sb = untypedServer()
   let query = sb
-    .from("clients")
-    .select("id, name, email, phone, created_at, updated_at", {
-      count: "exact",
-    })
+    .from("projects")
+    .select(
+      "id, name, event_type, status, event_date, location, total_amount, currency, client_id, created_at, updated_at",
+      { count: "exact" },
+    )
     .eq("studio_id", auth.studioId)
     .is("deleted_at", null)
-    .order("name", { ascending: true })
+    .order("event_date", { ascending: false, nullsFirst: false })
     .range(from, to)
 
-  if (search) {
-    const term = `%${search}%`
-    query = query.or(`name.ilike.${term},email.ilike.${term}`)
-  }
+  if (status) query = query.eq("status", status)
+  if (clientId) query = query.eq("client_id", clientId)
 
   const { data, count, error } = await query
   if (error) return apiV1Error("QUERY_FAILED", error.message)
@@ -53,28 +50,40 @@ export async function POST(req: NextRequest) {
   const auth = await apiV1Authenticate(req, "write")
   if (auth.error) return auth.error
 
-  let payload: { name?: string; email?: string; phone?: string }
+  let payload: {
+    name?: string
+    client_id?: string
+    event_type?: string
+    event_date?: string
+    location?: string
+    total_amount?: number
+    currency?: string
+  }
   try {
     payload = await req.json()
   } catch {
     return apiV1Error("INVALID_JSON", "Body must be valid JSON", 400)
   }
 
-  if (!payload.name?.trim()) {
-    return apiV1Error("VALIDATION", "name is required", 400)
+  if (!payload.name?.trim() || !payload.client_id) {
+    return apiV1Error("VALIDATION", "name + client_id are required", 400)
   }
 
   const sb = untypedServer()
   const { data, error } = await sb
-    .from("clients")
+    .from("projects")
     .insert({
       studio_id: auth.studioId,
       name: payload.name.trim(),
-      email: payload.email ?? null,
-      phone: payload.phone ?? null,
-      source: "api",
+      client_id: payload.client_id,
+      event_type: payload.event_type ?? null,
+      event_date: payload.event_date ?? null,
+      location: payload.location ?? null,
+      total_amount: payload.total_amount ?? null,
+      currency: payload.currency ?? "DOP",
+      status: "lead",
     })
-    .select("id, name, email, phone, created_at")
+    .select("id, name, event_type, event_date, status, created_at")
     .single()
 
   if (error) return apiV1Error("INSERT_FAILED", error.message)
