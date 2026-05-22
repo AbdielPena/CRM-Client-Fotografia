@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import {
   AlertCircle,
   Save,
@@ -40,7 +41,7 @@ export function NewSubscriptionForm({
   cards: Array<{ id: string; descripcion: string }>
   categories: Array<{ id: string; nombre: string; tipo: string }>
 }) {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     createFinSubscriptionAction,
     initialState,
   )
@@ -290,20 +291,27 @@ export function NewSubscriptionForm({
       )}
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        <Button type="submit" disabled={pending}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Creando...
-            </>
-          ) : (
-            <>
-              <Save className="mr-1 size-4" />
-              Crear suscripción
-            </>
-          )}
-        </Button>
+        <SubmitButton />
       </div>
     </form>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Creando...
+        </>
+      ) : (
+        <>
+          <Save className="mr-1 size-4" />
+          Crear suscripción
+        </>
+      )}
+    </Button>
   )
 }

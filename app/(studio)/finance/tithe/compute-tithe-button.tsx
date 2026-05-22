@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import { Calculator, Loader2 } from "lucide-react"
 
 import {
@@ -19,7 +20,7 @@ function defaultPeriod(): string {
 }
 
 export function ComputeTitheButton() {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     computeTitheAction,
     initialState,
   )
@@ -91,23 +92,30 @@ export function ComputeTitheButton() {
               >
                 Cerrar
               </Button>
-              <Button type="submit" disabled={pending} size="sm">
-                {pending ? (
-                  <>
-                    <Loader2 className="mr-1 size-3.5 animate-spin" />
-                    Calculando...
-                  </>
-                ) : (
-                  <>
-                    <Calculator className="mr-1 size-3.5" />
-                    Calcular
-                  </>
-                )}
-              </Button>
+              <SubmitButton />
             </div>
           </form>
         </div>
       )}
     </>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending} size="sm">
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-3.5 animate-spin" />
+          Calculando...
+        </>
+      ) : (
+        <>
+          <Calculator className="mr-1 size-3.5" />
+          Calcular
+        </>
+      )}
+    </Button>
   )
 }

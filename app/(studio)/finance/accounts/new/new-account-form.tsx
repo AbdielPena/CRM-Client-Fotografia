@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import { AlertCircle, CheckCircle2, Plus, Save, Landmark } from "lucide-react"
 
 import {
@@ -22,7 +23,7 @@ const initialAccountState: FinAccountActionState = {}
 const initialBankState: FinBankActionState = {}
 
 export function NewAccountForm({ banks: initialBanks }: { banks: Bank[] }) {
-  const [accountState, accountAction, accountPending] = useActionState(
+  const [accountState, accountAction] = useFormState(
     createFinAccountAction,
     initialAccountState,
   )
@@ -153,13 +154,20 @@ export function NewAccountForm({ banks: initialBanks }: { banks: Bank[] }) {
         <input type="hidden" name="activa" value="true" />
 
         <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-          <Button type="submit" disabled={accountPending || banks.length === 0}>
-            <Save className="mr-1 size-4" />
-            {accountPending ? "Guardando..." : "Crear cuenta"}
-          </Button>
+          <AccountSubmitButton banksEmpty={banks.length === 0} />
         </div>
       </form>
     </div>
+  )
+}
+
+function AccountSubmitButton({ banksEmpty }: { banksEmpty: boolean }) {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending || banksEmpty}>
+      <Save className="mr-1 size-4" />
+      {pending ? "Guardando..." : "Crear cuenta"}
+    </Button>
   )
 }
 
@@ -168,12 +176,12 @@ export function NewAccountForm({ banks: initialBanks }: { banks: Bank[] }) {
 // ---------------------------------------------------------------------------
 
 function CreateBankInlineForm({ onCreated }: { onCreated: (b: Bank) => void }) {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     createFinBankAction,
     initialBankState,
   )
 
-  // Si succeed, notificar al parent. useActionState devuelve state.bankId
+  // Si succeed, notificar al parent. useFormState devuelve state.bankId
   // tras success — usamos useEffect-like trigger.
   if (state.ok && state.bankId && state.values) {
     onCreated({
@@ -245,11 +253,18 @@ function CreateBankInlineForm({ onCreated }: { onCreated: (b: Bank) => void }) {
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending ? "Creando..." : "Crear banco"}
-        </Button>
+        <BankSubmitButton />
       </div>
     </form>
+  )
+}
+
+function BankSubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" size="sm" disabled={pending}>
+      {pending ? "Creando..." : "Crear banco"}
+    </Button>
   )
 }
 
