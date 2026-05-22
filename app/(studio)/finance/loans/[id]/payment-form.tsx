@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import { AlertCircle, CheckCircle2, Save, Loader2 } from "lucide-react"
 
 import {
@@ -30,7 +30,7 @@ export function LoanPaymentForm({
   currency: string
   accounts: Account[]
 }) {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     recordLoanPaymentAction,
     initialState,
   )
@@ -119,20 +119,27 @@ export function LoanPaymentForm({
       </div>
 
       <div className="flex justify-end border-t border-border pt-3">
-        <Button type="submit" disabled={pending}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Registrando...
-            </>
-          ) : (
-            <>
-              <Save className="mr-1 size-4" />
-              Registrar cobro
-            </>
-          )}
-        </Button>
+        <SubmitButton />
       </div>
     </form>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Registrando...
+        </>
+      ) : (
+        <>
+          <Save className="mr-1 size-4" />
+          Registrar cobro
+        </>
+      )}
+    </Button>
   )
 }

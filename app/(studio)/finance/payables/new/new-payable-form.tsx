@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import { AlertCircle, Save, Loader2 } from "lucide-react"
 
 import {
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 const initialState: FinPayableActionState = {}
 
 export function NewPayableForm() {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     createFinPayableAction,
     initialState,
   )

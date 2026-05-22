@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import Link from "next/link"
 import { ArrowLeft, AlertCircle, Save, Loader2 } from "lucide-react"
 
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 const initialState: FinActionState = {}
 
 export default function NewLoanPage() {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     createFinLoanAction,
     initialState,
   )
@@ -119,21 +119,28 @@ export default function NewLoanPage() {
         </div>
 
         <div className="flex justify-end border-t border-border pt-4">
-          <Button type="submit" disabled={pending}>
-            {pending ? (
-              <>
-                <Loader2 className="mr-1 size-4 animate-spin" />
-                Guardando...
-              </>
-            ) : (
-              <>
-                <Save className="mr-1 size-4" />
-                Registrar préstamo
-              </>
-            )}
-          </Button>
+          <SubmitButton />
         </div>
       </form>
     </div>
+  )
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Guardando...
+        </>
+      ) : (
+        <>
+          <Save className="mr-1 size-4" />
+          Registrar préstamo
+        </>
+      )}
+    </Button>
   )
 }
