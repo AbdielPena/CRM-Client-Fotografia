@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState, type ReactNode } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import {
   AlertCircle,
   CheckCircle2,
@@ -25,11 +26,11 @@ export function NewMailAccountForm({
 }: {
   hasExistingDefault: boolean
 }) {
-  const [createState, createAction, createPending] = useActionState(
+  const [createState, createAction] = useFormState(
     createMailAccountAction,
     initialState,
   )
-  const [testState, testAction, testPending] = useActionState(
+  const [testState, testAction] = useFormState(
     testMailAccountAction,
     initialState,
   )
@@ -214,44 +215,62 @@ export function NewMailAccountForm({
       </label>
 
       {/* Buttons */}
+      {/* TODO(react18): useFormStatus en react-dom 18 no expone qué `formAction`
+        disparó el submit, así que ambos botones comparten `pending` y muestran
+        el mismo spinner cuando uno se ejecuta. El resultado real (test vs.
+        guardado) se distingue por el banner showState.message arriba. */}
       <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
-        <Button
-          type="submit"
+        <DualSubmitButton
           formAction={testAction}
-          disabled={testPending || createPending}
           variant="outline"
-        >
-          {testPending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Probando...
-            </>
-          ) : (
-            <>
-              <Wifi className="mr-1 size-4" />
-              Probar conexión
-            </>
-          )}
-        </Button>
-        <Button
-          type="submit"
+          loadingLabel="Procesando..."
+          idleLabel="Probar conexión"
+          idleIcon={<Wifi className="mr-1 size-4" />}
+        />
+        <DualSubmitButton
           formAction={createAction}
-          disabled={testPending || createPending}
-        >
-          {createPending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Guardando...
-            </>
-          ) : (
-            <>
-              <Save className="mr-1 size-4" />
-              Guardar cuenta
-            </>
-          )}
-        </Button>
+          loadingLabel="Procesando..."
+          idleLabel="Guardar cuenta"
+          idleIcon={<Save className="mr-1 size-4" />}
+        />
       </div>
     </form>
+  )
+}
+
+function DualSubmitButton({
+  formAction,
+  variant,
+  loadingLabel,
+  idleLabel,
+  idleIcon,
+}: {
+  formAction: (formData: FormData) => void
+  variant?: "outline"
+  loadingLabel: string
+  idleLabel: string
+  idleIcon: ReactNode
+}) {
+  const { pending } = useFormStatus()
+  return (
+    <Button
+      type="submit"
+      formAction={formAction}
+      disabled={pending}
+      variant={variant}
+    >
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          {loadingLabel}
+        </>
+      ) : (
+        <>
+          {idleIcon}
+          {idleLabel}
+        </>
+      )}
+    </Button>
   )
 }
 

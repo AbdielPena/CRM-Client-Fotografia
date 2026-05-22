@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useRef, useState } from "react"
+import { useRef, useState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import { useRouter } from "next/navigation"
 import { Send, Loader2, AlertCircle, CheckCircle2, ChevronDown } from "lucide-react"
 
@@ -41,7 +42,7 @@ export function ComposeForm({
   initialDraftId?: string
   initialBody?: string
 }) {
-  const [state, action, pending] = useActionState(sendMailAction, initialState)
+  const [state, action] = useFormState(sendMailAction, initialState)
   const router = useRouter()
   const [showCcBcc, setShowCcBcc] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
@@ -222,20 +223,27 @@ export function ComposeForm({
           formRef={formRef}
           initialDraftId={initialDraftId}
         />
-        <Button type="submit" disabled={pending || state.ok === true}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Enviando...
-            </>
-          ) : (
-            <>
-              <Send className="mr-1 size-4" />
-              Enviar mensaje
-            </>
-          )}
-        </Button>
+        <SubmitButton succeeded={state.ok === true} />
       </div>
     </form>
+  )
+}
+
+function SubmitButton({ succeeded }: { succeeded: boolean }) {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending || succeeded}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Enviando...
+        </>
+      ) : (
+        <>
+          <Send className="mr-1 size-4" />
+          Enviar mensaje
+        </>
+      )}
+    </Button>
   )
 }

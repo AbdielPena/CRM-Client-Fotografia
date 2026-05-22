@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import { Send, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
 
 import {
@@ -30,7 +30,7 @@ export function ReplyForm({
   projectId?: string | null
   invoiceId?: string | null
 }) {
-  const [state, action, pending] = useActionState(sendMailAction, initialState)
+  const [state, action] = useFormState(sendMailAction, initialState)
 
   return (
     <form action={action} className="space-y-3">
@@ -146,20 +146,27 @@ export function ReplyForm({
             ? "Respuesta vinculada al thread (mantiene threading RFC 5322)"
             : "Mensaje nuevo en este thread"}
         </p>
-        <Button type="submit" disabled={pending || !accountId}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Enviando...
-            </>
-          ) : (
-            <>
-              <Send className="mr-1 size-4" />
-              Enviar
-            </>
-          )}
-        </Button>
+        <SubmitButton hasAccount={Boolean(accountId)} />
       </div>
     </form>
+  )
+}
+
+function SubmitButton({ hasAccount }: { hasAccount: boolean }) {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending || !hasAccount}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Enviando...
+        </>
+      ) : (
+        <>
+          <Send className="mr-1 size-4" />
+          Enviar
+        </>
+      )}
+    </Button>
   )
 }
