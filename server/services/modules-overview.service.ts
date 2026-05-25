@@ -1,176 +1,183 @@
 import "server-only"
 
-import { createSupabaseServerClient } from "@/server/supabase/server"
-import type { ModuleDefinition } from "@/lib/types/dashboard"
+import { untypedServer } from "@/server/supabase/untyped"
+import type { ModulesOverviewData } from "@/components/dashboard/modules-overview"
 
 /**
- * Service que agrega KPIs cross-módulo para el dashboard principal.
+ * Recolecta KPIs cross-módulo para el dashboard principal del CRM.
  *
- * Cada módulo del monolito (CRM / Finance / Inventory / Mail) declara sus
- * propios KPIs aquí. Si una tabla todavía no existe en la DB (porque la
- * migration no se aplicó), los counts vuelven a 0 sin reventar la página.
+ * Estrategia:
+ *   - 1 sola query function que hace fan-out parallel a las 3 tablas heads
+ *     de cada módulo (fin_*, inv_*, mail_*)
+ *   - Best-effort: si una tabla no existe (migration no aplicada), su
+ *     módulo queda undefined en el resultado y el component lo renderiza
+ *     como empty state
+ *   - Cap de queries para evitar overcost: solo summary aggregates,
+ *     no listados completos
  *
- * Output: ModuleSummary[] que se pasa a ModuleCard[] en el dashboard.
- *
- * Performance: queries en paralelo via Promise.allSettled. Cada query
- * usa head:true (no devuelve rows, solo count). 8 queries totales ~ 200ms.
+ * Uso desde Server Component:
+ *   const moduleData = await getModulesOverview(studioId)
+ *   <ModulesOverview data={moduleData} />
  */
 
-export type ModuleSummary = ModuleDefinition & {
-  status: "ok" | "degraded" | "down" | "unknown"
-  kpis: Array<{ label: string; value: string | number; tone?: "positive" | "warning" | "danger" | "neutral" }>
-}
+export async function getModulesOverview(
+  studioId: string,
+): Promise<ModulesOverviewData> {
+  const sb = untypedServer()
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function safeCount(client: any, table: string, studioId: string, filters: Record<string, unknown> = {}): Promise<number> {
-  try {
-    let q = client.from(table).select("id", { count: "exact", head: true }).eq("studio_id", studioId)
-    if (!Object.prototype.hasOwnProperty.call(filters, "include_deleted")) {
-      q = q.is("deleted_at", null)
-    }
-    for (const [k, v] of Object.entries(filters)) {
-      if (k === "include_deleted") continue
-      if (Array.isArray(v)) q = q.in(k, v as unknown[])
-      else q = q.eq(k, v)
-    }
-    const { count, error } = await q
-    if (error) return 0
-    return count ?? 0
-  } catch {
-    return 0
+  // Mes actual para queries de transactions
+  const now = new Date()
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    .toISOString()
+    .slice(0, 10)
+
+  // Fan-out de queries — cada módulo independiente. Si una tabla no existe,
+  // catch silencioso y dejamos undefined.
+  const [financeData, inventoryData, mailData] = await Promise.all([
+    fetchFinanceKpis(sb, studioId, firstOfMonth).catch(() => undefined),
+    fetchInventoryKpis(sb, studioId).catch(() => undefined),
+    fetchMailKpis(sb, studioId).catch(() => undefined),
+  ])
+
+  return {
+    finance: financeData,
+    inventory: inventoryData,
+    mail: mailData,
   }
 }
 
-export async function getModulesOverview(studioId: string): Promise<ModuleSummary[]> {
-  const supabase = createSupabaseServerClient()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb: any = supabase
+// ============================================================================
+// Finance KPIs
+// ============================================================================
 
-  // Run all counts in parallel
-  const [
-    crmClients,
-    crmActiveProjects,
-    crmPendingLeads,
-    finPendingPayables,
-    finActiveDebts,
-    finActiveSubs,
-    invItems,
-    invActiveLoans,
-    invActiveRentals,
-    invMaintPending,
-    mailAccounts,
-    mailUnreadThreads,
-  ] = await Promise.all([
-    safeCount(sb, "clients", studioId),
-    safeCount(sb, "projects", studioId, { status: ["booked", "in_progress", "editing"] }),
-    safeCount(sb, "leads", studioId, { status: "new" }),
-    safeCount(sb, "fin_payables", studioId, { status: "pendiente" }),
-    safeCount(sb, "fin_debts", studioId, { estado: "activa" }),
-    safeCount(sb, "fin_subscriptions", studioId, { activa: true }),
-    safeCount(sb, "inv_items", studioId, { is_active: true }),
-    safeCount(sb, "inv_loans", studioId, { status: "activo" }),
-    safeCount(sb, "inv_rentals", studioId, { status: ["confirmada", "en_curso"] }),
-    safeCount(sb, "inv_maintenance_records", studioId, { status: ["pendiente", "en_proceso"], include_deleted: true }),
-    safeCount(sb, "mail_accounts", studioId, { is_active: true }),
-    safeCount(sb, "mail_threads", studioId).then(async (totalThreads) => {
-      // Unread = threads con unread_count > 0
-      try {
-        const { count } = await sb
-          .from("mail_threads")
-          .select("id", { count: "exact", head: true })
-          .eq("studio_id", studioId)
-          .is("deleted_at", null)
-          .gt("unread_count", 0)
-        return count ?? 0
-      } catch {
-        return totalThreads
-      }
-    }),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchFinanceKpis(sb: any, studioId: string, firstOfMonth: string) {
+  const [incomeRes, expensesRes, recvRes, payRes] = await Promise.all([
+    sb
+      .from("fin_transactions")
+      .select("monto, currency")
+      .eq("studio_id", studioId)
+      .eq("tipo", "ingreso")
+      .eq("is_business", true)
+      .gte("fecha", firstOfMonth)
+      .is("deleted_at", null),
+    sb
+      .from("fin_transactions")
+      .select("monto, currency")
+      .eq("studio_id", studioId)
+      .eq("tipo", "gasto")
+      .eq("is_business", true)
+      .gte("fecha", firstOfMonth)
+      .is("deleted_at", null),
+    sb
+      .from("fin_receivables")
+      .select("id", { count: "exact", head: true })
+      .eq("studio_id", studioId)
+      .in("estado", ["pendiente", "parcial", "vencida"])
+      .is("deleted_at", null),
+    sb
+      .from("fin_payables")
+      .select("id", { count: "exact", head: true })
+      .eq("studio_id", studioId)
+      .in("estado", ["pendiente", "parcial", "vencida"])
+      .is("deleted_at", null),
   ])
 
-  return [
-    {
-      id: "crm",
-      name: "CRM",
-      description: "Clientes, proyectos, leads y sesiones",
-      color: "#7C3AED",
-      iconName: "Camera",
-      href: "/clients",
-      enabled: true,
-      status: "ok",
-      quickActions: [
-        { label: "Nuevo cliente", href: "/clients/new" },
-        { label: "Ver proyectos", href: "/projects" },
-        { label: "Pipeline leads", href: "/leads" },
-      ],
-      kpis: [
-        { label: "Clientes", value: crmClients, tone: "neutral" },
-        { label: "Proyectos activos", value: crmActiveProjects, tone: crmActiveProjects > 0 ? "positive" : "neutral" },
-        { label: "Leads nuevos", value: crmPendingLeads, tone: crmPendingLeads > 0 ? "warning" : "neutral" },
-      ],
-    },
-    {
-      id: "finance",
-      name: "Finanzas",
-      description: "Cuentas, transacciones, deudas y metas",
-      color: "#10B981",
-      iconName: "Wallet",
-      href: "/finance",
-      enabled: true,
-      status: "ok",
-      quickActions: [
-        { label: "Cuentas", href: "/finance/accounts" },
-        { label: "Suscripciones", href: "/finance/subscriptions" },
-        { label: "Diezmo", href: "/finance/tithe" },
-      ],
-      kpis: [
-        { label: "Pagos pendientes", value: finPendingPayables, tone: finPendingPayables > 0 ? "warning" : "neutral" },
-        { label: "Deudas activas", value: finActiveDebts, tone: finActiveDebts > 0 ? "warning" : "neutral" },
-        { label: "Suscripciones", value: finActiveSubs, tone: "neutral" },
-      ],
-    },
-    {
-      id: "inventory",
-      name: "Inventario",
-      description: "Equipos, préstamos, alquileres y mantenimiento",
-      color: "#F59E0B",
-      iconName: "Package",
-      href: "/inventory",
-      enabled: true,
-      status: invMaintPending > 0 ? "degraded" : "ok",
-      quickActions: [
-        { label: "Equipos", href: "/inventory/items" },
-        { label: "Préstamos", href: "/inventory/loans" },
-        { label: "Mantenimiento", href: "/inventory/maintenance" },
-      ],
-      kpis: [
-        { label: "Equipos", value: invItems, tone: "neutral" },
-        { label: "Préstamos / Rentas activas", value: invActiveLoans + invActiveRentals, tone: "neutral" },
-        { label: "Mantenimiento", value: invMaintPending, tone: invMaintPending > 0 ? "warning" : "neutral" },
-      ],
-    },
-    {
-      id: "mail",
-      name: "Correo",
-      description: "Inbox unificado con Mailcow IMAP+SMTP",
-      color: "#F97316",
-      iconName: "Mail",
-      href: "/mail/inbox",
-      enabled: mailAccounts > 0,
-      status: mailAccounts === 0 ? "unknown" : "ok",
-      quickActions:
-        mailAccounts > 0
-          ? [
-              { label: "Bandeja", href: "/mail/inbox" },
-              { label: "Borradores", href: "/mail/drafts" },
-              { label: "Redactar", href: "/mail/compose" },
-            ]
-          : [{ label: "Configurar Mailcow", href: "/settings/mail" }],
-      kpis: [
-        { label: "Cuentas activas", value: mailAccounts, tone: mailAccounts > 0 ? "positive" : "neutral" },
-        { label: "Conversaciones no leídas", value: mailUnreadThreads, tone: mailUnreadThreads > 0 ? "warning" : "neutral" },
-        { label: "Setup", value: mailAccounts > 0 ? "Listo" : "Pendiente", tone: mailAccounts > 0 ? "positive" : "warning" },
-      ],
-    },
-  ]
+  const incomeRows = (incomeRes.data ?? []) as Array<{ monto: number | string; currency: string }>
+  const expenseRows = (expensesRes.data ?? []) as Array<{ monto: number | string; currency: string }>
+
+  // Currency primary = el más común en el mes (heurística simple)
+  const currencyCounts = new Map<string, number>()
+  for (const r of [...incomeRows, ...expenseRows]) {
+    currencyCounts.set(r.currency, (currencyCounts.get(r.currency) ?? 0) + 1)
+  }
+  const primaryCurrency = Array.from(currencyCounts.entries()).sort(
+    (a, b) => b[1] - a[1],
+  )[0]?.[0] ?? "DOP"
+
+  const incomeMonth = incomeRows
+    .filter((r) => r.currency === primaryCurrency)
+    .reduce((acc, r) => acc + Number(r.monto ?? 0), 0)
+  const expensesMonth = expenseRows
+    .filter((r) => r.currency === primaryCurrency)
+    .reduce((acc, r) => acc + Number(r.monto ?? 0), 0)
+
+  return {
+    incomeMonth: Number(incomeMonth.toFixed(2)),
+    expensesMonth: Number(expensesMonth.toFixed(2)),
+    netBalance: Number((incomeMonth - expensesMonth).toFixed(2)),
+    receivablesPending: recvRes.count ?? 0,
+    payablesPending: payRes.count ?? 0,
+    currency: primaryCurrency,
+  }
+}
+
+// ============================================================================
+// Inventory KPIs
+// ============================================================================
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchInventoryKpis(sb: any, studioId: string) {
+  const [itemsRes, loansRes, rentalsRes] = await Promise.all([
+    sb
+      .from("inv_items")
+      .select("quantity_total, min_stock, quantity_loaned, quantity_rented")
+      .eq("studio_id", studioId)
+      .eq("is_active", true)
+      .is("deleted_at", null),
+    sb
+      .from("inv_loans")
+      .select("id", { count: "exact", head: true })
+      .eq("studio_id", studioId)
+      .eq("status", "activo"),
+    sb
+      .from("inv_rentals")
+      .select("id", { count: "exact", head: true })
+      .eq("studio_id", studioId)
+      .eq("status", "activa"),
+  ])
+
+  const items = (itemsRes.data ?? []) as Array<{
+    quantity_total: number
+    min_stock: number
+    quantity_loaned: number
+    quantity_rented: number
+  }>
+
+  const totalItems = items.length
+  const lowStock = items.filter((it) => it.quantity_total <= it.min_stock).length
+
+  return {
+    totalItems,
+    lowStock,
+    activeLoans: loansRes.count ?? 0,
+    activeRentals: rentalsRes.count ?? 0,
+  }
+}
+
+// ============================================================================
+// Mail KPIs
+// ============================================================================
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchMailKpis(sb: any, studioId: string) {
+  const [unreadRes, accountsRes] = await Promise.all([
+    sb
+      .from("mail_threads")
+      .select("id", { count: "exact", head: true })
+      .eq("studio_id", studioId)
+      .gt("unread_count", 0)
+      .is("deleted_at", null),
+    sb
+      .from("mail_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("studio_id", studioId)
+      .eq("is_active", true)
+      .is("deleted_at", null),
+  ])
+
+  return {
+    unreadThreads: unreadRes.count ?? 0,
+    accountsConfigured: accountsRes.count ?? 0,
+  }
 }
