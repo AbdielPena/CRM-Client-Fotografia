@@ -143,7 +143,9 @@ export default async function DashboardPage() {
     getTopPackages(session.studioId, 5, 5),
     countUnreadNotifications(session.studioId),
     getRecentActivity(session.studioId, 12).catch(() => []),
-    getModulesOverview(session.studioId).catch(() => ({})),
+    getModulesOverview(session.studioId).catch(
+      () => ({}) as Awaited<ReturnType<typeof getModulesOverview>>,
+    ),
     getOnboardingSteps(session.studioId).catch(() => []),
   ])
 
