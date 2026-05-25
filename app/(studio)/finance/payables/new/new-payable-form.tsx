@@ -11,6 +11,25 @@ import { Button } from "@/components/ui/button"
 
 const initialState: FinPayableActionState = {}
 
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Guardando...
+        </>
+      ) : (
+        <>
+          <Save className="mr-1 size-4" />
+          Crear CxP
+        </>
+      )}
+    </Button>
+  )
+}
+
 export function NewPayableForm() {
   const [state, action] = useFormState(
     createFinPayableAction,
@@ -94,19 +113,7 @@ export function NewPayableForm() {
       </div>
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
-        <Button type="submit" disabled={pending}>
-          {pending ? (
-            <>
-              <Loader2 className="mr-1 size-4 animate-spin" />
-              Guardando...
-            </>
-          ) : (
-            <>
-              <Save className="mr-1 size-4" />
-              Crear CxP
-            </>
-          )}
-        </Button>
+        <SubmitButton />
       </div>
     </form>
   )
