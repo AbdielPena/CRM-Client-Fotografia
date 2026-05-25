@@ -134,6 +134,43 @@ export async function createClient(
     metadata: { name: client.name },
   })
 
+  // Disparar automatizaciones + outbound webhook (best-effort, no bloquea)
+  void (async () => {
+    const payload = {
+      name: client.name,
+      email: client.email,
+      source: client.source ?? null,
+    }
+
+    try {
+      const { dispatchAutomationEvent } = await import('./automation.service')
+      await dispatchAutomationEvent({
+        studioId,
+        event: 'client.created',
+        entityType: 'client',
+        entityId: client.id,
+        payload,
+      })
+    } catch (err) {
+      console.error('[client] automation dispatch failed:', err)
+    }
+
+    try {
+      const { dispatchOutboundWebhook } = await import(
+        './outbound-webhook.service'
+      )
+      await dispatchOutboundWebhook({
+        studioId,
+        eventType: 'client.created',
+        payload,
+        entityType: 'client',
+        entityId: client.id,
+      })
+    } catch (err) {
+      console.error('[client] outbound webhook failed:', err)
+    }
+  })()
+
   // Generar código de acceso al portal y enviárselo por email (best-effort).
   // No queremos bloquear la creación si el email falla.
   if (client.email) {

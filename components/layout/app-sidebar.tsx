@@ -24,16 +24,26 @@ import {
   CalendarClock,
   Layers,
   Mail,
+  Wallet,
+  Boxes,
+  Landmark,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
   Trash2,
   ShieldCheck,
+  Sparkles,
+  CreditCard,
+  CheckSquare,
+  BarChart3,
+  Key,
+  Webhook,
+  Rocket,
+  MessageCircle,
   type LucideIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
-import { AppSwitcher } from "@/components/app-switcher"
 import { ThemeDock } from "@/components/shared/theme-dock"
 import {
   Tooltip,
@@ -71,7 +81,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Principal",
     items: [
       { type: "link", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
       { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
+      { type: "link", href: "/tasks", label: "Tareas", icon: CheckSquare },
+      { type: "link", href: "/chat", label: "Chat interno", icon: MessageCircle },
     ],
   },
   {
@@ -86,10 +99,37 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     type: "group",
-    label: "Finanzas",
+    label: "Documentos",
     items: [
       { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
       { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
+    ],
+  },
+  // Módulos del monolito unificado (F3, F5, F6). Aparecen como sección dedicada
+  // — antes vivían en sistemas separados con SSO federado, ahora son nativos.
+  {
+    type: "group",
+    label: "Módulos",
+    items: [
+      { type: "link", href: "/finance/transactions", label: "Finanzas", icon: Wallet },
+      { type: "link", href: "/inventory/items", label: "Inventario", icon: Boxes },
+      { type: "link", href: "/mail/inbox", label: "Correo", icon: Mail },
+    ],
+  },
+  {
+    type: "group",
+    label: "Análisis",
+    items: [
+      { type: "link", href: "/reports", label: "Reportes", icon: BarChart3 },
+    ],
+  },
+  {
+    type: "group",
+    label: "Automatización",
+    items: [
+      { type: "link", href: "/automations", label: "Automatizaciones", icon: Sparkles },
+      { type: "link", href: "/settings/webhooks", label: "Webhooks salientes", icon: Webhook },
+      { type: "link", href: "/settings/api", label: "API y tokens", icon: Key },
     ],
   },
   {
@@ -99,8 +139,11 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/settings/packages", label: "Paquetes", icon: Package },
       { type: "link", href: "/settings/forms", label: "Formularios", icon: ClipboardList },
       { type: "link", href: "/settings/contracts", label: "Contratos", icon: FileStack },
+      { type: "link", href: "/settings/project-templates", label: "Plantillas de proyecto", icon: Layers },
       { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },
       { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },
+      { type: "link", href: "/settings/branding", label: "Marca y personalización", icon: Layers },
+      { type: "link", href: "/settings/fiscal", label: "Fiscal RD (NCF/ITBIS)", icon: Landmark },
     ],
   },
   {
@@ -115,6 +158,8 @@ const NAV_GROUPS: NavGroup[] = [
         icon: CalendarClock,
       },
       { type: "link", href: "/settings", label: "Ajustes generales", icon: Settings },
+      { type: "link", href: "/settings/billing", label: "Plan y facturación", icon: CreditCard },
+      { type: "link", href: "/settings/members", label: "Miembros del studio", icon: Users },
       { type: "link", href: "/settings/security", label: "Seguridad (2FA)", icon: ShieldCheck },
       { type: "link", href: "/trash", label: "Papelera", icon: Trash2 },
     ],
@@ -251,20 +296,35 @@ export function AppSidebar({
         )}
       >
         {/* ======================== Header ========================
-            AppSwitcher: componente compartido del Studio Suite. Reemplaza el
-            brand custom del CRM por una versión consistente cross-system con
-            dropdown de los 5 destinos. currentSystem="crm" destaca este.
-            Toques `initial`/`studioName` quedan disponibles si se requiere
-            tooltip o sub-label en el futuro. */}
+            Brand simple del studio. Antes vivía el AppSwitcher cross-system
+            del hub federado (5 destinos, JWT corto). Tras la unificación a
+            monolito (F8 hub-kill), solo necesitamos identificar el studio. */}
         <header
           className={cn(
             "relative flex h-[64px] items-center border-b border-[hsl(var(--sidebar-border))]",
-            collapsed ? "justify-center px-2" : "px-3",
+            collapsed ? "justify-center px-2" : "gap-3 px-3",
           )}
         >
-          <div className="w-full">
-            <AppSwitcher currentSystem="crm" collapsed={collapsed} />
-          </div>
+          <Link
+            href="/dashboard"
+            className={cn(
+              "flex items-center gap-3 rounded-lg transition-colors hover:bg-[hsl(var(--sidebar-accent))/50]",
+              collapsed ? "size-10 justify-center" : "min-w-0 flex-1 px-2 py-1.5",
+            )}
+            title={studioName}
+          >
+            <span
+              aria-hidden
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-brand/70 text-sm font-bold text-brand-foreground shadow-sm"
+            >
+              {initial}
+            </span>
+            {!collapsed && (
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none text-foreground">
+                {studioName}
+              </span>
+            )}
+          </Link>
         </header>
 
         {/* ======================== Navigation ======================== */}

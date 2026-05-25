@@ -14,6 +14,12 @@ import {
   getTopPackages,
   getRecentActivity,
 } from "@/server/services/dashboard.service"
+import { getModulesOverview } from "@/server/services/modules-overview.service"
+import {
+  autoDetectCompletedSteps,
+  calculateProgress,
+  getOnboardingSteps,
+} from "@/server/services/onboarding.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { formatCurrency } from "@/lib/utils/currency"
 
@@ -26,6 +32,8 @@ import { GoalsProgress } from "@/components/dashboard/goals-progress"
 import { RecentActivityRich } from "@/components/dashboard/recent-activity-rich"
 import { TopPackagesList } from "@/components/dashboard/top-packages-list"
 import { UpcomingSessions } from "@/components/dashboard/upcoming-sessions"
+import { ModulesOverview } from "@/components/dashboard/modules-overview"
+import { OnboardingBanner } from "@/components/dashboard/onboarding-banner"
 
 export const metadata: Metadata = { title: "Dashboard" }
 
@@ -118,14 +126,28 @@ async function getDashboardData(studioId: string) {
 export default async function DashboardPage() {
   const session = await requireStudioAuth()
 
-  const [data, monthlyRevenue, topPackages, unreadNotifications, recentActivity] =
-    await Promise.all([
-      getDashboardData(session.studioId),
-      getMonthlyRevenue(session.studioId, 12),
-      getTopPackages(session.studioId, 5, 5),
-      countUnreadNotifications(session.studioId),
-      getRecentActivity(session.studioId, 12).catch(() => []),
-    ])
+  // Auto-detect onboarding steps completados desde data real (no bloquea render)
+  void autoDetectCompletedSteps(session.studioId).catch(() => null)
+
+  const [
+    data,
+    monthlyRevenue,
+    topPackages,
+    unreadNotifications,
+    recentActivity,
+    modulesOverview,
+    onboardingSteps,
+  ] = await Promise.all([
+    getDashboardData(session.studioId),
+    getMonthlyRevenue(session.studioId, 12),
+    getTopPackages(session.studioId, 5, 5),
+    countUnreadNotifications(session.studioId),
+    getRecentActivity(session.studioId, 12).catch(() => []),
+    getModulesOverview(session.studioId).catch(() => []),
+    getOnboardingSteps(session.studioId).catch(() => []),
+  ])
+
+  const onboardingProgress = calculateProgress(onboardingSteps)
 
   const firstName = (session.name || session.email).split(" ")[0]
 
@@ -185,6 +207,30 @@ export default async function DashboardPage() {
 
       <div className="px-6 pb-12 pt-4 lg:px-8">
         <div className="space-y-5">
+          {/* ─── Onboarding banner (solo si <100%) ─────────────── */}
+          {onboardingProgress.percentage < 100 && onboardingSteps.length > 0 && (
+            <OnboardingBanner
+              percentage={onboardingProgress.percentage}
+              completed={onboardingProgress.completed}
+              total={onboardingProgress.total}
+            />
+          )}
+
+          {/* ─── Modules overview (cross-módulo) ────────────────── */}
+          {modulesOverview.length > 0 && (
+            <section>
+              <div className="mb-3 flex items-baseline justify-between">
+                <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Tus módulos
+                </h2>
+                <p className="text-[11px] text-muted-foreground">
+                  Resumen de actividad por área
+                </p>
+              </div>
+              <ModulesOverview modules={modulesOverview} />
+            </section>
+          )}
+
           {/* ─── KPIs (todos clickables) ──────────────────────────── */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
