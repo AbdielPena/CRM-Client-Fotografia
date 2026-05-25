@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS public.inv_loans (
   signature_url         TEXT,
   registered_by         UUID NOT NULL REFERENCES auth.users(id),
   -- Asociación opcional a un booking/project del CRM (correlación cross-módulo)
-  booking_id            UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+  booking_id            UUID REFERENCES public.booking_requests(id) ON DELETE SET NULL,
   project_id            UUID REFERENCES public.projects(id) ON DELETE SET NULL,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -57,8 +57,9 @@ COMMENT ON COLUMN public.fin_payables.forma_pago IS
    06=Nota de Crédito, 07=Otras formas de venta.';
 
 -- 3) Index para queries del 606 por studio+periodo
+-- NOTA: fin_payables no tiene paid_at; usamos fecha_emision para filtrar por periodo DGII
 CREATE INDEX IF NOT EXISTS idx_fin_payables_dgii_606
-  ON public.fin_payables (studio_id, paid_at)
+  ON public.fin_payables (studio_id, fecha_emision)
   WHERE ncf_proveedor IS NOT NULL AND deleted_at IS NULL;
 
 -- 4) Constraint suave: si ncf_proveedor está set, rnc_proveedor también debería estarlo
