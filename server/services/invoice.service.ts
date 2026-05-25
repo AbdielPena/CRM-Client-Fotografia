@@ -228,6 +228,31 @@ export async function sendInvoice(
     action: 'invoice.sent',
   })
 
+  // F4: auto-emit NCF si el studio tiene tax_config.default_ncf_type configurado
+  // y la invoice no tenía NCF asignado todavía. Best-effort: si falla
+  // (sin secuencia activa, sin RNC del cliente para tipos restrictivos),
+  // log warning pero NO bloquea el send — el user puede emitir NCF manualmente
+  // después desde el botón "Emitir NCF" en /invoices/[id].
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const invoiceAsAny = invoice as any
+  if (!invoiceAsAny?.ncf) {
+    try {
+      const { getTaxConfig, issueNcfForInvoice } = await import(
+        "./fiscal-ncf.service"
+      )
+      const taxConfig = await getTaxConfig(studioId)
+      if (taxConfig?.default_ncf_type) {
+        await issueNcfForInvoice(studioId, actorId, invoiceId)
+        console.log(`[invoice.sent] NCF auto-asignado a invoice ${invoiceId}`)
+      }
+    } catch (err) {
+      console.warn(
+        `[invoice.sent] auto-NCF falló (non-fatal):`,
+        err instanceof Error ? err.message : err,
+      )
+    }
+  }
+
   // Dispatch automation + outbound webhook (best-effort)
   void (async () => {
     const payload = {
