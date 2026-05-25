@@ -143,7 +143,7 @@ export default async function DashboardPage() {
     getTopPackages(session.studioId, 5, 5),
     countUnreadNotifications(session.studioId),
     getRecentActivity(session.studioId, 12).catch(() => []),
-    getModulesOverview(session.studioId).catch(() => []),
+    getModulesOverview(session.studioId).catch(() => ({})),
     getOnboardingSteps(session.studioId).catch(() => []),
   ])
 
@@ -217,7 +217,9 @@ export default async function DashboardPage() {
           )}
 
           {/* ─── Modules overview (cross-módulo) ────────────────── */}
-          {modulesOverview.length > 0 && (
+          {(modulesOverview.finance ||
+            modulesOverview.inventory ||
+            modulesOverview.mail) && (
             <section>
               <div className="mb-3 flex items-baseline justify-between">
                 <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -227,7 +229,7 @@ export default async function DashboardPage() {
                   Resumen de actividad por área
                 </p>
               </div>
-              <ModulesOverview modules={modulesOverview} />
+              <ModulesOverview data={modulesOverview} />
             </section>
           )}
 
