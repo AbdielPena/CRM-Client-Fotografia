@@ -9,6 +9,25 @@ import type { Database } from '@/types/supabase'
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from './env'
 
 /**
+ * Cookie domain compartido entre subdominios.
+ *
+ * Cuando AUTH_COOKIE_DOMAIN está seteado (e.g. ".abbypixel.com"), el cookie
+ * de sesión de Supabase se comparte entre hub.abbypixel.com, my.abbypixel.com,
+ * fi.abbypixel.com, inventario.abbypixel.com, etc. Esto permite SSO cross-
+ * subdomain: un login en cualquier módulo (o en el hub) logea al usuario
+ * en TODOS los demás sin re-loguear.
+ *
+ * En dev (localhost) se deja vacío para que el cookie sea host-only.
+ */
+const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN
+function applyDomain(options: CookieOptions): CookieOptions {
+  if (AUTH_COOKIE_DOMAIN && !options.domain) {
+    return { ...options, domain: AUTH_COOKIE_DOMAIN }
+  }
+  return options
+}
+
+/**
  * Cliente Supabase SSR para uso en:
  *  - Server Components
  *  - Server Actions
@@ -31,7 +50,7 @@ export function createSupabaseServerClient(): SupabaseClient<Database> {
       },
       set(name: string, value: string, options: CookieOptions) {
         try {
-          cookieStore.set({ name, value, ...options })
+          cookieStore.set({ name, value, ...applyDomain(options) })
         } catch {
           // Server Components no pueden escribir cookies; se ignora.
           // Las Actions/Route Handlers sí pueden.
@@ -39,7 +58,7 @@ export function createSupabaseServerClient(): SupabaseClient<Database> {
       },
       remove(name: string, options: CookieOptions) {
         try {
-          cookieStore.set({ name, value: '', ...options })
+          cookieStore.set({ name, value: '', ...applyDomain(options) })
         } catch {
           // igual que arriba
         }
