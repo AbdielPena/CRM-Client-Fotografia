@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import { CheckCircle2, Loader2, AlertCircle } from "lucide-react"
 
 import {
@@ -11,6 +11,25 @@ import { formatCurrency } from "@/lib/utils/currency"
 import { Button } from "@/components/ui/button"
 
 const initialState: FinTitheActionState = {}
+
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? (
+        <>
+          <Loader2 className="mr-1 size-4 animate-spin" />
+          Registrando...
+        </>
+      ) : (
+        <>
+          <CheckCircle2 className="mr-1 size-4" />
+          Marcar como pagado
+        </>
+      )}
+    </Button>
+  )
+}
 
 export function MarkPaidForm({
   titheId,
@@ -23,7 +42,7 @@ export function MarkPaidForm({
   accounts: Array<{ id: string; nombre: string; currency: string }>
   categories: Array<{ id: string; nombre: string; tipo: string }>
 }) {
-  const [state, action, pending] = useActionState(
+  const [state, action] = useFormState(
     markTithePaidAction,
     initialState,
   )
@@ -147,19 +166,7 @@ export function MarkPaidForm({
         </label>
 
         <div className="flex items-center justify-end pt-2">
-          <Button type="submit" disabled={pending}>
-            {pending ? (
-              <>
-                <Loader2 className="mr-1 size-4 animate-spin" />
-                Registrando...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="mr-1 size-4" />
-                Marcar como pagado
-              </>
-            )}
-          </Button>
+          <SubmitButton />
         </div>
       </form>
     </section>

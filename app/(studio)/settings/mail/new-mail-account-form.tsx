@@ -1,6 +1,7 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useState } from "react"
+import { useFormState, useFormStatus } from "react-dom"
 import {
   AlertCircle,
   CheckCircle2,
@@ -20,16 +21,42 @@ import { Button } from "@/components/ui/button"
 
 const initialState: MailAccountActionState = {}
 
+function ActionButton({
+  formAction,
+  variant,
+  children,
+  pendingChildren,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formAction: any
+  variant?: "outline"
+  children: React.ReactNode
+  pendingChildren: React.ReactNode
+}) {
+  const { pending, action } = useFormStatus()
+  const isThisActive = pending && action === formAction
+  return (
+    <Button
+      type="submit"
+      formAction={formAction}
+      disabled={pending}
+      variant={variant}
+    >
+      {isThisActive ? pendingChildren : children}
+    </Button>
+  )
+}
+
 export function NewMailAccountForm({
   hasExistingDefault,
 }: {
   hasExistingDefault: boolean
 }) {
-  const [createState, createAction, createPending] = useActionState(
+  const [createState, createAction] = useFormState(
     createMailAccountAction,
     initialState,
   )
-  const [testState, testAction, testPending] = useActionState(
+  const [testState, testAction] = useFormState(
     testMailAccountAction,
     initialState,
   )
@@ -215,41 +242,35 @@ export function NewMailAccountForm({
 
       {/* Buttons */}
       <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
-        <Button
-          type="submit"
+        <ActionButton
           formAction={testAction}
-          disabled={testPending || createPending}
           variant="outline"
-        >
-          {testPending ? (
+          pendingChildren={
             <>
               <Loader2 className="mr-1 size-4 animate-spin" />
               Probando...
             </>
-          ) : (
-            <>
-              <Wifi className="mr-1 size-4" />
-              Probar conexión
-            </>
-          )}
-        </Button>
-        <Button
-          type="submit"
-          formAction={createAction}
-          disabled={testPending || createPending}
+          }
         >
-          {createPending ? (
+          <>
+            <Wifi className="mr-1 size-4" />
+            Probar conexión
+          </>
+        </ActionButton>
+        <ActionButton
+          formAction={createAction}
+          pendingChildren={
             <>
               <Loader2 className="mr-1 size-4 animate-spin" />
               Guardando...
             </>
-          ) : (
-            <>
-              <Save className="mr-1 size-4" />
-              Guardar cuenta
-            </>
-          )}
-        </Button>
+          }
+        >
+          <>
+            <Save className="mr-1 size-4" />
+            Guardar cuenta
+          </>
+        </ActionButton>
       </div>
     </form>
   )
