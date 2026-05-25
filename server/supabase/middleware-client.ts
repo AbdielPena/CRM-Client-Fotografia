@@ -17,20 +17,29 @@ export function createSupabaseMiddlewareClient(req: NextRequest) {
     },
   })
 
+  // Cookie domain compartido entre subdominios (ver server.ts para detalle)
+  const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN
+  const applyDomain = (options: CookieOptions): CookieOptions =>
+    AUTH_COOKIE_DOMAIN && !options.domain
+      ? { ...options, domain: AUTH_COOKIE_DOMAIN }
+      : options
+
   const supabase = createServerClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
       get(name: string) {
         return req.cookies.get(name)?.value
       },
       set(name: string, value: string, options: CookieOptions) {
-        req.cookies.set({ name, value, ...options })
+        const opts = applyDomain(options)
+        req.cookies.set({ name, value, ...opts })
         response = NextResponse.next({ request: { headers: req.headers } })
-        response.cookies.set({ name, value, ...options })
+        response.cookies.set({ name, value, ...opts })
       },
       remove(name: string, options: CookieOptions) {
-        req.cookies.set({ name, value: '', ...options })
+        const opts = applyDomain(options)
+        req.cookies.set({ name, value: '', ...opts })
         response = NextResponse.next({ request: { headers: req.headers } })
-        response.cookies.set({ name, value: '', ...options })
+        response.cookies.set({ name, value: '', ...opts })
       },
     },
   })
