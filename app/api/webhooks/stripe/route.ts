@@ -3,6 +3,7 @@ import Stripe from "stripe"
 import { createClient } from "@supabase/supabase-js"
 import { createId } from "@paralleldrive/cuid2"
 import { SUPABASE_URL } from "@/server/supabase/env"
+import { recordIncomeFromInvoice } from "@/server/services/fin-transaction.service"
 
 // Stripe webhook necesita service role para bypass de RLS.
 // El secret SUPABASE_SERVICE_ROLE_KEY NO se expone al cliente.
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
 
         const { data: invoice } = await admin
           .from("invoices")
-          .select("id, total, currency")
+          .select("id, total, currency, client_id")
           .eq("id", invoiceId)
           .eq("studio_id", studioId)
           .is("deleted_at", null)
@@ -74,6 +75,35 @@ export async function POST(req: NextRequest) {
         }
 
         console.log(`[Stripe] Payment recorded for invoice ${invoiceId}: $${amountPaid}`)
+
+        // Cross-módulo F5 wire-up: crear fin_transactions.income idempotente
+        // (external_reference UNIQUE garantiza no duplicados en webhook retries).
+        // Non-fatal: si falla, el payment ya está registrado y el income se
+        // puede recrear manualmente desde /finance/transactions.
+        try {
+          const result = await recordIncomeFromInvoice(studioId, "stripe-webhook", {
+            invoiceId,
+            amount: amountPaid,
+            currency: pi.currency.toUpperCase(),
+            paidAt: new Date().toISOString(),
+            paymentReference: pi.id,
+            clientId: (invoice as { client_id: string | null }).client_id ?? undefined,
+          })
+          if (result.alreadyExisted) {
+            console.log(
+              `[Stripe→Finance] income already existed for invoice ${invoiceId} (idempotent retry)`,
+            )
+          } else {
+            console.log(
+              `[Stripe→Finance] income created tx_id=${result.transactionId} for invoice ${invoiceId}`,
+            )
+          }
+        } catch (finErr) {
+          console.warn(
+            `[Stripe→Finance] recordIncomeFromInvoice failed (non-fatal, payment registered):`,
+            finErr,
+          )
+        }
         break
       }
 
