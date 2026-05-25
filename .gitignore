@@ -74,3 +74,4 @@ next-build.zip
 # TypeScript build cache
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+.deploy-tmp/
