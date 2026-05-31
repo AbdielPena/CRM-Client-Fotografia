@@ -6,6 +6,7 @@ import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js
 import { z } from "zod"
 
 import { env } from "@/lib/env"
+import { createSupabaseServerClient } from "@/server/supabase/server"
 
 /**
  * GET /api/auth/hub-sso?token=<JWT>&redirect=<path>
@@ -14,15 +15,17 @@ import { env } from "@/lib/env"
  *
  * 1. Valida JWT (HS256, secret compartido HUB_JWT_SECRET, aud="studioflow", TTL 5min).
  * 2. Asegura que el usuario existe en Supabase Auth (admin upsert por email).
- * 3. Genera un magic link administrativo y redirige el browser a `action_link`,
- *    el cual Supabase intercepta, setea la cookie de sesión y vuelve al `redirect`.
+ * 3. Genera un magic link administrativo, extrae el `hashed_token`, y lo
+ *    verifica SERVER-SIDE con verifyOtp() usando el server client de @supabase/ssr.
+ *    Esto setea las cookies de sesión (con domain .abbypixel.com) directamente,
+ *    sin depender de que el browser procese un hash #access_token (el CRM no
+ *    tiene ese handler). Luego redirige al `redirect` ya autenticado.
  *
  * No requiere sesión previa — el JWT del hub ES la prueba de identidad.
  *
- * Restaurado tras decisión arquitectónica (2026-05-25): se mantiene la
- * federación HUB→módulos. Cada módulo (CRM, Finanzas, Inventario) vive en
- * su propio subdominio y comparte DB unificada en Supabase + auth bridged
- * vía este endpoint.
+ * Arquitectura federada (2026-05-25): hub.abbypixel.com es el launcher master,
+ * cada módulo (CRM=my, Finanzas=fi, Inventario=inventario) vive en su subdominio
+ * y comparte DB Supabase + cookie de auth cross-subdomain (.abbypixel.com).
  */
 
 const ClaimsSchema = z.object({
@@ -90,24 +93,46 @@ export async function GET(request: NextRequest) {
     user = created.user
   }
 
-  // 3. Generar magic link y redirigir al action_link
-  // El callback de Supabase (configurado por Supabase como ${SUPABASE_URL}/auth/v1/verify)
-  // intercambia el token y redirige a `redirectTo`.
-  const safeRedirect = sanitizeRedirect(redirectParam)
-  const baseAppUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin
-  const finalRedirect = new URL(safeRedirect, baseAppUrl).toString()
-
+  // 3. Generar magic link → obtener hashed_token → verificar OTP server-side.
+  //
+  // Por qué verifyOtp server-side en vez de redirigir al action_link:
+  // El action_link de Supabase devuelve los tokens en el HASH del URL
+  // (#access_token=...&refresh_token=...). El hash solo lo ve el JS del browser,
+  // y el CRM no tiene un handler que procese ese hash → la sesión nunca se
+  // establecía y /dashboard redirigía a /login.
+  //
+  // verifyOtp() con el server client de @supabase/ssr canjea el token_hash y
+  // ESCRIBE las cookies de sesión directamente (con domain .abbypixel.com vía
+  // el applyDomain del server client). Así la redirección a /dashboard ya
+  // llega autenticada — sin JS, sin hash, robusto.
   const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email: claims.email,
-    options: { redirectTo: finalRedirect },
   })
-  if (linkErr || !linkData?.properties?.action_link) {
+  const hashedToken = linkData?.properties?.hashed_token
+  if (linkErr || !hashedToken) {
     console.error("[hub-sso] generateLink falló", linkErr)
     return serverError("No se pudo generar enlace de sesión")
   }
 
-  return NextResponse.redirect(linkData.properties.action_link)
+  const safeRedirect = sanitizeRedirect(redirectParam)
+  const baseAppUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin
+  const finalRedirect = new URL(safeRedirect, baseAppUrl).toString()
+
+  // La respuesta DEBE ser la que lleva las cookies. Creamos el redirect primero
+  // y dejamos que el server client escriba las cookies sobre cookies() (que en
+  // un Route Handler se propagan a la respuesta).
+  const supabase = createSupabaseServerClient()
+  const { error: verifyErr } = await supabase.auth.verifyOtp({
+    token_hash: hashedToken,
+    type: "email",
+  })
+  if (verifyErr) {
+    console.error("[hub-sso] verifyOtp falló", verifyErr)
+    return serverError("No se pudo establecer la sesión")
+  }
+
+  return NextResponse.redirect(finalRedirect)
 }
 
 function sanitizeRedirect(path: string): string {
