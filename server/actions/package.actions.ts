@@ -17,6 +17,8 @@ export async function createPackageAction(formData: FormData) {
     editedPhotos: formData.get("editedPhotos"),
     includes: formData.get("includes"),
     isActive: formData.get("isActive") !== "false",
+    contractTemplateId: formData.get("contractTemplateId"),
+    formTemplateId: formData.get("formTemplateId"),
   }
 
   const parsed = createPackageSchema.safeParse(raw)
@@ -40,6 +42,8 @@ export async function updatePackageAction(packageId: string, formData: FormData)
     editedPhotos: formData.get("editedPhotos"),
     includes: formData.get("includes"),
     isActive: formData.get("isActive") !== "false",
+    contractTemplateId: formData.get("contractTemplateId"),
+    formTemplateId: formData.get("formTemplateId"),
   }
 
   const parsed = updatePackageSchema.safeParse(raw)
