@@ -35,11 +35,20 @@ interface Package {
   editedPhotos?: number
   includes?: string
   isActive: boolean
+  contractTemplateId?: string
+  formTemplateId?: string
+}
+
+interface TemplateOption {
+  id: string
+  name: string
 }
 
 interface PackageManagerProps {
   packages: Package[]
   studioSlug?: string
+  contractTemplates?: TemplateOption[]
+  formTemplates?: TemplateOption[]
 }
 
 type FormMode = "create" | "edit" | null
@@ -47,6 +56,8 @@ type FormMode = "create" | "edit" | null
 export function PackageManager({
   packages: initialPackages,
   studioSlug = "",
+  contractTemplates = [],
+  formTemplates = [],
 }: PackageManagerProps) {
   const [packages, setPackages] = useState(initialPackages)
   const [formMode, setFormMode] = useState<FormMode>(null)
@@ -256,6 +267,8 @@ export function PackageManager({
           onCancel={() => setFormMode(null)}
           isPending={isPending}
           title="Nuevo paquete"
+          contractTemplates={contractTemplates}
+          formTemplates={formTemplates}
         />
       )}
 
@@ -270,6 +283,8 @@ export function PackageManager({
           isPending={isPending}
           title={`Editando: ${editingPackage.name}`}
           defaultValues={editingPackage}
+          contractTemplates={contractTemplates}
+          formTemplates={formTemplates}
         />
       )}
     </div>
@@ -282,12 +297,16 @@ function PackageForm({
   isPending,
   title,
   defaultValues,
+  contractTemplates = [],
+  formTemplates = [],
 }: {
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   onCancel: () => void
   isPending: boolean
   title: string
   defaultValues?: Package
+  contractTemplates?: TemplateOption[]
+  formTemplates?: TemplateOption[]
 }) {
   const inputCls =
     "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
@@ -434,6 +453,66 @@ function PackageForm({
             className={cn(inputCls, "resize-none")}
             placeholder="- Sesión en estudio&#10;- Galería digital privada&#10;- 1 impresión tamaño carta"
           />
+        </div>
+
+        {/* Vinculación a contrato + formulario — se aplican por defecto cuando
+            un cliente reserva este paquete */}
+        <div className="sm:col-span-2 mt-1 border-t border-border/60 pt-4">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Documentos vinculados al paquete
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Plantilla de contrato
+          </label>
+          <select
+            name="contractTemplateId"
+            defaultValue={defaultValues?.contractTemplateId ?? ""}
+            className={inputCls}
+          >
+            <option value="">— Ninguno —</option>
+            {contractTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          {contractTemplates.length === 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              No hay plantillas.{" "}
+              <a href="/settings/contracts" className="text-brand hover:underline">
+                Crear una
+              </a>
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Formulario
+          </label>
+          <select
+            name="formTemplateId"
+            defaultValue={defaultValues?.formTemplateId ?? ""}
+            className={inputCls}
+          >
+            <option value="">— Ninguno —</option>
+            {formTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          {formTemplates.length === 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              No hay formularios.{" "}
+              <a href="/settings/forms" className="text-brand hover:underline">
+                Crear uno
+              </a>
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-3 sm:col-span-2">

@@ -95,6 +95,9 @@ export async function createPackage(studioId: string, data: CreatePackageInput) 
     edited_photos: data.editedPhotos ?? null,
     includes: parseIncludes(data.includes),
     is_active: data.isActive ?? true,
+    // "" / null / undefined → null (sin vincular)
+    default_contract_template_id: data.contractTemplateId || null,
+    default_form_template_id: data.formTemplateId || null,
   })
 }
 
@@ -117,6 +120,12 @@ export async function updatePackage(
   if (data.editedPhotos !== undefined) patch.edited_photos = data.editedPhotos
   if (data.includes !== undefined) patch.includes = parseIncludes(data.includes)
   if (data.isActive !== undefined) patch.is_active = data.isActive
+  // Vinculación a plantilla de contrato / formulario. El form siempre envía el
+  // select (uuid o "" para desvincular) → normalizamos "" a null.
+  if (data.contractTemplateId !== undefined)
+    patch.default_contract_template_id = data.contractTemplateId || null
+  if (data.formTemplateId !== undefined)
+    patch.default_form_template_id = data.formTemplateId || null
 
   // Slug: si el user lo escribe explícito → usamos su valor (sanitizado).
   // Si cambia el nombre sin slug explícito → regeneramos para mantener SEO-friendly.
