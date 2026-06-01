@@ -201,6 +201,12 @@ function appBaseUrl(): string {
 }
 
 export interface ClientShareLinks {
+  /**
+   * Link PRINCIPAL: el wizard de confirmación /b/<token>. El cliente completa
+   * TODO el proceso acá (revisar plan → cuestionario → firma → pago). Es el
+   * link que se le envía tras aprobar la solicitud.
+   */
+  confirmationUrl: string | null
   /** Portal del cliente: ve TODO (galerías, contrato, facturas, reservas). */
   portalUrl: string
   /** Código de acceso (por si lo quiere dictar aparte). */
@@ -258,8 +264,10 @@ export async function getClientShareLinks(
     clientEmail,
   )}&code=${encodeURIComponent(accessCode)}`
 
-  // Link de firma del contrato. El contrato se vincula al PROJECT (no al
-  // booking_request), así que lo buscamos por project_id.
+  // Link principal (wizard) + firma. El contrato se vincula al PROJECT (no al
+  // booking_request), así que buscamos su signing_token por project_id. Ese
+  // mismo token es la llave del wizard /b/<token>.
+  let confirmationUrl: string | null = null
   let contractSignUrl: string | null = null
   const projectId = (booking as { project_id: string | null }).project_id
   if (projectId) {
@@ -274,13 +282,17 @@ export async function getClientShareLinks(
       .maybeSingle()
     const token = (contract as { signing_token: string | null } | null)
       ?.signing_token
-    if (token) contractSignUrl = `${base}/sign/${token}`
+    if (token) {
+      confirmationUrl = `${base}/b/${token}` // wizard completo (link principal)
+      contractSignUrl = `${base}/sign/${token}`
+    }
   }
 
   const clientWhatsapp =
     (booking as { client_whatsapp: string | null }).client_whatsapp ?? null
 
   return {
+    confirmationUrl,
     portalUrl,
     accessCode,
     clientEmail,
