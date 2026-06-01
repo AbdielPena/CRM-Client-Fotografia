@@ -27,7 +27,7 @@ export default async function PublicInvoicePage({
     .select(
       `id, invoice_number, status, total, currency, due_date, issued_at,
        installment_number, installment_total, paid_at, amount_paid, balance_due,
-       studio_id, client_id, project_id`,
+       metadata, studio_id, client_id, project_id`,
     )
     .eq("id", params.id)
     .is("deleted_at", null)
@@ -61,13 +61,14 @@ export default async function PublicInvoicePage({
   const project = projectRes.data
   const contract = contractRes.data
 
+  const currency = invoice.currency ?? "DOP"
   const accent = studio?.primary_color ?? "#7c3aed"
-  const totalFormatted = formatMoney(invoice.total, invoice.currency ?? "DOP")
-  const paidFormatted = formatMoney(invoice.amount_paid ?? 0, invoice.currency ?? "DOP")
-  const balanceFormatted = formatMoney(
-    invoice.balance_due ?? invoice.total,
-    invoice.currency ?? "DOP",
-  )
+  const totalNum = Number(invoice.total ?? 0)
+  const paidNum = Number(invoice.amount_paid ?? 0)
+  const balanceNum = Math.max(totalNum - paidNum, 0)
+  const totalFormatted = formatMoney(totalNum, currency)
+  const paidFormatted = formatMoney(paidNum, currency)
+  const balanceFormatted = formatMoney(balanceNum, currency)
   const status = invoice.status as string
   const isPaid = status === "paid"
   const isOverdue = !isPaid && invoice.due_date && new Date(invoice.due_date) < new Date()
@@ -76,6 +77,51 @@ export default async function PublicInvoicePage({
     invoice.installment_number && invoice.installment_total
       ? `Cuota ${invoice.installment_number} de ${invoice.installment_total}`
       : null
+
+  // Plan de pago: cuotas dentro de la misma factura (reserva + balance)
+  const metadata =
+    (invoice.metadata as Record<string, unknown> | null) ?? {}
+  const installmentTotal = Number(invoice.installment_total ?? 1)
+  const depositPercent =
+    metadata?.deposit_percent != null
+      ? Number(metadata.deposit_percent)
+      : installmentTotal >= 2
+        ? 50
+        : 0
+  type PublicCuota = { label: string; amount: number; state: "paid" | "partial" | "pending"; paid: number }
+  let plan: PublicCuota[] = []
+  if (installmentTotal >= 2 && totalNum > 0) {
+    const pct = depositPercent > 0 && depositPercent < 100 ? depositPercent : 50
+    const c1 = Math.min(Math.round(totalNum * pct) / 100, totalNum)
+    const raw =
+      installmentTotal === 2
+        ? [
+            { label: `Reserva (${pct}%)`, amount: c1 },
+            { label: "Balance restante", amount: Math.round((totalNum - c1) * 100) / 100 },
+          ]
+        : Array.from({ length: installmentTotal }, (_, i) => {
+            const base = Math.round((totalNum / installmentTotal) * 100) / 100
+            return {
+              label: `Cuota ${i + 1}`,
+              amount: i === installmentTotal - 1 ? Math.round((totalNum - base * (installmentTotal - 1)) * 100) / 100 : base,
+            }
+          })
+    let remaining = paidNum
+    plan = raw.map((r) => {
+      let state: PublicCuota["state"] = "pending"
+      let paid = 0
+      if (r.amount > 0 && remaining >= r.amount) {
+        state = "paid"
+        paid = r.amount
+        remaining -= r.amount
+      } else if (remaining > 0) {
+        state = "partial"
+        paid = remaining
+        remaining = 0
+      }
+      return { label: r.label, amount: r.amount, state, paid }
+    })
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50 py-10 px-4">
@@ -193,6 +239,50 @@ export default async function PublicInvoicePage({
                 </div>
               )}
             </div>
+
+            {/* Plan de pago (cuotas dentro de la misma factura) */}
+            {plan.length > 0 && (
+              <div className="pt-4 border-t border-neutral-100">
+                <div className="text-xs uppercase tracking-wide text-neutral-500 mb-2">
+                  Plan de pago · {installmentTotal} cuotas
+                </div>
+                <div className="space-y-2">
+                  {plan.map((c, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between rounded-xl border border-neutral-200 px-3 py-2.5"
+                    >
+                      <div>
+                        <div className="text-sm font-medium text-neutral-900">{c.label}</div>
+                        <div className="text-xs text-neutral-500">
+                          {c.state === "paid"
+                            ? "Pagada"
+                            : c.state === "partial"
+                              ? `Abonado ${formatMoney(c.paid, currency)}`
+                              : "Pendiente"}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-neutral-900">
+                          {formatMoney(c.amount, currency)}
+                        </span>
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded-full ${
+                            c.state === "paid"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : c.state === "partial"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-neutral-100 text-neutral-500"
+                          }`}
+                        >
+                          {c.state === "paid" ? "Pagada" : c.state === "partial" ? "Parcial" : "Pendiente"}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* CTA contrato pendiente */}
             {contract && contract.status !== "signed" && !isPaid && (

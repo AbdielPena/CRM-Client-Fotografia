@@ -23,10 +23,19 @@ interface RecordPaymentFormProps {
   invoiceId: string
   balance: number
   currency: string
+  /** Monto de la cuota de reserva (1ª cuota) para llenado rápido. */
+  depositAmount?: number
 }
 
-export function RecordPaymentForm({ invoiceId, balance, currency }: RecordPaymentFormProps) {
-  const [amount, setAmount] = useState(balance)
+export function RecordPaymentForm({
+  invoiceId,
+  balance,
+  currency,
+  depositAmount = 0,
+}: RecordPaymentFormProps) {
+  // Si la reserva aún no se cubre, pre-llenar con la reserva; si no, con el saldo.
+  const showDepositQuick = depositAmount > 0 && depositAmount < balance
+  const [amount, setAmount] = useState(showDepositQuick ? depositAmount : balance)
   const [isPending, startTransition] = useTransition()
   const [success, setSuccess] = useState(false)
 
@@ -69,6 +78,26 @@ export function RecordPaymentForm({ invoiceId, balance, currency }: RecordPaymen
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
+        {(showDepositQuick || balance > 0) && (
+          <div className="flex flex-wrap gap-2">
+            {showDepositQuick && (
+              <button
+                type="button"
+                onClick={() => setAmount(depositAmount)}
+                className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+              >
+                Reserva: {formatCurrency(depositAmount, currency)}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setAmount(balance)}
+              className="rounded-full border border-border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              Saldo completo: {formatCurrency(balance, currency)}
+            </button>
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">
             Monto (saldo: {formatCurrency(balance, currency)})

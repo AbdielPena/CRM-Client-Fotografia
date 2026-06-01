@@ -409,3 +409,88 @@ ${brandClose}
 `
   return { subject, html }
 }
+
+/**
+ * Email enviado al cliente cada vez que la factura cambia: se registra un
+ * pago (changeKind 'payment') o se edita la información/monto de la factura
+ * (changeKind 'edit'). Muestra el resumen del plan: total, pagado y saldo.
+ */
+export function renderInvoiceUpdate(params: {
+  studioName: string
+  primaryColor?: string
+  clientName: string
+  projectName?: string | null
+  invoiceNumber: string
+  changeKind: 'payment' | 'edit'
+  totalFormatted: string
+  paidFormatted: string
+  balanceFormatted: string
+  paymentAmountFormatted?: string | null
+  isFullyPaid: boolean
+  portalUrl: string
+}) {
+  const {
+    studioName,
+    primaryColor = '#7c3aed',
+    clientName,
+    projectName,
+    invoiceNumber,
+    changeKind,
+    totalFormatted,
+    paidFormatted,
+    balanceFormatted,
+    paymentAmountFormatted,
+    isFullyPaid,
+    portalUrl,
+  } = params
+
+  const subject =
+    changeKind === 'payment'
+      ? isFullyPaid
+        ? `✅ Pago completo recibido — Factura ${invoiceNumber}`
+        : `✅ Registramos tu pago — Factura ${invoiceNumber}`
+      : `🧾 Actualizamos tu factura ${invoiceNumber}`
+
+  const heading =
+    changeKind === 'payment'
+      ? isFullyPaid
+        ? `${escapeHtml(clientName)}, recibimos tu pago completo 🎉`
+        : `${escapeHtml(clientName)}, registramos tu pago ✅`
+      : `${escapeHtml(clientName)}, actualizamos tu factura 🧾`
+
+  const intro =
+    changeKind === 'payment'
+      ? paymentAmountFormatted
+        ? `Confirmamos un pago de <strong>${escapeHtml(paymentAmountFormatted)}</strong>${projectName ? ` para tu proyecto <strong>${escapeHtml(projectName)}</strong>` : ''}. Aquí está el estado actualizado de tu factura.`
+        : `Confirmamos un nuevo pago en tu factura. Aquí está el estado actualizado.`
+      : `Hicimos cambios en tu factura${projectName ? ` de <strong>${escapeHtml(projectName)}</strong>` : ''}. Revisa el resumen actualizado a continuación.`
+
+  const row = (label: string, value: string, color = '#111827', bold = false) => `
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f1f1f4;">
+      <span style="font-size: 14px; color: #6b7280;">${escapeHtml(label)}</span>
+      <span style="font-size: 14px; color: ${color}; font-weight: ${bold ? 700 : 500};">${escapeHtml(value)}</span>
+    </div>`
+
+  const html = `
+${brand(studioName, primaryColor)}
+  <h1 style="margin: 0 0 12px; font-size: 22px; font-weight: 700;">${heading}</h1>
+  <p style="margin: 0 0 16px; color: #4b5563; font-size: 15px; line-height: 1.6;">${intro}</p>
+
+  <div style="padding: 20px; background: #faf5ff; border-radius: 12px; border: 1px solid #e9d5ff; margin: 24px 0;">
+    <p style="margin: 0 0 8px; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em;">Factura ${escapeHtml(invoiceNumber)}</p>
+    ${row('Total', totalFormatted)}
+    ${row('Pagado', paidFormatted, '#059669')}
+    ${row(isFullyPaid ? 'Saldo' : 'Saldo pendiente', balanceFormatted, isFullyPaid ? '#059669' : escapeHtml(primaryColor), true)}
+  </div>
+
+  <a href="${escapeHtml(portalUrl)}" style="display: inline-block; padding: 12px 24px; background: ${escapeHtml(primaryColor)}; color: #fff; text-decoration: none; border-radius: 10px; font-size: 15px; font-weight: 600;">Ver factura →</a>
+
+  <p style="margin: 24px 0 0; color: #6b7280; font-size: 13px;">${
+    isFullyPaid
+      ? '¡Gracias! Tu factura quedó saldada por completo.'
+      : 'El saldo restante puede pagarse en cualquier momento. Cualquier duda, respóndenos este correo.'
+  }</p>
+${brandClose}
+`
+  return { subject, html }
+}
