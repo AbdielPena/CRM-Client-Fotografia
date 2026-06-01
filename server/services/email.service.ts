@@ -229,13 +229,14 @@ export function renderBookingApprovedForClient(params: {
     ? `<p style="margin: 0 0 12px;">Responde a este email o escríbenos a <a href="mailto:${escapeHtml(replyToEmail)}" style="color: ${escapeHtml(primaryColor)};">${escapeHtml(replyToEmail)}</a> para coordinar el pago.</p>`
     : ''
   const contractCta = contractSignUrl
-    ? `<p style="margin: 16px 0 24px; text-align: center;"><a href="${escapeHtml(contractSignUrl)}" style="display: inline-block; background: ${escapeHtml(primaryColor)}; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Firmar contrato</a></p>`
+    ? `<p style="margin: 16px 0 24px; text-align: center;"><a href="${escapeHtml(contractSignUrl)}" style="display: inline-block; background: ${escapeHtml(primaryColor)}; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Continuar con mi reserva</a></p>`
     : ''
 
   const html = `
 ${brand(studioName, primaryColor)}
   <h1 style="margin: 0 0 8px; font-size: 22px;">¡Gran noticia, ${escapeHtml(clientName)}!</h1>
   <p style="margin: 0 0 24px; color: #4b5563;">Hemos aprobado tu solicitud para el paquete <strong>${escapeHtml(packageName)}</strong> el <strong>${escapeHtml(eventDate)}</strong>.</p>
+  <p style="margin: 0 0 16px; color: #4b5563;">Para confirmar tu sesión, continúa con estos pasos: revisa tu plan, completa el formulario y firma el contrato. Al final te mostraremos la factura para realizar el pago.</p>
   ${depositLine}
   ${contractCta}
   ${replyLine}

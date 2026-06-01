@@ -635,6 +635,17 @@ function buildContractSignUrl(signingToken: string): string {
   return `${appBaseUrl()}/sign/${signingToken}`
 }
 
+/**
+ * Construye la URL del HUB de confirmación del cliente (flujo nuevo).
+ * El cliente entra acá tras la aprobación: revisa el plan, completa el
+ * formulario y firma el contrato — en vez de ir directo a /sign.
+ * Usa el signing_token del contrato como llave estable.
+ * Alineada con la ruta Next `app/b/[token]/page.tsx`.
+ */
+function buildBookingFlowUrl(signingToken: string): string {
+  return `${appBaseUrl()}/b/${signingToken}`
+}
+
 export async function approveBookingRequest(params: {
   studioId: string
   requestId: string
@@ -785,7 +796,10 @@ export async function approveBookingRequest(params: {
         .eq('id', conversionBundle.contractId)
         .maybeSingle()
       if (contractRow?.signing_token) {
-        contractSignUrl = buildContractSignUrl(contractRow.signing_token)
+        // Flujo nuevo: el cliente entra al HUB de confirmación (/b/<token>),
+        // no directo a /sign. Ahí revisa el plan, completa el formulario y
+        // firma. buildContractSignUrl queda disponible para fallback/otros usos.
+        contractSignUrl = buildBookingFlowUrl(contractRow.signing_token)
       }
     } catch (err) {
       console.error(

@@ -66,39 +66,44 @@
       backlink de facturas condicional, return nullable
 - [x] `client.actions.ts`: emailBundle condicional (guard del nullable, flujo manual intacto)
 
-### ⬜ Fase B — Flujo del cliente (páginas)
-- [ ] Página `/confirm/[token]` (o `/b/[token]`): "Tu sesión fue aprobada · Continuar"
-- [ ] Paso revisar plan (reusar datos del package_snapshot/pricing_snapshot)
-- [ ] Conectar formulario final (`default_form_template_id`) → `/f/[token]` o inline
-- [ ] Orquestar: confirmar → revisar → formulario → `/sign` (en ese orden)
-- [ ] `email.service.ts renderBookingApprovedForClient`: link a `/confirm/<token>` (no `/sign`)
-- [ ] Token: ¿reusar contract.signing_token o crear booking_confirmation_token?
+### ✅ Fase B — Flujo del cliente (páginas) (HECHO, branch)
+- [x] Página `/b/[token]` (hub): bienvenida + resumen del plan + checklist de pasos
+      (formulario → firma → pago) con CTA al paso actual. Usa contract.signing_token.
+      `app/b/[token]/page.tsx` + `server/services/booking-flow.service.ts`
+- [x] Conecta formulario (`/f/<access_token>`) y firma (`/sign/<token>`) en orden
+- [x] `email.service renderBookingApprovedForClient`: botón "Continuar con mi reserva" → `/b/<token>`
+- [x] `booking-request.service`: `buildBookingFlowUrl()`, el email apunta a `/b/`
+- [x] `middleware.ts`: `/b/` agregado a PUBLIC_PREFIXES
 
-### ⬜ Fase C — Factura al firmar
-- [ ] RPC `generate_booking_invoice(studio, project)` idempotente: 1 factura del total,
-      installment_total=2, status 'sent'. No duplica si ya existe.
-- [ ] Hook post-firma (`contract-post-sign.service.ts onContractSigned`): llamar la RPC +
-      transición booking `approved→awaiting_payment` + email factura al cliente
-- [ ] `/sign` redirige a `/i/<id>` tras firmar ("paga para confirmar")
+### ✅ Fase C — Factura al firmar (HECHO, branch)
+- [x] RPC `generate_booking_invoice(studio, project)` idempotente: 1 factura del total,
+      installment_total=2, status 'sent'. No duplica. (migración aplicada a prod)
+- [x] `contract-post-sign.service onContractSigned`: cuando firma el CLIENTE → genera
+      factura (RPC) + transición booking `approved→awaiting_payment` + email factura
+- [x] El hub `/b/<token>` muestra el paso "Realiza el pago" con link a `/i/<id>` tras firmar
 
-### ⬜ Fase D — Pagos + notificación
-- [ ] Migración: unique parcial anti-duplicado en `payments` (idempotency_key o
-      (invoice_id, amount, received_at)) — verificar que no haya dups antes
-- [ ] `markInvoicePaid` / `recordPaymentAction`: notificar al cliente (email + portal) en
-      cada pago/cambio de factura (template payment_received)
-- [ ] Factura modificable: editar montos/info y notificar al cliente del cambio
+### 🟡 Fase D — Pagos + notificación (PARCIAL, branch)
+- [x] Notifica al cliente "sesión confirmada" al recibir el primer pago
+      (en confirmBookingAfterPayment)
+- [ ] PENDIENTE: notificar al cliente en CADA pago registrado (no solo el primero)
+- [ ] PENDIENTE: unique/idempotency_key en `payments` (riesgo bajo — registro manual)
+- [ ] PENDIENTE: factura editable (montos/info) con notificación al cliente del cambio
 
-### ⬜ Fase E — Confirmar pago → confirmed + Google Calendar
-- [ ] Lógica: al confirmar pago (depósito) → booking `awaiting_payment→confirmed`
-      (¿trigger SQL o en onPaymentRecorded TS?). Decidir: confirma con depósito.
-- [ ] Google Calendar: soportar evento TENTATIVO al aprobar → CONFIRMADO al pagar
-      (google-calendar.service.ts línea ~526 status hardcoded 'confirmed' → parametrizar)
-- [ ] Si no hay OAuth Google: degradar a availability_block interno (ya existe provisional)
+### ✅ Fase E — Confirmar pago → confirmed + Google Calendar (HECHO núcleo, branch)
+- [x] `onPaymentRecorded` (project-automation.service): 1er pago → `confirmBookingAfterPayment`
+      → booking `awaiting_payment/approved → confirmed` (idempotente)
+- [x] `confirmProjectCalendarEvent` (google-calendar.service): evento local → 'confirmed' +
+      resync best-effort a Google (degrada sin OAuth)
+- [ ] PENDIENTE (mejora): evento TENTATIVO al aprobar (hoy se crea 'confirmed' siempre).
+      Requiere parametrizar la creación + OAuth Google configurado.
 
-### ⬜ Fase F — Anti-duplicados + visibilidad
-- [ ] Auditar idempotencia de todo el flujo (aprobar 2x, pagar 2x, firmar 2x)
-- [ ] Indicador en /bookings y /bookings/[id] del PASO actual de cada solicitud
-      (esperando confirmación cliente / firmado / esperando pago / confirmado)
+### ✅ Fase F — Visibilidad del paso (HECHO, branch)
+- [x] StatusBadge YA mapea pending_review/approved/awaiting_payment/confirmed/scheduled
+      con labels ES + colores. Como ahora los estados se USAN de verdad, el admin ve
+      el progreso real en /bookings y /bookings/[id].
+- [x] Idempotencia del flujo: conversion lock (approve) + generate_booking_invoice
+      idempotente + confirmBookingAfterPayment idempotente + google_events upsert.
+- [ ] PENDIENTE (mejora): auditar doble-pago manual (idempotency_key)
 
 ## Deploy (al final)
 1. Build local/VPS limpio (typecheck) en la branch
