@@ -27,7 +27,11 @@ interface ContractSigningViewProps {
   }
 }
 
-export function ContractSigningView({ token, contract }: ContractSigningViewProps) {
+export function ContractSigningView({
+  token,
+  contract,
+  returnTo,
+}: ContractSigningViewProps & { returnTo?: string }) {
   const [agreed, setAgreed] = useState(false)
   const [signerName, setSignerName] = useState(contract.clientName)
   const [emptySignature, setEmptySignature] = useState(true)
@@ -80,6 +84,13 @@ export function ContractSigningView({ token, contract }: ContractSigningViewProp
           return
         }
         setSigned(true)
+        // Si venimos del wizard de booking, volver al siguiente paso (pago).
+        // Pequeño delay para que el cliente vea la confirmación de firma.
+        if (returnTo) {
+          setTimeout(() => {
+            window.location.href = returnTo
+          }, 1200)
+        }
       } catch {
         setError("Error de conexión. Por favor intentá nuevamente.")
       }

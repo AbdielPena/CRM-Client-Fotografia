@@ -51,6 +51,8 @@ interface StudioData {
   invoice_footer?: string | null
   contract_footer?: string | null
   tax_id?: string | null
+  payment_instructions?: string | null
+  payment_whatsapp?: string | null
   plan: string
 }
 
@@ -70,6 +72,8 @@ export function SettingsForm({ studio }: { studio: StudioData }) {
     invoiceFooter: studio.invoice_footer ?? "",
     contractFooter: studio.contract_footer ?? "",
     taxId: studio.tax_id ?? "",
+    paymentInstructions: studio.payment_instructions ?? "",
+    paymentWhatsapp: studio.payment_whatsapp ?? "",
   })
 
   const update = (field: string, value: string) =>
@@ -179,6 +183,31 @@ export function SettingsForm({ studio }: { studio: StudioData }) {
             onChange={(v) => update("contractFooter", v)}
             placeholder="Este contrato es válido con firma digital."
             rows={3}
+          />
+        </Field>
+      </Section>
+
+      {/* Instrucciones de pago */}
+      <Section title="Instrucciones de pago" icon={<FileText className="h-4 w-4" />}>
+        <Field
+          label="Datos para transferencia bancaria"
+          hint="El cliente los ve al confirmar su reserva. Pega tus cuentas bancarias, titular y cédula."
+        >
+          <Textarea
+            value={form.paymentInstructions}
+            onChange={(v) => update("paymentInstructions", v)}
+            placeholder={"Banreservas\nCuenta de ahorro: 0000000000\nTitular: Tu Nombre\nCédula: 000-0000000-0\n\nBanco Popular\nCuenta de ahorro: 0000000000\nTitular: Tu Nombre"}
+            rows={6}
+          />
+        </Field>
+        <Field
+          label="WhatsApp para recibir el voucher"
+          hint="El cliente te enviará el comprobante de la transferencia por aquí."
+        >
+          <Input
+            value={form.paymentWhatsapp}
+            onChange={(v) => update("paymentWhatsapp", v)}
+            placeholder="+1 809 000 0000"
           />
         </Field>
       </Section>

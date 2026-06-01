@@ -37,8 +37,10 @@ function pickFirst(v: unknown) {
 
 export default async function ContractSigningPage({
   params,
+  searchParams,
 }: {
   params: { token: string }
+  searchParams?: { return?: string }
 }) {
   const supabase = createSupabaseServiceClient()
 
@@ -120,6 +122,9 @@ export default async function ContractSigningPage({
   return (
     <ContractSigningView
       token={params.token}
+      returnTo={
+        searchParams?.return?.startsWith("/b/") ? searchParams.return : undefined
+      }
       contract={{
         id: contract.id as string,
         title: contract.title as string,

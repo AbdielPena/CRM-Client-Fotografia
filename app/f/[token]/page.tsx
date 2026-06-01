@@ -11,7 +11,7 @@ export default async function PublicFormPage({
   searchParams,
 }: {
   params: { token: string }
-  searchParams?: { error?: string; ok?: string }
+  searchParams?: { error?: string; ok?: string; return?: string }
 }) {
   const result = await getPublicFormResponse(params.token)
   if (!result) notFound()
@@ -79,6 +79,9 @@ export default async function PublicFormPage({
       template={template}
       studio={studio}
       errorFromQuery={searchParams?.error}
+      returnTo={
+        searchParams?.return?.startsWith("/b/") ? searchParams.return : undefined
+      }
     />
   )
 }
