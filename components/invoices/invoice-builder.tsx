@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
 import { Plus, Trash2 } from "lucide-react"
-import { createInvoiceAction } from "@/server/actions/invoice.actions"
+import { createInvoiceAction, updateInvoiceAction } from "@/server/actions/invoice.actions"
+import { toast } from "sonner"
 
 interface Project {
   id: string
@@ -26,32 +26,63 @@ interface LineItem {
   taxRate: number
 }
 
+export interface InvoiceBuilderInitial {
+  projectName?: string
+  clientName?: string
+  dueDate?: string
+  currency?: string
+  discount?: number
+  depositPercent?: number
+  notes?: string
+  items?: LineItem[]
+}
+
 interface InvoiceBuilderProps {
   projects: Project[]
   clients: Client[]
   defaultProjectId?: string
   defaultClientId?: string
+  /** "create" (default) o "edit". En edit el proyecto/cliente son fijos. */
+  mode?: "create" | "edit"
+  invoiceId?: string
+  invoiceNumber?: string
+  initial?: InvoiceBuilderInitial
 }
+
+const CURRENCIES = [
+  { value: "DOP", label: "DOP — Peso dominicano" },
+  { value: "USD", label: "USD — Dólar" },
+  { value: "EUR", label: "EUR — Euro" },
+  { value: "MXN", label: "MXN — Peso mexicano" },
+  { value: "COP", label: "COP — Peso colombiano" },
+  { value: "ARS", label: "ARS — Peso argentino" },
+]
 
 export function InvoiceBuilder({
   projects,
   clients,
   defaultProjectId,
   defaultClientId,
+  mode = "create",
+  invoiceId,
+  invoiceNumber,
+  initial,
 }: InvoiceBuilderProps) {
+  const isEdit = mode === "edit"
+
   const [selectedProjectId, setSelectedProjectId] = useState(defaultProjectId ?? "")
   const [selectedClientId, setSelectedClientId] = useState(defaultClientId ?? "")
-  const [currency, setCurrency] = useState("USD")
-  const [discount, setDiscount] = useState(0)
-  const [depositPercent, setDepositPercent] = useState(0)
-  const [items, setItems] = useState<LineItem[]>([
-    { description: "", quantity: 1, unitPrice: 0, taxRate: 0 },
-  ])
+  const [currency, setCurrency] = useState(initial?.currency ?? "DOP")
+  const [discount, setDiscount] = useState(initial?.discount ?? 0)
+  const [depositPercent, setDepositPercent] = useState(initial?.depositPercent ?? 0)
+  const [items, setItems] = useState<LineItem[]>(
+    initial?.items && initial.items.length > 0
+      ? initial.items
+      : [{ description: "", quantity: 1, unitPrice: 0, taxRate: 0 }],
+  )
   const [isPending, startTransition] = useTransition()
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId)
-
-  // Auto-fill client when project is selected
+  // Auto-fill client when project is selected (solo en modo crear)
   const handleProjectChange = (projectId: string) => {
     setSelectedProjectId(projectId)
     const proj = projects.find((p) => p.id === projectId)
@@ -89,14 +120,21 @@ export function InvoiceBuilder({
   const depositAmount = (total * depositPercent) / 100
 
   const fmt = (n: number) =>
-    new Intl.NumberFormat("es-MX", { style: "currency", currency }).format(n)
+    new Intl.NumberFormat("es-DO", { style: "currency", currency }).format(n)
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    const form = e.currentTarget
-    const fd = new FormData(form)
+    const fd = new FormData(e.currentTarget)
     startTransition(async () => {
-      await createInvoiceAction(fd)
+      if (isEdit && invoiceId) {
+        const result = (await updateInvoiceAction(invoiceId, fd)) as
+          | { error?: string }
+          | undefined
+        // updateInvoiceAction redirige en éxito; solo llega aquí si hubo error
+        if (result?.error) toast.error(result.error)
+      } else {
+        await createInvoiceAction(fd)
+      }
     })
   }
 
@@ -104,51 +142,75 @@ export function InvoiceBuilder({
     <form onSubmit={handleSubmit} className="max-w-4xl space-y-6">
       {/* Project + Client */}
       <div className="bg-card rounded-xl border border-border p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">
-            Proyecto <span className="text-danger">*</span>
-          </label>
-          <select
-            name="projectId"
-            required
-            value={selectedProjectId}
-            onChange={(e) => handleProjectChange(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
-          >
-            <option value="">Seleccionar proyecto...</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} — {p.clientName}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isEdit ? (
+          <>
+            <div>
+              <p className="block text-xs font-medium text-muted-foreground uppercase mb-1">
+                Proyecto
+              </p>
+              <p className="text-sm font-medium text-foreground">
+                {initial?.projectName ?? "—"}
+              </p>
+            </div>
+            <div>
+              <p className="block text-xs font-medium text-muted-foreground uppercase mb-1">
+                Cliente
+              </p>
+              <p className="text-sm font-medium text-foreground">
+                {initial?.clientName ?? "—"}
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Proyecto <span className="text-danger">*</span>
+              </label>
+              <select
+                name="projectId"
+                required
+                value={selectedProjectId}
+                onChange={(e) => handleProjectChange(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
+              >
+                <option value="">Seleccionar proyecto...</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — {p.clientName}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1">
-            Cliente <span className="text-danger">*</span>
-          </label>
-          <select
-            name="clientId"
-            required
-            value={selectedClientId}
-            onChange={(e) => setSelectedClientId(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
-          >
-            <option value="">Seleccionar cliente...</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Cliente <span className="text-danger">*</span>
+              </label>
+              <select
+                name="clientId"
+                required
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
+              >
+                <option value="">Seleccionar cliente...</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-foreground mb-1">Fecha de vencimiento</label>
           <input
             name="dueDate"
             type="date"
+            defaultValue={initial?.dueDate ?? ""}
             className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
@@ -161,11 +223,11 @@ export function InvoiceBuilder({
             onChange={(e) => setCurrency(e.target.value)}
             className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
           >
-            <option value="USD">USD — Dólar</option>
-            <option value="MXN">MXN — Peso mexicano</option>
-            <option value="EUR">EUR — Euro</option>
-            <option value="COP">COP — Peso colombiano</option>
-            <option value="ARS">ARS — Peso argentino</option>
+            {CURRENCIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -316,7 +378,7 @@ export function InvoiceBuilder({
               </div>
 
               <div className="flex items-center justify-between pt-1">
-                <span className="text-muted-foreground text-xs">Depósito requerido</span>
+                <span className="text-muted-foreground text-xs">Reserva / depósito</span>
                 <div className="flex items-center gap-2">
                   <input
                     name="depositPercent"
@@ -333,6 +395,11 @@ export function InvoiceBuilder({
                   )}
                 </div>
               </div>
+              {depositPercent > 0 && depositPercent < 100 && (
+                <p className="text-[11px] text-muted-foreground text-right">
+                  La factura se cobra en 2 cuotas: reserva {fmt(depositAmount)} + balance {fmt(total - depositAmount)}.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -347,6 +414,7 @@ export function InvoiceBuilder({
           <textarea
             name="notes"
             rows={3}
+            defaultValue={initial?.notes ?? ""}
             className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand resize-none"
             placeholder="Ej. Gracias por confiar en nosotros. Los pagos pueden realizarse vía transferencia..."
           />
@@ -370,14 +438,25 @@ export function InvoiceBuilder({
           disabled={isPending}
           className="px-5 py-2.5 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors disabled:opacity-50"
         >
-          {isPending ? "Creando..." : "Crear factura"}
+          {isEdit
+            ? isPending
+              ? "Guardando..."
+              : "Guardar cambios"
+            : isPending
+              ? "Creando..."
+              : "Crear factura"}
         </button>
         <a
-          href="/invoices"
+          href={isEdit && invoiceId ? `/invoices/${invoiceId}` : "/invoices"}
           className="px-5 py-2.5 text-sm font-medium text-foreground bg-muted rounded-lg hover:bg-muted transition-colors"
         >
           Cancelar
         </a>
+        {isEdit && invoiceNumber && (
+          <span className="text-xs text-muted-foreground ml-auto">
+            Editando factura {invoiceNumber}
+          </span>
+        )}
       </div>
     </form>
   )

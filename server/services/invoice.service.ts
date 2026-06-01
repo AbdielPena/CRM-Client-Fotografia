@@ -2,6 +2,7 @@ import 'server-only'
 
 import { invoicesRepo } from '@/server/repositories'
 import { createSupabaseServerClient } from '@/server/supabase/server'
+import { createSupabaseServiceClient } from '@/server/supabase/service'
 import type { CreateInvoiceInput } from '@/lib/validations/invoice.schema'
 import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
@@ -201,6 +202,203 @@ export async function createInvoice(
 }
 
 // ----------------------------------------------------------------------------
+// Editar
+// ----------------------------------------------------------------------------
+
+export interface UpdateInvoiceData {
+  items: { description: string; quantity: number; unitPrice: number; taxRate: number }[]
+  discount?: number
+  depositPercent?: number
+  dueDate?: string | null
+  notes?: string | null
+  currency?: string
+  title?: string | null
+}
+
+/**
+ * Edita una factura existente: reemplaza los ítems, recalcula totales y
+ * mantiene el plan de cuotas (depósito 50% → installment_total=2). No toca
+ * `amount_paid` (eso lo maneja el trigger de pagos), pero sí recalcula el
+ * `status` y `balance_due` por si el total cambió respecto a lo ya pagado.
+ * Al final notifica al cliente del cambio (best-effort).
+ */
+export async function updateInvoice(
+  studioId: string,
+  actorId: string,
+  invoiceId: string,
+  data: UpdateInvoiceData,
+) {
+  const existing = await invoicesRepo.findById(invoiceId)
+  if (!existing || existing.studio_id !== studioId) {
+    throw new Error('INVOICE_NOT_FOUND')
+  }
+  if (existing.status === 'cancelled') {
+    throw new Error('INVOICE_CANCELLED')
+  }
+
+  const { subtotal, discountAmount, tax, total } = calculateTotals(
+    data.items,
+    data.discount ?? 0,
+  )
+  const currency = (data.currency || existing.currency || 'DOP').toUpperCase()
+  const amountPaid = Number(existing.amount_paid ?? 0)
+
+  // Depósito → define si la factura se divide en 2 cuotas (reserva + balance)
+  const depositPercent = Number(data.depositPercent ?? 0)
+  const installmentTotal =
+    depositPercent > 0 && depositPercent < 100
+      ? 2
+      : (existing.installment_total ?? 1)
+
+  // Recalcular status respecto a lo ya pagado
+  let status = existing.status as string
+  if (total > 0 && amountPaid >= total) status = 'paid'
+  else if (amountPaid > 0) status = 'partially_paid'
+  else if (status === 'paid' || status === 'partially_paid') status = 'sent'
+
+  const balanceDue = Math.max(total - amountPaid, 0)
+  const prevMeta =
+    (existing.metadata && typeof existing.metadata === 'object'
+      ? (existing.metadata as Record<string, unknown>)
+      : {}) ?? {}
+
+  await invoicesRepo.update(invoiceId, {
+    subtotal,
+    tax_rate: 0,
+    tax_amount: tax,
+    discount_amount: discountAmount,
+    total,
+    currency,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    status: status as any,
+    installment_total: installmentTotal,
+    balance_due: balanceDue,
+    due_date: data.dueDate || null,
+    notes: data.notes ?? null,
+    title: data.title ?? existing.title ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    metadata: { ...prevMeta, deposit_percent: depositPercent || null } as any,
+    updated_at: new Date().toISOString(),
+  })
+
+  // Reemplazar ítems: borrar los actuales e insertar los nuevos
+  const supabase = createSupabaseServerClient()
+  const { error: delErr } = await supabase
+    .from('invoice_items')
+    .delete()
+    .eq('invoice_id', invoiceId)
+    .eq('studio_id', studioId)
+  if (delErr) throwServiceError('INVOICE_ITEMS_DELETE_FAILED', delErr, { studioId, invoiceId })
+
+  await invoicesRepo.addItems(
+    data.items.map((item, idx) => ({
+      invoice_id: invoiceId,
+      studio_id: studioId,
+      description: item.description,
+      quantity: item.quantity,
+      unit_price: item.unitPrice,
+      amount: item.quantity * item.unitPrice,
+      sort_order: idx,
+    })),
+  )
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: 'invoice',
+    entityId: invoiceId,
+    action: 'invoice.updated',
+    metadata: { total, currency, deposit_percent: depositPercent },
+  })
+
+  // Notificar al cliente del cambio (best-effort, no bloquea)
+  await notifyClientInvoiceChanged(studioId, invoiceId, { changeKind: 'edit' })
+
+  return { id: invoiceId, total, status, projectId: existing.project_id ?? null }
+}
+
+/**
+ * Envía al cliente un email con el estado actualizado de la factura.
+ * `changeKind: 'payment'` tras registrar un pago; `'edit'` tras editar la
+ * factura. Best-effort: cualquier fallo se loguea pero no propaga.
+ */
+async function notifyClientInvoiceChanged(
+  studioId: string,
+  invoiceId: string,
+  opts: { changeKind: 'payment' | 'edit'; paymentAmount?: number },
+): Promise<void> {
+  try {
+    const supabase = createSupabaseServiceClient()
+    const { data: inv } = await supabase
+      .from('invoices')
+      .select(
+        'invoice_number, total, amount_paid, currency, status, client_id, project_id',
+      )
+      .eq('id', invoiceId)
+      .eq('studio_id', studioId)
+      .maybeSingle()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const invoice = inv as any
+    if (!invoice) return
+
+    const [cliRes, stRes, prRes] = await Promise.all([
+      supabase.from('clients').select('name, email').eq('id', invoice.client_id).maybeSingle(),
+      supabase.from('studios').select('name, primary_color').eq('id', studioId).maybeSingle(),
+      invoice.project_id
+        ? supabase.from('projects').select('name').eq('id', invoice.project_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = cliRes.data as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const studio = stRes.data as any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const project = prRes.data as any
+    if (!client?.email) return
+
+    const currency = invoice.currency ?? 'DOP'
+    const total = Number(invoice.total ?? 0)
+    const paid = Number(invoice.amount_paid ?? 0)
+    const balance = Math.max(total - paid, 0)
+    const fmt = (n: number) =>
+      `${currency} ${new Intl.NumberFormat('es-DO', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n)}`
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+
+    const { renderInvoiceUpdate, enqueueEmail } = await import('./email.service')
+    const email = renderInvoiceUpdate({
+      studioName: studio?.name ?? 'Studio',
+      primaryColor: studio?.primary_color ?? '#7c3aed',
+      clientName: String(client.name ?? 'Cliente').split(' ')[0],
+      projectName: project?.name ?? null,
+      invoiceNumber: invoice.invoice_number,
+      changeKind: opts.changeKind,
+      totalFormatted: fmt(total),
+      paidFormatted: fmt(paid),
+      balanceFormatted: fmt(balance),
+      paymentAmountFormatted: opts.paymentAmount ? fmt(opts.paymentAmount) : null,
+      isFullyPaid: invoice.status === 'paid',
+      portalUrl: `${appUrl}/i/${invoiceId}`,
+    })
+    await enqueueEmail({
+      studioId,
+      toEmail: client.email,
+      toName: client.name,
+      subject: email.subject,
+      bodyHtml: email.html,
+      templateSlug:
+        opts.changeKind === 'payment' ? 'invoice_payment_recorded' : 'invoice_updated',
+      relatedEntityType: 'invoice',
+      relatedEntityId: invoiceId,
+    })
+  } catch (err) {
+    console.error('[notifyClientInvoiceChanged] failed (non-fatal):', err)
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Estados: enviar, marcar pagada, eliminar
 // ----------------------------------------------------------------------------
 
@@ -346,6 +544,12 @@ export async function markInvoicePaid(
 
   // El trigger ya actualizó el invoice; devolvemos el estado nuevo
   const updated = await invoicesRepo.findById(invoiceId)
+
+  // Notificar al cliente que registramos su pago (best-effort, no bloquea)
+  await notifyClientInvoiceChanged(studioId, invoiceId, {
+    changeKind: 'payment',
+    paymentAmount: paymentData.amount,
+  })
 
   // Si el invoice quedó totalmente pagado, dispatch invoice.paid
   if (updated?.status === 'paid') {

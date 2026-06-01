@@ -10,7 +10,7 @@ import { IssueNcfButton } from "@/components/invoices/issue-ncf-button"
 import { RecordPaymentForm } from "@/components/invoices/record-payment-form"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
 import type { NcfType } from "@/lib/fiscal"
-import { Receipt, CreditCard, Printer } from "lucide-react"
+import { Receipt, CreditCard, Printer, Pencil, Layers } from "lucide-react"
 import Link from "next/link"
 import type { Metadata } from "next"
 
@@ -59,6 +59,59 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   const amountPaid = Number(invoice.amount_paid ?? 0)
   const balance = total - amountPaid
 
+  // Plan de pago: la factura del booking se cobra en 2 cuotas (reserva + balance)
+  // dentro del mismo registro. installment_total define cuántas cuotas.
+  const metadata = (invoice.metadata as Rec | null) ?? {}
+  const installmentTotal = Number(invoice.installment_total ?? 1)
+  const depositPercent =
+    metadata?.deposit_percent != null
+      ? Number(metadata.deposit_percent)
+      : installmentTotal >= 2
+        ? 50
+        : 0
+
+  type Cuota = {
+    n: number
+    label: string
+    amount: number
+    state: "paid" | "partial" | "pending"
+    paid: number
+  }
+  let plan: Cuota[] = []
+  if (installmentTotal >= 2 && total > 0) {
+    const pct = depositPercent > 0 && depositPercent < 100 ? depositPercent : 50
+    let raw: { label: string; amount: number }[]
+    if (installmentTotal === 2) {
+      const c1 = Math.round(total * pct) / 100
+      raw = [
+        { label: `Reserva (${pct}%)`, amount: Math.min(c1, total) },
+        { label: "Balance restante", amount: Math.round((total - Math.min(c1, total)) * 100) / 100 },
+      ]
+    } else {
+      const base = Math.round((total / installmentTotal) * 100) / 100
+      raw = Array.from({ length: installmentTotal }, (_, i) => ({
+        label: `Cuota ${i + 1}`,
+        amount: i === installmentTotal - 1 ? Math.round((total - base * (installmentTotal - 1)) * 100) / 100 : base,
+      }))
+    }
+    let remaining = amountPaid
+    plan = raw.map((r, i) => {
+      let state: Cuota["state"] = "pending"
+      let paid = 0
+      if (r.amount > 0 && remaining >= r.amount) {
+        state = "paid"
+        paid = r.amount
+        remaining -= r.amount
+      } else if (remaining > 0) {
+        state = "partial"
+        paid = remaining
+        remaining = 0
+      }
+      return { n: i + 1, label: r.label, amount: r.amount, state, paid }
+    })
+  }
+  const depositQuickFill = plan.length > 0 ? plan[0].amount : 0
+
   const status = invoice.status as string
   const invoiceNumber = invoice.invoice_number as string
   const dueDate = invoice.due_date as string | null
@@ -83,6 +136,15 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
               defaultNcfType={(taxConfig?.default_ncf_type as NcfType | null) ?? undefined}
               hasClientRnc={hasClientRnc}
             />
+            {status !== "cancelled" && (
+              <Link
+                href={`/invoices/${invoice.id}/edit`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar
+              </Link>
+            )}
             <Link
               href={`/invoice-print/${invoice.id}`}
               target="_blank"
@@ -236,6 +298,58 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
             ) : null}
           </div>
 
+          {/* Plan de pago (cuotas dentro de la misma factura) */}
+          {plan.length > 0 && (
+            <div className="sf-card p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <Layers className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">
+                  Plan de pago · {installmentTotal} cuotas
+                </h2>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Esta factura se cobra en {installmentTotal} pagos parciales dentro del mismo registro.
+              </p>
+              <div className="space-y-2.5">
+                {plan.map((c) => {
+                  const chip =
+                    c.state === "paid"
+                      ? { label: "Pagada", cls: "bg-emerald-100 text-emerald-700" }
+                      : c.state === "partial"
+                        ? { label: "Abono parcial", cls: "bg-amber-100 text-amber-700" }
+                        : { label: "Pendiente", cls: "bg-muted text-muted-foreground" }
+                  return (
+                    <div
+                      key={c.n}
+                      className="flex items-center justify-between rounded-xl border border-border/60 px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{c.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {c.state === "partial"
+                            ? `Abonado ${fmt(c.paid)} de ${fmt(c.amount)}`
+                            : c.state === "paid"
+                              ? "Pago recibido"
+                              : "Por cobrar"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-foreground">
+                          {fmt(c.amount)}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium ${chip.cls}`}
+                        >
+                          {chip.label}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Payment history */}
           {payments.length > 0 && (
             <div className="sf-card p-5">
@@ -281,6 +395,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
               invoiceId={invoice.id as string}
               balance={balance}
               currency={currency}
+              depositAmount={depositQuickFill}
             />
           )}
 
