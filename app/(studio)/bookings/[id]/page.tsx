@@ -23,10 +23,12 @@ import {
 import { getEntityActivity } from "@/server/services/activity.service"
 import { listFormResponsesForBooking } from "@/server/services/form.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
+import { getClientShareLinks } from "@/server/services/client-portal.service"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { ActivityTimeline } from "@/components/shared/activity-timeline"
 import { FormResponsesPanel } from "@/components/admin/form-responses-panel"
+import { ShareWithClientPanel } from "@/components/bookings/share-with-client-panel"
 import { formatCurrency, formatDateShort } from "@/lib/utils/currency"
 import type { Database } from "@/types/supabase"
 
@@ -42,6 +44,8 @@ type BookingDetail = {
   client_email: string
   client_phone: string | null
   client_whatsapp: string | null
+  client_id: string | null
+  project_id: string | null
   event_type: string | null
   event_date: string
   event_time: string | null
@@ -173,6 +177,12 @@ export default async function BookingRequestDetailPage({
     }),
     countUnreadNotifications(session.studioId),
   ])
+
+  // Links compartibles para el cliente (solo si el booking ya generó cliente,
+  // i.e. fue aprobado). Fallback cuando el email de confirmación no llega.
+  const shareLinks = req.client_id
+    ? await getClientShareLinks(session.studioId, req.id).catch(() => null)
+    : null
   const publicBaseUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
   const pkg = req.package
@@ -231,6 +241,18 @@ export default async function BookingRequestDetailPage({
             <XCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>{actionError}</span>
           </div>
+        )}
+
+        {/* Compartir con el cliente — visible cuando el booking fue aprobado.
+            Fallback al email de confirmación (útil sin SMTP configurado). */}
+        {shareLinks && (
+          <ShareWithClientPanel
+            portalUrl={shareLinks.portalUrl}
+            accessCode={shareLinks.accessCode}
+            clientName={shareLinks.clientName}
+            clientWhatsapp={shareLinks.clientWhatsapp}
+            contractSignUrl={shareLinks.contractSignUrl}
+          />
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
