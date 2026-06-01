@@ -43,27 +43,31 @@ export async function GET(req: NextRequest) {
   const state = url.searchParams.get('state')
   const errorParam = url.searchParams.get('error')
 
+  // Detrás del proxy (CloudPanel/nginx) req.url es la dirección interna
+  // (p.ej. http://localhost:3001). Para redirigir de vuelta al navegador
+  // usamos la URL pública configurada; si no existe, caemos al origin real.
+  const appBase = process.env.NEXT_PUBLIC_APP_URL || url.origin
   const redirectBase = `/settings/integrations/google`
 
   if (errorParam) {
     return NextResponse.redirect(
-      new URL(`${redirectBase}?error=${encodeURIComponent(errorParam)}`, req.url),
+      new URL(`${redirectBase}?error=${encodeURIComponent(errorParam)}`, appBase),
     )
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(new URL(`${redirectBase}?error=missing_params`, req.url))
+    return NextResponse.redirect(new URL(`${redirectBase}?error=missing_params`, appBase))
   }
 
   const studioIdFromState = verifyState(state)
   if (!studioIdFromState) {
-    return NextResponse.redirect(new URL(`${redirectBase}?error=invalid_state`, req.url))
+    return NextResponse.redirect(new URL(`${redirectBase}?error=invalid_state`, appBase))
   }
 
   // Doble check: la sesión activa debe corresponder al studioId del state
   const ctx = await getAuthContext()
   if (!ctx || ctx.studioId !== studioIdFromState) {
-    return NextResponse.redirect(new URL(`${redirectBase}?error=session_mismatch`, req.url))
+    return NextResponse.redirect(new URL(`${redirectBase}?error=session_mismatch`, appBase))
   }
 
   try {
@@ -72,9 +76,9 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'unknown'
     return NextResponse.redirect(
-      new URL(`${redirectBase}?error=${encodeURIComponent(msg)}`, req.url),
+      new URL(`${redirectBase}?error=${encodeURIComponent(msg)}`, appBase),
     )
   }
 
-  return NextResponse.redirect(new URL(`${redirectBase}?connected=1`, req.url))
+  return NextResponse.redirect(new URL(`${redirectBase}?connected=1`, appBase))
 }
