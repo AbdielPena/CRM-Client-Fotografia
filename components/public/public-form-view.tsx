@@ -11,6 +11,8 @@ interface PublicFormViewProps {
   template: { name: string; description: string | null }
   studio: { id: string; name: string; primary_color: string | null } | null
   errorFromQuery?: string
+  /** Si viene del wizard de booking, al enviar regresa acá (siguiente paso). */
+  returnTo?: string
 }
 
 export function PublicFormView({
@@ -20,6 +22,7 @@ export function PublicFormView({
   template,
   studio,
   errorFromQuery,
+  returnTo,
 }: PublicFormViewProps) {
   const router = useRouter()
   const [data, setData] = useState<Record<string, unknown>>(initialData ?? {})
@@ -87,6 +90,11 @@ export function PublicFormView({
           return
         }
         setSubmitted(true)
+        // Si venimos del wizard de booking, volver al siguiente paso
+        if (returnTo) {
+          window.location.href = returnTo
+          return
+        }
         router.refresh()
       } catch {
         setErrors({ _form: 'Error de conexión' })

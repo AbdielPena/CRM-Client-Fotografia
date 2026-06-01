@@ -15,7 +15,7 @@ export default async function SettingsPage() {
     supabase
       .from("studios")
       .select(
-        "id, name, email, phone, website, address, city, country, logo_url, currency, timezone, invoice_prefix, invoice_footer, contract_footer, tax_id, plan",
+        "id, name, email, phone, website, address, city, country, logo_url, currency, timezone, invoice_prefix, invoice_footer, contract_footer, tax_id, payment_instructions, payment_whatsapp, plan",
       )
       .eq("id", session.studioId)
       .maybeSingle(),

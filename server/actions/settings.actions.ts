@@ -19,6 +19,8 @@ const updateStudioSchema = z.object({
   invoiceFooter: z.string().max(500).optional(),
   contractFooter: z.string().max(500).optional(),
   taxId: z.string().optional(),
+  paymentInstructions: z.string().max(2000).optional(),
+  paymentWhatsapp: z.string().max(40).optional(),
 })
 
 export type UpdateStudioInput = z.infer<typeof updateStudioSchema>
@@ -38,6 +40,8 @@ const FIELD_MAP: Record<string, string> = {
   invoiceFooter: "invoice_footer",
   contractFooter: "contract_footer",
   taxId: "tax_id",
+  paymentInstructions: "payment_instructions",
+  paymentWhatsapp: "payment_whatsapp",
 }
 
 export async function updateStudioAction(input: UpdateStudioInput) {

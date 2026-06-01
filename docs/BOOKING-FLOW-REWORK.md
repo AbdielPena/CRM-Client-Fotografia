@@ -1,5 +1,39 @@
 # Booking Flow Rework — Plan + Estado
 
+## ⭐ SPEC VISUAL (referencia Sprout/AbbysPixel — validada con el dueño)
+
+El cliente debe vivir un **WIZARD secuencial continuo** (no un checklist con links
+sueltos). Pantallas exactas de la referencia:
+
+1. **Confirm your session booking** — resumen de la sesión → botón **CONTINUE**
+2. **Questionnaire** — el cuestionario del paquete + sidebar Payments
+   (Session fee, Total, **Due Today = depósito 50%**)
+3. **Contract** — contrato completo + sidebar payments → el cliente firma
+4. **How would you like to pay?** — *Amount due today: 50%* + *"el resto después"* +
+   **Transferencia bancaria** con instrucciones (datos de banco del studio) + nota voucher
+5. **Notify studio** — "tu pago va en camino" + mensaje opcional + (opción subir voucher)
+   → botón **"SEND MESSAGE AND BOOK SESSION"**
+6. **Thanks for booking** — Payment due + View Invoice + Documents (cuestionario, contrato)
+   ⚠️ "Thanks/confirmed" en la pantalla del cliente **NO = agendado**. El cliente solo
+   NOTIFICÓ que pagará. Se agenda SOLO cuando el ADMIN confirma el pago.
+
+### Decisiones (validadas)
+- **Instrucciones de pago**: configurables en Ajustes del studio (datos bancarios +
+  WhatsApp para validar el voucher). Campos nuevos en `studios`.
+- **Voucher**: AMBOS — el cliente puede subirlo en el sistema Y/O mandarlo por WhatsApp.
+- **"Notificar pago"**: crea un `payment` en estado **PENDING** + aviso al admin.
+  El booking queda `awaiting_payment`. El admin confirma → `completed` → se agenda.
+
+### Implementación del wizard (reemplaza el checklist hub actual)
+- `/b/[token]?step=` orquesta: confirm → questionnaire → contract → payment → thanks
+- Reusa `/f` (cuestionario) y `/sign` (firma) con returnTo de vuelta al wizard
+- Paso payment + thanks inline en `/b`
+- Action `notifyPaymentIntent`: crea payment pending + notif admin (+ voucher opcional)
+- Admin confirma pago (recordPayment existente) → onPaymentRecorded → booking confirmed + agenda
+
+---
+
+
 > Rework del flujo completo de booking para que siga la lógica de negocio correcta.
 > **Estrategia de deploy**: TODO se implementa en la branch `claude/pensive-cerf-2592e8`
 > y se deploya COMPLETO al final. Producción no se rompe a medias.

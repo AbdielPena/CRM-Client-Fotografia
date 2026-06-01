@@ -35,7 +35,13 @@ export interface BookingFlowState {
   contractStatus: string
   contractSigned: boolean
   expired: boolean
-  studio: { name: string; logoUrl: string | null; primaryColor: string }
+  studio: {
+    name: string
+    logoUrl: string | null
+    primaryColor: string
+    paymentInstructions: string | null
+    paymentWhatsapp: string | null
+  }
   client: { name: string; email: string | null }
   plan: {
     packageName: string
@@ -44,10 +50,14 @@ export interface BookingFlowState {
     total: number
     currency: string
     includes: string[]
+    depositPercent: number
+    depositAmount: number
   }
   forms: BookingFlowForm[]
   formsPending: number
   invoice: BookingFlowInvoice | null
+  /** true si el cliente ya notificó un pago (payment status pending). */
+  paymentNotified: boolean
   /** Paso en el que debe actuar el cliente ahora. */
   currentStep: BookingFlowStep
 }
@@ -89,6 +99,8 @@ export async function getClientBookingFlow(
     total: 0,
     currency: "DOP",
     includes: [],
+    depositPercent: 50,
+    depositAmount: 0,
   }
   let client: BookingFlowState["client"] = { name: "Cliente", email: null }
 
@@ -97,7 +109,7 @@ export async function getClientBookingFlow(
       .from("projects")
       .select(
         `name, event_type, event_date, total_amount, currency, client_id,
-         package:packages ( name, price, currency, includes ),
+         package:packages ( name, price, currency, includes, deposit_percent ),
          client:clients ( name, email )`,
       )
       .eq("id", projectId)
@@ -110,26 +122,31 @@ export async function getClientBookingFlow(
         price?: number
         currency?: string
         includes?: string[]
+        deposit_percent?: number
       }>(proj.package)[0]
       const cli = asArray<{ name?: string; email?: string | null }>(
         proj.client,
       )[0]
+      const total = Number(proj.total_amount ?? pkg?.price ?? 0)
+      const depositPercent = Number(pkg?.deposit_percent ?? 50)
       plan = {
         packageName: pkg?.name ?? proj.name ?? "Tu paquete",
         eventType: proj.event_type ?? null,
         eventDate: proj.event_date ?? null,
-        total: Number(proj.total_amount ?? pkg?.price ?? 0),
+        total,
         currency: proj.currency ?? pkg?.currency ?? "DOP",
         includes: Array.isArray(pkg?.includes) ? (pkg!.includes as string[]) : [],
+        depositPercent,
+        depositAmount: Math.round(total * depositPercent) / 100,
       }
       if (cli) client = { name: cli.name ?? "Cliente", email: cli.email ?? null }
     }
   }
 
-  // 3. Studio branding
+  // 3. Studio branding + instrucciones de pago
   const { data: studioRow } = await supabase
     .from("studios")
-    .select("name, logo_url, primary_color")
+    .select("name, logo_url, primary_color, payment_instructions, payment_whatsapp")
     .eq("id", studioId)
     .maybeSingle()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -138,6 +155,8 @@ export async function getClientBookingFlow(
     name: s?.name ?? "Studio",
     logoUrl: s?.logo_url ?? null,
     primaryColor: s?.primary_color ?? "#7C3AED",
+    paymentInstructions: s?.payment_instructions ?? null,
+    paymentWhatsapp: s?.payment_whatsapp ?? null,
   }
 
   // 4. Formularios del booking/proyecto
@@ -191,6 +210,17 @@ export async function getClientBookingFlow(
     }
   }
 
+  // 6. ¿El cliente ya notificó un pago? (payment status pending)
+  let paymentNotified = false
+  if (invoice) {
+    const { count } = await supabase
+      .from("payments")
+      .select("id", { count: "exact", head: true })
+      .eq("invoice_id", invoice.id)
+      .eq("status", "pending")
+    paymentNotified = (count ?? 0) > 0
+  }
+
   const contractStatus = contract.status as string
   const contractSigned = !!contract.signed_at || contractStatus === "signed"
   const expiresAt = contract.expires_at as string | null
@@ -200,16 +230,18 @@ export async function getClientBookingFlow(
     contractStatus === "expired" ||
     (!!expiresAt && new Date() > new Date(expiresAt))
 
-  // Determinar el paso actual
+  // Determinar el paso actual del wizard
   let currentStep: BookingFlowStep
   if (formsPending > 0) {
     currentStep = "form"
   } else if (!contractSigned) {
     currentStep = "sign"
-  } else if (invoice && invoice.status !== "paid") {
-    currentStep = "pay"
+  } else if (invoice && invoice.status === "paid") {
+    currentStep = "done" // pago confirmado → sesión agendada
+  } else if (paymentNotified) {
+    currentStep = "done" // ya notificó el pago → esperando confirmación del studio
   } else {
-    currentStep = "done"
+    currentStep = "pay" // firmado, falta notificar el pago
   }
 
   return {
@@ -224,6 +256,7 @@ export async function getClientBookingFlow(
     forms,
     formsPending,
     invoice,
+    paymentNotified,
     currentStep,
   }
 }
