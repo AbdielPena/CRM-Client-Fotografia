@@ -1240,3 +1240,32 @@ export async function linkCalendarEventToEntity(
 
   if (error) throw new Error(`[linkCalendarEventToEntity] ${error.message}`)
 }
+
+/**
+ * Confirma el evento de calendario de un proyecto tras recibir el pago del
+ * booking (provisional → confirmado).
+ *
+ * Best-effort y seguro: marca el evento local como 'confirmed' y, si el studio
+ * tiene Google Calendar conectado (OAuth), re-sincroniza el proyecto para
+ * empujar el cambio a Google. Si no hay OAuth o no hay evento, no hace nada.
+ */
+export async function confirmProjectCalendarEvent(
+  studioId: string,
+  projectId: string,
+): Promise<void> {
+  const supabase = createSupabaseServiceClient()
+
+  // Marcar el/los evento(s) locales del proyecto como confirmados
+  await supabase
+    .from('google_events')
+    .update({ status: 'confirmed', updated_at: new Date().toISOString() })
+    .eq('studio_id', studioId)
+    .eq('project_id', projectId)
+
+  // Empujar a Google si hay integración conectada (best-effort)
+  try {
+    await syncProjectById(studioId, projectId)
+  } catch {
+    // Sin OAuth conectado / error de red → no fatal.
+  }
+}

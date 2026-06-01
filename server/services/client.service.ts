@@ -226,6 +226,9 @@ export async function createClientWithBooking(
     project_name: data.projectName ?? null,
     location: data.location ?? null,
     reserve_due_in_days: data.reserveDueInDays ?? null,
+    // Si skipInvoices=true, la RPC crea solo cliente+proyecto+contrato.
+    // La factura única se genera tras la firma del contrato (flujo de booking).
+    skip_invoices: data.skipInvoices ?? false,
   }
 
   const { data: result, error } = await supabase.rpc(
@@ -244,10 +247,10 @@ export async function createClientWithBooking(
   return result as {
     client_id: string
     project_id: string
-    invoice1_id: string
-    invoice2_id: string
-    invoice1_number: string
-    invoice2_number: string
+    invoice1_id: string | null
+    invoice2_id: string | null
+    invoice1_number: string | null
+    invoice2_number: string | null
     contract_id: string
   }
 }

@@ -107,12 +107,16 @@ export async function createClientAction(
       parsed.data
     )
     clientId = result.client_id
-    emailBundle = {
-      clientId: result.client_id,
-      projectId: result.project_id,
-      contractId: result.contract_id,
-      invoice1Id: result.invoice1_id,
-    }
+    // Solo armamos el bundle de emails si la RPC creó factura (flujo manual
+    // del CRM). El flujo de booking usa skip_invoices → no entra por acá.
+    emailBundle = result.invoice1_id
+      ? {
+          clientId: result.client_id,
+          projectId: result.project_id,
+          contractId: result.contract_id,
+          invoice1Id: result.invoice1_id,
+        }
+      : null
   } catch (err) {
     if (err instanceof ClientCreationError) {
       return {

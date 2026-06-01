@@ -493,8 +493,8 @@ async function convertBookingToClientBundle(params: {
   clientId: string
   projectId: string
   contractId: string
-  invoice1Id: string
-  invoice2Id: string
+  invoice1Id: string | null
+  invoice2Id: string | null
 } | null> {
   const { row } = params
 
@@ -565,6 +565,9 @@ async function convertBookingToClientBundle(params: {
       eventDate: row.event_date,
       location: row.event_location || undefined,
       reserveDueInDays: pricing.reserve_due_in_days ?? undefined,
+      // Flujo nuevo: NO crear facturas al aprobar. La factura única se genera
+      // cuando el cliente firma el contrato (ver onContractSigned / Fase C).
+      skipInvoices: true,
     },
   )
 
@@ -597,15 +600,22 @@ async function convertBookingToClientBundle(params: {
     )
   }
 
-  const { error: invoiceLinkErr } = await svc
-    .from('invoices')
-    .update({ booking_request_id: params.requestId })
-    .in('id', [result.invoice1_id, result.invoice2_id])
-  if (invoiceLinkErr) {
-    console.error(
-      '[convertBookingToClientBundle] link invoices → booking failed',
-      invoiceLinkErr,
-    )
+  // Backlink de facturas: solo si la RPC las creó (flujo manual). En el flujo
+  // de booking (skipInvoices) no hay facturas todavía — se generan al firmar.
+  const invoiceIds = [result.invoice1_id, result.invoice2_id].filter(
+    (id): id is string => Boolean(id),
+  )
+  if (invoiceIds.length > 0) {
+    const { error: invoiceLinkErr } = await svc
+      .from('invoices')
+      .update({ booking_request_id: params.requestId })
+      .in('id', invoiceIds)
+    if (invoiceLinkErr) {
+      console.error(
+        '[convertBookingToClientBundle] link invoices → booking failed',
+        invoiceLinkErr,
+      )
+    }
   }
 
   return {
@@ -623,6 +633,17 @@ async function convertBookingToClientBundle(params: {
  */
 function buildContractSignUrl(signingToken: string): string {
   return `${appBaseUrl()}/sign/${signingToken}`
+}
+
+/**
+ * Construye la URL del HUB de confirmación del cliente (flujo nuevo).
+ * El cliente entra acá tras la aprobación: revisa el plan, completa el
+ * formulario y firma el contrato — en vez de ir directo a /sign.
+ * Usa el signing_token del contrato como llave estable.
+ * Alineada con la ruta Next `app/b/[token]/page.tsx`.
+ */
+function buildBookingFlowUrl(signingToken: string): string {
+  return `${appBaseUrl()}/b/${signingToken}`
 }
 
 export async function approveBookingRequest(params: {
@@ -775,7 +796,10 @@ export async function approveBookingRequest(params: {
         .eq('id', conversionBundle.contractId)
         .maybeSingle()
       if (contractRow?.signing_token) {
-        contractSignUrl = buildContractSignUrl(contractRow.signing_token)
+        // Flujo nuevo: el cliente entra al HUB de confirmación (/b/<token>),
+        // no directo a /sign. Ahí revisa el plan, completa el formulario y
+        // firma. buildContractSignUrl queda disponible para fallback/otros usos.
+        contractSignUrl = buildBookingFlowUrl(contractRow.signing_token)
       }
     } catch (err) {
       console.error(
