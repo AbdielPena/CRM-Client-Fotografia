@@ -82,8 +82,10 @@ export function BookingWizard(props: BookingWizardProps) {
   const [busy, setBusy] = useState(false)
 
   // visibilidad de los stepper dots
-  const dotSteps = props.steps.filter((s) => s !== "plan" && s !== "done")
-  const dotIndex = dotSteps.indexOf(step as StepKey)
+  const dotSteps: StepKey[] = props.steps.filter(
+    (s) => s !== "plan" && s !== "done",
+  )
+  const dotIndex = dotSteps.indexOf(step)
 
   const eventDate = fmtDate(props.plan.eventDate)
   const firstName = props.client.name.split(" ")[0] || "Hola"
