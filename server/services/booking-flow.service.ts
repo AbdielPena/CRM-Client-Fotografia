@@ -56,6 +56,15 @@ export interface BookingFlowState {
   }
   forms: BookingFlowForm[]
   formsPending: number
+  /** Cuestionario pendiente (schema + datos previos) para embeber en el wizard. */
+  pendingForm: {
+    accessToken: string
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    schema: any
+    data: Record<string, unknown>
+  } | null
+  /** HTML del contrato (placeholders ya resueltos) para embeber en el wizard. */
+  contractHtml: string | null
   invoice: BookingFlowInvoice | null
   /** true si el cliente ya notificó un pago (payment status pending). */
   paymentNotified: boolean
@@ -162,8 +171,9 @@ export async function getClientBookingFlow(
     paymentWhatsapp: s?.payment_whatsapp ?? null,
   }
 
-  // 4. Formularios del booking/proyecto
+  // 4. Formularios del booking/proyecto (incluye schema + data para embeber)
   const forms: BookingFlowForm[] = []
+  let pendingForm: BookingFlowState["pendingForm"] = null
   {
     const orFilter = bookingRequestId
       ? `project_id.eq.${projectId},booking_request_id.eq.${bookingRequestId}`
@@ -171,7 +181,7 @@ export async function getClientBookingFlow(
     const { data: formRows } = await supabase
       .from("form_responses")
       .select(
-        `access_token, status, form_template:form_templates ( name )`,
+        `access_token, status, data, schema_snapshot, form_template:form_templates ( name )`,
       )
       .or(projectId ? orFilter : `booking_request_id.eq.${bookingRequestId}`)
       .eq("studio_id", studioId)
@@ -183,11 +193,46 @@ export async function getClientBookingFlow(
         status: r.status,
         templateName: tmpl?.name ?? null,
       })
+      // Primer cuestionario pendiente → exponer schema + data para el wizard
+      if (
+        !pendingForm &&
+        r.status !== "completed" &&
+        r.status !== "expired" &&
+        r.schema_snapshot
+      ) {
+        pendingForm = {
+          accessToken: r.access_token,
+          schema: r.schema_snapshot,
+          data: (r.data as Record<string, unknown>) ?? {},
+        }
+      }
     }
   }
   const formsPending = forms.filter(
     (f) => f.status !== "completed" && f.status !== "expired",
   ).length
+
+  // 4b. HTML del contrato (placeholders resueltos) para embeber en el wizard
+  let contractHtml: string | null = null
+  try {
+    const { buildContractPlaceholders, renderPlaceholders } = await import(
+      "./contract-placeholders.service"
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: cRow } = await supabase
+      .from("contracts")
+      .select("body_html")
+      .eq("id", contract.id)
+      .maybeSingle()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bodyHtml = (cRow as any)?.body_html ?? ""
+    if (bodyHtml) {
+      const { vars } = await buildContractPlaceholders(contract.id as string)
+      contractHtml = renderPlaceholders(bodyHtml, vars)
+    }
+  } catch (err) {
+    console.error("[getClientBookingFlow] contract html failed", err)
+  }
 
   // 5. Factura del proyecto (la única del flujo nuevo; la más reciente)
   let invoice: BookingFlowInvoice | null = null
@@ -258,6 +303,8 @@ export async function getClientBookingFlow(
     plan,
     forms,
     formsPending,
+    pendingForm,
+    contractHtml,
     invoice,
     paymentNotified,
     currentStep,
