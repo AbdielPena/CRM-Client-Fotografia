@@ -47,6 +47,7 @@ export interface BookingFlowState {
     packageName: string
     eventType: string | null
     eventDate: string | null
+    location: string | null
     total: number
     currency: string
     includes: string[]
@@ -96,6 +97,7 @@ export async function getClientBookingFlow(
     packageName: "Tu paquete",
     eventType: null,
     eventDate: null,
+    location: null,
     total: 0,
     currency: "DOP",
     includes: [],
@@ -108,7 +110,7 @@ export async function getClientBookingFlow(
     const { data: projRow } = await supabase
       .from("projects")
       .select(
-        `name, event_type, event_date, total_amount, currency, client_id,
+        `name, event_type, event_date, location, total_amount, currency, client_id,
          package:packages ( name, price, currency, includes, deposit_percent ),
          client:clients ( name, email )`,
       )
@@ -133,6 +135,7 @@ export async function getClientBookingFlow(
         packageName: pkg?.name ?? proj.name ?? "Tu paquete",
         eventType: proj.event_type ?? null,
         eventDate: proj.event_date ?? null,
+        location: proj.location ?? null,
         total,
         currency: proj.currency ?? pkg?.currency ?? "DOP",
         includes: Array.isArray(pkg?.includes) ? (pkg!.includes as string[]) : [],

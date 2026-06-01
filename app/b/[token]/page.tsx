@@ -32,14 +32,17 @@ function formatDate(d: string | null): string | null {
 
 export default async function BookingFlowPage({
   params,
+  searchParams,
 }: {
   params: { token: string }
+  searchParams?: { go?: string }
 }) {
   const flow = await getClientBookingFlow(params.token)
   if (!flow) notFound()
 
   const color = flow.studio.primaryColor
   const selfUrl = `/b/${params.token}`
+  const started = searchParams?.go === "1"
 
   if (flow.expired) {
     return (
@@ -57,6 +60,83 @@ export default async function BookingFlowPage({
 
   const eventDate = formatDate(flow.plan.eventDate)
   const firstName = flow.client.name.split(" ")[0] || "Hola"
+
+  // ── PASO 1: Información de lo seleccionado (antes de empezar el wizard) ──
+  // El cliente revisa lo que eligió (plan + fecha + qué incluye + precio) y
+  // presiona Continuar para iniciar el proceso (cuestionario → contrato → pago).
+  if (!started && flow.currentStep !== "done") {
+    return (
+      <Shell studioName={flow.studio.name} color={color} logoUrl={flow.studio.logoUrl}>
+        <div className="mb-5 text-center">
+          <div
+            className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl"
+            style={{ background: `${color}1a` }}
+          >
+            <Sparkles className="h-6 w-6" style={{ color }} />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground">
+            ¡Hola, {firstName}!
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tu solicitud fue aprobada. Esto fue lo que seleccionaste:
+          </p>
+        </div>
+
+        {/* Resumen completo de lo seleccionado */}
+        <div className="rounded-2xl border border-border bg-muted/40 p-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-bold text-foreground">{flow.plan.packageName}</h2>
+            <span className="whitespace-nowrap text-lg font-bold text-foreground tabular-nums">
+              {formatCurrency(flow.plan.total, flow.plan.currency)}
+            </span>
+          </div>
+
+          <dl className="mt-4 space-y-2.5 border-t border-border/60 pt-4 text-sm">
+            {flow.plan.eventType && (
+              <Detail label="Tipo de sesión" value={flow.plan.eventType} />
+            )}
+            {eventDate && <Detail label="Fecha" value={eventDate} />}
+            {flow.plan.location && (
+              <Detail label="Ubicación" value={flow.plan.location} />
+            )}
+            <Detail
+              label="Reserva para confirmar"
+              value={`${formatCurrency(flow.plan.depositAmount, flow.plan.currency)} (${flow.plan.depositPercent}%)`}
+            />
+          </dl>
+
+          {flow.plan.includes.length > 0 && (
+            <div className="mt-4 border-t border-border/60 pt-4">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Incluye
+              </p>
+              <ul className="space-y-1.5">
+                {flow.plan.includes.map((inc, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+                    <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
+                    {inc}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <a
+          href={`${selfUrl}?go=1`}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          style={{ background: color }}
+        >
+          Continuar
+          <ArrowRight className="h-4 w-4" />
+        </a>
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          Siguiente: completar formulario, firmar contrato y realizar el pago.
+        </p>
+      </Shell>
+    )
+  }
+
   const hasForm = flow.forms.length > 0
   const pendingForm = flow.forms.find(
     (f) => f.status !== "completed" && f.status !== "expired",
@@ -148,7 +228,7 @@ export default async function BookingFlowPage({
           title="Completa tu cuestionario"
           description="Necesitamos algunos datos para preparar tu sesión."
           ctaLabel="Continuar al cuestionario"
-          ctaHref={`/f/${pendingForm.accessToken}?return=${encodeURIComponent(selfUrl)}`}
+          ctaHref={`/f/${pendingForm.accessToken}?return=${encodeURIComponent(`${selfUrl}?go=1`)}`}
         />
       )}
 
@@ -159,7 +239,7 @@ export default async function BookingFlowPage({
           title="Revisa y firma tu contrato"
           description="Lee tu contrato de servicios y fírmalo digitalmente."
           ctaLabel="Revisar y firmar"
-          ctaHref={`/sign/${flow.signingToken}?return=${encodeURIComponent(selfUrl)}`}
+          ctaHref={`/sign/${flow.signingToken}?return=${encodeURIComponent(`${selfUrl}?go=1`)}`}
         />
       )}
 
@@ -280,6 +360,15 @@ function DoneView({
           Ver mi factura
         </a>
       )}
+    </div>
+  )
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right font-medium text-foreground">{value}</dd>
     </div>
   )
 }
