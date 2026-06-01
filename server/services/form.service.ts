@@ -474,7 +474,10 @@ export async function createFormResponsesForBooking(params: {
         form_template_id: link.form_template_id,
         booking_request_id: params.bookingRequestId,
         client_email: params.clientEmail,
-        status: 'pending',
+        // 'sent' (no 'pending'): el form ya está disponible para el cliente.
+        // El state machine permite sent→completed; pending→completed es ilegal,
+        // lo que rompía el submit en el wizard embebido.
+        status: 'sent',
         data: {},
         schema_snapshot: link.template.schema as unknown as Json,
       },
