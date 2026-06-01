@@ -393,8 +393,22 @@ export async function createFormResponsesForBooking(params: {
 }): Promise<Array<{ id: string; templateId: string; accessToken: string }>> {
   const svc = createSupabaseServiceClient()
 
-  // Links package_forms → form_templates activos
-  const { data: links, error: linksErr } = await svc
+  // Fuente 1: formulario vinculado DIRECTAMENTE al paquete
+  // (packages.default_form_template_id — lo que el owner elige en /settings/packages).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: pkgRow } = await svc
+    .from('packages')
+    .select('default_form_template_id')
+    .eq('id', params.packageId)
+    .eq('studio_id', params.studioId)
+    .maybeSingle()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const defaultFormId = (pkgRow as any)?.default_form_template_id as
+    | string
+    | null
+
+  // Fuente 2: links package_forms (vinculación M-N alternativa, compat)
+  const { data: pkgLinks, error: linksErr } = await svc
     .from('package_forms')
     .select(
       `id, is_required, sort_order, form_template_id,
@@ -405,7 +419,31 @@ export async function createFormResponsesForBooking(params: {
     .order('sort_order', { ascending: true })
 
   if (linksErr) throwServiceError("FORM_BOOKING_LINKS_FAILED", linksErr)
-  if (!links || links.length === 0) return []
+
+  // Combinar ambas fuentes en una lista de links (default primero), sin duplicar
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const links: any[] = []
+  const seenTemplateIds = new Set<string>()
+
+  if (defaultFormId) {
+    const { data: defTmpl } = await svc
+      .from('form_templates')
+      .select('id, name, schema, is_active, deleted_at')
+      .eq('id', defaultFormId)
+      .eq('studio_id', params.studioId)
+      .maybeSingle()
+    if (defTmpl) {
+      links.push({ form_template_id: defaultFormId, template: defTmpl })
+      seenTemplateIds.add(defaultFormId)
+    }
+  }
+  for (const l of (pkgLinks as unknown as any[]) ?? []) {
+    if (seenTemplateIds.has(l.form_template_id)) continue
+    seenTemplateIds.add(l.form_template_id)
+    links.push(l)
+  }
+
+  if (links.length === 0) return []
 
   // Ya existentes para idempotencia
   const existing = await formResponsesRepo.listByBookingRequest(
