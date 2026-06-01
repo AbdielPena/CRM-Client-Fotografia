@@ -247,6 +247,7 @@ export default async function BookingRequestDetailPage({
             Fallback al email de confirmación (útil sin SMTP configurado). */}
         {shareLinks && (
           <ShareWithClientPanel
+            confirmationUrl={shareLinks.confirmationUrl}
             portalUrl={shareLinks.portalUrl}
             accessCode={shareLinks.accessCode}
             clientName={shareLinks.clientName}

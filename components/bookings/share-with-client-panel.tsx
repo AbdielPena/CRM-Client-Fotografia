@@ -4,6 +4,8 @@ import { useState } from "react"
 import { Check, Copy, MessageCircle, ExternalLink, LinkIcon, FileSignature } from "lucide-react"
 
 interface ShareWithClientPanelProps {
+  /** Link principal: wizard de confirmación /b/<token> que el cliente completa. */
+  confirmationUrl: string | null
   portalUrl: string
   accessCode: string
   clientName: string | null
@@ -32,6 +34,7 @@ function useCopy() {
 }
 
 export function ShareWithClientPanel({
+  confirmationUrl,
   portalUrl,
   accessCode,
   clientName,
@@ -42,7 +45,9 @@ export function ShareWithClientPanel({
   const { copiedKey, copy } = useCopy()
 
   const firstName = clientName?.split(" ")[0] ?? "Hola"
-  const waMessage = `¡Hola ${firstName}! 📸 Tu sesión con ${studioName} fue confirmada. Aquí puedes ver todos los detalles, tu contrato y tus fotos cuando estén listas:\n\n${portalUrl}`
+  // El link principal que se comparte es el wizard de confirmación.
+  const primaryUrl = confirmationUrl ?? portalUrl
+  const waMessage = `¡Hola ${firstName}! 📸 Tu solicitud con ${studioName} fue aprobada. Completa tu reserva aquí (revisa tu plan, llena el formulario, firma el contrato y realiza el pago):\n\n${primaryUrl}`
   const waNumber = clientWhatsapp?.replace(/\D/g, "") ?? ""
   const waHref = waNumber
     ? `https://wa.me/${waNumber}?text=${encodeURIComponent(waMessage)}`
@@ -57,84 +62,111 @@ export function ShareWithClientPanel({
             Compartir con el cliente
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Si el correo no llega, comparte este enlace por WhatsApp. El cliente
-            ve su sesión, contrato, facturas y galería sin necesidad de contraseña.
+            Este es el enlace que el cliente usa para completar su reserva
+            (revisar plan → formulario → firma → pago). Compártelo por WhatsApp
+            si el correo no llega.
           </p>
         </div>
       </div>
 
-      {/* Link del portal (el "book" completo) */}
-      <div className="mt-4">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
-          Enlace del portal (acceso completo)
-        </p>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 truncate rounded-lg bg-card border border-border px-3 py-2 font-mono text-[11px] text-muted-foreground">
-            {portalUrl}
-          </code>
-          <button
-            type="button"
-            onClick={() => copy("portal", portalUrl)}
-            title="Copiar enlace"
-            className="flex-shrink-0 rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            {copiedKey === "portal" ? (
-              <Check className="h-4 w-4 text-emerald-500" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-          </button>
-          <a
-            href={portalUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Abrir en nueva pestaña"
-            className="flex-shrink-0 rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        </div>
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Código de acceso:{" "}
-          <button
-            type="button"
-            onClick={() => copy("code", accessCode)}
-            className="font-mono font-semibold text-foreground hover:text-brand"
-            title="Copiar código"
-          >
-            {accessCode}
-            {copiedKey === "code" && (
-              <span className="ml-1 text-emerald-600">✓</span>
-            )}
-          </button>
-        </p>
-      </div>
-
-      {/* Link de firma del contrato */}
-      {contractSignUrl && (
+      {/* Link PRINCIPAL: wizard de confirmación */}
+      {confirmationUrl && (
         <div className="mt-4">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1.5">
-            Enlace para firmar el contrato
+            Enlace de confirmación de la sesión
           </p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded-lg bg-card border border-border px-3 py-2 font-mono text-[11px] text-muted-foreground">
-              {contractSignUrl}
+            <code className="flex-1 truncate rounded-lg bg-card border-2 border-emerald-300 px-3 py-2 font-mono text-[11px] text-foreground">
+              {confirmationUrl}
             </code>
             <button
               type="button"
-              onClick={() => copy("contract", contractSignUrl)}
+              onClick={() => copy("confirm", confirmationUrl)}
               title="Copiar enlace"
               className="flex-shrink-0 rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              {copiedKey === "contract" ? (
+              {copiedKey === "confirm" ? (
                 <Check className="h-4 w-4 text-emerald-500" />
               ) : (
-                <FileSignature className="h-4 w-4" />
+                <Copy className="h-4 w-4" />
               )}
             </button>
+            <a
+              href={confirmationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir en nueva pestaña"
+              className="flex-shrink-0 rounded-lg border border-border bg-card p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <ExternalLink className="h-4 w-4" />
+            </a>
           </div>
         </div>
       )}
+
+      {/* Link secundario: portal del cliente (acceso a galería/facturas) */}
+      <details className="mt-3">
+        <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground hover:text-foreground">
+          Otros enlaces (portal del cliente, firma directa)
+        </summary>
+        <div className="mt-2 space-y-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+              Portal del cliente
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded-lg bg-card border border-border px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                {portalUrl}
+              </code>
+              <button
+                type="button"
+                onClick={() => copy("portal", portalUrl)}
+                className="flex-shrink-0 rounded-lg border border-border bg-card p-2 text-muted-foreground hover:bg-muted"
+              >
+                {copiedKey === "portal" ? (
+                  <Check className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Código:{" "}
+              <button
+                type="button"
+                onClick={() => copy("code", accessCode)}
+                className="font-mono font-semibold text-foreground hover:text-brand"
+              >
+                {accessCode}
+                {copiedKey === "code" && <span className="ml-1 text-emerald-600">✓</span>}
+              </button>
+            </p>
+          </div>
+          {contractSignUrl && (
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">
+                Firma directa del contrato
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 truncate rounded-lg bg-card border border-border px-3 py-2 font-mono text-[11px] text-muted-foreground">
+                  {contractSignUrl}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => copy("contract", contractSignUrl)}
+                  className="flex-shrink-0 rounded-lg border border-border bg-card p-2 text-muted-foreground hover:bg-muted"
+                >
+                  {copiedKey === "contract" ? (
+                    <Check className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <FileSignature className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </details>
 
       {/* CTA WhatsApp */}
       <a
