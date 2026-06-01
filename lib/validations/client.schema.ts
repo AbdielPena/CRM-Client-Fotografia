@@ -81,6 +81,9 @@ export const createClientWithBookingSchema = createClientSchema.extend({
   projectName: z.preprocess(emptyAsUndefined, z.string().max(150).optional()),
   location: z.preprocess(emptyAsUndefined, z.string().max(200).optional()),
   reserveDueInDays: z.coerce.number().int().min(0).max(30).optional(),
+  // Flujo de booking nuevo: crea cliente+proyecto+contrato SIN facturas.
+  // La factura única se genera tras firmar el contrato.
+  skipInvoices: z.boolean().optional(),
 })
 
 export const updateClientSchema = createClientSchema.partial()
