@@ -26,9 +26,25 @@ function signState(studioId: string): string {
 
 /**
  * Inicia flow OAuth. Firma studioId en el state y redirige a Google.
+ * Si falta configuración del servidor (credenciales OAuth o secret de firma),
+ * redirige de vuelta a settings con un mensaje claro en lugar de reventar la
+ * página con un 500.
  */
 export async function connectGoogleCalendarAction() {
   const session = await requireRole('admin')
+
+  const missing: string[] = []
+  if (!process.env.GOOGLE_CLIENT_ID) missing.push('GOOGLE_CLIENT_ID')
+  if (!process.env.GOOGLE_CLIENT_SECRET) missing.push('GOOGLE_CLIENT_SECRET')
+  if (!process.env.OAUTH_STATE_SECRET) missing.push('OAUTH_STATE_SECRET')
+  if (missing.length > 0) {
+    const msg = encodeURIComponent(
+      `Google Calendar aún no está configurado en el servidor (falta: ${missing.join(', ')}). ` +
+        `Configura las credenciales OAuth de Google para habilitarlo.`,
+    )
+    redirect(`/settings/integrations/google?error=${msg}`)
+  }
+
   const state = signState(session.studioId)
   const url = getAuthorizeUrl(state)
   redirect(url)

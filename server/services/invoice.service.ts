@@ -256,7 +256,8 @@ export async function updateInvoice(
   else if (amountPaid > 0) status = 'partially_paid'
   else if (status === 'paid' || status === 'partially_paid') status = 'sent'
 
-  const balanceDue = Math.max(total - amountPaid, 0)
+  // NOTA: `balance_due` es una columna GENERATED ALWAYS (total - amount_paid),
+  // no se puede escribir — la BD la recalcula sola al cambiar el total.
   const prevMeta =
     (existing.metadata && typeof existing.metadata === 'object'
       ? (existing.metadata as Record<string, unknown>)
@@ -272,7 +273,6 @@ export async function updateInvoice(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     status: status as any,
     installment_total: installmentTotal,
-    balance_due: balanceDue,
     due_date: data.dueDate || null,
     notes: data.notes ?? null,
     title: data.title ?? existing.title ?? null,
