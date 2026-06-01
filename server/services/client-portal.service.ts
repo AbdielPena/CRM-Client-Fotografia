@@ -191,3 +191,101 @@ export function portalCookieOptions() {
     maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
   }
 }
+
+// ----------------------------------------------------------------------------
+// Links compartibles para el cliente (fallback cuando el email no llega)
+// ----------------------------------------------------------------------------
+
+function appBaseUrl(): string {
+  return (process.env["NEXT_PUBLIC_APP_URL"] ?? "").replace(/\/$/, "")
+}
+
+export interface ClientShareLinks {
+  /** Portal del cliente: ve TODO (galerías, contrato, facturas, reservas). */
+  portalUrl: string
+  /** Código de acceso (por si lo quiere dictar aparte). */
+  accessCode: string
+  clientEmail: string
+  clientName: string | null
+  /** Link directo a firmar el contrato (si hay contrato con token). */
+  contractSignUrl: string | null
+  /** WhatsApp del cliente (e.164 sin símbolos) si lo tenemos. */
+  clientWhatsapp: string | null
+}
+
+/**
+ * Construye los links compartibles para el cliente de un booking aprobado.
+ *
+ * El "book de la sesión" es el portal del cliente: con email + access_code en
+ * la URL, el cliente entra directo sin esperar el email de confirmación. Útil
+ * cuando el SMTP no está configurado — el owner copia el link y lo manda por
+ * WhatsApp.
+ *
+ * Devuelve null si el booking todavía no tiene cliente asociado (no aprobado).
+ */
+export async function getClientShareLinks(
+  studioId: string,
+  bookingRequestId: string,
+): Promise<ClientShareLinks | null> {
+  const supabase = createSupabaseServiceClient()
+
+  const { data: booking } = await supabase
+    .from("booking_requests")
+    .select("client_id, project_id, client_whatsapp")
+    .eq("id", bookingRequestId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+
+  const clientId = (booking as { client_id: string | null } | null)?.client_id
+  if (!booking || !clientId) return null
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("email, name")
+    .eq("id", clientId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  if (!client) return null
+
+  const clientEmail = (client as { email: string | null }).email ?? ""
+  const clientName = (client as { name: string | null }).name ?? null
+
+  // Genera el código si el cliente aún no tiene uno (idempotente)
+  const accessCode = await ensureClientAccessCode(studioId, clientId)
+
+  const base = appBaseUrl()
+  const portalUrl = `${base}/portal/login?email=${encodeURIComponent(
+    clientEmail,
+  )}&code=${encodeURIComponent(accessCode)}`
+
+  // Link de firma del contrato. El contrato se vincula al PROJECT (no al
+  // booking_request), así que lo buscamos por project_id.
+  let contractSignUrl: string | null = null
+  const projectId = (booking as { project_id: string | null }).project_id
+  if (projectId) {
+    const { data: contract } = await supabase
+      .from("contracts")
+      .select("signing_token")
+      .eq("project_id", projectId)
+      .eq("studio_id", studioId)
+      .not("signing_token", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const token = (contract as { signing_token: string | null } | null)
+      ?.signing_token
+    if (token) contractSignUrl = `${base}/sign/${token}`
+  }
+
+  const clientWhatsapp =
+    (booking as { client_whatsapp: string | null }).client_whatsapp ?? null
+
+  return {
+    portalUrl,
+    accessCode,
+    clientEmail,
+    clientName,
+    contractSignUrl,
+    clientWhatsapp,
+  }
+}
