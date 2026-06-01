@@ -84,8 +84,12 @@ async function generateInvoiceAndAdvanceBooking(params: {
 }): Promise<void> {
   const supabase = createSupabaseServiceClient()
 
-  // 1. Generar (o recuperar) la factura única del proyecto — idempotente
-  const { data: invoiceId, error: rpcErr } = await supabase.rpc(
+  // 1. Generar (o recuperar) la factura única del proyecto — idempotente.
+  //    untypedService: la RPC generate_booking_invoice no está en los tipos
+  //    generados (se creó por migración aparte). Mismo patrón que otras RPCs.
+  const { untypedService } = await import("@/server/supabase/untyped")
+  const rpcSvc = untypedService()
+  const { data: invoiceId, error: rpcErr } = await rpcSvc.rpc(
     "generate_booking_invoice",
     { p_studio_id: params.studioId, p_project_id: params.projectId },
   )
