@@ -387,6 +387,8 @@ export async function listFormResponsesForProject(params: {
 export async function createFormResponsesForBooking(params: {
   studioId: string
   bookingRequestId: string
+  /** Proyecto recién creado en la aprobación; liga el form al proyecto desde el inicio. */
+  projectId?: string | null
   packageId: string
   clientEmail: string
   actorId?: string | null
@@ -473,6 +475,7 @@ export async function createFormResponsesForBooking(params: {
         studio_id: params.studioId,
         form_template_id: link.form_template_id,
         booking_request_id: params.bookingRequestId,
+        project_id: params.projectId ?? null,
         client_email: params.clientEmail,
         // 'sent' (no 'pending'): el form ya está disponible para el cliente.
         // El state machine permite sent→completed; pending→completed es ilegal,

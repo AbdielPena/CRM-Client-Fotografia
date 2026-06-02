@@ -67,7 +67,7 @@ export function FormResponsesPanel({ responses, publicBaseUrl, bookingId }: Prop
           <h2 className="text-sm font-semibold text-foreground">Formularios</h2>
         </div>
         <p className="text-xs text-muted-foreground">
-          No hay formularios asociados a esta solicitud.
+          No hay formularios asociados todavía.
         </p>
       </section>
     )

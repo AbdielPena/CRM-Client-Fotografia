@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getProjectById } from "@/server/services/project.service"
 import { listFormResponsesForProject } from "@/server/services/form.service"
+import { getEntityActivity } from "@/server/services/activity.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { getAssetThumbUrl } from "@/server/services/gallery.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
@@ -18,6 +19,9 @@ import {
   FileText,
   Receipt,
   Clock,
+  CreditCard,
+  Truck,
+  History,
   Image as ImageIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -97,9 +101,18 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     }
   }
 
-  // Si project tiene booking_request_id, refetch para incluir esos forms.
-  // En la mayoría de casos no lo tiene → usa el resultado paralelo.
-  const bookingRequestId = (project.booking_request_id as string | null) ?? null
+  // La tabla `projects` NO tiene columna booking_request_id — la relación es
+  // INVERSA (booking_requests.project_id). Resolvemos el booking que apunta a
+  // este proyecto para incluir sus form_responses (también cubre forms
+  // históricos que quedaron ligados solo por booking_request_id).
+  const { data: brRow } = await supabase
+    .from("booking_requests")
+    .select("id")
+    .eq("studio_id", session.studioId)
+    .eq("project_id", params.id)
+    .is("deleted_at", null)
+    .maybeSingle()
+  const bookingRequestId = (brRow as { id?: string } | null)?.id ?? null
   const formResponses = bookingRequestId
     ? await listFormResponsesForProject({
         studioId: session.studioId,
@@ -107,6 +120,29 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         bookingRequestId,
       })
     : formResponsesEarly
+
+  // Pagos, entregas e historial de actividad del proyecto
+  const [{ data: paymentsRaw }, { data: deliveriesRaw }, activity] =
+    await Promise.all([
+      supabase
+        .from("payments")
+        .select(
+          "id, amount, currency, status, method, received_at, created_at, invoice_id",
+        )
+        .eq("studio_id", session.studioId)
+        .eq("project_id", params.id)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("client_deliveries")
+        .select("id, title, status, delivered_at, gallery_id, created_at")
+        .eq("studio_id", session.studioId)
+        .eq("project_id", params.id)
+        .order("created_at", { ascending: false }),
+      getEntityActivity(session.studioId, "project", params.id),
+    ])
+  const payments = (paymentsRaw ?? []) as Rec[]
+  const deliveries = (deliveriesRaw ?? []) as Rec[]
 
   const publicBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
 
@@ -278,6 +314,32 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               )}
             </div>
           </div>
+
+          {/* Historial de actividad del proyecto */}
+          {activity.length > 0 && (
+            <div className="sf-card p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <History className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Historial</h2>
+              </div>
+              <ol className="space-y-3">
+                {[...activity].reverse().map((a) => (
+                  <li key={String(a.id)} className="flex gap-3">
+                    <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary/60" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-foreground">
+                        {String(a.description ?? a.action ?? "Acción")}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {a.actor_name ? `${String(a.actor_name)} · ` : ""}
+                        {formatDateShort(new Date(String(a.created_at)))}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -309,7 +371,14 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               {pkg && (
                 <div className="flex items-start gap-3">
                   <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <span className="text-foreground">{String(pkg.name)}</span>
+                  <div className="min-w-0">
+                    <span className="block text-foreground">{String(pkg.name)}</span>
+                    {pkg.price != null && (
+                      <span className="text-xs text-muted-foreground">
+                        Paquete · {formatCurrency(Number(pkg.price), (pkg.currency as string) ?? currency)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </dl>
@@ -347,16 +416,104 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             </div>
           )}
 
-          {/* Contract status */}
-          {contracts.length > 0 && (
+          {/* Pagos */}
+          {payments.length > 0 && (
             <div className="sf-card p-5">
               <div className="flex items-center gap-2 mb-3">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Contrato</h2>
+                <CreditCard className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Pagos</h2>
               </div>
-              <Link href={`/contracts/${contracts[0].id}`} className="inline-block">
-                <StatusBadge status={String(contracts[0].status)} />
-              </Link>
+              <div className="space-y-2">
+                {payments.map((p) => (
+                  <div key={String(p.id)} className="flex items-center justify-between py-1.5">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-foreground">
+                        {formatCurrency(Number(p.amount ?? 0), (p.currency as string) ?? currency)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {String(p.method ?? "").replace(/_/g, " ")}
+                        {p.received_at
+                          ? ` · ${formatDateShort(new Date(String(p.received_at)))}`
+                          : ""}
+                      </p>
+                    </div>
+                    <StatusBadge status={String(p.status)} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Contrato — timeline con fechas reales */}
+          {contracts.length > 0 &&
+            (() => {
+              const c = contracts[0]
+              const rows: Array<[string, string | null]> = [
+                ["Creado", (c.created_at as string | null) ?? null],
+                ["Enviado", (c.sent_at as string | null) ?? null],
+                ["Firmado", (c.signed_at as string | null) ?? null],
+              ]
+              return (
+                <div className="sf-card p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <h2 className="text-sm font-semibold text-foreground">Contrato</h2>
+                    </div>
+                    <StatusBadge status={String(c.status)} />
+                  </div>
+                  <dl className="space-y-1.5 text-xs">
+                    {rows.map(([label, val]) =>
+                      val ? (
+                        <div key={label} className="flex justify-between">
+                          <dt className="text-muted-foreground">{label}</dt>
+                          <dd className="text-foreground">
+                            {formatDateShort(new Date(String(val)))}
+                          </dd>
+                        </div>
+                      ) : null,
+                    )}
+                    {c.signed_name ? (
+                      <div className="flex justify-between">
+                        <dt className="text-muted-foreground">Firmante</dt>
+                        <dd className="text-foreground">{String(c.signed_name)}</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                  <Link
+                    href={`/contracts/${c.id}`}
+                    className="mt-3 inline-block text-xs font-medium text-primary hover:text-primary/80"
+                  >
+                    Ver contrato →
+                  </Link>
+                </div>
+              )
+            })()}
+
+          {/* Entregas */}
+          {deliveries.length > 0 && (
+            <div className="sf-card p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Truck className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Entregas</h2>
+              </div>
+              <div className="space-y-2">
+                {deliveries.map((d) => (
+                  <div key={String(d.id)} className="flex items-center justify-between py-1.5">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-foreground">
+                        {String(d.title ?? "Entrega")}
+                      </p>
+                      {d.delivered_at ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          {formatDateShort(new Date(String(d.delivered_at)))}
+                        </p>
+                      ) : null}
+                    </div>
+                    <StatusBadge status={String(d.status)} />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

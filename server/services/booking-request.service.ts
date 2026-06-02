@@ -769,9 +769,11 @@ export async function approveBookingRequest(params: {
   // Auto-crear form_responses ligados al paquete (si hay form_templates
   // vinculados vía package_forms). Best-effort.
   try {
+    const projectIdForForms = conversionBundle?.projectId ?? current.project_id ?? null
     const forms = await createFormResponsesForBooking({
       studioId: params.studioId,
       bookingRequestId: params.requestId,
+      projectId: projectIdForForms,
       packageId: current.package_id,
       clientEmail: current.client_email,
       actorId: params.actorId,
@@ -780,6 +782,17 @@ export async function approveBookingRequest(params: {
       console.log(
         `[approveBookingRequest] generados ${forms.length} form(s) para booking ${params.requestId}`,
       )
+    }
+    // Backfill defensivo: liga al proyecto cualquier form de este booking que
+    // haya quedado con project_id nulo (p.ej. creado antes de tener el proyecto).
+    if (projectIdForForms) {
+      const svc = createSupabaseServiceClient()
+      await svc
+        .from('form_responses')
+        .update({ project_id: projectIdForForms })
+        .eq('studio_id', params.studioId)
+        .eq('booking_request_id', params.requestId)
+        .is('project_id', null)
     }
   } catch (err) {
     console.error('[approveBookingRequest] createFormResponsesForBooking failed', err)

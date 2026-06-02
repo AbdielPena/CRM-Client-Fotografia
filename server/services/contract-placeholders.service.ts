@@ -78,7 +78,7 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
     .select(
       `id, studio_id, project_id, signed_at, signed_name, signed_email, signature_image_url,
        project:projects(
-         id, name, event_type, event_date, event_location, package_id,
+         id, name, event_type, event_date, location, package_id,
          client:clients(id, name, email, phone, address, city, country),
          package:packages(id, name, price, currency)
        )`,
@@ -132,13 +132,13 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
   if (project) {
     const { data: invoicesRaw } = await supabase
       .from("invoices")
-      .select("id, total_amount, status, currency, amount_paid")
+      .select("id, total, status, currency, amount_paid")
       .eq("project_id", (project as { id: string }).id)
       .is("deleted_at", null)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const invoices = (invoicesRaw ?? []) as any[]
     totalPrice = invoices.reduce(
-      (sum, inv) => sum + Number(inv.total_amount ?? 0),
+      (sum, inv) => sum + Number(inv.total ?? 0),
       0,
     )
     if (invoices[0]?.currency) currency = invoices[0].currency
@@ -173,48 +173,99 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
   const pk = (pkg ?? {}) as Record<string, unknown>
   const s = (studio ?? {}) as Record<string, unknown>
 
+  // Número sin símbolo de moneda (las plantillas usan "{{moneda}} {{paquete_precio}}")
+  const FORMAT_NUM = (n: number | string | null | undefined): string => {
+    const v = Number(n ?? 0)
+    if (!Number.isFinite(v)) return "0.00"
+    return v.toLocaleString("es-DO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+  const todayStr = FORMAT_DATE(new Date().toISOString())
+  const clientName = String(c.name ?? contract.signed_name ?? "")
+  const clientEmail = String(c.email ?? contract.signed_email ?? "")
+  const clientPhone = String(c.phone ?? "")
+  const studioName = String(s.name ?? "")
+  const pkgName = String(pk.name ?? "")
+  const eventType = String(p.event_type ?? "")
+  const eventDateStr = FORMAT_DATE(p.event_date as string | null)
+  const eventTimeStr = FORMAT_TIME(p.event_date as string | null)
+  const eventLocation = String(p.location ?? "")
+  const totalStr = FORMAT_MONEY(totalPrice, currency)
+  const paidStr = FORMAT_MONEY(amountPaid, currency)
+  const remainingStr = FORMAT_MONEY(remaining, currency)
+  const signedDate = contract.signed_at ? FORMAT_DATE(contract.signed_at) : ""
+  const signerName = String(contract.signed_name ?? "")
+
+  // Mapa de variables. Incluimos las claves en INGLÉS (compat) y sus ALIAS en
+  // ESPAÑOL, que son las que usan realmente las plantillas y el editor.
   const vars: PlaceholderVars = {
     // Cliente
-    client_name: String(c.name ?? contract.signed_name ?? ""),
-    client_email: String(c.email ?? contract.signed_email ?? ""),
-    client_phone: String(c.phone ?? ""),
+    client_name: clientName,
+    cliente_nombre: clientName,
+    client_email: clientEmail,
+    cliente_email: clientEmail,
+    client_phone: clientPhone,
+    cliente_telefono: clientPhone,
     client_address: String(c.address ?? ""),
+    cliente_direccion: String(c.address ?? ""),
     client_city: String(c.city ?? ""),
+    cliente_ciudad: String(c.city ?? ""),
     client_country: String(c.country ?? ""),
+    cliente_pais: String(c.country ?? ""),
 
     // Proyecto / evento
     project_name: String(p.name ?? ""),
-    event_type: String(p.event_type ?? ""),
-    event_date: FORMAT_DATE(p.event_date as string | null),
-    event_time: FORMAT_TIME(p.event_date as string | null),
-    event_location: String(p.event_location ?? ""),
+    proyecto_nombre: String(p.name ?? ""),
+    event_type: eventType,
+    evento_tipo: eventType,
+    event_date: eventDateStr,
+    evento_fecha: eventDateStr,
+    event_time: eventTimeStr,
+    evento_hora: eventTimeStr,
+    event_location: eventLocation,
+    evento_locacion: eventLocation,
+    evento_lugar: eventLocation,
 
-    // Paquete
-    package_name: String(pk.name ?? ""),
+    // Paquete (paquete_precio SIN símbolo; package_price CON símbolo por compat)
+    package_name: pkgName,
+    paquete_nombre: pkgName,
     package_price: FORMAT_MONEY(pk.price as number | null, currency),
+    paquete_precio: FORMAT_NUM(pk.price as number | null),
 
     // Montos
-    total_price: FORMAT_MONEY(totalPrice, currency),
-    amount_paid: FORMAT_MONEY(amountPaid, currency),
-    remaining_balance: FORMAT_MONEY(remaining, currency),
+    total_price: totalStr,
+    valor_total: totalStr,
+    precio_total: totalStr,
+    amount_paid: paidStr,
+    monto_pagado: paidStr,
+    remaining_balance: remainingStr,
+    saldo_pendiente: remainingStr,
     currency,
+    moneda: currency,
 
     // Studio
-    studio_name: String(s.name ?? ""),
+    studio_name: studioName,
+    estudio_nombre: studioName,
     studio_email: String(s.email ?? ""),
+    estudio_email: String(s.email ?? ""),
     studio_phone: String(s.phone ?? ""),
+    estudio_telefono: String(s.phone ?? ""),
     studio_address: String(s.address ?? ""),
+    estudio_direccion: String(s.address ?? ""),
 
     // Fechas del contrato
-    contract_date: FORMAT_DATE(new Date().toISOString()),
-    today: FORMAT_DATE(new Date().toISOString()),
+    contract_date: todayStr,
+    fecha_contrato: todayStr,
+    today: todayStr,
+    hoy: todayStr,
+    fecha: todayStr,
 
-    // Firma (se inyecta como <img> al renderizar; el placeholder solo debe
-    // mostrar fecha legible o nada si no firmado todavía)
-    signature_client: contract.signed_at ? FORMAT_DATE(contract.signed_at) : "",
+    // Firma (la imagen se inyecta aparte; aquí solo fecha/nombre legibles)
+    signature_client: signedDate,
     signature_studio: "",
-    signed_name: String(contract.signed_name ?? ""),
-    signed_at: contract.signed_at ? FORMAT_DATE(contract.signed_at) : "",
+    signed_name: signerName,
+    nombre_firmante: signerName,
+    signed_at: signedDate,
+    firma_cliente: signedDate,
   }
 
   return {
