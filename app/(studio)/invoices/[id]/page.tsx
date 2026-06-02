@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { InvoiceDetailActions } from "@/components/invoices/invoice-detail-actions"
 import { IssueNcfButton } from "@/components/invoices/issue-ncf-button"
 import { RecordPaymentForm } from "@/components/invoices/record-payment-form"
+import { WhatsAppSendMenu } from "@/components/whatsapp/whatsapp-send-menu"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
 import type { NcfType } from "@/lib/fiscal"
 import { Receipt, CreditCard, Printer, Pencil, Layers } from "lucide-react"
@@ -58,6 +59,15 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   const total = Number(invoice.total ?? 0)
   const amountPaid = Number(invoice.amount_paid ?? 0)
   const balance = total - amountPaid
+
+  // WhatsApp de 1 clic (cobranza)
+  const waPhone = (client?.phone as string | null) ?? null
+  const waVars = {
+    clienteNombre: (client?.name as string | undefined) ?? null,
+    factura: (invoice.invoice_number as string | null) ?? null,
+    saldo: balance > 0 ? fmt(balance) : null,
+    link: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/i/${invoice.id}`,
+  }
 
   // Plan de pago: la factura del booking se cobra en 2 cuotas (reserva + balance)
   // dentro del mismo registro. installment_total define cuántas cuotas.
@@ -129,6 +139,11 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         actions={
           <>
             <StatusBadge status={status} />
+            <WhatsAppSendMenu
+              phone={waPhone}
+              vars={waVars}
+              only={["recordar_pago", "recordar_balance", "recordar_reserva"]}
+            />
             <IssueNcfButton
               invoiceId={invoice.id as string}
               currentNcf={ncf}

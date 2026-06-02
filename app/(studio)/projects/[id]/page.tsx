@@ -10,6 +10,7 @@ import { countUnreadNotifications } from "@/server/services/notification.service
 import { StatusBadge } from "@/components/shared/status-badge"
 import { NoteForm } from "@/components/shared/note-form"
 import { ProjectDetailActions } from "@/components/projects/project-detail-actions"
+import { WhatsAppSendMenu } from "@/components/whatsapp/whatsapp-send-menu"
 import { FormResponsesPanel } from "@/components/admin/form-responses-panel"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
 import {
@@ -154,6 +155,18 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
   const clientLabel = client ? (client.name as string) : ""
 
+  // WhatsApp de 1 clic (hub del cliente)
+  const waPhone =
+    (client?.phone as string | null) ?? (client?.whatsapp as string | null) ?? null
+  const waVars = {
+    clienteNombre: clientLabel || null,
+    fecha: eventDate ? formatDate(new Date(eventDate)) : null,
+    lugar: (project.location as string | null) ?? null,
+    link: invoices[0]
+      ? `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/i/${invoices[0].id}`
+      : null,
+  }
+
   return (
     <>
       <AppTopbar
@@ -164,6 +177,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         actions={
           <>
             <StatusBadge status={project.status as string} />
+            <WhatsAppSendMenu phone={waPhone} vars={waVars} />
             <ProjectDetailActions
               project={{
                 id: project.id as string,
