@@ -3,6 +3,7 @@ import "server-only"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { throwServiceError } from "@/lib/utils/api-error"
+import type { CalendarEventRow } from "./google-calendar.service"
 
 /**
  * Sistema inteligente de entregas. Calcula fecha estimada, prioridad y riesgo
@@ -217,6 +218,65 @@ export async function getDeliveryStats(studioId: string): Promise<{
       (d) => d.daysUntilDelivery !== null && d.daysUntilDelivery >= 0 && d.daysUntilDelivery <= 7,
     ).length,
   }
+}
+
+/**
+ * Genera eventos de calendario INTERNOS (no Google) para fechas de entrega y
+ * cumpleaños, para mostrarlos en el calendario del software. Reutiliza el mismo
+ * shape `CalendarEventRow` que consume el grid/lista del calendario.
+ */
+export async function getDeliveryCalendarEvents(
+  studioId: string,
+  opts: { from?: string; to?: string } = {},
+): Promise<CalendarEventRow[]> {
+  const deliveries = await listDeliveries(studioId, { includeDelivered: false })
+  const fromD = opts.from ? opts.from.slice(0, 10) : null
+  const toD = opts.to ? opts.to.slice(0, 10) : null
+  const inRange = (d: string | null): boolean =>
+    !!d && (!fromD || d >= fromD) && (!toD || d <= toD)
+
+  const make = (
+    d: UpcomingDelivery,
+    kind: "delivery" | "birthday",
+    dateStr: string,
+  ): CalendarEventRow => ({
+    id: `${kind}-${d.id}`,
+    googleEventId: "",
+    googleCalendarId: "",
+    summary:
+      kind === "delivery"
+        ? `📦 Entrega — ${d.clientName}`
+        : `🎂 Cumpleaños — ${d.clientName}`,
+    description:
+      kind === "delivery"
+        ? `Fecha estimada de entrega de fotos (${d.projectName})`
+        : `Cumpleaños de la quinceañera (${d.projectName})`,
+    location: null,
+    startsAt: `${dateStr}T${kind === "delivery" ? "09:00:00" : "00:00:00"}Z`,
+    endsAt: `${dateStr}T${kind === "delivery" ? "10:00:00" : "23:59:00"}Z`,
+    isAllDay: true,
+    htmlLink: null,
+    status: "confirmed",
+    origin: "studioflow",
+    projectId: d.projectId,
+    clientId: d.clientId,
+    bookingRequestId: null,
+    contractId: null,
+    invoiceId: null,
+    galleryId: null,
+    deliveryId: d.id,
+    syncStatus: "local",
+    lastSyncedAt: null,
+    clientName: d.clientName,
+    projectName: d.projectName,
+  })
+
+  const out: CalendarEventRow[] = []
+  for (const d of deliveries) {
+    if (inRange(d.estimatedDeliveryDate)) out.push(make(d, "delivery", d.estimatedDeliveryDate!))
+    if (inRange(d.birthday)) out.push(make(d, "birthday", d.birthday!))
+  }
+  return out
 }
 
 /** Recalcula (idempotente) la entrega de un proyecto vía la RPC. Best-effort. */

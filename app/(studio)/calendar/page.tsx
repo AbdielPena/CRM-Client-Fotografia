@@ -11,6 +11,7 @@ import {
   type CalendarEventRow,
 } from "@/server/services/google-calendar.service"
 import { syncGoogleCalendarNowAction } from "@/server/actions/google-calendar.actions"
+import { getDeliveryCalendarEvents } from "@/server/services/delivery.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { CalendarOriginFilters } from "@/components/calendar/calendar-origin-filters"
@@ -47,8 +48,10 @@ export default async function CalendarPage({
   const startDate = new Date(year, month - 1, 1).toISOString()
   const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
 
+  const upcomingTo = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30).toISOString()
+
   const supabase = createSupabaseServerClient()
-  const [monthEvents, upcomingEvents, unread, gcalStatus, totalEventsRes] =
+  const [gcalMonth, gcalUpcoming, unread, gcalStatus, totalEventsRes, delMonth, delUpcoming] =
     await Promise.all([
       listCalendarEvents(session.studioId, {
         from: startDate,
@@ -57,7 +60,7 @@ export default async function CalendarPage({
       }),
       listCalendarEvents(session.studioId, {
         from: now.toISOString(),
-        to: new Date(Date.now() + 30 * 86400 * 1000).toISOString(),
+        to: upcomingTo,
         origin,
       }),
       countUnreadNotifications(session.studioId),
@@ -66,7 +69,23 @@ export default async function CalendarPage({
         .from("google_events")
         .select("id", { count: "exact", head: true })
         .eq("studio_id", session.studioId),
+      // Entregas y cumpleaños como eventos INTERNOS del software (no Google)
+      getDeliveryCalendarEvents(session.studioId, { from: startDate, to: endDate }).catch(
+        () => [] as Awaited<ReturnType<typeof getDeliveryCalendarEvents>>,
+      ),
+      getDeliveryCalendarEvents(session.studioId, {
+        from: now.toISOString(),
+        to: upcomingTo,
+      }).catch(() => [] as Awaited<ReturnType<typeof getDeliveryCalendarEvents>>),
     ])
+
+  // Las entregas son origin 'studioflow' → se muestran salvo en filtros de Google.
+  const includeDeliveries =
+    origin === "all" || origin === "studioflow" || origin === "with_client"
+  const monthEvents = includeDeliveries ? [...gcalMonth, ...delMonth] : gcalMonth
+  const upcomingEvents = (
+    includeDeliveries ? [...gcalUpcoming, ...delUpcoming] : gcalUpcoming
+  ).sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""))
 
   // Banner: Google está conectado pero NUNCA se hizo el import inicial.
   const totalEvents = totalEventsRes.count ?? 0
