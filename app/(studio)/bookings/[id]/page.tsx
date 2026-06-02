@@ -12,8 +12,10 @@ import {
   CheckCircle2,
   XCircle,
   Ban,
+  RotateCcw,
 } from "lucide-react"
 import { requireStudioAuth, requireRole } from "@/server/middleware/auth"
+import { createSupabaseServerClient } from "@/server/supabase/server"
 import {
   getBookingRequestById,
   approveBookingRequest,
@@ -150,11 +152,41 @@ async function cancelAction(formData: FormData) {
   revalidatePath("/bookings")
 }
 
+// Reset total para pruebas: borra cliente/proyecto/contrato/form/factura/pagos/
+// notificaciones/historial generados por la solicitud y la deja en pending_review.
+async function resetTestAction(formData: FormData) {
+  "use server"
+  const session = await requireRole("admin")
+  const id = String(formData.get("id") ?? "")
+  if (!id) redirect("/bookings")
+
+  // Validar que la solicitud pertenece al studio del usuario antes de resetear.
+  const booking = await getBookingRequestById(session.studioId, id).catch(() => null)
+  if (!booking) redirect("/bookings")
+
+  const supabase = createSupabaseServerClient()
+  // RPC SECURITY DEFINER (no está en los tipos generados → cast).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).rpc(
+    "reset_booking_request_for_testing",
+    { p_booking_request_id: id },
+  )
+  if (error) {
+    console.error("[resetTestAction] reset falló:", error.message)
+    redirect(`/bookings/${id}?error=reset_failed`)
+  }
+  revalidatePath(`/bookings/${id}`)
+  revalidatePath("/bookings")
+  redirect(`/bookings/${id}?reset=1`)
+}
+
 const ACTION_ERROR_MESSAGES: Record<string, string> = {
   event_past:
     "No se puede aprobar: la fecha del evento ya pasó. Cancela o rechaza la solicitud.",
   conflict:
     "Otro operador ya actualizó esta solicitud. Recarga para ver el estado actual.",
+  reset_failed:
+    "No se pudo reiniciar la solicitud. Revisa los logs e inténtalo de nuevo.",
 }
 
 export default async function BookingRequestDetailPage({
@@ -162,7 +194,7 @@ export default async function BookingRequestDetailPage({
   searchParams,
 }: {
   params: { id: string }
-  searchParams?: { error?: string }
+  searchParams?: { error?: string; reset?: string }
 }) {
   const session = await requireStudioAuth()
   const raw = await getBookingRequestById(session.studioId, params.id)
@@ -205,6 +237,7 @@ export default async function BookingRequestDetailPage({
     searchParams?.error && ACTION_ERROR_MESSAGES[searchParams.error]
       ? ACTION_ERROR_MESSAGES[searchParams.error]
       : null
+  const resetDone = searchParams?.reset === "1"
 
   const canApproveOrReject = req.status === "pending_review"
   const canCancel = [
@@ -240,6 +273,20 @@ export default async function BookingRequestDetailPage({
           >
             <XCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
             <span>{actionError}</span>
+          </div>
+        )}
+
+        {resetDone && (
+          <div
+            role="status"
+            className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm text-emerald-800 flex items-start gap-2"
+          >
+            <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>
+              Solicitud reiniciada desde cero. Cliente, proyecto, contrato,
+              formulario, factura, pagos, notificaciones e historial fueron
+              eliminados. Ya puedes aprobarla de nuevo para volver a probar.
+            </span>
           </div>
         )}
 
@@ -447,6 +494,34 @@ export default async function BookingRequestDetailPage({
                 </form>
               </details>
             )}
+
+            {/* Zona de pruebas — reinicio total de la solicitud */}
+            <details className="sf-card border-dashed border-amber-300 bg-amber-50/40 p-5">
+              <summary className="list-none cursor-pointer flex items-center gap-2 text-sm font-medium text-amber-900">
+                <RotateCcw className="h-4 w-4" />
+                Reiniciar para pruebas (volver a cero)
+              </summary>
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  Borra por completo el <strong>cliente, proyecto, contrato,
+                  formulario, factura, pagos, eventos de calendario,
+                  notificaciones e historial</strong> generados por esta
+                  solicitud y la deja en <strong>&ldquo;pendiente de
+                  revisión&rdquo;</strong> para volver a probar el flujo desde
+                  cero. Esta acción no se puede deshacer.
+                </p>
+                <form action={resetTestAction}>
+                  <input type="hidden" name="id" value={req.id} />
+                  <button
+                    type="submit"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-700 transition-colors"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Reiniciar desde cero
+                  </button>
+                </form>
+              </div>
+            </details>
           </div>
 
           {/* Sidebar: paquete */}
