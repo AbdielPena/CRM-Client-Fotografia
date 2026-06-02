@@ -41,6 +41,7 @@ import {
   Rocket,
   MessageCircle,
   Truck,
+  Activity,
   type LucideIcon,
 } from "lucide-react"
 
@@ -123,6 +124,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Análisis",
     items: [
       { type: "link", href: "/reports", label: "Reportes", icon: BarChart3 },
+      { type: "link", href: "/status", label: "Estado del sistema", icon: Activity },
     ],
   },
   {
