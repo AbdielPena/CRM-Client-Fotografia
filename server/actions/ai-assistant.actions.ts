@@ -30,6 +30,8 @@ export async function saveAssistantSettingsAction(formData: FormData): Promise<v
     greeting: ((formData.get("greeting") as string) || "").trim() || null,
     enabled: formData.get("enabled") !== "false",
     handoff_enabled: formData.get("handoff_enabled") !== "false",
+    handoff_tag:
+      ((formData.get("handoff_tag") as string) || "Transferido a un agente").trim(),
     updated_at: new Date().toISOString(),
   }
   const { error } = await db()

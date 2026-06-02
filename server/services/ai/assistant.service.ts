@@ -42,6 +42,7 @@ async function loadContext(studioId: string) {
     greeting: (s?.greeting as string | null) ?? null,
     enabled: s ? !!s.enabled : true,
     handoffEnabled: s ? !!s.handoff_enabled : true,
+    handoffTag: (s?.handoff_tag as string | null) ?? "Transferido a un agente",
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     packages: (pkgRes.data as any[]) ?? [],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,8 +82,16 @@ REGLAS IMPORTANTES:
 - NUNCA inventes precios, fechas, ni políticas. Usa SOLO la información de abajo.
 - Si preguntan por precios o paquetes, responde con los PAQUETES de abajo.
 - Si la persona muestra interés real (quiere reservar, pide info para agendar, deja sus datos), usa la herramienta "capturar_lead".
-- Si hay molestia, reclamo, una solicitud compleja, o algo que no puedes resolver con la información dada, usa la herramienta "pasar_a_humano".
 - No prometas nada que no esté en la información provista.
+
+CUÁNDO TRANSFERIR A UN HUMANO — usa SIEMPRE la herramienta "pasar_a_humano" en estos casos (es mejor transferir que adivinar):
+- No tienes la respuesta, o la información no está en lo de abajo.
+- Te piden algo fuera de tus paquetes/datos, o un caso especial/puntual.
+- Quieren negociar precio, descuento o un trato especial.
+- Hay molestia, queja, reclamo o enojo.
+- Es una solicitud compleja: cambios de contrato, reprogramar, urgencias, temas legales o de pago.
+- Piden explícitamente hablar con una persona o agente.
+Cuando transfieras, hazlo con calidez (ej: "Te paso con un agente del equipo para ayudarte mejor 🙌") y NO sigas intentando resolverlo por tu cuenta.
 
 PAQUETES DISPONIBLES:
 ${pkgLines}
@@ -146,6 +155,7 @@ async function executeTool(
   name: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: Record<string, any>,
+  handoffTag: string,
 ): Promise<{ result: Record<string, unknown>; handoff: boolean }> {
   const sb = db()
   if (name === "capturar_lead") {
@@ -176,19 +186,47 @@ async function executeTool(
     return { result: { ok: true, mensaje: "Lead guardado y estudio notificado." }, handoff: false }
   }
   if (name === "pasar_a_humano") {
-    await sb
+    // Marcar la conversación y recuperar el contacto
+    const { data: conv } = await sb
       .from("chatflow_conversations")
       .update({ status: "needs_human" })
       .eq("id", conversationId)
       .eq("studio_id", studioId)
+      .select("contact_id")
+      .maybeSingle()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contactId = (conv as any)?.contact_id as string | undefined
+
+    // Etiquetar el contacto (estilo ManyChat): "Transferido a un agente"
+    if (contactId && handoffTag) {
+      const { data: c } = await sb
+        .from("chatflow_contacts")
+        .select("tags")
+        .eq("id", contactId)
+        .maybeSingle()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tags: string[] = ((c as any)?.tags as string[]) ?? []
+      if (!tags.includes(handoffTag)) {
+        await sb
+          .from("chatflow_contacts")
+          .update({ tags: [...tags, handoffTag] })
+          .eq("id", contactId)
+          .eq("studio_id", studioId)
+      }
+    }
+
     await notifyStudio(
       studioId,
-      "🙋 El asistente pidió ayuda humana",
-      String(args.motivo ?? "Conversación que requiere atención."),
+      "🙋 Chat transferido a un agente",
+      String(args.motivo ?? "Conversación que requiere atención.") +
+        (handoffTag ? ` · etiqueta: ${handoffTag}` : ""),
       conversationId,
     )
     return {
-      result: { ok: true, mensaje: "Un miembro del equipo continuará la conversación." },
+      result: {
+        ok: true,
+        mensaje: `Conversación transferida a un agente y etiquetada como "${handoffTag}".`,
+      },
       handoff: true,
     }
   }
@@ -287,7 +325,13 @@ export async function sendAssistantMessage(
       break
     }
     if (r.functionCall) {
-      const exec = await executeTool(studioId, convId, r.functionCall.name, r.functionCall.args)
+      const exec = await executeTool(
+        studioId,
+        convId,
+        r.functionCall.name,
+        r.functionCall.args,
+        ctx.handoffTag,
+      )
       if (exec.handoff) handoff = true
       contents.push({ role: "model", parts: [{ functionCall: r.functionCall }] })
       contents.push({

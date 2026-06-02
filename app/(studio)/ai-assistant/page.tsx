@@ -125,6 +125,20 @@ export default async function AiAssistantPage() {
                 <input type="checkbox" name="handoff_enabled" defaultChecked={s ? !!s.handoff_enabled : true} value="true" className="h-4 w-4" />
                 Permitir que la IA pase a un humano
               </label>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Etiqueta al transferir
+                </label>
+                <input
+                  name="handoff_tag"
+                  defaultValue={(s?.handoff_tag as string | null) ?? "Transferido a un agente"}
+                  className={inputCls}
+                  placeholder="Transferido a un agente"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Se le pone al contacto cuando la IA no puede resolver y transfiere.
+                </p>
+              </div>
               <button
                 type="submit"
                 className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-foreground hover:bg-brand/90"
