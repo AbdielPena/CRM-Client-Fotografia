@@ -10,6 +10,7 @@ import { saveAssistantSettingsAction } from "@/server/actions/ai-assistant.actio
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { AssistantChat } from "@/components/ai/assistant-chat"
 import { KnowledgeManager } from "@/components/ai/knowledge-manager"
+import { LearningPanel } from "@/components/ai/learning-panel"
 
 export const metadata: Metadata = { title: "AI Assistant Center" }
 export const dynamic = "force-dynamic"
@@ -21,13 +22,19 @@ export default async function AiAssistantPage() {
   const session = await requireStudioAuth()
   const sb = createSupabaseServerClient() as unknown as SupabaseClient
 
-  const [studioRes, settingsRes, knowledgeRes, unread] = await Promise.all([
+  const [studioRes, settingsRes, knowledgeRes, learningRes, unread] = await Promise.all([
     sb.from("studios").select("name").eq("id", session.studioId).maybeSingle(),
     sb.from("chatflow_settings").select("*").eq("studio_id", session.studioId).maybeSingle(),
     sb
       .from("chatflow_knowledge")
       .select("id, kind, question, answer")
       .eq("studio_id", session.studioId)
+      .order("created_at", { ascending: false }),
+    sb
+      .from("chatflow_learning")
+      .select("id, question, context, created_at")
+      .eq("studio_id", session.studioId)
+      .eq("status", "pendiente")
       .order("created_at", { ascending: false }),
     countUnreadNotifications(session.studioId),
   ])
@@ -45,6 +52,13 @@ export default async function AiAssistantPage() {
     kind: (k.kind as string) ?? "faq",
     question: (k.question as string | null) ?? null,
     answer: k.answer as string,
+  }))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const learning = ((learningRes.data as any[]) ?? []).map((l) => ({
+    id: l.id as string,
+    question: l.question as string,
+    context: (l.context as string | null) ?? null,
+    createdAt: l.created_at as string,
   }))
   const aiReady = geminiConfigured()
 
@@ -139,6 +153,20 @@ export default async function AiAssistantPage() {
                   Se le pone al contacto cuando la IA no puede resolver y transfiere.
                 </p>
               </div>
+              <label className="flex items-start gap-2 rounded-lg bg-muted/30 p-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  name="auto_learn"
+                  defaultChecked={s ? !!s.auto_learn : false}
+                  value="true"
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>
+                  <strong>Modo aprendizaje</strong>: cuando la IA no sepa algo, registra la
+                  pregunta abajo para que la enseñes. <em>Nunca</em> aprende precios
+                  personalizados ni descuentos (eso siempre va a un humano).
+                </span>
+              </label>
               <button
                 type="submit"
                 className="w-full rounded-lg bg-brand py-2 text-sm font-medium text-brand-foreground hover:bg-brand/90"
@@ -157,6 +185,9 @@ export default async function AiAssistantPage() {
             </div>
           </div>
         </div>
+
+        {/* Aprendizaje (preguntas que la IA no supo) */}
+        {learning.length > 0 && <LearningPanel items={learning} />}
 
         {/* Entrenamiento (conocimiento) */}
         <KnowledgeManager items={knowledge} />

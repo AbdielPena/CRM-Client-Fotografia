@@ -32,6 +32,7 @@ export async function saveAssistantSettingsAction(formData: FormData): Promise<v
     handoff_enabled: formData.get("handoff_enabled") !== "false",
     handoff_tag:
       ((formData.get("handoff_tag") as string) || "Transferido a un agente").trim(),
+    auto_learn: formData.get("auto_learn") === "true",
     updated_at: new Date().toISOString(),
   }
   const { error } = await db()
@@ -64,6 +65,40 @@ export async function deleteKnowledgeAction(id: string) {
     .eq("id", id)
     .eq("studio_id", session.studioId)
   if (error) return { error: error.message }
+  revalidatePath("/ai-assistant")
+  return { success: true }
+}
+
+// Aprendizaje: el dueño contesta una pregunta que la IA no supo → se vuelve
+// conocimiento y la IA la usará desde ahora.
+export async function resolveLearningAction(id: string, question: string, answer: string) {
+  const session = await requireRole("staff")
+  const clean = (answer ?? "").trim()
+  if (!clean) return { error: "Escribe la respuesta" }
+  const sb = db()
+  const { error: kErr } = await sb.from("chatflow_knowledge").insert({
+    studio_id: session.studioId,
+    kind: "faq",
+    question: (question ?? "").trim() || null,
+    answer: clean,
+  })
+  if (kErr) return { error: kErr.message }
+  await sb
+    .from("chatflow_learning")
+    .update({ status: "resuelta", resolved_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("studio_id", session.studioId)
+  revalidatePath("/ai-assistant")
+  return { success: true }
+}
+
+export async function ignoreLearningAction(id: string) {
+  const session = await requireRole("staff")
+  await db()
+    .from("chatflow_learning")
+    .update({ status: "ignorada" })
+    .eq("id", id)
+    .eq("studio_id", session.studioId)
   revalidatePath("/ai-assistant")
   return { success: true }
 }
