@@ -33,6 +33,7 @@ interface Package {
   currency: string
   durationHours?: number
   editedPhotos?: number
+  deliveryDays?: number
   includes?: string
   isActive: boolean
   contractTemplateId?: string
@@ -428,6 +429,25 @@ function PackageForm({
             className={inputCls}
             placeholder="ej. 100"
           />
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Tiempo estimado de entrega (días)
+          </label>
+          <input
+            name="deliveryDays"
+            type="number"
+            min="0"
+            max="365"
+            defaultValue={defaultValues?.deliveryDays}
+            className={inputCls}
+            placeholder="ej. 21"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Días para entregar tras la sesión. El sistema calcula la fecha de
+            entrega y prioriza según el cumpleaños. Déjalo vacío si no aplica.
+          </p>
         </div>
 
         <div className="sm:col-span-2">

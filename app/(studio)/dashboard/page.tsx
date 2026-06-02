@@ -4,6 +4,9 @@ import {
   ArrowRight,
   Plus,
   Download,
+  Truck,
+  Cake,
+  AlertTriangle,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -21,7 +24,8 @@ import {
   getOnboardingSteps,
 } from "@/server/services/onboarding.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
-import { formatCurrency } from "@/lib/utils/currency"
+import { listDeliveries, getDeliveryStats } from "@/server/services/delivery.service"
+import { formatCurrency, formatDateShort } from "@/lib/utils/currency"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
@@ -137,6 +141,8 @@ export default async function DashboardPage() {
     recentActivity,
     modulesOverview,
     onboardingSteps,
+    deliveries,
+    deliveryStats,
   ] = await Promise.all([
     getDashboardData(session.studioId),
     getMonthlyRevenue(session.studioId, 12),
@@ -147,6 +153,14 @@ export default async function DashboardPage() {
       () => ({}) as Awaited<ReturnType<typeof getModulesOverview>>,
     ),
     getOnboardingSteps(session.studioId).catch(() => []),
+    listDeliveries(session.studioId, { includeDelivered: false }).catch(() => []),
+    getDeliveryStats(session.studioId).catch(() => ({
+      upcoming: 0,
+      overdue: 0,
+      birthdaysSoon: 0,
+      lateRisks: 0,
+      dueThisWeek: 0,
+    })),
   ])
 
   const onboardingProgress = calculateProgress(onboardingSteps)
@@ -350,6 +364,84 @@ export default async function DashboardPage() {
               />
             </DashboardCard>
           </div>
+
+          {/* ─── Próximas entregas (sistema inteligente) ──────────── */}
+          {deliveries.length > 0 && (
+            <DashboardCard
+              title="Próximas entregas"
+              href="/deliveries"
+              hrefLabel="Ver todas"
+              delay={0.38}
+            >
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {deliveryStats.overdue > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-semibold text-red-700">
+                      <AlertTriangle className="h-3 w-3" /> {deliveryStats.overdue} atrasada
+                      {deliveryStats.overdue === 1 ? "" : "s"}
+                    </span>
+                  )}
+                  {deliveryStats.birthdaysSoon > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-pink-100 px-2.5 py-1 text-[11px] font-semibold text-pink-700">
+                      <Cake className="h-3 w-3" /> {deliveryStats.birthdaysSoon} cumpleaños ≤7d
+                    </span>
+                  )}
+                  {deliveryStats.lateRisks > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                      <AlertTriangle className="h-3 w-3" /> {deliveryStats.lateRisks} en riesgo
+                    </span>
+                  )}
+                  {deliveryStats.dueThisWeek > 0 && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                      <Truck className="h-3 w-3" /> {deliveryStats.dueThisWeek} esta semana
+                    </span>
+                  )}
+                </div>
+                <ul className="divide-y divide-border/40">
+                  {deliveries.slice(0, 6).map((d) => (
+                    <li key={d.id} className="flex items-center justify-between gap-3 py-2">
+                      <div className="min-w-0">
+                        <Link
+                          href={d.projectId ? `/projects/${d.projectId}` : "/deliveries"}
+                          className="block truncate text-sm font-medium text-foreground hover:text-primary"
+                        >
+                          {d.clientName}
+                        </Link>
+                        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          {d.birthday ? (
+                            <>
+                              <Cake className="h-3 w-3 text-pink-500" />
+                              {formatDateShort(new Date(d.birthday + "T00:00:00"))} ·{" "}
+                            </>
+                          ) : null}
+                          entrega{" "}
+                          {d.estimatedDeliveryDate
+                            ? formatDateShort(new Date(d.estimatedDeliveryDate + "T00:00:00"))
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {d.lateRisk && (
+                          <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                        )}
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize ${
+                            d.priority === "alta"
+                              ? "bg-red-100 text-red-700"
+                              : d.priority === "media"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {d.priority}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </DashboardCard>
+          )}
 
           {/* ─── Top packages ─────────────────────────────────────── */}
           <DashboardCard

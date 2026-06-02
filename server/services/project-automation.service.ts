@@ -200,6 +200,17 @@ async function confirmBookingAfterPayment(
     // Sin Google Calendar conectado o función no disponible — no es fatal.
   }
 
+  // Sistema de entregas: con el pago confirmado, crea/recalcula la entrega del
+  // proyecto (fecha estimada, prioridad/riesgo, inicio del compromiso). El
+  // compromiso solo se "activa" cuando además la sesión ya ocurrió; el cron
+  // diario lo refresca. Best-effort.
+  try {
+    const { recomputeProjectDelivery } = await import("./delivery.service")
+    await recomputeProjectDelivery(studioId, projectId)
+  } catch (err) {
+    console.error("[confirmBookingAfterPayment] recomputeProjectDelivery failed", err)
+  }
+
   // Notificar al cliente: pago recibido + sesión confirmada
   try {
     if (b.client_email) {

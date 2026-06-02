@@ -770,6 +770,55 @@ export async function saveFormProgress(
 }
 
 /** Submit final del formulario. Valida contra schema_snapshot. */
+/**
+ * Extrae la fecha de cumpleaños de la quinceañera de las respuestas del form.
+ * La detecta por (a) una key conocida, o (b) un campo cuyo key/label mencione
+ * "cumpleaños"/"nacimiento"/"birthday" y cuyo valor sea una fecha. → 'YYYY-MM-DD'.
+ */
+function extractBirthdayFromForm(
+  schema: FormSchema | null,
+  data: Record<string, unknown>,
+): string | null {
+  const norm = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[_\s-]+/g, "")
+  const KNOWN = new Set(
+    [
+      "quinceanera_birthday",
+      "fecha_cumpleanos",
+      "cumpleanos",
+      "birthday",
+      "fecha_nacimiento",
+      "nacimiento",
+    ].map(norm),
+  )
+  const looksBirthday = (s: string) => {
+    const n = norm(s)
+    return n.includes("cumple") || n.includes("nacimiento") || n.includes("birthday")
+  }
+  const asDate = (v: unknown): string | null =>
+    typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null
+
+  for (const [k, v] of Object.entries(data)) {
+    if (KNOWN.has(norm(k))) {
+      const d = asDate(v)
+      if (d) return d
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fields = (schema as any)?.fields
+  if (Array.isArray(fields)) {
+    for (const f of fields) {
+      const key = String(f?.key ?? f?.id ?? f?.name ?? "")
+      const label = String(f?.label ?? f?.question ?? "")
+      if (key && (looksBirthday(key) || looksBirthday(label))) {
+        const d = asDate(data[key])
+        if (d) return d
+      }
+    }
+  }
+  return null
+}
+
 export async function submitPublicForm(
   accessToken: string,
   data: Record<string, unknown>,
@@ -778,7 +827,7 @@ export async function submitPublicForm(
 
   const { data: response, error } = await supabase
     .from('form_responses')
-    .select('id, studio_id, status, schema_snapshot, booking_request_id, form_template_id')
+    .select('id, studio_id, status, schema_snapshot, booking_request_id, project_id, form_template_id')
     .eq('access_token', accessToken)
     .maybeSingle()
   if (error) throwServiceError("FORM_OP_FAILED", error)
@@ -814,6 +863,42 @@ export async function submitPublicForm(
     .in('status', ['sent', 'in_progress', 'pending'])
 
   if (updateErr) throwServiceError("FORM_UPDATE_FAILED", updateErr)
+
+  // Automatización de entregas: si el formulario captura la fecha de cumpleaños
+  // de la quinceañera, copiarla al proyecto y recalcular la entrega. Best-effort
+  // y con service client (el cliente público no puede escribir en projects).
+  try {
+    const birthday = extractBirthdayFromForm(
+      response.schema_snapshot as unknown as FormSchema,
+      data,
+    )
+    let projectId = (response.project_id as string | null) ?? null
+    const svc = createSupabaseServiceClient()
+    if (!projectId && response.booking_request_id) {
+      const { data: br } = await svc
+        .from('booking_requests')
+        .select('project_id')
+        .eq('id', response.booking_request_id as string)
+        .maybeSingle()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      projectId = ((br as any)?.project_id as string | null) ?? null
+    }
+    if (projectId && birthday) {
+      await svc
+        .from('projects')
+        // quinceanera_birthday es columna nueva (aún no en los tipos generados)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .update({ quinceanera_birthday: birthday } as any)
+        .eq('id', projectId)
+        .eq('studio_id', response.studio_id as string)
+    }
+    if (projectId) {
+      const { recomputeProjectDelivery } = await import('./delivery.service')
+      await recomputeProjectDelivery(response.studio_id as string, projectId)
+    }
+  } catch (err) {
+    console.error('[submitPublicForm] birthday/delivery mapping failed', err)
+  }
 
   // Notificar al studio (best-effort)
   try {

@@ -40,6 +40,7 @@ import {
   Webhook,
   Rocket,
   MessageCircle,
+  Truck,
   type LucideIcon,
 } from "lucide-react"
 
@@ -94,6 +95,7 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
       { type: "link", href: "/projects", label: "Proyectos", icon: FolderOpen },
       { type: "link", href: "/calendar", label: "Calendario", icon: CalendarDays },
+      { type: "link", href: "/deliveries", label: "Próximas entregas", icon: Truck },
       { type: "link", href: "/galleries", label: "Galerías", icon: ImageIcon },
     ],
   },

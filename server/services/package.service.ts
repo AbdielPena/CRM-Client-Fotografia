@@ -84,7 +84,7 @@ export async function createPackage(studioId: string, data: CreatePackageInput) 
   const base = explicit || buildSlug(data.name) || 'paquete'
   const slug = await uniqueSlug(studioId, base)
 
-  return packagesRepo.create({
+  const insert = {
     studio_id: studioId,
     name: data.name,
     slug,
@@ -98,7 +98,10 @@ export async function createPackage(studioId: string, data: CreatePackageInput) 
     // "" / null / undefined → null (sin vincular)
     default_contract_template_id: data.contractTemplateId || null,
     default_form_template_id: data.formTemplateId || null,
-  })
+  }
+  // delivery_days aún no está en los tipos generados (columna nueva)
+  ;(insert as Record<string, unknown>).delivery_days = data.deliveryDays ?? null
+  return packagesRepo.create(insert)
 }
 
 export async function updatePackage(
@@ -118,6 +121,7 @@ export async function updatePackage(
   if (data.price !== undefined) patch.price = data.price
   if (data.durationHours !== undefined) patch.duration_hours = data.durationHours
   if (data.editedPhotos !== undefined) patch.edited_photos = data.editedPhotos
+  if (data.deliveryDays !== undefined) patch.delivery_days = data.deliveryDays ?? null
   if (data.includes !== undefined) patch.includes = parseIncludes(data.includes)
   if (data.isActive !== undefined) patch.is_active = data.isActive
   // Vinculación a plantilla de contrato / formulario. El form siempre envía el

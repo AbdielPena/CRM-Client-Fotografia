@@ -21,6 +21,9 @@ export const createPackageSchema = z.object({
   currency: z.string().length(3).default("USD"),
   durationHours: z.coerce.number().min(0).optional(),
   editedPhotos: z.coerce.number().int().min(0).optional(),
+  // Tiempo estimado de entrega del servicio (en días). Editable por plan; no es
+  // un valor fijo del sistema. Alimenta el cálculo de fechas de entrega.
+  deliveryDays: z.coerce.number().int().min(0).max(365).optional(),
   includes: z.string().max(2000).optional().or(z.literal("")),
   isActive: z.boolean().default(true),
   // Plantilla de contrato y formulario que se aplican por defecto cuando un

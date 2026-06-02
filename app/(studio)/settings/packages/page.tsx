@@ -48,6 +48,7 @@ export default async function PackagesSettingsPage() {
             currency: string
             duration_hours: number | null
             edited_photos: number | null
+            delivery_days?: number | null
             includes: string[] | null
             is_active: boolean
             default_contract_template_id: string | null
@@ -61,6 +62,7 @@ export default async function PackagesSettingsPage() {
             currency: p.currency,
             durationHours: p.duration_hours ?? undefined,
             editedPhotos: p.edited_photos ?? undefined,
+            deliveryDays: p.delivery_days ?? undefined,
             includes: p.includes ? p.includes.join("\n") : undefined,
             isActive: p.is_active,
             contractTemplateId: p.default_contract_template_id ?? undefined,
