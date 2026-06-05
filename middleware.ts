@@ -25,6 +25,7 @@ const PUBLIC_PREFIXES = [
   '/api/webhooks',
   '/api/health',
   '/api/public',
+  '/api/internal', // API por ID para web local co-alojada (auth por X-Internal-Key)
   '/api/deploy', // hooks de deploy desde GitHub Actions (auth por Bearer interno)
   '/_next',
   '/favicon',
