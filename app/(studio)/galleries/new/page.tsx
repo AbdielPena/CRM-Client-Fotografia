@@ -61,6 +61,41 @@ export default async function NewGalleryPage({
           }}
           className="max-w-2xl space-y-5"
         >
+          <div className="rounded-xl border border-border bg-card p-6 space-y-3">
+            <h2 className="text-sm font-semibold text-foreground">Tipo de galería</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="cursor-pointer">
+                <input
+                  type="radio"
+                  name="galleryType"
+                  value="selection"
+                  defaultChecked
+                  className="peer sr-only"
+                />
+                <div className="h-full rounded-xl border border-border bg-background p-4 transition-colors peer-checked:border-brand peer-checked:ring-2 peer-checked:ring-brand/20">
+                  <p className="text-sm font-semibold text-foreground">📷 Selección</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    El cliente elige sus fotos favoritas. Favoritos, colecciones y envío de selección.
+                  </p>
+                </div>
+              </label>
+              <label className="cursor-pointer">
+                <input
+                  type="radio"
+                  name="galleryType"
+                  value="final_delivery"
+                  className="peer sr-only"
+                />
+                <div className="h-full rounded-xl border border-border bg-background p-4 transition-colors peer-checked:border-brand peer-checked:ring-2 peer-checked:ring-brand/20">
+                  <p className="text-sm font-semibold text-foreground">✨ Entrega final</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Entrega de fotos editadas. Pistas Redes / Máxima Calidad, descarga y portada premium.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <div className="rounded-xl border border-border bg-card p-6 space-y-4">
             <h2 className="text-sm font-semibold text-foreground">Información básica</h2>
 
@@ -180,6 +215,23 @@ export default async function NewGalleryPage({
               <label htmlFor="requireEmail" className="text-sm text-foreground">
                 Requerir email del cliente para ver la galería
               </label>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Días de disponibilidad
+              </label>
+              <input
+                name="availabilityDays"
+                type="number"
+                min={1}
+                max={3650}
+                placeholder="30 (se calcula la expiración al publicar)"
+                className={inputCls}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Cuántos días estará disponible para el cliente. Si lo dejas vacío, hereda del plan o usa 30.
+              </p>
             </div>
           </div>
 

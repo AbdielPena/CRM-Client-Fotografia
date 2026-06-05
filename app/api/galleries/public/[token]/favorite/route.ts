@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 import { z } from "zod"
 
 import {
+  captureGuestLead,
   getClientFavorites,
   toggleFavorite,
   validateGalleryToken,
@@ -29,6 +30,10 @@ export async function POST(
       body.clientEmail || null,
       body.clientName || null,
     )
+    // Captura de lead de invitado (no bloquea la respuesta).
+    if (body.clientEmail) {
+      void captureGuestLead(view.gallery.id, body.clientEmail, body.clientName || null)
+    }
     return NextResponse.json(result)
   } catch (e) {
     return apiError(e)

@@ -17,6 +17,8 @@ import {
   X,
   Send,
   Loader2,
+  Palette,
+  Activity,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -24,6 +26,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
 import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader } from "@/components/galleries/asset-uploader"
+import { GalleryAppearanceTab } from "@/components/galleries/gallery-appearance-tab"
+import { GalleryActivityTab } from "@/components/galleries/gallery-activity-tab"
 
 import { createSetAction, deleteSetAction } from "@/server/actions/gallery-set.actions"
 import {
@@ -59,6 +63,13 @@ type Gallery = {
   watermark_opacity: number
   download_pin_required: boolean
   selection_submitted: boolean
+  // Galerías 2.0
+  gallery_type: "selection" | "final_delivery"
+  template_id: string
+  theme: Record<string, unknown>
+  cover_config: Record<string, unknown>
+  subtitle: string | null
+  welcome_text: string | null
 }
 
 type Asset = {
@@ -108,6 +119,15 @@ type PinRow = {
   created_at: string
 }
 
+type ActivityData = {
+  views: number
+  lastViewedAt: string | null
+  downloads: number
+  favoritesTotal: number
+  uniqueVisitors: number
+  topFavorites: Array<{ assetId: string; count: number; thumbUrl: string | null }>
+}
+
 interface Props {
   gallery: Gallery
   assets: Asset[]
@@ -116,6 +136,7 @@ interface Props {
   pins: PinRow[]
   studioId: string
   publicToken: string | null
+  activity: ActivityData
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -128,6 +149,7 @@ export function GalleryDetailTabs({
   pins,
   studioId,
   publicToken,
+  activity,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
 
@@ -161,8 +183,14 @@ export function GalleryDetailTabs({
           <TabsTrigger value="watermark" className="gap-1.5">
             <Droplet className="h-3.5 w-3.5" /> Marca de agua
           </TabsTrigger>
+          <TabsTrigger value="appearance" className="gap-1.5">
+            <Palette className="h-3.5 w-3.5" /> Apariencia
+          </TabsTrigger>
           <TabsTrigger value="share" className="gap-1.5">
             <Share2 className="h-3.5 w-3.5" /> Compartir
+          </TabsTrigger>
+          <TabsTrigger value="activity" className="gap-1.5">
+            <Activity className="h-3.5 w-3.5" /> Actividad
           </TabsTrigger>
         </TabsList>
 
@@ -190,8 +218,26 @@ export function GalleryDetailTabs({
           <WatermarkTab gallery={gallery} />
         </TabsContent>
 
+        <TabsContent value="appearance" className="mt-5">
+          <GalleryAppearanceTab
+            galleryId={gallery.id}
+            galleryType={gallery.gallery_type}
+            initial={{
+              templateId: gallery.template_id,
+              theme: gallery.theme,
+              coverConfig: gallery.cover_config,
+              subtitle: gallery.subtitle,
+              welcomeText: gallery.welcome_text,
+            }}
+          />
+        </TabsContent>
+
         <TabsContent value="share" className="mt-5">
           <ShareTab gallery={gallery} publicToken={publicToken} />
+        </TabsContent>
+
+        <TabsContent value="activity" className="mt-5">
+          <GalleryActivityTab activity={activity} />
         </TabsContent>
       </Tabs>
     </div>

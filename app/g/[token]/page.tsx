@@ -7,6 +7,7 @@ import {
   trackGalleryView,
   validateGalleryToken,
 } from "@/server/services/gallery.service"
+import { getPublicBrandingByStudioId } from "@/server/services/studio-branding.service"
 import { GalleryPasswordGate } from "@/components/public/gallery-password-gate"
 import { PublicGalleryView } from "@/components/public/public-gallery-view"
 
@@ -16,13 +17,22 @@ type PageProps = { params: { token: string } }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const view = await validateGalleryToken(params.token)
-  if (!view) return { title: "Galería no disponible" }
+  if (!view) {
+    return { title: "Galería no disponible", robots: { index: false, follow: false } }
+  }
+  // OG image en resolución web (1600px) — no el thumb de 400px (preview pixelado).
+  const ogImage = view.gallery.coverWebUrl || view.gallery.coverThumbUrl
+  const branding = await getPublicBrandingByStudioId(view.gallery.studioId)
   return {
     title: view.gallery.name,
-    description: view.gallery.description ?? undefined,
-    openGraph: view.gallery.coverThumbUrl
-      ? { images: [{ url: view.gallery.coverThumbUrl }] }
+    description: view.gallery.description ?? view.gallery.subtitle ?? undefined,
+    // Galerías privadas: nunca indexar en buscadores.
+    robots: { index: false, follow: false },
+    icons: branding?.favicon_url ? { icon: branding.favicon_url } : undefined,
+    openGraph: ogImage
+      ? { title: view.gallery.name, images: [{ url: ogImage, width: 1600 }] }
       : undefined,
+    twitter: ogImage ? { card: "summary_large_image" } : undefined,
   }
 }
 
@@ -58,6 +68,9 @@ export default async function PublicGalleryPage({ params }: PageProps) {
     } | null
   ) ?? null
 
+  // Branding del estudio (white-label): logo, color, footer.
+  const branding = await getPublicBrandingByStudioId(view.gallery.studioId)
+
   return (
     <PublicGalleryView
       token={params.token}
@@ -70,7 +83,10 @@ export default async function PublicGalleryPage({ params }: PageProps) {
       assets={view.assets}
       studio={{
         name: studioInfo?.studios?.name ?? "StudioFlow",
-        logoUrl: studioInfo?.studios?.logo_url ?? null,
+        logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+        primaryColor: branding?.primary_color ?? null,
+        hideBranding: branding?.hide_studioflow_branding ?? false,
+        footerHtml: branding?.custom_footer_html ?? null,
       }}
     />
   )

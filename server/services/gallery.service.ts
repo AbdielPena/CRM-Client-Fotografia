@@ -12,11 +12,13 @@ import { randomUUID } from "node:crypto"
 
 import { createId } from "@paralleldrive/cuid2"
 import slugify from "slugify"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 import type { Database } from "@/types/supabase"
 
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
+import { defaultTemplateForType } from "@/lib/galleries/templates"
 import {
   isLocalStorage,
   localPublicUrl,
@@ -76,6 +78,17 @@ export type GalleryRow = {
   cover_design: string
   // Descarga
   download_pin_required: boolean
+  // Galerías 2.0
+  gallery_type: "selection" | "final_delivery"
+  template_id: string
+  theme: Record<string, unknown>
+  cover_config: Record<string, unknown>
+  subtitle: string | null
+  welcome_text: string | null
+  availability_days: number | null
+  package_id: string | null
+  embed_enabled: boolean
+  embed_token: string | null
 }
 
 export type GalleryAssetRow = {
@@ -97,6 +110,8 @@ export type GalleryAssetRow = {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  // Galerías 2.0: pista de entrega
+  delivery_track: "social" | "high_quality" | null
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -175,7 +190,7 @@ export async function getGalleries(
 
   const { data, error, count } = await q
   if (error) throw error
-  return { rows: (data ?? []) as GalleryRow[], total: count ?? 0 }
+  return { rows: (data ?? []) as unknown as GalleryRow[], total: count ?? 0 }
 }
 
 export async function getGalleryById(
@@ -191,7 +206,7 @@ export async function getGalleryById(
     .is("deleted_at", null)
     .maybeSingle()
   if (error) throw error
-  return (data as GalleryRow | null) ?? null
+  return (data as unknown as GalleryRow | null) ?? null
 }
 
 export type CreateGalleryInput = {
@@ -204,6 +219,11 @@ export type CreateGalleryInput = {
   allowDownload?: boolean
   requireEmail?: boolean
   expiresAt?: string | null
+  // Galerías 2.0
+  galleryType?: "selection" | "final_delivery"
+  templateId?: string | null
+  availabilityDays?: number | null
+  packageId?: string | null
 }
 
 /**
@@ -251,9 +271,32 @@ export async function createGallery(
   await assertGalleryParentsActive(studioId, data.clientId, data.projectId)
 
   const supabase = srvc()
+  const db = supabase as unknown as SupabaseClient
   const slug = uniqueSlug(data.name)
 
-  const { data: row, error } = await supabase
+  const galleryType: "selection" | "final_delivery" =
+    data.galleryType === "final_delivery" ? "final_delivery" : "selection"
+
+  // Heredar defaults del plan (si la galería referencia un paquete).
+  let availabilityDays = data.availabilityDays ?? null
+  let templateId = data.templateId ?? null
+  if (data.packageId) {
+    const { data: pkg } = await db
+      .from("packages")
+      .select("gallery_availability_days, gallery_default_template")
+      .eq("id", data.packageId)
+      .eq("studio_id", studioId)
+      .maybeSingle()
+    if (pkg) {
+      if (availabilityDays == null && pkg.gallery_availability_days != null)
+        availabilityDays = pkg.gallery_availability_days as number
+      if (!templateId && pkg.gallery_default_template)
+        templateId = pkg.gallery_default_template as string
+    }
+  }
+  if (!templateId) templateId = defaultTemplateForType(galleryType)
+
+  const { data: row, error } = await db
     .from("galleries")
     .insert({
       studio_id: studioId,
@@ -268,6 +311,10 @@ export async function createGallery(
       require_email: data.requireEmail ?? false,
       expires_at: data.expiresAt ?? null,
       created_by: actorId,
+      gallery_type: galleryType,
+      template_id: templateId,
+      availability_days: availabilityDays,
+      package_id: data.packageId ?? null,
     })
     .select("*")
     .single()
@@ -295,6 +342,17 @@ export type UpdateGalleryInput = Partial<
   accentColor?: string
   layoutGrid?: string
   coverDesign?: string
+  // Galerías 2.0
+  galleryType?: "selection" | "final_delivery"
+  templateId?: string
+  theme?: Record<string, unknown>
+  coverConfig?: Record<string, unknown>
+  subtitle?: string | null
+  welcomeText?: string | null
+  availabilityDays?: number | null
+  packageId?: string | null
+  embedEnabled?: boolean
+  embedToken?: string | null
 }
 
 export async function updateGallery(
@@ -303,9 +361,8 @@ export async function updateGallery(
   galleryId: string,
   data: UpdateGalleryInput,
 ): Promise<GalleryRow> {
-  const supabase = srvc()
-  type GalleriesUpdate = Database["public"]["Tables"]["galleries"]["Update"]
-  const patch: GalleriesUpdate = {}
+  const db = srvc() as unknown as SupabaseClient
+  const patch: Record<string, unknown> = {}
 
   if (data.name !== undefined) patch.name = data.name.trim()
   if (data.description !== undefined) patch.description = data.description?.trim() || null
@@ -332,7 +389,19 @@ export async function updateGallery(
   if (data.layoutGrid !== undefined) patch.layout_grid = data.layoutGrid
   if (data.coverDesign !== undefined) patch.cover_design = data.coverDesign
 
-  const { data: row, error } = await supabase
+  // Galerías 2.0
+  if (data.galleryType !== undefined) patch.gallery_type = data.galleryType
+  if (data.templateId !== undefined) patch.template_id = data.templateId
+  if (data.theme !== undefined) patch.theme = data.theme
+  if (data.coverConfig !== undefined) patch.cover_config = data.coverConfig
+  if (data.subtitle !== undefined) patch.subtitle = data.subtitle?.trim() || null
+  if (data.welcomeText !== undefined) patch.welcome_text = data.welcomeText?.trim() || null
+  if (data.availabilityDays !== undefined) patch.availability_days = data.availabilityDays
+  if (data.packageId !== undefined) patch.package_id = data.packageId
+  if (data.embedEnabled !== undefined) patch.embed_enabled = data.embedEnabled
+  if (data.embedToken !== undefined) patch.embed_token = data.embedToken
+
+  const { data: row, error } = await db
     .from("galleries")
     .update(patch)
     .eq("id", galleryId)
@@ -343,12 +412,72 @@ export async function updateGallery(
   return row as GalleryRow
 }
 
+export const DEFAULT_GALLERY_AVAILABILITY_DAYS = 30
+
 export async function publishGallery(
   studioId: string,
   actorId: string,
   galleryId: string,
 ): Promise<GalleryRow> {
-  return updateGallery(studioId, actorId, galleryId, { status: "published" })
+  const current = await getGalleryById(studioId, galleryId)
+  const patch: UpdateGalleryInput = { status: "published" }
+
+  // Calcular expiración al publicar si aún no tiene una fecha fija.
+  if (current && !current.expires_at) {
+    let days = current.availability_days ?? null
+    if (days == null && current.package_id) {
+      const db = srvc() as unknown as SupabaseClient
+      const { data: pkg } = await db
+        .from("packages")
+        .select("gallery_availability_days")
+        .eq("id", current.package_id)
+        .eq("studio_id", studioId)
+        .maybeSingle()
+      if (pkg?.gallery_availability_days != null) days = pkg.gallery_availability_days as number
+    }
+    if (days == null) days = DEFAULT_GALLERY_AVAILABILITY_DAYS
+    if (days > 0) {
+      const exp = new Date()
+      exp.setDate(exp.getDate() + days)
+      patch.expiresAt = exp.toISOString()
+    }
+  }
+
+  return updateGallery(studioId, actorId, galleryId, patch)
+}
+
+/** Asigna la pista de entrega (Redes / Máxima Calidad) a varios assets. */
+export async function setAssetsDeliveryTrack(
+  studioId: string,
+  galleryId: string,
+  assetIds: string[],
+  track: "social" | "high_quality" | null,
+): Promise<void> {
+  if (assetIds.length === 0) return
+  const db = srvc() as unknown as SupabaseClient
+  const { error } = await db
+    .from("gallery_assets")
+    .update({ delivery_track: track })
+    .eq("studio_id", studioId)
+    .eq("gallery_id", galleryId)
+    .in("id", assetIds)
+  if (error) throw error
+}
+
+/** Activa/desactiva el embed; genera el token la primera vez y lo preserva. */
+export async function setGalleryEmbed(
+  studioId: string,
+  actorId: string,
+  galleryId: string,
+  enabled: boolean,
+): Promise<{ embedEnabled: boolean; embedToken: string | null }> {
+  const current = await getGalleryById(studioId, galleryId)
+  const patch: UpdateGalleryInput = { embedEnabled: enabled }
+  if (enabled && !current?.embed_token) {
+    patch.embedToken = `emb_${randomUUID().replace(/-/g, "")}`
+  }
+  const row = await updateGallery(studioId, actorId, galleryId, patch)
+  return { embedEnabled: row.embed_enabled, embedToken: row.embed_token }
 }
 
 export async function deleteGallery(
@@ -480,7 +609,7 @@ export async function confirmAssetUpload(
   // lanzamos al caller — la UI puede reintentar.
   void processAssetSafely(assetId, studioId, galleryId)
 
-  return asset as GalleryAssetRow
+  return asset as unknown as GalleryAssetRow
 }
 
 async function processAssetSafely(
@@ -551,6 +680,21 @@ async function processAssetSafely(
       webBuf = await applyWatermark(webBuf, watermarkCfg)
     }
 
+    // LQIP: placeholder diminuto (data URI ~1KB) para evitar el "pop-in" gris
+    // del grid mientras carga. Se calcula sobre el buffer ya en memoria (costo
+    // casi cero) y se guarda en metadata. Sin dependencia nueva (Sharp ya está).
+    let lqip: string | null = null
+    try {
+      const lqipBuf = await sharp(buffer, sharpOpts)
+        .rotate()
+        .resize({ width: 24, withoutEnlargement: true })
+        .webp({ quality: 40 })
+        .toBuffer()
+      lqip = `data:image/webp;base64,${lqipBuf.toString("base64")}`
+    } catch {
+      /* LQIP es best-effort; si falla seguimos sin él */
+    }
+
     const tKey = thumbKey(studioId, galleryId, assetId)
     const wKey = webKey(studioId, galleryId, assetId)
 
@@ -581,6 +725,8 @@ async function processAssetSafely(
           format: meta.format,
           orientation: meta.orientation,
           space: meta.space,
+          lqip,
+          aspect: meta.width && meta.height ? meta.width / meta.height : null,
         },
       })
       .eq("id", assetId)
@@ -715,7 +861,143 @@ export async function getGalleryAssets(
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true })
   if (error) throw error
-  return (data ?? []) as GalleryAssetRow[]
+  return (data ?? []) as unknown as GalleryAssetRow[]
+}
+
+export type GalleryActivity = {
+  views: number
+  lastViewedAt: string | null
+  downloads: number
+  favoritesTotal: number
+  uniqueVisitors: number
+  topFavorites: Array<{ assetId: string; count: number; thumbUrl: string | null }>
+}
+
+/** Métricas de actividad de una galería (data ya capturada, sin migración). */
+export async function getGalleryActivity(
+  studioId: string,
+  galleryId: string,
+): Promise<GalleryActivity> {
+  const db = svc() as unknown as SupabaseClient
+
+  const [tokensRes, downloadsRes, favsRes] = await Promise.all([
+    db
+      .from("gallery_share_tokens")
+      .select("view_count, last_viewed_at")
+      .eq("gallery_id", galleryId)
+      .eq("studio_id", studioId),
+    db
+      .from("gallery_downloads")
+      .select("id", { count: "exact", head: true })
+      .eq("gallery_id", galleryId),
+    db.from("gallery_favorites").select("asset_id, client_email").eq("gallery_id", galleryId),
+  ])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tokens = (tokensRes.data ?? []) as any[]
+  const views = tokens.reduce((s, t) => s + (Number(t.view_count) || 0), 0)
+  const lastViewedAt =
+    tokens
+      .map((t) => t.last_viewed_at as string | null)
+      .filter((x): x is string => !!x)
+      .sort()
+      .pop() ?? null
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const favs = (favsRes.data ?? []) as any[]
+  const uniqueVisitors = new Set(favs.map((f) => (f.client_email as string) || "anon")).size
+  const favCount = new Map<string, number>()
+  for (const f of favs) {
+    const id = f.asset_id as string
+    favCount.set(id, (favCount.get(id) ?? 0) + 1)
+  }
+  const topEntries = [...favCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+
+  let topFavorites: GalleryActivity["topFavorites"] = []
+  if (topEntries.length) {
+    const ids = topEntries.map(([id]) => id)
+    const { data: assets } = await db
+      .from("gallery_assets")
+      .select("id, thumb_key")
+      .in("id", ids)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const thumbById = new Map((assets ?? []).map((a: any) => [a.id, a.thumb_key]))
+    topFavorites = topEntries.map(([assetId, count]) => ({
+      assetId,
+      count,
+      thumbUrl: getAssetThumbUrl((thumbById.get(assetId) as string | null) ?? null),
+    }))
+  }
+
+  return {
+    views,
+    lastViewedAt,
+    downloads: downloadsRes.count ?? 0,
+    favoritesTotal: favs.length,
+    uniqueVisitors,
+    topFavorites,
+  }
+}
+
+/**
+ * Captura como lead a un invitado que dejó su email en una galería pública,
+ * siempre que NO sea el cliente dueño ni un cliente existente del estudio.
+ * Idempotente y best-effort (no rompe el flujo del visor si falla).
+ */
+export async function captureGuestLead(
+  galleryId: string,
+  email: string | null,
+  name: string | null,
+): Promise<void> {
+  const cleanEmail = (email ?? "").trim().toLowerCase()
+  if (!cleanEmail || !cleanEmail.includes("@")) return
+  const db = svc() as unknown as SupabaseClient
+  try {
+    const { data: g } = await db
+      .from("galleries")
+      .select("studio_id, client_id")
+      .eq("id", galleryId)
+      .maybeSingle()
+    if (!g) return
+
+    // No es lead si el email es del cliente dueño de la galería.
+    if (g.client_id) {
+      const { data: c } = await db
+        .from("clients")
+        .select("email")
+        .eq("id", g.client_id)
+        .maybeSingle()
+      if (c?.email && String(c.email).trim().toLowerCase() === cleanEmail) return
+    }
+    // No es lead si ya es cliente del estudio.
+    const { data: existingClient } = await db
+      .from("clients")
+      .select("id")
+      .eq("studio_id", g.studio_id)
+      .eq("email", cleanEmail)
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (existingClient) return
+    // Idempotente: no duplicar lead con el mismo email.
+    const { data: existingLead } = await db
+      .from("leads")
+      .select("id")
+      .eq("studio_id", g.studio_id)
+      .eq("email", cleanEmail)
+      .maybeSingle()
+    if (existingLead) return
+
+    await db.from("leads").insert({
+      studio_id: g.studio_id,
+      name: (name ?? "").trim() || cleanEmail.split("@")[0],
+      email: cleanEmail,
+      source: "gallery_guest",
+      status: "new",
+      currency: "DOP",
+    })
+  } catch (err) {
+    console.error("[captureGuestLead]", err)
+  }
 }
 
 export function getAssetThumbUrl(thumbKey: string | null): string | null {
@@ -770,18 +1052,39 @@ export async function shareGalleryWithClient(
   return createGalleryShareToken(studioId, galleryId, { expiresAt: opts.expiresAt ?? null })
 }
 
+export type PublicGalleryAsset = {
+  id: string
+  width: number | null
+  height: number | null
+  aspect: number | null
+  lqip: string | null
+  deliveryTrack: "social" | "high_quality" | null
+  thumbUrl: string | null
+  webUrl: string | null
+}
+
 export type PublicGalleryView = {
-  gallery: Pick<
-    GalleryRow,
-    "id" | "name" | "description" | "visibility" | "allow_download" | "require_email"
-  > & { coverThumbUrl: string | null }
-  assets: Array<{
+  gallery: {
     id: string
-    width: number | null
-    height: number | null
-    thumbUrl: string | null
-    webUrl: string | null
-  }>
+    studioId: string
+    name: string
+    description: string | null
+    subtitle: string | null
+    welcomeText: string | null
+    visibility: GalleryRow["visibility"]
+    allow_download: boolean
+    require_email: boolean
+    galleryType: "selection" | "final_delivery"
+    templateId: string
+    theme: Record<string, unknown>
+    coverConfig: Record<string, unknown>
+    accentColor: string | null
+    eventDate: string | null
+    expiresAt: string | null
+    coverThumbUrl: string | null
+    coverWebUrl: string | null
+  }
+  assets: PublicGalleryAsset[]
   tokenInfo: { id: string; expiresAt: string | null }
 }
 
@@ -793,6 +1096,7 @@ export async function validateGalleryToken(
   token: string,
 ): Promise<PublicGalleryView | null> {
   const supabase = svc()
+  const db = supabase as unknown as SupabaseClient
 
   const { data: tk } = await supabase
     .from("gallery_share_tokens")
@@ -802,19 +1106,19 @@ export async function validateGalleryToken(
   if (!tk || tk.revoked_at) return null
   if (tk.expires_at && new Date(tk.expires_at).getTime() < Date.now()) return null
 
-  const { data: gallery } = await supabase
+  const { data: gallery } = await db
     .from("galleries")
     .select(
-      "id, name, description, visibility, allow_download, require_email, status, cover_asset_id",
+      "id, studio_id, name, description, subtitle, welcome_text, visibility, allow_download, require_email, status, cover_asset_id, gallery_type, template_id, theme, cover_config, accent_color, event_date, expires_at",
     )
     .eq("id", tk.gallery_id)
     .is("deleted_at", null)
     .maybeSingle()
   if (!gallery || gallery.status !== "published") return null
 
-  const { data: assets } = await supabase
+  const { data: assets } = await db
     .from("gallery_assets")
-    .select("id, width, height, thumb_key, web_key, status")
+    .select("id, width, height, thumb_key, web_key, status, metadata, delivery_track")
     .eq("gallery_id", tk.gallery_id)
     .is("deleted_at", null)
     .eq("status", "completed")
@@ -823,31 +1127,195 @@ export async function validateGalleryToken(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const assetList = (assets ?? []) as any[]
-  let coverThumb: string | null = null
-  if (gallery.cover_asset_id && assetList.length) {
-    const cover = assetList.find((a) => a.id === gallery.cover_asset_id)
-    coverThumb = getAssetThumbUrl((cover?.thumb_key as string | null) ?? null)
-  }
+
+  // Portada: usa el cover elegido, o el primer asset como respaldo.
+  const coverAsset =
+    (gallery.cover_asset_id && assetList.find((a) => a.id === gallery.cover_asset_id)) ||
+    assetList[0] ||
+    null
+  const coverThumb = getAssetThumbUrl((coverAsset?.thumb_key as string | null) ?? null)
+  const coverWeb = getAssetWebUrl((coverAsset?.web_key as string | null) ?? null)
+
+  const metaOf = (a: Record<string, unknown>) =>
+    (a.metadata && typeof a.metadata === "object" ? a.metadata : {}) as Record<string, unknown>
 
   return {
     gallery: {
       id: gallery.id as string,
+      studioId: gallery.studio_id as string,
       name: gallery.name as string,
       description: gallery.description as string | null,
+      subtitle: (gallery.subtitle as string | null) ?? null,
+      welcomeText: (gallery.welcome_text as string | null) ?? null,
       visibility: gallery.visibility as GalleryRow["visibility"],
       allow_download: gallery.allow_download as boolean,
       require_email: gallery.require_email as boolean,
+      galleryType: ((gallery.gallery_type as string) === "final_delivery"
+        ? "final_delivery"
+        : "selection") as "selection" | "final_delivery",
+      templateId: (gallery.template_id as string) ?? "classic_proofing",
+      theme: (gallery.theme as Record<string, unknown>) ?? {},
+      coverConfig: (gallery.cover_config as Record<string, unknown>) ?? {},
+      accentColor: (gallery.accent_color as string | null) ?? null,
+      eventDate: (gallery.event_date as string | null) ?? null,
+      expiresAt: (gallery.expires_at as string | null) ?? null,
       coverThumbUrl: coverThumb,
+      coverWebUrl: coverWeb,
     },
-    assets: assetList.map((a) => ({
-      id: a.id as string,
-      width: a.width as number | null,
-      height: a.height as number | null,
-      thumbUrl: getAssetThumbUrl(a.thumb_key as string | null),
-      webUrl: getAssetWebUrl(a.web_key as string | null),
-    })),
+    assets: assetList.map((a): PublicGalleryAsset => {
+      const m = metaOf(a)
+      return {
+        id: a.id as string,
+        width: a.width as number | null,
+        height: a.height as number | null,
+        aspect: typeof m.aspect === "number" ? (m.aspect as number) : null,
+        lqip: typeof m.lqip === "string" ? (m.lqip as string) : null,
+        deliveryTrack:
+          a.delivery_track === "social" || a.delivery_track === "high_quality"
+            ? a.delivery_track
+            : null,
+        thumbUrl: getAssetThumbUrl(a.thumb_key as string | null),
+        webUrl: getAssetWebUrl(a.web_key as string | null),
+      }
+    }),
     tokenInfo: { id: tk.id as string, expiresAt: tk.expires_at as string | null },
   }
+}
+
+// ─── API interna por ID (web local en el mismo servidor) ────────────────────
+
+export type EmbedGalleryResult =
+  | { ok: false; reason: "not_found" | "forbidden" }
+  | { ok: true; etag: string; data: Record<string, unknown> }
+
+/**
+ * Resuelve una galería por ID para consumo desde una web LOCAL co-alojada
+ * (no externa). Requiere que esté publicada + embed habilitado + key válida
+ * (el `embed_token` de la galería, o `INTERNAL_API_KEY` del entorno).
+ */
+export async function getEmbeddableGallery(
+  galleryId: string,
+  key: string | null,
+  opts: { page?: number; pageSize?: number; scope?: "summary" | "full" } = {},
+): Promise<EmbedGalleryResult> {
+  const db = svc() as unknown as SupabaseClient
+
+  const { data: g } = await db
+    .from("galleries")
+    .select(
+      "id, studio_id, name, slug, description, subtitle, gallery_type, template_id, theme, cover_config, accent_color, event_date, layout_grid, status, expires_at, embed_enabled, embed_token, cover_asset_id, updated_at",
+    )
+    .eq("id", galleryId)
+    .is("deleted_at", null)
+    .maybeSingle()
+
+  if (!g || g.status !== "published" || !g.embed_enabled) {
+    return { ok: false, reason: "not_found" }
+  }
+
+  const internalKey = process.env["INTERNAL_API_KEY"] ?? null
+  const keyOk = (!!key && key === g.embed_token) || (!!internalKey && key === internalKey)
+  if (!keyOk) return { ok: false, reason: "forbidden" }
+
+  const page = Math.max(1, opts.page ?? 1)
+  const pageSize = Math.min(200, Math.max(1, opts.pageSize ?? 60))
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  const { data: sets } = await db
+    .from("gallery_sets")
+    .select("id, name, sort_order, asset_count")
+    .eq("gallery_id", galleryId)
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: true })
+
+  const { data: assets, count } = await db
+    .from("gallery_assets")
+    .select("id, width, height, thumb_key, web_key, metadata, delivery_track, set_id, sort_order", {
+      count: "exact",
+    })
+    .eq("gallery_id", galleryId)
+    .is("deleted_at", null)
+    .eq("status", "completed")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true })
+    .range(from, to)
+
+  const total = count ?? 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const list = (assets ?? []) as any[]
+
+  // Portada (puede no estar en la página actual): query puntual.
+  let coverUrl: string | null = null
+  if (g.cover_asset_id) {
+    const { data: cov } = await db
+      .from("gallery_assets")
+      .select("web_key")
+      .eq("id", g.cover_asset_id)
+      .maybeSingle()
+    coverUrl = getAssetWebUrl((cov?.web_key as string | null) ?? null)
+  } else if (list[0]) {
+    coverUrl = getAssetWebUrl((list[0].web_key as string | null) ?? null)
+  }
+
+  const metaOf = (a: Record<string, unknown>) =>
+    (a.metadata && typeof a.metadata === "object" ? a.metadata : {}) as Record<string, unknown>
+  const includeOriginal = opts.scope === "full"
+
+  const data: Record<string, unknown> = {
+    gallery: {
+      id: g.id,
+      studioId: g.studio_id,
+      name: g.name,
+      slug: g.slug,
+      type: g.gallery_type,
+      description: g.description,
+      subtitle: g.subtitle,
+      templateId: g.template_id,
+      theme: g.theme ?? {},
+      coverConfig: g.cover_config ?? {},
+      accentColor: g.accent_color,
+      layoutGrid: g.layout_grid,
+      eventDate: g.event_date,
+      status: g.status,
+      expiresAt: g.expires_at,
+      cover: coverUrl ? { url: coverUrl } : null,
+      updatedAt: g.updated_at,
+    },
+    sections: (sets ?? []).map((s: Record<string, unknown>) => ({
+      id: s.id,
+      name: s.name,
+      sort: s.sort_order,
+      count: s.asset_count,
+    })),
+    assets: list.map((a) => {
+      const m = metaOf(a)
+      return {
+        id: a.id,
+        w: a.width,
+        h: a.height,
+        ratio: typeof m.aspect === "number" ? m.aspect : null,
+        blurhash: typeof m.lqip === "string" ? m.lqip : null,
+        sort: a.sort_order,
+        sectionId: a.set_id ?? null,
+        deliveryTrack: a.delivery_track ?? null,
+        urls: {
+          thumb: getAssetThumbUrl(a.thumb_key as string | null),
+          web: getAssetWebUrl(a.web_key as string | null),
+          ...(includeOriginal ? { original: null } : {}),
+        },
+      }
+    }),
+    meta: {
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+  }
+
+  const etag = `W/"${String(g.updated_at).replace(/[^0-9]/g, "")}-${total}"`
+  return { ok: true, etag, data }
 }
 
 export async function trackGalleryView(tokenId: string): Promise<void> {

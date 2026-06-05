@@ -8,16 +8,19 @@ import { countUnreadNotifications } from "@/server/services/notification.service
 import {
   getAssetThumbUrl,
   getAssetWebUrl,
+  getGalleryActivity,
   getGalleryAssets,
   getGalleryById,
 } from "@/server/services/gallery.service"
 import { getCollectionsByGallery } from "@/server/services/gallery-collection.service"
 import { getSetsByGallery } from "@/server/services/gallery-set.service"
 import { getPinsByGallery } from "@/server/services/gallery-download-pin.service"
+import { getGallerySelectionQuota } from "@/server/services/selection-quota.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { GalleryDetailTabs } from "@/components/galleries/gallery-detail-tabs"
+import { GalleryExtrasInvoiceButton } from "@/components/galleries/gallery-extras-invoice-button"
 
 export const metadata: Metadata = { title: "Detalle de galería" }
 
@@ -29,12 +32,13 @@ export default async function GalleryDetailPage({
   const session = await requireStudioAuth()
   const galleryId = params.id
 
-  const [gallery, assets, collections, sets, pins, unread] = await Promise.all([
+  const [gallery, assets, collections, sets, pins, activity, unread] = await Promise.all([
     getGalleryById(session.studioId, galleryId),
     getGalleryAssets(session.studioId, galleryId),
     getCollectionsByGallery(session.studioId, galleryId),
     getSetsByGallery(session.studioId, galleryId),
     getPinsByGallery(session.studioId, galleryId),
+    getGalleryActivity(session.studioId, galleryId),
     countUnreadNotifications(session.studioId),
   ])
 
@@ -42,6 +46,7 @@ export default async function GalleryDetailPage({
 
   // Resolve cliente (si tiene)
   let clientLabel: string | null = null
+  let clientEmail: string | null = null
   if (gallery.client_id) {
     const supabase = createSupabaseServerClient()
     const { data } = await supabase
@@ -51,7 +56,17 @@ export default async function GalleryDetailPage({
       .maybeSingle()
     if (data) {
       const c = data as { name: string; email: string | null }
+      clientEmail = c.email
       clientLabel = c.email ? `${c.name} · ${c.email}` : c.name
+    }
+  }
+
+  // Extras facturables: solo si se envió la selección y excede la cuota del plan.
+  let extrasQuota: { extras: number; extraTotal: number; currency: string } | null = null
+  if (gallery.selection_submitted && gallery.client_id && gallery.project_id) {
+    const q = await getGallerySelectionQuota(galleryId, clientEmail ?? undefined)
+    if (q.extras > 0 && q.extraUnitPrice > 0) {
+      extrasQuota = { extras: q.extras, extraTotal: q.extraTotal, currency: q.currency }
     }
   }
 
@@ -124,17 +139,27 @@ export default async function GalleryDetailPage({
             </div>
           </div>
 
-          {activeToken && (
-            <a
-              href={`/g/${activeToken.token}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:border-border-strong"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Ver pública
-            </a>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {extrasQuota && (
+              <GalleryExtrasInvoiceButton
+                galleryId={galleryId}
+                extras={extrasQuota.extras}
+                extraTotal={extrasQuota.extraTotal}
+                currency={extrasQuota.currency}
+              />
+            )}
+            {activeToken && (
+              <a
+                href={`/g/${activeToken.token}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:border-border-strong"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Ver pública
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
@@ -161,6 +186,12 @@ export default async function GalleryDetailPage({
           download_pin_required:
             (gallery as unknown as { download_pin_required: boolean }).download_pin_required ?? false,
           selection_submitted: gallery.selection_submitted ?? false,
+          gallery_type: gallery.gallery_type ?? "selection",
+          template_id: gallery.template_id ?? "classic_proofing",
+          theme: gallery.theme ?? {},
+          cover_config: gallery.cover_config ?? {},
+          subtitle: gallery.subtitle ?? null,
+          welcome_text: gallery.welcome_text ?? null,
         }}
         assets={assetsWithUrls}
         sets={sets}
@@ -168,6 +199,7 @@ export default async function GalleryDetailPage({
         pins={pins}
         studioId={session.studioId}
         publicToken={activeToken?.token ?? null}
+        activity={activity}
       />
     </>
   )

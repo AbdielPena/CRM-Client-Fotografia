@@ -16,6 +16,11 @@ import {
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
+import {
+  resolveGalleryTheme,
+  galleryStyleTokens,
+  resolveCoverConfig,
+} from "@/lib/galleries/templates"
 
 type Asset = {
   id: string
@@ -23,6 +28,9 @@ type Asset = {
   height: number | null
   thumbUrl: string | null
   webUrl: string | null
+  lqip?: string | null
+  aspect?: number | null
+  deliveryTrack?: "social" | "high_quality" | null
 }
 
 type Gallery = {
@@ -35,6 +43,17 @@ type Gallery = {
   download_pin_required?: boolean
   selection_submitted?: boolean
   selection_locked?: boolean
+  // Galerías 2.0
+  galleryType?: "selection" | "final_delivery"
+  templateId?: string
+  theme?: Record<string, unknown>
+  coverConfig?: Record<string, unknown>
+  subtitle?: string | null
+  welcomeText?: string | null
+  accentColor?: string | null
+  eventDate?: string | null
+  coverThumbUrl?: string | null
+  coverWebUrl?: string | null
 }
 
 type Collection = {
@@ -47,7 +66,118 @@ type Collection = {
   asset_ids: string[]
 }
 
-type Studio = { name: string; logoUrl: string | null }
+type Studio = {
+  name: string
+  logoUrl: string | null
+  primaryColor?: string | null
+  hideBranding?: boolean
+  footerHtml?: string | null
+}
+
+function formatEventDate(d: string): string | null {
+  try {
+    return new Date(`${d}T00:00:00`).toLocaleDateString("es", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+  } catch {
+    return null
+  }
+}
+
+/** Portada hero full-bleed (premium) que aparece arriba de la galería. */
+function GalleryHero({
+  gallery,
+  cover,
+  accent,
+  photoCount,
+}: {
+  gallery: Gallery
+  cover: ReturnType<typeof resolveCoverConfig>
+  accent: string
+  photoCount: number
+}) {
+  const bg = gallery.coverWebUrl || gallery.coverThumbUrl
+  if (!bg) return null
+  const title = cover.title || gallery.name
+  const subtitle =
+    cover.subtitle ||
+    gallery.subtitle ||
+    (gallery.eventDate ? formatEventDate(gallery.eventDate) : null)
+  const textLight = cover.textColor !== "dark"
+  const fg = textLight ? "#ffffff" : "#111111"
+  const align =
+    cover.textAlign === "left"
+      ? "items-start text-left"
+      : cover.textAlign === "right"
+        ? "items-end text-right"
+        : "items-center text-center"
+  return (
+    <section className="relative h-[70vh] min-h-[440px] w-full overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={bg}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{
+          objectPosition: `${(cover.focalX ?? 0.5) * 100}% ${(cover.focalY ?? 0.5) * 100}%`,
+        }}
+      />
+      {cover.overlay !== "none" && (
+        <div
+          className="absolute inset-0"
+          style={{
+            background: cover.overlay === "light" ? "#ffffff" : "#000000",
+            opacity: cover.overlayIntensity ?? 0.35,
+          }}
+        />
+      )}
+      <div
+        className={cn(
+          "relative z-10 mx-auto flex h-full max-w-5xl flex-col justify-center gap-3 px-6",
+          align,
+        )}
+      >
+        <h1 className="text-4xl font-semibold leading-[1.05] sm:text-6xl" style={{ color: fg }}>
+          {title}
+        </h1>
+        {subtitle && (
+          <p
+            className="text-base sm:text-lg"
+            style={{ color: textLight ? "rgba(255,255,255,.85)" : "rgba(0,0,0,.7)" }}
+          >
+            {subtitle}
+          </p>
+        )}
+        {gallery.welcomeText && (
+          <p
+            className="max-w-xl text-sm"
+            style={{ color: textLight ? "rgba(255,255,255,.75)" : "rgba(0,0,0,.6)" }}
+          >
+            {gallery.welcomeText}
+          </p>
+        )}
+        {cover.showButton && (
+          <a
+            href="#fotos"
+            className="mt-3 inline-block rounded-full px-6 py-2.5 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105"
+            style={{ background: accent }}
+          >
+            {cover.buttonLabel ||
+              (gallery.galleryType === "final_delivery" ? "Ver mis fotos" : "Entrar a seleccionar")}
+          </a>
+        )}
+        <p
+          className="mt-1 text-xs"
+          style={{ color: textLight ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.55)" }}
+        >
+          {photoCount} fotos
+        </p>
+      </div>
+    </section>
+  )
+}
 
 export function PublicGalleryView({
   token,
@@ -382,6 +512,27 @@ export function PublicGalleryView({
     return () => window.removeEventListener("keydown", onKey)
   }, [open, assets, toggleHeart])
 
+  // ─── Tema visual (template + overrides) ──────────────────────────────────
+  const theme = useMemo(
+    () => resolveGalleryTheme(gallery.templateId, gallery.theme),
+    [gallery.templateId, gallery.theme],
+  )
+  const tokens = useMemo(() => galleryStyleTokens(theme), [theme])
+  const cover = useMemo(() => resolveCoverConfig(gallery.coverConfig), [gallery.coverConfig])
+
+  // Inyectar la Google Font del template (una vez)
+  useEffect(() => {
+    const g = tokens.googleFont
+    if (!g || typeof document === "undefined") return
+    const id = `g-font-${g}`
+    if (document.getElementById(id)) return
+    const link = document.createElement("link")
+    link.id = id
+    link.rel = "stylesheet"
+    link.href = `https://fonts.googleapis.com/css2?family=${g}`
+    document.head.appendChild(link)
+  }, [tokens.googleFont])
+
   if (emailPrompt) {
     return <EmailPrompt galleryName={gallery.name} onSubmit={saveEmail} />
   }
@@ -391,7 +542,15 @@ export function PublicGalleryView({
   const canSubmit = selectionCount > 0
 
   return (
-    <div className="min-h-screen bg-zinc-50 pb-24 dark:bg-zinc-950">
+    <div
+      className={cn(
+        "min-h-screen pb-24",
+        tokens.mode === "dark" ? "dark bg-zinc-950" : "bg-zinc-50",
+      )}
+      style={{ fontFamily: tokens.fontStack }}
+    >
+      <GalleryHero gallery={gallery} cover={cover} accent={tokens.accent} photoCount={assets.length} />
+
       <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -583,7 +742,7 @@ export function PublicGalleryView({
         </div>
       )}
 
-      <main className="mx-auto max-w-7xl px-4 py-6">
+      <main id="fotos" className="mx-auto max-w-7xl px-4 py-6">
         {assets.length === 0 ? (
           <p className="py-12 text-center text-sm text-zinc-500">
             Aún no hay fotos en esta galería.
@@ -596,6 +755,15 @@ export function PublicGalleryView({
                 <button
                   key={a.id}
                   onClick={() => setOpen(i)}
+                  style={
+                    a.lqip
+                      ? {
+                          backgroundImage: `url(${a.lqip})`,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
+                        }
+                      : undefined
+                  }
                   className={cn(
                     "group relative aspect-square overflow-hidden rounded-md bg-zinc-200 transition-all dark:bg-zinc-800",
                     marked && "ring-2 ring-rose-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
@@ -605,7 +773,7 @@ export function PublicGalleryView({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={a.thumbUrl}
-                      alt=""
+                      alt={`Foto ${i + 1}`}
                       loading="lazy"
                       draggable={false}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
@@ -717,6 +885,21 @@ export function PublicGalleryView({
           }}
         />
       )}
+
+      <footer className="mx-auto max-w-7xl px-4 py-8 text-center">
+        {studio.footerHtml && (
+          <div
+            className="mx-auto mb-2 text-xs text-zinc-500 dark:text-zinc-400"
+            // El estudio controla este HTML desde su configuración de branding.
+            dangerouslySetInnerHTML={{ __html: studio.footerHtml }}
+          />
+        )}
+        {!studio.hideBranding && (
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-600">
+            Hecho con <span className="font-medium">StudioFlow</span>
+          </p>
+        )}
+      </footer>
     </div>
   )
 }

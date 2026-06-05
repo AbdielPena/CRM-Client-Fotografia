@@ -35,7 +35,11 @@ export type TemplateSlug =
   // Galería
   | "gallery_available"
   | "gallery_selection_pending"
+  | "gallery_selection_received"
   | "gallery_expiring"
+  | "gallery_expired"
+  | "gallery_final_delivery_available"
+  | "gallery_drive_link_available"
   // Entregas
   | "delivery_ready"
   // Otros
@@ -286,6 +290,64 @@ export const TEMPLATE_CATALOG: Record<
       { key: "gallery_name", label: "Galería", example: "Boda Pérez" },
       { key: "expires_at", label: "Vencimiento", example: "30 jun" },
       { key: "gallery_url", label: "URL", example: "https://..." },
+    ],
+  },
+  gallery_selection_received: {
+    label: "Selección recibida",
+    description: "Confirma al cliente que su selección de fotos fue recibida.",
+    category: "gallery",
+    defaultSubject: "Recibimos tu selección — {{gallery_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>¡Recibimos tu selección de <strong>{{gallery_name}}</strong>! Ya comenzamos a trabajar en ella y te avisaremos cuando tu entrega esté lista.</p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "Juan" },
+      { key: "gallery_name", label: "Galería", example: "Boda Pérez" },
+      { key: "project_name", label: "Proyecto", example: "Boda 2026" },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  gallery_expired: {
+    label: "Galería vencida",
+    description: "Avisa al cliente que su galería dejó de estar disponible.",
+    category: "gallery",
+    defaultSubject: "Tu galería expiró — {{gallery_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>Tu galería <strong>{{gallery_name}}</strong> dejó de estar disponible el {{expiration_date}}. Si necesitás recuperarla, respondé este correo.</p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "Juan" },
+      { key: "gallery_name", label: "Galería", example: "Boda Pérez" },
+      { key: "expiration_date", label: "Venció el", example: "30 jun 2026" },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  gallery_final_delivery_available: {
+    label: "Entrega final disponible",
+    description: "Avisa al cliente que sus fotos editadas (entrega final) ya están listas.",
+    category: "gallery",
+    defaultSubject: "✨ Tus fotos están listas — {{gallery_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>¡Tus fotos editadas de <strong>{{gallery_name}}</strong> ya están disponibles! <a href="{{gallery_link}}">Verlas y descargarlas acá</a>.</p><p>Disponible hasta el {{expiration_date}}.</p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "Juan" },
+      { key: "gallery_name", label: "Galería", example: "Boda Pérez" },
+      { key: "project_name", label: "Proyecto", example: "Boda 2026" },
+      { key: "gallery_link", label: "Link de la galería", example: "https://..." },
+      { key: "expiration_date", label: "Disponible hasta", example: "30 jun 2026" },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  gallery_drive_link_available: {
+    label: "Link de Drive disponible",
+    description: "Comparte con el cliente el link de respaldo en Google Drive.",
+    category: "gallery",
+    defaultSubject: "Tu respaldo en Drive — {{gallery_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>Te dejamos el respaldo de <strong>{{gallery_name}}</strong> en Google Drive: <a href="{{drive_link}}">abrir carpeta</a>.</p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "Juan" },
+      { key: "gallery_name", label: "Galería", example: "Boda Pérez" },
+      { key: "drive_link", label: "Link de Drive", example: "https://drive.google.com/..." },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
     ],
   },
   delivery_ready: {
