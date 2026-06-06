@@ -10,7 +10,7 @@ import {
   getReactions,
   listChannels,
 } from "@/server/services/chat.service"
-import { untypedServer } from "@/server/supabase/untyped"
+import { listMembers } from "@/server/services/studio-members.service"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 
@@ -44,26 +44,13 @@ export default async function ChannelPage({
   // Reactions para los mensajes cargados
   const reactions = await getReactions(messages.map((m) => m.id))
 
-  // Lista de members del studio para mostrar nombres de autores
-  const sb = untypedServer()
-  const { data: membersRes } = await sb
-    .from("studio_members")
-    .select("user_id, user:auth_users(id, email, raw_user_meta_data)")
-    .eq("studio_id", session.studioId)
-
-  type MemberRow = {
-    user_id: string
-    user?: {
-      id: string
-      email: string
-      raw_user_meta_data: { full_name?: string } | null
-    } | null
-  }
-
-  const members = ((membersRes ?? []) as MemberRow[]).map((m) => ({
+  // Lista de members del studio para mostrar nombres de autores. listMembers
+  // resuelve el email vía admin API (auth.users no es embebible por PostgREST → 500).
+  const memberList = await listMembers(session.studioId)
+  const members = memberList.map((m) => ({
     userId: m.user_id,
-    email: m.user?.email ?? "",
-    name: m.user?.raw_user_meta_data?.full_name ?? m.user?.email ?? "Usuario",
+    email: m.email ?? "",
+    name: m.name ?? "Usuario",
   }))
 
   return (

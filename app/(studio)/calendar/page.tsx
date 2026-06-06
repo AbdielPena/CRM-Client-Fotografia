@@ -11,7 +11,10 @@ import {
   type CalendarEventRow,
 } from "@/server/services/google-calendar.service"
 import { syncGoogleCalendarNowAction } from "@/server/actions/google-calendar.actions"
-import { getDeliveryCalendarEvents } from "@/server/services/delivery.service"
+import {
+  getDeliveryCalendarEvents,
+  getProjectSessionEvents,
+} from "@/server/services/delivery.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { CalendarOriginFilters } from "@/components/calendar/calendar-origin-filters"
@@ -37,8 +40,17 @@ export default async function CalendarPage({
   const session = await requireStudioAuth()
 
   const now = new Date()
-  const year = Number(searchParams.year ?? now.getFullYear())
-  const month = Number(searchParams.month ?? now.getMonth() + 1)
+  const parsedYear = Number(searchParams.year ?? now.getFullYear())
+  const parsedMonth = Number(searchParams.month ?? now.getMonth() + 1)
+  // Guard: NaN / fuera de rango → mes y año actuales (evita Invalid Date → 500)
+  const year =
+    Number.isInteger(parsedYear) && parsedYear >= 1970 && parsedYear <= 9999
+      ? parsedYear
+      : now.getFullYear()
+  const month =
+    Number.isInteger(parsedMonth) && parsedMonth >= 1 && parsedMonth <= 12
+      ? parsedMonth
+      : now.getMonth() + 1
   const origin = (
     ALLOWED_ORIGINS.includes(searchParams.origin as CalendarOriginFilter)
       ? searchParams.origin
@@ -51,8 +63,17 @@ export default async function CalendarPage({
   const upcomingTo = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30).toISOString()
 
   const supabase = createSupabaseServerClient()
-  const [gcalMonth, gcalUpcoming, unread, gcalStatus, totalEventsRes, delMonth, delUpcoming] =
-    await Promise.all([
+  const [
+    gcalMonth,
+    gcalUpcoming,
+    unread,
+    gcalStatus,
+    totalEventsRes,
+    delMonth,
+    delUpcoming,
+    sessMonth,
+    sessUpcoming,
+  ] = await Promise.all([
       listCalendarEvents(session.studioId, {
         from: startDate,
         to: endDate,
@@ -77,14 +98,28 @@ export default async function CalendarPage({
         from: now.toISOString(),
         to: upcomingTo,
       }).catch(() => [] as Awaited<ReturnType<typeof getDeliveryCalendarEvents>>),
+      // Sesiones de proyectos (projects.event_date) como eventos INTERNOS.
+      // No dependen de Google Calendar: se leen directo de la tabla projects.
+      getProjectSessionEvents(session.studioId, { from: startDate, to: endDate }).catch(
+        () => [] as Awaited<ReturnType<typeof getProjectSessionEvents>>,
+      ),
+      getProjectSessionEvents(session.studioId, {
+        from: now.toISOString(),
+        to: upcomingTo,
+      }).catch(() => [] as Awaited<ReturnType<typeof getProjectSessionEvents>>),
     ])
 
-  // Las entregas son origin 'studioflow' → se muestran salvo en filtros de Google.
-  const includeDeliveries =
+  // Entregas y sesiones son origin 'studioflow' → se muestran salvo en filtros
+  // exclusivos de Google. with_client solo aplica a los que tienen clientId.
+  const includeInternal =
     origin === "all" || origin === "studioflow" || origin === "with_client"
-  const monthEvents = includeDeliveries ? [...gcalMonth, ...delMonth] : gcalMonth
+  const monthEvents = includeInternal
+    ? [...gcalMonth, ...sessMonth, ...delMonth]
+    : gcalMonth
   const upcomingEvents = (
-    includeDeliveries ? [...gcalUpcoming, ...delUpcoming] : gcalUpcoming
+    includeInternal
+      ? [...gcalUpcoming, ...sessUpcoming, ...delUpcoming]
+      : gcalUpcoming
   ).sort((a, b) => (a.startsAt ?? "").localeCompare(b.startsAt ?? ""))
 
   // Banner: Google está conectado pero NUNCA se hizo el import inicial.

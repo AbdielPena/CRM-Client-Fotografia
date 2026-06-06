@@ -69,12 +69,7 @@ export async function getTasks(
 
   let query = sb
     .from("tasks")
-    .select(
-      `*,
-       assignee:assigned_to_user_id(id, email, raw_user_meta_data),
-       creator:created_by(id, email, raw_user_meta_data)`,
-      { count: "exact" },
-    )
+    .select("*", { count: "exact" })
     .eq("studio_id", studioId)
     .is("deleted_at", null)
     .order("priority", { ascending: false })

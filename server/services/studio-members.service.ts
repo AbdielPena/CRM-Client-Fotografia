@@ -44,14 +44,49 @@ export type StudioInvitation = {
 // Members
 // ============================================================================
 
+/**
+ * Resuelve email + nombre de un conjunto de user_ids vía la admin API
+ * (service role). `auth.users` NO es embebible por PostgREST (schema auth no
+ * expuesto), así que esta es la forma soportada de obtener el email en el
+ * servidor — mismo patrón que app/api/auth/hub-sso. Nunca expone auth.users
+ * al cliente.
+ */
+async function resolveUsersByIds(
+  userIds: string[],
+): Promise<Map<string, { email: string | null; fullName: string | null }>> {
+  const map = new Map<string, { email: string | null; fullName: string | null }>()
+  const wanted = new Set(userIds.filter(Boolean))
+  if (wanted.size === 0) return map
+
+  const admin = untypedService()
+  const perPage = 1000
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage })
+    if (error) break
+    const users = (data?.users ?? []) as Array<{
+      id: string
+      email?: string | null
+      user_metadata?: { full_name?: string } | null
+    }>
+    for (const u of users) {
+      if (wanted.has(u.id)) {
+        map.set(u.id, {
+          email: u.email ?? null,
+          fullName: u.user_metadata?.full_name ?? null,
+        })
+      }
+    }
+    // Última página, o ya encontramos todos los buscados.
+    if (users.length < perPage || map.size >= wanted.size) break
+  }
+  return map
+}
+
 export async function listMembers(studioId: string): Promise<StudioMember[]> {
   const sb = untypedServer()
   const { data, error } = await sb
     .from("studio_members")
-    .select(
-      `user_id, role, created_at,
-       user:auth_users(id, email, raw_user_meta_data)`,
-    )
+    .select("user_id, role, created_at, display_name")
     .eq("studio_id", studioId)
     .order("created_at", { ascending: true })
 
@@ -61,19 +96,23 @@ export async function listMembers(studioId: string): Promise<StudioMember[]> {
     user_id: string
     role: StudioRole
     created_at: string
-    user?: {
-      email: string
-      raw_user_meta_data: { full_name?: string } | null
-    } | null
+    display_name: string | null
   }
+  const rows = (data ?? []) as Row[]
 
-  return ((data ?? []) as Row[]).map((r) => ({
-    user_id: r.user_id,
-    role: r.role,
-    joined_at: r.created_at,
-    email: r.user?.email ?? null,
-    name: r.user?.raw_user_meta_data?.full_name ?? r.user?.email ?? null,
-  }))
+  // El email vive en auth.users (no embebible) → admin API con service role.
+  const userMap = await resolveUsersByIds(rows.map((r) => r.user_id))
+
+  return rows.map((r) => {
+    const u = userMap.get(r.user_id)
+    return {
+      user_id: r.user_id,
+      role: r.role,
+      joined_at: r.created_at,
+      email: u?.email ?? null,
+      name: r.display_name ?? u?.fullName ?? u?.email ?? null,
+    }
+  })
 }
 
 export async function updateMemberRole(
@@ -192,18 +231,19 @@ export async function inviteToStudio(
     throw new Error("INVALID_EMAIL")
   }
 
-  // Check si ya es miembro
+  // Check si ya es miembro. auth.users no es embebible por PostgREST, así que
+  // resolvemos los emails de los miembros vía la admin API (service role).
   const { data: existing } = await sb
     .from("studio_members")
-    .select(`user_id, user:auth_users(email)`)
+    .select("user_id")
     .eq("studio_id", studioId)
 
-  type MemberRow = {
-    user_id: string
-    user?: { email: string } | null
-  }
-  const isMember = ((existing ?? []) as MemberRow[]).some(
-    (m) => m.user?.email?.toLowerCase() === data.email.toLowerCase(),
+  const memberIds = ((existing ?? []) as Array<{ user_id: string }>).map(
+    (m) => m.user_id,
+  )
+  const memberUsers = await resolveUsersByIds(memberIds)
+  const isMember = [...memberUsers.values()].some(
+    (u) => u.email?.toLowerCase() === data.email.toLowerCase(),
   )
   if (isMember) {
     throw new Error("USER_ALREADY_MEMBER")

@@ -108,8 +108,11 @@ export async function onClientCreated(
 }
 
 /**
- * Pago registrado → "Reservado" (1er pago) o "Sesión realizada" (2do+).
- * Cuenta los pagos completados del proyecto agregados sobre todas sus facturas.
+ * Pago registrado → "Reservado" (confirmado).
+ * Pagar la reserva (o el balance) confirma la sesión; NUNCA la marca como
+ * realizada. "Sesión realizada" solo se setea por un trigger explícito
+ * (automatización update_project_status, cambio manual, o un trigger futuro
+ * basado en la fecha de la sesión) — nunca por el conteo de pagos.
  */
 export async function onPaymentRecorded(
   studioId: string,
@@ -137,10 +140,12 @@ export async function onPaymentRecorded(
     .eq("status", "completed")
 
   const paymentsCount = count ?? 0
-  if (paymentsCount === 1) {
+  // Cualquier pago confirmado (reserva o balance) deja el proyecto en "Reservado".
+  // transitionProjectStatus es idempotente: si ya está en "Reservado" no hace nada.
+  // "Sesión realizada" NO se infiere por conteo de pagos (bug viejo): solo se setea
+  // por automatización explícita / cambio manual / trigger por fecha de sesión.
+  if (paymentsCount >= 1) {
     await transitionProjectStatus(studioId, projectId, "reservado")
-  } else if (paymentsCount >= 2) {
-    await transitionProjectStatus(studioId, projectId, "sesion_realizada")
   }
 
   // Flujo de booking: el PRIMER pago (depósito) confirma la sesión.

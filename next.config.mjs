@@ -80,9 +80,27 @@ const nextConfig = {
       },
       {
         // Permite que las galerías públicas y prints sean embebibles si el studio quiere
-        // (ej: mostrar la galería embebida en su sitio principal)
+        // (ej: mostrar la galería embebida en su sitio principal).
+        // Cache-Control no-store: las galerías son dinámicas (pueden vencer/cambiar de
+        // estado vía cron). Sin esto, nginx/CDN cachean el HTML y sirven una galería
+        // vencida o desactualizada. CDN-Cache-Control refuerza para proxies intermedios.
         source: "/g/:token*",
-        headers: [{ key: "X-Frame-Options", value: "ALLOWALL" }],
+        headers: [
+          { key: "X-Frame-Options", value: "ALLOWALL" },
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+        ],
+      },
+      {
+        // Rutas públicas dinámicas por token/estado: hub del cliente (/b), links de
+        // booking (/p), factura pública (/i), firma (/sign), formularios (/f),
+        // registro (/r) y portal del cliente. Nunca deben cachearse: su contenido
+        // depende del estado en DB (plan, firma, pago, vencimiento).
+        source: "/:prefix(b|p|i|sign|f|r|portal)/:path*",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+          { key: "CDN-Cache-Control", value: "no-store" },
+        ],
       },
       {
         source: "/contract-print/:path*",

@@ -23,6 +23,7 @@ import { getForecast } from "@/server/services/reports-forecast.service"
 import { formatCurrency, formatDate } from "@/lib/utils/currency"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
+import { YearSelect } from "./year-select"
 
 export const metadata: Metadata = { title: "Reportes" }
 
@@ -55,23 +56,7 @@ export default async function ReportsPage({
         title="Reportes"
         description="P&L, cash flow, antigüedad de cobros, top clientes. Año actual por default."
         unreadNotifications={unread}
-        actions={
-          <select
-            defaultValue={String(year)}
-            onChange={(e) => {
-              if (typeof window !== "undefined") {
-                window.location.href = `/reports?year=${e.target.value}`
-              }
-            }}
-            className="rounded-xl border border-input bg-background px-3 py-2 text-sm"
-          >
-            {Array.from({ length: 5 }, (_, i) => year - 2 + i).map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        }
+        actions={<YearSelect year={year} />}
       />
 
       <main className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">

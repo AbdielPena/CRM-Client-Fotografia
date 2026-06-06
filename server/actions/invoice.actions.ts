@@ -110,8 +110,8 @@ export async function recordPaymentAction(invoiceId: string, formData: FormData)
     paidAt: paidAt ? new Date(paidAt) : undefined,
   })
 
-  // Automatización: contar pagos completados del proyecto y mover de status.
-  // 1er pago → "Reservado", 2do+ → "Sesión realizada".
+  // Automatización: al registrar un pago, el proyecto pasa a "Reservado"
+  // (confirmado). "Sesión realizada" NO se infiere por conteo de pagos.
   if (result.projectId) {
     try {
       await onPaymentRecorded(session.studioId, result.projectId)

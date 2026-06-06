@@ -5,6 +5,7 @@ import type { Metadata } from "next"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { untypedServer } from "@/server/supabase/untyped"
+import { listMembers } from "@/server/services/studio-members.service"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 
@@ -20,16 +21,10 @@ export default async function NewTaskPage({
   const session = await requireStudioAuth()
   const sb = untypedServer()
 
-  // Members del studio (para asignación)
-  const [membersRes, clientsRes, projectsRes, unread] = await Promise.all([
-    sb
-      .from("studio_members")
-      .select(
-        `user_id, role,
-         user:auth_users(id, email, raw_user_meta_data)`,
-      )
-      .eq("studio_id", session.studioId)
-      .limit(50),
+  // Members del studio (para asignación). listMembers resuelve el email vía la
+  // admin API (auth.users no es embebible por PostgREST → causaba 500).
+  const [memberList, clientsRes, projectsRes, unread] = await Promise.all([
+    listMembers(session.studioId),
     sb
       .from("clients")
       .select("id, name")
@@ -47,19 +42,10 @@ export default async function NewTaskPage({
     countUnreadNotifications(session.studioId),
   ])
 
-  type MemberRow = {
-    user_id: string
-    role: string
-    user?: {
-      id: string
-      email: string
-      raw_user_meta_data: { full_name?: string } | null
-    } | null
-  }
-  const members = ((membersRes.data ?? []) as MemberRow[]).map((m) => ({
+  const members = memberList.map((m) => ({
     userId: m.user_id,
-    email: m.user?.email ?? "",
-    name: m.user?.raw_user_meta_data?.full_name ?? null,
+    email: m.email ?? "",
+    name: m.name,
     role: m.role,
   }))
   const clients = (clientsRes.data ?? []) as Array<{ id: string; name: string }>
