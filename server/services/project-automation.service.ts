@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseServiceClient } from "@/server/supabase/service"
+import { untypedService } from "@/server/supabase/untyped"
 import { getProjectStatuses } from "@/server/services/project-status.service"
 import { setProjectStatus } from "@/server/services/project-status.service"
 
@@ -348,4 +349,114 @@ export async function onSelectionSubmitted(
   const projectId = await resolveProjectIdFromGallery(studioId, galleryId)
   if (!projectId) return
   await transitionProjectStatus(studioId, projectId, "edicion")
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline de trabajo por cliente — etapas auto-generadas
+// ---------------------------------------------------------------------------
+
+export type WorkflowStage = "send_selection" | "send_prints"
+
+/**
+ * Crea (idempotente) una tarea de etapa del pipeline. SIN asignar (visible para
+ * todo el panel). El índice único parcial (studio_id, entity_id, workflow_stage)
+ * evita duplicados; si ya existe (23505), no hace nada.
+ */
+export async function createWorkflowTask(
+  studioId: string,
+  projectId: string,
+  stage: WorkflowStage,
+  opts: { title: string; description?: string; dueDate?: string | null },
+): Promise<boolean> {
+  const sb = untypedService()
+  const { error } = await sb.from("tasks").insert({
+    studio_id: studioId,
+    title: opts.title,
+    description: opts.description ?? null,
+    due_date: opts.dueDate ?? null,
+    priority: "high",
+    status: "pendiente",
+    entity_type: "project",
+    entity_id: projectId,
+    workflow_stage: stage,
+    notify_assignee: false,
+    created_by: null,
+  })
+  if (error) {
+    if ((error as { code?: string }).code === "23505") return false // ya existe
+    console.error("[pipeline] createWorkflowTask error", stage, error)
+    return false
+  }
+  return true
+}
+
+/**
+ * Galería de ENTREGA FINAL publicada → proyecto a "Entregado" + tarea
+ * "Enviar impresiones". Best-effort, idempotente.
+ */
+export async function onFinalDeliveryPublished(
+  studioId: string,
+  projectId: string,
+): Promise<void> {
+  await transitionProjectStatus(studioId, projectId, "entregado")
+  await createWorkflowTask(studioId, projectId, "send_prints", {
+    title: "Enviar impresiones al cliente",
+    description:
+      "La galería de fotos finales está publicada. Coordina y envía las impresiones; al marcar esta tarea como completada, el cliente queda finalizado (si no le quedan otros proyectos pendientes).",
+    dueDate: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+  })
+}
+
+/**
+ * Evalúa si el CLIENTE del proyecto queda "finalizado". Regla del usuario:
+ * solo si NO le quedan proyectos pendientes — es decir, TODOS sus proyectos
+ * vivos tienen su tarea "Enviar impresiones" completada. Setea clients.completed_at.
+ */
+export async function maybeFinalizeClient(
+  studioId: string,
+  projectId: string,
+): Promise<void> {
+  const supabase = createSupabaseServiceClient()
+  const { data: project } = await supabase
+    .from("projects")
+    .select("client_id")
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const clientId = (project as { client_id: string | null } | null)?.client_id
+  if (!clientId) return
+
+  const { data: projects } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("studio_id", studioId)
+    .eq("client_id", clientId)
+    .is("deleted_at", null)
+  const projectIds = ((projects ?? []) as Array<{ id: string }>).map((p) => p.id)
+  if (projectIds.length === 0) return
+
+  const sb = untypedService()
+  const { data: prints } = await sb
+    .from("tasks")
+    .select("entity_id, status")
+    .eq("studio_id", studioId)
+    .eq("workflow_stage", "send_prints")
+    .eq("entity_type", "project")
+    .in("entity_id", projectIds)
+    .is("deleted_at", null)
+  const done = new Set(
+    ((prints ?? []) as Array<{ entity_id: string; status: string }>)
+      .filter((t) => t.status === "completada")
+      .map((t) => t.entity_id),
+  )
+
+  // Cliente finalizado solo si TODOS sus proyectos tienen impresiones completadas.
+  if (!projectIds.every((id) => done.has(id))) return
+
+  await sb
+    .from("clients")
+    .update({ completed_at: new Date().toISOString() })
+    .eq("id", clientId)
+    .eq("studio_id", studioId)
+    .is("completed_at", null)
 }

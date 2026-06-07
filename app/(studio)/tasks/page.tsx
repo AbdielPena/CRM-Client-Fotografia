@@ -14,6 +14,7 @@ import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { getTasks } from "@/server/services/task.service"
 import { formatDate } from "@/lib/utils/currency"
+import { STAGE_LABELS, type StageKey } from "@/lib/workflow/types"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
@@ -199,6 +200,11 @@ export default async function TasksPage({
                           >
                             {t.priority}
                           </span>
+                          {t.workflow_stage && STAGE_LABELS[t.workflow_stage as StageKey] && (
+                            <span className="inline-flex items-center rounded-full bg-brand-soft px-2 py-0.5 text-[9px] font-medium text-brand">
+                              Pipeline · {STAGE_LABELS[t.workflow_stage as StageKey]}
+                            </span>
+                          )}
                           {t.tags?.length > 0 && (
                             <>
                               {t.tags.slice(0, 2).map((tag) => (

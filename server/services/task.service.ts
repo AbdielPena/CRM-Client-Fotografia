@@ -38,6 +38,7 @@ export type TaskRow = {
   tags: string[]
   entity_type: string | null
   entity_id: string | null
+  workflow_stage: string | null
   notify_assignee: boolean
   notify_email_sent_at: string | null
   is_recurring: boolean
@@ -349,6 +350,24 @@ export async function changeTaskStatus(
         })
       } catch (err) {
         console.error("[task] recurrence creation failed:", err)
+      }
+    })()
+  }
+
+  // Pipeline por cliente: al completar la tarea "Enviar impresiones"
+  // (workflow_stage='send_prints'), evaluar si el cliente queda finalizado.
+  if (
+    status === "completada" &&
+    task.workflow_stage === "send_prints" &&
+    task.entity_type === "project" &&
+    task.entity_id
+  ) {
+    void (async () => {
+      try {
+        const { maybeFinalizeClient } = await import("./project-automation.service")
+        await maybeFinalizeClient(studioId, task.entity_id as string)
+      } catch (err) {
+        console.error("[task] finalize client failed:", err)
       }
     })()
   }

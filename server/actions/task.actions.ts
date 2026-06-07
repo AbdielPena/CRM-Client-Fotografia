@@ -128,6 +128,7 @@ export async function changeTaskStatusAction(
     await changeTaskStatus(session.studioId, session.userId, taskId, status)
     revalidatePath(`/tasks/${taskId}`)
     revalidatePath("/tasks")
+    revalidatePath("/deliveries")
     return { ok: true, message: `Estado: ${status}` }
   } catch (err) {
     return {

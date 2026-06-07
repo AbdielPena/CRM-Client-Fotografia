@@ -443,7 +443,27 @@ export async function publishGallery(
     }
   }
 
-  return updateGallery(studioId, actorId, galleryId, patch)
+  const updated = await updateGallery(studioId, actorId, galleryId, patch)
+
+  // Pipeline por cliente: publicar una galería de ENTREGA FINAL cierra la etapa
+  // de entrega → proyecto a "Entregado" + crea la tarea "Enviar impresiones".
+  // Best-effort: nunca rompe la publicación.
+  const gType = (current as { gallery_type?: string | null } | null)?.gallery_type
+  const gProjectId = (current as { project_id?: string | null } | null)?.project_id
+  if (gType === "final_delivery" && gProjectId) {
+    void (async () => {
+      try {
+        const { onFinalDeliveryPublished } = await import(
+          "./project-automation.service"
+        )
+        await onFinalDeliveryPublished(studioId, gProjectId)
+      } catch (err) {
+        console.error("[gallery] onFinalDeliveryPublished failed", err)
+      }
+    })()
+  }
+
+  return updated
 }
 
 /** Asigna la pista de entrega (Redes / Máxima Calidad) a varios assets. */
