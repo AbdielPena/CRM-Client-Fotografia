@@ -372,3 +372,257 @@
     box-shadow: 0 0 0 3px hsl(var(--brand) / 0.16);
   }
 }
+
+/* =======================================================================
+   CLIENT LUXE · Experiencia premium del CLIENTE (bodas / quinceañeras)
+   Scope: .client-luxe — aplicado SOLO en superficies de cliente (booking,
+   portal, galería pública, formularios, firma). NO toca el CRM del fotógrafo.
+   Estética: blanco puro + crema + beige + dorado elegante, serif editorial,
+   sombras suaves, glass, espaciados amplios.
+   Al re-mapear los tokens base (--background, --card, --brand, …) los
+   componentes existentes basados en tokens (.sf-card, inputs, etc.) adoptan
+   automáticamente el look luxury dentro del scope.
+   ======================================================================= */
+.client-luxe {
+  /* Paleta dorada para utilidades gold-* */
+  --lx-gold: 36 46% 47%;
+  --lx-gold-soft: 40 56% 93%;
+  --lx-gold-foreground: 40 55% 98%;
+  --lx-gold-deep: 32 48% 38%;
+
+  /* Superficies cálidas */
+  --background: 40 33% 98%;
+  --foreground: 28 14% 16%;
+  --surface: 0 0% 100%;
+  --elevated: 40 40% 99%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 28 14% 16%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 28 14% 16%;
+
+  --muted: 38 32% 95%;
+  --muted-foreground: 30 8% 42%;
+  --accent: 40 40% 96%;
+  --accent-foreground: 28 14% 16%;
+  --secondary: 38 32% 95%;
+  --secondary-foreground: 28 14% 16%;
+
+  /* Marca = dorado elegante */
+  --brand: 36 46% 47%;
+  --brand-foreground: 40 55% 98%;
+  --brand-soft: 40 56% 93%;
+  --brand-soft-foreground: 32 48% 32%;
+  --primary: 36 46% 47%;
+  --primary-foreground: 40 55% 98%;
+
+  /* Bordes cálidos muy sutiles */
+  --border: 36 26% 89%;
+  --border-strong: 34 22% 80%;
+  --input: 36 26% 89%;
+  --ring: 36 46% 47%;
+
+  --skeleton: 38 28% 93%;
+  --radius: 16px;
+
+  font-family: var(--font-sans);
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Dark mode del scope cliente (OS oscuro). Mantiene cálido + dorado. */
+.dark .client-luxe {
+  --lx-gold: 37 50% 60%;
+  --lx-gold-soft: 32 28% 18%;
+  --lx-gold-foreground: 30 25% 10%;
+  --lx-gold-deep: 38 55% 66%;
+
+  --background: 28 16% 9%;
+  --foreground: 40 28% 93%;
+  --surface: 28 14% 12%;
+  --elevated: 28 14% 14%;
+
+  --card: 28 14% 12%;
+  --card-foreground: 40 28% 93%;
+  --popover: 28 14% 12%;
+  --popover-foreground: 40 28% 93%;
+
+  --muted: 30 12% 18%;
+  --muted-foreground: 36 12% 64%;
+  --accent: 30 12% 18%;
+  --accent-foreground: 40 28% 93%;
+  --secondary: 30 12% 18%;
+  --secondary-foreground: 40 28% 93%;
+
+  --brand: 37 50% 60%;
+  --brand-foreground: 30 25% 10%;
+  --brand-soft: 32 28% 18%;
+  --brand-soft-foreground: 40 56% 86%;
+  --primary: 37 50% 60%;
+  --primary-foreground: 30 25% 10%;
+
+  --border: 30 14% 20%;
+  --border-strong: 30 14% 28%;
+  --input: 30 14% 20%;
+  --ring: 37 50% 60%;
+
+  --skeleton: 30 12% 16%;
+}
+
+@layer utilities {
+  /* Tipografía editorial premium */
+  .font-serif {
+    font-family: var(--font-serif), "Playfair Display", Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+  .font-serif-soft {
+    font-family: var(--font-serif-soft), "Cormorant Garamond", Georgia, serif;
+  }
+
+  /* Overline luxury (dorado, tracking amplio) */
+  .lx-overline {
+    font-size: 0.6875rem;
+    line-height: 1.2;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: hsl(var(--lx-gold, 36 46% 47%));
+  }
+
+  /* Texto con degradé dorado */
+  .text-gradient-gold {
+    background-image: linear-gradient(
+      100deg,
+      hsl(34, 48%, 42%) 0%,
+      hsl(40, 60%, 58%) 45%,
+      hsl(36, 50%, 46%) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* Línea/separador dorado fino */
+  .lx-hairline {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--lx-gold, 36 46% 47%) / 0.5),
+      transparent
+    );
+  }
+
+  /* Sombras premium suaves */
+  .shadow-luxe {
+    box-shadow:
+      0 1px 2px hsl(30 30% 20% / 0.04),
+      0 8px 24px -8px hsl(30 30% 20% / 0.1);
+  }
+  .shadow-luxe-lg {
+    box-shadow:
+      0 2px 4px hsl(30 30% 20% / 0.05),
+      0 24px 56px -16px hsl(30 30% 20% / 0.16);
+  }
+
+  /* Ambiente radial cálido (crema) — reemplaza el aurora azul del CRM */
+  .bg-luxe-radial {
+    background-image: radial-gradient(
+      ellipse at top,
+      hsl(40 56% 88% / 0.55),
+      transparent 65%
+    );
+  }
+  .dark .bg-luxe-radial {
+    background-image: radial-gradient(
+      ellipse at top,
+      hsl(36 40% 30% / 0.35),
+      transparent 65%
+    );
+  }
+
+  /* Glass cálido (cristal) */
+  .lx-glass {
+    background-color: hsl(40 40% 99% / 0.7);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    border: 1px solid hsl(36 30% 88% / 0.7);
+  }
+}
+
+@layer components {
+  /* Tarjeta premium */
+  .lx-card {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 20px;
+    box-shadow:
+      0 1px 2px hsl(30 30% 20% / 0.03),
+      0 10px 30px -12px hsl(30 30% 20% / 0.1);
+    transition:
+      transform 320ms cubic-bezier(0.32, 0.72, 0, 1),
+      box-shadow 320ms cubic-bezier(0.32, 0.72, 0, 1),
+      border-color 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .lx-card-hover:hover {
+    transform: translateY(-3px);
+    border-color: hsl(var(--lx-gold, 36 46% 47%) / 0.4);
+    box-shadow:
+      0 2px 4px hsl(30 30% 20% / 0.05),
+      0 26px 56px -18px hsl(30 30% 20% / 0.18);
+  }
+
+  /* Botón dorado premium */
+  .lx-btn-gold {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold;
+    color: hsl(var(--lx-gold-foreground, 40 55% 98%));
+    background-image: linear-gradient(
+      135deg,
+      hsl(38, 52%, 52%) 0%,
+      hsl(34, 48%, 44%) 100%
+    );
+    box-shadow:
+      0 1px 2px hsl(32 48% 30% / 0.2),
+      0 8px 20px -6px hsl(34 48% 40% / 0.45);
+    transition:
+      transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 220ms cubic-bezier(0.4, 0, 0.2, 1),
+      filter 220ms ease;
+  }
+  .lx-btn-gold:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.05);
+    box-shadow:
+      0 2px 4px hsl(32 48% 30% / 0.24),
+      0 14px 30px -8px hsl(34 48% 40% / 0.5);
+  }
+  .lx-btn-gold:active {
+    transform: translateY(0);
+  }
+
+  /* Botón secundario (contorno) */
+  .lx-btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold;
+    color: hsl(var(--foreground));
+    background-color: hsl(var(--surface));
+    border: 1px solid hsl(var(--border-strong));
+    transition:
+      border-color 220ms ease,
+      background-color 220ms ease,
+      transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .lx-btn-outline:hover {
+    border-color: hsl(var(--lx-gold, 36 46% 47%) / 0.6);
+    background-color: hsl(40 40% 97%);
+  }
+
+  /* Chip / pill crema */
+  .lx-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium;
+    background-color: hsl(var(--brand-soft));
+    color: hsl(var(--brand-soft-foreground));
+  }
+}

@@ -110,6 +110,36 @@ const config: Config = {
         },
 
         skeleton: "hsl(var(--skeleton))",
+
+        // ── Paleta LUXURY para la experiencia del cliente ──
+        // Dorado elegante + cremas/beige. Usados sólo en superficies de cliente.
+        gold: {
+          DEFAULT: "hsl(var(--lx-gold, 36 42% 47%))",
+          soft: "hsl(var(--lx-gold-soft, 40 56% 92%))",
+          foreground: "hsl(var(--lx-gold-foreground, 40 50% 98%))",
+          50: "hsl(43, 60%, 96%)",
+          100: "hsl(42, 58%, 91%)",
+          200: "hsl(40, 54%, 83%)",
+          300: "hsl(38, 50%, 72%)",
+          400: "hsl(37, 47%, 60%)",
+          500: "hsl(36, 46%, 50%)",
+          600: "hsl(34, 48%, 43%)",
+          700: "hsl(32, 47%, 35%)",
+          800: "hsl(30, 42%, 29%)",
+          900: "hsl(28, 38%, 24%)",
+        },
+        cream: {
+          DEFAULT: "hsl(40, 44%, 96%)",
+          50: "hsl(40, 50%, 98%)",
+          100: "hsl(40, 44%, 96%)",
+          200: "hsl(38, 36%, 92%)",
+          300: "hsl(36, 30%, 87%)",
+        },
+        ink: {
+          DEFAULT: "hsl(30, 10%, 15%)",
+          soft: "hsl(30, 8%, 32%)",
+          muted: "hsl(30, 6%, 46%)",
+        },
       },
       borderRadius: {
         sm: "6px",
@@ -125,6 +155,14 @@ const config: Config = {
         // Display = misma Inter, sólo cambia tracking via .font-display utility
         display: ["var(--font-sans)", "Inter", "system-ui", "sans-serif"],
         mono: ["var(--font-mono)", "JetBrains Mono", "monospace"],
+        // Serif premium (experiencia del cliente / luxury)
+        serif: ["var(--font-serif)", "Playfair Display", "Georgia", "serif"],
+        "serif-soft": [
+          "var(--font-serif-soft)",
+          "Cormorant Garamond",
+          "Georgia",
+          "serif",
+        ],
       },
       fontSize: {
         "display-xl": ["3rem", { lineHeight: "1.1", letterSpacing: "-0.025em", fontWeight: "700" }],
@@ -221,6 +259,18 @@ const config: Config = {
           from: { strokeDashoffset: "1000" },
           to: { strokeDashoffset: "0" },
         },
+        kenburns: {
+          "0%": { transform: "scale(1) translateY(0)" },
+          "100%": { transform: "scale(1.08) translateY(-1.5%)" },
+        },
+        "fade-in-down": {
+          from: { opacity: "0", transform: "translateY(-10px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "gold-shine": {
+          "0%": { backgroundPosition: "200% center" },
+          "100%": { backgroundPosition: "-200% center" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 220ms cubic-bezier(.32,.72,0,1)",
@@ -236,6 +286,9 @@ const config: Config = {
         "gradient-shift": "gradient-shift 8s ease infinite",
         "slide-in-right": "slide-in-right 220ms cubic-bezier(.34,1.56,.64,1)",
         "draw-line": "draw-line 1.4s cubic-bezier(.4,0,.2,1) forwards",
+        kenburns: "kenburns 18s ease-out forwards",
+        "fade-in-down": "fade-in-down 320ms cubic-bezier(.34,1.56,.64,1)",
+        "gold-shine": "gold-shine 6s linear infinite",
       },
       backgroundImage: {
         "aurora":

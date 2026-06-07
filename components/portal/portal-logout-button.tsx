@@ -21,7 +21,7 @@ export function PortalLogoutButton() {
       type="button"
       onClick={logout}
       disabled={pending}
-      className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+      className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-gold-300 hover:text-gold-700 disabled:opacity-50"
     >
       {pending ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin" />

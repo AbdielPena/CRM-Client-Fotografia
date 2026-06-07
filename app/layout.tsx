@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next"
-import { Inter, Instrument_Serif, JetBrains_Mono } from "next/font/google"
+import {
+  Inter,
+  Instrument_Serif,
+  JetBrains_Mono,
+  Playfair_Display,
+  Cormorant_Garamond,
+} from "next/font/google"
 import { Toaster } from "sonner"
 
 import { ThemeProvider, ThemeScript } from "@/components/shared/theme-provider"
@@ -23,6 +29,22 @@ const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-mono",
+})
+
+// ── Fuentes premium para la experiencia del CLIENTE (luxury) ──
+// Sólo se usan dentro del scope `.client-luxe`; no afectan el CRM.
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-serif",
+  weight: ["400", "500", "600", "700"],
+})
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-serif-soft",
+  weight: ["400", "500", "600"],
 })
 
 export const metadata: Metadata = {
@@ -63,7 +85,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="es"
       suppressHydrationWarning
-      className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
+      className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${playfair.variable} ${cormorant.variable}`}
     >
       <head>
         <ThemeScript />

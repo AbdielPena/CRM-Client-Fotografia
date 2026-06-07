@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Sparkles } from "lucide-react"
 
 import { PortalLoginForm } from "@/components/portal/portal-login-form"
 
@@ -7,15 +8,27 @@ export const dynamic = "force-dynamic"
 
 export default function PortalLoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4 dark:bg-zinc-950">
-      <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          Portal del cliente
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Ingresá con el email y el código que te envió tu fotógrafo.
+    <div className="client-luxe relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
+      <div className="bg-luxe-radial pointer-events-none absolute inset-0" />
+      <div className="relative w-full max-w-sm">
+        <div className="lx-card animate-fade-in-up p-8">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-white shadow-luxe">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <p className="lx-overline mb-2">Portal privado</p>
+            <h1 className="font-serif text-2xl font-semibold text-foreground">
+              Bienvenida de nuevo
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Ingresa con el email y el código que te envió tu fotógrafo.
+            </p>
+          </div>
+          <PortalLoginForm />
+        </div>
+        <p className="mt-5 text-center text-[11px] tracking-wide text-muted-foreground/60">
+          Tu información, solo para ti.
         </p>
-        <PortalLoginForm />
       </div>
     </div>
   )

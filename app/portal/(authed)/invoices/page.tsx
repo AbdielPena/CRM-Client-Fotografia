@@ -9,6 +9,11 @@ import {
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency, formatDateShort } from "@/lib/utils/currency"
+import {
+  PortalHeader,
+  PortalEmpty,
+  PortalSummaryPill,
+} from "@/components/portal/portal-ui"
 
 export const dynamic = "force-dynamic"
 
@@ -34,86 +39,92 @@ export default async function PortalInvoicesPage() {
   const currency = invoices[0]?.currency ?? "USD"
 
   return (
-    <div className="space-y-5">
-      <header className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-            Tus facturas
-          </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Detalle de facturas emitidas a tu nombre.
-          </p>
-        </div>
-        {totalDue > 0 && (
-          <div className="rounded-xl bg-amber-50 px-4 py-2 text-right dark:bg-amber-500/10">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              Pendiente
-            </p>
-            <p className="font-mono text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">
-              {formatCurrency(totalDue, currency)}
-            </p>
-          </div>
-        )}
-      </header>
+    <div className="space-y-8">
+      <PortalHeader
+        eyebrow="Facturación"
+        title="Tus facturas"
+        description="Detalle de las facturas emitidas a tu nombre."
+        right={
+          totalDue > 0 ? (
+            <PortalSummaryPill
+              label="Pendiente"
+              value={formatCurrency(totalDue, currency)}
+              tone="warning"
+            />
+          ) : undefined
+        }
+      />
 
       {invoices.length === 0 ? (
-        <Empty msg="Sin facturas todavía." />
+        <PortalEmpty icon={Receipt} title="Sin facturas todavía" description="Aquí aparecerán tus facturas cuando tu fotógrafo las emita." />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {invoices.map((inv) => {
-              const href = inv.public_token
-                ? `/i/${inv.public_token}`
-                : `#`
-              return (
-                <li key={inv.id} className="flex items-center gap-4 px-5 py-4">
-                  <Receipt className="h-5 w-5 flex-shrink-0 text-zinc-400" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
-                      {inv.invoice_number ?? `Factura #${String(inv.id).slice(0, 6)}`}
-                    </p>
-                    <p className="text-[12px] text-zinc-500 dark:text-zinc-400">
-                      {inv.due_date
-                        ? `Vence ${formatDateShort(new Date(inv.due_date))}`
-                        : formatDateShort(new Date(inv.created_at))}
-                    </p>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {invoices.map((inv, i) => {
+            const isPaid = inv.status === "paid"
+            return (
+              <div
+                key={inv.id}
+                className="lx-card animate-fade-in-up p-5"
+                style={{ animationDelay: `${Math.min(i * 50, 300)}ms` }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                        isPaid
+                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+                          : "bg-brand-soft text-gold-600"
+                      }`}
+                    >
+                      <Receipt className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {inv.invoice_number ?? `Factura #${String(inv.id).slice(0, 6)}`}
+                      </p>
+                      <p className="text-[12px] text-muted-foreground">
+                        {inv.due_date
+                          ? `Vence ${formatDateShort(new Date(inv.due_date))}`
+                          : formatDateShort(new Date(inv.created_at))}
+                      </p>
+                    </div>
                   </div>
-                  <span className="font-mono text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+                  <StatusBadge status={String(inv.status)} />
+                </div>
+
+                <div className="mt-4 flex items-end justify-between gap-3 border-t border-border pt-4">
+                  <span className="font-serif-soft text-2xl font-semibold tabular-nums text-foreground">
                     {formatCurrency(Number(inv.total_amount ?? 0), inv.currency ?? "USD")}
                   </span>
-                  <StatusBadge status={String(inv.status)} />
-                  <Link
-                    href={`/invoice-print/${inv.id}`}
-                    target="_blank"
-                    className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-                  >
-                    <Printer className="h-3 w-3" />
-                    PDF
-                  </Link>
-                  {inv.public_token && (
+                  <div className="flex items-center gap-2">
                     <Link
-                      href={href}
+                      href={`/invoice-print/${inv.id}`}
                       target="_blank"
-                      className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-gold-300 hover:text-gold-700"
                     >
-                      Ver
+                      <Printer className="h-3 w-3" />
+                      PDF
                     </Link>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
+                    {inv.public_token && (
+                      <Link
+                        href={`/i/${inv.public_token}`}
+                        target="_blank"
+                        className={
+                          isPaid
+                            ? "inline-flex items-center rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-gold-300 hover:text-gold-700"
+                            : "lx-btn-gold !px-4 !py-1.5 text-xs"
+                        }
+                      >
+                        {isPaid ? "Ver" : "Pagar ahora"}
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
-    </div>
-  )
-}
-
-function Empty({ msg }: { msg: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-      <Receipt className="mx-auto h-8 w-8 text-zinc-400" />
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{msg}</p>
     </div>
   )
 }

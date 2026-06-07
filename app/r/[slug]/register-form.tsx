@@ -27,21 +27,23 @@ export function PublicRegisterForm({
 
   if (result?.ok) {
     return (
-      <div className="text-center py-6">
-        <CheckCircle2 className="h-12 w-12 text-emerald-600 mx-auto mb-3" />
-        <h2 className="text-lg font-semibold text-zinc-900">
-          {result.created ? "¡Registro completado!" : "Ya estás registrado"}
+      <div className="py-4 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-white">
+          <CheckCircle2 className="h-7 w-7" />
+        </div>
+        <h2 className="font-serif text-xl font-semibold text-foreground">
+          {result.created ? `¡Gracias!` : "Ya estás registrado"}
         </h2>
-        <p className="text-sm text-zinc-600 mt-2">
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
           {result.created
             ? `Hemos enviado un correo de confirmación. ${result.studioName} se pondrá en contacto contigo pronto.`
             : `Ya tenemos tus datos. Si tienes preguntas, contáctanos.`}
         </p>
         {contactEmail ? (
-          <p className="text-xs text-zinc-500 mt-4">
+          <p className="mt-4 text-xs text-muted-foreground">
             ¿Dudas?{" "}
             <a
-              className="text-zinc-900 underline"
+              className="font-medium text-gold-700 hover:underline"
               href={`mailto:${contactEmail}`}
             >
               {contactEmail}
@@ -92,8 +94,8 @@ export function PublicRegisterForm({
       />
 
       {generalError ? (
-        <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">
-          <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <p>{generalError}</p>
         </div>
       ) : null}
@@ -101,12 +103,12 @@ export function PublicRegisterForm({
       <button
         type="submit"
         disabled={isPending}
-        className="w-full bg-zinc-900 text-white rounded-md py-2.5 text-sm font-medium hover:bg-zinc-800 disabled:opacity-50 transition"
+        className="lx-btn-gold w-full disabled:opacity-50"
       >
-        {isPending ? "Enviando…" : `Registrarme con ${studioName}`}
+        {isPending ? "Enviando…" : `Continuar con ${studioName}`}
       </button>
 
-      <p className="text-[11px] text-zinc-500 text-center">
+      <p className="text-center text-[11px] text-muted-foreground">
         Al registrarte, aceptas que {studioName} te contacte por email.
       </p>
     </form>
@@ -137,7 +139,7 @@ function Field({
   const Component = as === "textarea" ? "textarea" : "input"
   return (
     <div>
-      <label className="block text-sm font-medium text-zinc-800 mb-1">
+      <label className="mb-1.5 block text-sm font-medium text-foreground">
         {label} {required ? <span className="text-red-500">*</span> : null}
       </label>
       <Component
@@ -147,10 +149,10 @@ function Field({
         autoComplete={autoComplete}
         placeholder={placeholder}
         rows={rows}
-        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/20 focus:border-zinc-900"
+        className="sf-input-focus w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground focus:outline-none"
       />
       {errors && errors.length > 0 ? (
-        <p className="text-xs text-red-600 mt-1">{errors[0]}</p>
+        <p className="mt-1 text-xs text-red-600">{errors[0]}</p>
       ) : null}
     </div>
   )

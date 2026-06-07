@@ -1,7 +1,16 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import Image from "next/image"
-import { Check, Clock, Image as ImageIcon, Calendar } from "lucide-react"
+import {
+  Check,
+  Clock,
+  Image as ImageIcon,
+  CalendarDays,
+  ChevronDown,
+  ShieldCheck,
+  Heart,
+  Mail,
+  Phone,
+} from "lucide-react"
 import { createSupabasePublicClient } from "@/server/supabase/server"
 import { formatCurrency } from "@/lib/utils/currency"
 import type { Metadata } from "next"
@@ -9,6 +18,8 @@ import type { Metadata } from "next"
 // Página pública del paquete. Sin auth. Accesible a anon vía RLS
 // `packages_public_select` + `studios_public_select` (is_active && !deleted).
 // URL: /p/[studioSlug]/[packageSlug]
+// Rediseño premium (luxury): hero editorial, bienvenida emocional, includes
+// elegante, galería, tarjeta de inversión sticky con CTA dorado.
 
 interface PageParams {
   studio: string
@@ -52,8 +63,6 @@ type StudioRow = {
 async function fetchPackage(studioSlug: string, packageSlug: string) {
   const supabase = createSupabasePublicClient()
 
-  // Usamos las vistas `studios_public` / `packages_public` que solo exponen
-  // columnas seguras (sin storage, taxes, tokens, etc.).
   const { data: studioRaw } = await supabase
     .from("studios_public")
     .select(
@@ -110,117 +119,147 @@ export default async function PublicPackagePage({
 
   const { studio, pkg } = result
 
-  // Normalizar includes (puede venir como array JSON desde Postgres)
   const includes = Array.isArray(pkg.includes)
     ? (pkg.includes as string[]).filter(Boolean)
     : []
-
   const gallery = Array.isArray(pkg.gallery_images)
     ? (pkg.gallery_images as string[]).filter(Boolean)
     : []
 
   const bookingHref = `/p/${params.studio}/${params.pkg}/book`
-
-  const primary = studio.primary_color ?? "#111827"
-  const secondary = studio.secondary_color ?? "#f9fafb"
+  const eventLabel = pkg.event_type ?? "Sesión fotográfica"
+  const firstName = studio.name
+  const depositAmount =
+    pkg.deposit_percent && pkg.deposit_percent > 0
+      ? (Number(pkg.price) * pkg.deposit_percent) / 100
+      : null
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
+    <div className="relative">
+      {/* ─────────────── Header glass ─────────────── */}
+      <header className="sticky top-0 z-30 lx-glass">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5 sm:px-8">
           <div className="flex items-center gap-3">
             {studio.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={studio.logo_url}
                 alt={studio.name}
-                className="h-9 w-9 rounded-full object-cover"
+                className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
               />
             ) : (
-              <div
-                className="h-9 w-9 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                style={{ backgroundColor: primary }}
-              >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 font-serif text-base font-semibold text-white">
                 {studio.name.charAt(0).toUpperCase()}
               </div>
             )}
-            <div>
-              <p className="text-sm font-semibold text-gray-900">{studio.name}</p>
+            <div className="leading-tight">
+              <p className="font-serif text-base font-semibold text-foreground">
+                {studio.name}
+              </p>
               {(studio.city || studio.country) && (
-                <p className="text-xs text-gray-500">
+                <p className="text-[11px] tracking-wide text-muted-foreground">
                   {[studio.city, studio.country].filter(Boolean).join(", ")}
                 </p>
               )}
             </div>
           </div>
-          {studio.website && (
-            <a
-              href={studio.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-gray-500 hover:text-gray-900"
-            >
-              {studio.website.replace(/^https?:\/\//, "")}
-            </a>
-          )}
+          <Link
+            href={bookingHref}
+            className="lx-btn-gold hidden !px-5 !py-2 text-[13px] sm:inline-flex"
+          >
+            Reservar
+          </Link>
         </div>
       </header>
 
-      {/* Hero */}
+      {/* ─────────────── Hero ─────────────── */}
       {pkg.cover_image_url ? (
-        <div className="relative h-72 sm:h-96 w-full bg-gray-200 overflow-hidden">
+        <section className="relative h-[72vh] min-h-[460px] w-full overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={pkg.cover_image_url}
             alt={pkg.name}
-            className="w-full h-full object-cover"
+            className="h-full w-full origin-center animate-kenburns object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 px-5 sm:px-8 pb-6 max-w-5xl mx-auto">
-            <p className="text-xs uppercase tracking-wider text-white/80 font-medium mb-1">
-              {pkg.event_type ?? "Sesión fotográfica"}
-            </p>
-            <h1 className="text-3xl sm:text-5xl font-bold text-white">
-              {pkg.name}
-            </h1>
+          <div className="absolute inset-0 bg-gradient-to-t from-[hsl(28_30%_8%/0.78)] via-[hsl(28_30%_10%/0.25)] to-[hsl(28_30%_10%/0.05)]" />
+          <div className="absolute inset-x-0 bottom-0">
+            <div className="mx-auto max-w-6xl px-5 pb-12 sm:px-8 sm:pb-16">
+              <p
+                className="lx-overline mb-3 animate-fade-in-up text-gold-200"
+                style={{ animationDelay: "80ms" }}
+              >
+                {eventLabel}
+              </p>
+              <h1
+                className="max-w-3xl animate-fade-in-up font-serif text-4xl font-semibold leading-[1.05] text-white drop-shadow-sm sm:text-6xl lg:text-7xl"
+                style={{ animationDelay: "160ms" }}
+              >
+                {pkg.name}
+              </h1>
+              {pkg.description && (
+                <p
+                  className="mt-4 max-w-xl animate-fade-in-up font-serif-soft text-lg leading-relaxed text-white/85 sm:text-xl"
+                  style={{ animationDelay: "260ms" }}
+                >
+                  {pkg.description}
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+          <div className="absolute bottom-5 left-1/2 -translate-x-1/2 text-white/70">
+            <ChevronDown className="h-5 w-5 animate-bounce" />
+          </div>
+        </section>
       ) : (
-        <div
-          className="px-5 sm:px-8 py-16"
-          style={{ backgroundColor: secondary }}
-        >
-          <div className="max-w-5xl mx-auto">
-            <p className="text-xs uppercase tracking-wider text-gray-500 font-medium mb-2">
-              {pkg.event_type ?? "Sesión fotográfica"}
-            </p>
-            <h1
-              className="text-3xl sm:text-5xl font-bold"
-              style={{ color: primary }}
-            >
+        <section className="relative overflow-hidden bg-gradient-to-b from-cream-50 to-background px-5 py-24 sm:px-8 sm:py-32">
+          <div className="bg-luxe-radial pointer-events-none absolute inset-0" />
+          <div className="relative mx-auto max-w-6xl text-center">
+            <p className="lx-overline mb-4">{eventLabel}</p>
+            <h1 className="mx-auto max-w-3xl font-serif text-5xl font-semibold leading-[1.05] text-foreground sm:text-7xl">
               {pkg.name}
             </h1>
+            {pkg.description && (
+              <p className="mx-auto mt-5 max-w-xl font-serif-soft text-xl leading-relaxed text-muted-foreground">
+                {pkg.description}
+              </p>
+            )}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Body */}
-      <main className="max-w-5xl mx-auto px-5 sm:px-8 py-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          {/* Descripción */}
+      {/* ─────────────── Bienvenida emocional ─────────────── */}
+      <section className="border-b border-border/60 bg-gradient-to-b from-background to-cream-50/40 px-5 py-16 text-center sm:px-8 sm:py-20">
+        <div className="mx-auto max-w-2xl">
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-brand-soft">
+            <Heart className="h-5 w-5 text-gold-600" />
+          </div>
+          <h2 className="font-serif text-3xl font-medium leading-snug text-foreground sm:text-4xl">
+            Bienvenida a tu experiencia con{" "}
+            <span className="text-gradient-gold">{firstName}</span>
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-muted-foreground">
+            Estamos honrados de ser parte de un momento tan especial. Antes de
+            continuar, conoce cada detalle pensado para que esta experiencia sea
+            inolvidable.
+          </p>
+          <div className="mx-auto mt-8 w-24 lx-hairline" />
+        </div>
+      </section>
+
+      {/* ─────────────── Cuerpo ─────────────── */}
+      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-10 px-5 py-14 sm:px-8 lg:grid-cols-3 lg:gap-14 lg:py-20">
+        <div className="space-y-14 lg:col-span-2">
+          {/* Sobre la experiencia */}
           {(pkg.description || pkg.long_description) && (
             <section>
-              <h2 className="text-sm font-semibold text-gray-900 mb-3">
-                Sobre este paquete
-              </h2>
+              <p className="lx-overline mb-3">Sobre esta experiencia</p>
               {pkg.description && (
-                <p className="text-gray-700 leading-relaxed mb-3">
+                <p className="font-serif-soft text-xl leading-relaxed text-foreground/90">
                   {pkg.description}
                 </p>
               )}
               {pkg.long_description && (
-                <p className="text-gray-600 leading-relaxed whitespace-pre-line">
+                <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-muted-foreground">
                   {pkg.long_description}
                 </p>
               )}
@@ -230,17 +269,16 @@ export default async function PublicPackagePage({
           {/* Incluye */}
           {includes.length > 0 && (
             <section>
-              <h2 className="text-sm font-semibold text-gray-900 mb-4">
-                ¿Qué incluye?
-              </h2>
-              <ul className="space-y-2.5">
+              <p className="lx-overline mb-5">La experiencia incluye</p>
+              <ul className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
                 {includes.map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5">
-                    <Check
-                      className="h-5 w-5 mt-0.5 flex-shrink-0"
-                      style={{ color: primary }}
-                    />
-                    <span className="text-gray-700">{item}</span>
+                  <li key={idx} className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-brand-soft">
+                      <Check className="h-3.5 w-3.5 text-gold-600" />
+                    </span>
+                    <span className="text-[15px] leading-relaxed text-foreground/90">
+                      {item}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -250,110 +288,114 @@ export default async function PublicPackagePage({
           {/* Galería */}
           {gallery.length > 0 && (
             <section>
-              <h2 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-gray-500" />
+              <p className="lx-overline mb-5 flex items-center gap-2">
+                <ImageIcon className="h-3.5 w-3.5" />
                 Galería
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {gallery.slice(0, 6).map((url, idx) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <div
                     key={idx}
-                    src={url}
-                    alt={`${pkg.name} — imagen ${idx + 1}`}
-                    className="aspect-square w-full object-cover rounded-lg"
-                    loading="lazy"
-                  />
+                    className={`group relative overflow-hidden rounded-2xl ${
+                      idx === 0 ? "col-span-2 row-span-2 aspect-square sm:aspect-auto" : "aspect-square"
+                    }`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt={`${pkg.name} — imagen ${idx + 1}`}
+                      className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+                  </div>
                 ))}
               </div>
             </section>
           )}
+
+          {/* Promesa de marca (banda editorial) */}
+          <section className="rounded-3xl bg-gradient-to-br from-cream-50 to-brand-soft/50 px-8 py-12 text-center">
+            <p className="mx-auto max-w-xl font-serif-soft text-2xl italic leading-relaxed text-foreground/90">
+              “Cada imagen es un recuerdo que vivirá para siempre. Nos
+              dedicamos a capturar la emoción real de tu día.”
+            </p>
+            <p className="lx-overline mt-5">{studio.name}</p>
+          </section>
         </div>
 
-        {/* Sticky sidebar con precio + CTA */}
-        <aside className="lg:sticky lg:top-8 h-fit">
-          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-            <p className="text-xs uppercase tracking-wider text-gray-500 font-medium mb-1">
-              Inversión
-            </p>
-            <p className="text-3xl font-bold text-gray-900">
+        {/* Tarjeta de inversión sticky */}
+        <aside className="lg:sticky lg:top-24 h-fit">
+          <div className="lx-card p-7">
+            <p className="lx-overline mb-2">Inversión</p>
+            <p className="font-serif text-4xl font-semibold text-foreground">
               {formatCurrency(Number(pkg.price), pkg.currency)}
             </p>
-            {pkg.deposit_percent && pkg.deposit_percent > 0 && (
-              <p className="text-xs text-gray-500 mt-1">
-                Reserva con {pkg.deposit_percent}% (
-                {formatCurrency(
-                  (Number(pkg.price) * pkg.deposit_percent) / 100,
-                  pkg.currency,
-                )}
-                )
+            {depositAmount !== null && (
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                Reserva con {pkg.deposit_percent}% ·{" "}
+                <span className="font-medium text-gold-700">
+                  {formatCurrency(depositAmount, pkg.currency)}
+                </span>
               </p>
             )}
 
-            <div className="mt-5 space-y-2.5 text-sm">
+            <div className="mt-6 space-y-3.5 border-t border-border pt-6 text-sm">
               {pkg.duration_hours ? (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Clock className="h-4 w-4 text-gray-400" />
-                  <span>
-                    {pkg.duration_hours}{" "}
-                    {pkg.duration_hours === 1 ? "hora" : "horas"} de sesión
-                  </span>
-                </div>
+                <DetailRow
+                  icon={<Clock className="h-4 w-4" />}
+                  text={`${pkg.duration_hours} ${pkg.duration_hours === 1 ? "hora" : "horas"} de sesión`}
+                />
               ) : null}
               {pkg.edited_photos ? (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <ImageIcon className="h-4 w-4 text-gray-400" />
-                  <span>{pkg.edited_photos} fotos editadas</span>
-                </div>
+                <DetailRow
+                  icon={<ImageIcon className="h-4 w-4" />}
+                  text={`${pkg.edited_photos} fotografías editadas`}
+                />
               ) : null}
               {pkg.reserve_due_in_days ? (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-                  <span>
-                    Reserva en los próximos {pkg.reserve_due_in_days} días
-                  </span>
-                </div>
+                <DetailRow
+                  icon={<CalendarDays className="h-4 w-4" />}
+                  text={`Reserva en los próximos ${pkg.reserve_due_in_days} días`}
+                />
               ) : null}
             </div>
 
-            <Link
-              href={bookingHref}
-              className="mt-6 block w-full text-center py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: primary }}
-            >
+            <Link href={bookingHref} className="lx-btn-gold mt-7 w-full">
               Reservar ahora
             </Link>
 
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5 text-gold-600" />
+              Confirmación en menos de 24 horas
+            </p>
+
             {(studio.email || studio.phone) && (
-              <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500 space-y-1">
+              <div className="mt-6 space-y-2 border-t border-border pt-5 text-[13px] text-muted-foreground">
                 {studio.email && (
-                  <p>
-                    ¿Dudas? Escribe a{" "}
-                    <a
-                      href={`mailto:${studio.email}`}
-                      className="text-gray-700 hover:underline"
-                    >
-                      {studio.email}
-                    </a>
-                  </p>
+                  <a
+                    href={`mailto:${studio.email}`}
+                    className="flex items-center gap-2 transition-colors hover:text-gold-700"
+                  >
+                    <Mail className="h-3.5 w-3.5" />
+                    {studio.email}
+                  </a>
                 )}
                 {studio.phone && (
-                  <p>
-                    O llama al{" "}
-                    <a
-                      href={`tel:${studio.phone}`}
-                      className="text-gray-700 hover:underline"
-                    >
-                      {studio.phone}
-                    </a>
-                  </p>
+                  <a
+                    href={`tel:${studio.phone}`}
+                    className="flex items-center gap-2 transition-colors hover:text-gold-700"
+                  >
+                    <Phone className="h-3.5 w-3.5" />
+                    {studio.phone}
+                  </a>
                 )}
               </div>
             )}
           </div>
 
-          <p className="text-center text-xs text-gray-400 mt-4">
-            Powered by StudioFlow
+          <p className="mt-5 text-center text-[11px] tracking-wide text-muted-foreground/70">
+            Una experiencia de {studio.name}
           </p>
         </aside>
       </main>
@@ -361,8 +403,14 @@ export default async function PublicPackagePage({
   )
 }
 
-// Evita que Next intente SSG sin contexto; siempre SSR (requiere datos frescos)
-export const dynamic = "force-dynamic"
+function DetailRow({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex items-center gap-3 text-foreground/80">
+      <span className="text-gold-600">{icon}</span>
+      <span>{text}</span>
+    </div>
+  )
+}
 
-// Image import mantenido para satisfacer TypeScript si se refactoriza a next/image
-void Image
+// Siempre SSR (requiere datos frescos)
+export const dynamic = "force-dynamic"

@@ -43,41 +43,44 @@ export default async function PublicRegisterPage({ params }: PageProps) {
   if (!studio) notFound()
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl border border-zinc-200 shadow-sm w-full max-w-md p-8">
-        <div className="flex items-center gap-3 mb-6">
-          {studio.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={studio.logo_url}
-              alt={studio.name}
-              className="h-12 w-12 rounded-lg object-cover"
-            />
-          ) : (
-            <div
-              className="h-12 w-12 rounded-lg grid place-items-center text-white text-lg font-semibold"
-              style={{ backgroundColor: studio.primary_color ?? "#0D0E14" }}
-            >
-              {studio.name.slice(0, 1).toUpperCase()}
-            </div>
-          )}
-          <div>
-            <h1 className="text-lg font-semibold text-zinc-900">{studio.name}</h1>
-            <p className="text-xs text-zinc-500">Formulario de registro</p>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      <div className="bg-luxe-radial pointer-events-none absolute inset-0" />
+      <div className="relative w-full max-w-md">
+        <div className="lx-card animate-fade-in-up p-8">
+          <div className="mb-6 flex flex-col items-center text-center">
+            {studio.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={studio.logo_url}
+                alt={studio.name}
+                className="mb-4 h-16 w-16 rounded-full object-cover ring-1 ring-border"
+              />
+            ) : (
+              <div className="mb-4 grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 font-serif text-2xl font-semibold text-white">
+                {studio.name.slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            <p className="lx-overline mb-1.5">Registro</p>
+            <h1 className="font-serif text-2xl font-semibold text-foreground">
+              {studio.name}
+            </h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Completa tus datos para que{" "}
+              <span className="font-medium text-gold-700">{studio.name}</span> pueda
+              contactarte. No necesitas elegir un paquete ahora — te enviaremos
+              opciones después.
+            </p>
           </div>
+
+          <PublicRegisterForm
+            studioSlug={params.slug}
+            studioName={studio.name}
+            contactEmail={studio.email}
+          />
         </div>
-
-        <p className="text-sm text-zinc-600 mb-6">
-          Completa tus datos para que <strong>{studio.name}</strong> pueda
-          contactarte. No es necesario seleccionar un paquete ahora — te
-          enviaremos opciones después.
+        <p className="mt-5 text-center text-[11px] tracking-wide text-muted-foreground/60">
+          Una experiencia de {studio.name}
         </p>
-
-        <PublicRegisterForm
-          studioSlug={params.slug}
-          studioName={studio.name}
-          contactEmail={studio.email}
-        />
       </div>
     </div>
   )

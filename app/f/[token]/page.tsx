@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
+import { Check, X } from 'lucide-react'
 import { getPublicFormResponse } from '@/server/services/form.service'
 import { PublicFormView } from '@/components/public/public-form-view'
 import type { FormSchema } from '@/lib/forms/types'
@@ -25,49 +26,35 @@ export default async function PublicFormPage({
   // Terminal: completed
   if (response.status === 'completed') {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl border border-gray-200 p-10 max-w-md w-full text-center shadow-sm">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Formulario enviado</h1>
-          <p className="text-sm text-gray-500">
-            Gracias. Ya recibimos tus respuestas
-            {response.completed_at
-              ? ` el ${new Date(response.completed_at).toLocaleDateString('es', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}`
-              : ''}
-            .
-          </p>
-        </div>
-      </div>
+      <Terminal
+        tone="success"
+        icon={<Check className="h-7 w-7" />}
+        title="Formulario enviado"
+        text={`Gracias. Ya recibimos tus respuestas${
+          response.completed_at
+            ? ` el ${new Date(response.completed_at).toLocaleDateString('es', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}`
+            : ''
+        }.`}
+      />
     )
   }
 
-  // Terminal: expired (estado real o por expires_at)
+  // Terminal: expired
   const expired =
     response.status === 'expired' ||
     (response.expires_at && new Date() > new Date(response.expires_at))
   if (expired) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl border border-gray-200 p-10 max-w-md w-full text-center shadow-sm">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Enlace expirado</h1>
-          <p className="text-sm text-gray-500">
-            Este formulario ya no está disponible. Contacta a tu fotógrafo para que te envíe uno nuevo.
-          </p>
-        </div>
-      </div>
+      <Terminal
+        tone="danger"
+        icon={<X className="h-7 w-7" />}
+        title="Enlace expirado"
+        text="Este formulario ya no está disponible. Contacta a tu fotógrafo para que te envíe uno nuevo."
+      />
     )
   }
 
@@ -83,5 +70,40 @@ export default async function PublicFormPage({
         searchParams?.return?.startsWith("/b/") ? searchParams.return : undefined
       }
     />
+  )
+}
+
+function Terminal({
+  tone,
+  icon,
+  title,
+  text,
+}: {
+  tone: "success" | "danger"
+  icon: React.ReactNode
+  title: string
+  text: string
+}) {
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      <div className="bg-luxe-radial pointer-events-none absolute inset-0" />
+      <div className="lx-card animate-fade-in-up relative w-full max-w-md p-10 text-center">
+        <div
+          className={`mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full text-white ${
+            tone === "success"
+              ? "bg-gradient-to-br from-gold-400 to-gold-600"
+              : "bg-gradient-to-br from-red-400 to-red-600"
+          }`}
+        >
+          {icon}
+        </div>
+        <h1 className="font-serif text-2xl font-semibold text-foreground">
+          {title}
+        </h1>
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+          {text}
+        </p>
+      </div>
+    </div>
   )
 }

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { CheckCircle2, Clock, Mail } from "lucide-react"
+import { Check, Clock, Mail, Sparkles } from "lucide-react"
 import { createSupabasePublicClient } from "@/server/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -29,6 +29,12 @@ async function fetchStudio(studioSlug: string) {
     | null
 }
 
+const STEPS = [
+  { label: "Solicitud enviada", state: "done" as const },
+  { label: "En revisión", state: "current" as const },
+  { label: "Confirmación", state: "todo" as const },
+]
+
 export default async function BookingSuccessPage({
   params,
   searchParams,
@@ -38,77 +44,113 @@ export default async function BookingSuccessPage({
 }) {
   const studio = await fetchStudio(params.studio)
   const isDuplicate = searchParams?.dup === "1"
-  const primary = studio?.primary_color ?? "#111827"
   const shortId = searchParams?.rid
     ? searchParams.rid.slice(0, 8).toUpperCase()
     : null
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-5 py-12">
-      <div className="max-w-lg w-full">
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 sm:p-10 text-center">
-          <div
-            className="mx-auto h-14 w-14 rounded-full flex items-center justify-center mb-5"
-            style={{ backgroundColor: `${primary}15` }}
-          >
-            <CheckCircle2 className="h-7 w-7" style={{ color: primary }} />
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-cream-50 to-background px-5 py-12">
+      <div className="w-full max-w-lg">
+        {/* Logo */}
+        {studio?.logo_url ? (
+          <div className="mb-6 flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={studio.logo_url}
+              alt={studio.name}
+              className="h-12 w-12 rounded-full object-cover ring-1 ring-border"
+            />
+          </div>
+        ) : null}
+
+        <div className="lx-card animate-fade-in-up p-8 text-center sm:p-10">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-gold-100 to-brand-soft">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600">
+              <Check className="h-6 w-6 text-white" />
+            </div>
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+          <p className="lx-overline mb-3">
+            {isDuplicate ? "Ya te teníamos" : "Recibido con cariño"}
+          </p>
+          <h1 className="font-serif text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
             {isDuplicate
               ? "Tu solicitud ya estaba registrada"
-              : "¡Solicitud recibida!"}
+              : "¡Tu solicitud fue recibida!"}
           </h1>
-          <p className="text-sm text-gray-600 leading-relaxed mb-6">
+          <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
             {isDuplicate
-              ? "Detectamos que ya nos habías enviado esta misma solicitud. No te preocupes: la estamos revisando."
-              : `Gracias por elegir ${studio?.name ?? "nuestro studio"}. Revisaremos tu solicitud y te contactaremos en las próximas 24 horas.`}
+              ? "Detectamos que ya nos habías enviado esta misma solicitud. No te preocupes: la estamos revisando con atención."
+              : `Gracias por elegir ${studio?.name ?? "nuestro estudio"}. Revisaremos cada detalle y te contactaremos muy pronto para reservar tu fecha.`}
           </p>
 
           {shortId && (
-            <div className="inline-block bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 mb-6">
-              <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium">
+            <div className="mx-auto mt-6 inline-flex flex-col items-center rounded-2xl border border-border bg-cream-50 px-6 py-3">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Código de referencia
-              </p>
-              <p className="text-sm font-mono font-semibold text-gray-900">
+              </span>
+              <span className="mt-0.5 font-mono text-base font-semibold text-foreground">
                 #{shortId}
-              </p>
+              </span>
             </div>
           )}
 
-          <div className="space-y-3 text-left bg-gray-50 rounded-xl p-5 mb-6">
-            <div className="flex items-start gap-3">
-              <Clock className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  Tiempo de respuesta
-                </p>
-                <p className="text-xs text-gray-500">
-                  Solemos contestar en menos de 24 horas.
-                </p>
+          {/* Progreso */}
+          <div className="mx-auto mt-8 flex max-w-sm items-center justify-between">
+            {STEPS.map((s, i) => (
+              <div key={s.label} className="flex flex-1 flex-col items-center">
+                <div className="flex w-full items-center">
+                  <div
+                    className={`h-0.5 flex-1 ${i === 0 ? "opacity-0" : s.state === "todo" ? "bg-border" : "bg-gold-400"}`}
+                  />
+                  <span
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                      s.state === "done"
+                        ? "bg-gradient-to-br from-gold-400 to-gold-600 text-white"
+                        : s.state === "current"
+                          ? "bg-brand-soft text-gold-700 ring-2 ring-gold-400/40"
+                          : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {s.state === "done" ? <Check className="h-4 w-4" /> : i + 1}
+                  </span>
+                  <div
+                    className={`h-0.5 flex-1 ${i === STEPS.length - 1 ? "opacity-0" : s.state === "done" ? "bg-gold-400" : "bg-border"}`}
+                  />
+                </div>
+                <span className="mt-2 text-[10.5px] font-medium leading-tight text-muted-foreground">
+                  {s.label}
+                </span>
               </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Mail className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">
-                  Revisa tu email
-                </p>
-                <p className="text-xs text-gray-500">
-                  Te enviaremos la confirmación y los siguientes pasos para
-                  asegurar tu fecha.
-                </p>
-              </div>
-            </div>
+            ))}
+          </div>
+
+          {/* Próximos pasos */}
+          <div className="mt-8 space-y-3 rounded-2xl bg-cream-50 p-5 text-left">
+            <NextStep
+              icon={<Clock className="h-4 w-4" />}
+              title="Tiempo de respuesta"
+              text="Solemos contestar en menos de 24 horas."
+            />
+            <NextStep
+              icon={<Mail className="h-4 w-4" />}
+              title="Revisa tu correo"
+              text="Te enviaremos la confirmación y los siguientes pasos para asegurar tu fecha."
+            />
+            <NextStep
+              icon={<Sparkles className="h-4 w-4" />}
+              title="Prepara tu visión"
+              text="Piensa en los momentos y detalles que quieres que capturemos."
+            />
           </div>
 
           {(studio?.email || studio?.phone) && (
-            <div className="text-xs text-gray-500 mb-6">
-              ¿Urgente? Contáctanos directamente:{" "}
+            <p className="mt-6 text-xs text-muted-foreground">
+              ¿Urgente? Escríbenos:{" "}
               {studio.email && (
                 <a
                   href={`mailto:${studio.email}`}
-                  className="text-gray-700 hover:underline"
+                  className="font-medium text-gold-700 hover:underline"
                 >
                   {studio.email}
                 </a>
@@ -117,26 +159,47 @@ export default async function BookingSuccessPage({
               {studio.phone && (
                 <a
                   href={`tel:${studio.phone}`}
-                  className="text-gray-700 hover:underline"
+                  className="font-medium text-gold-700 hover:underline"
                 >
                   {studio.phone}
                 </a>
               )}
-            </div>
+            </p>
           )}
 
           <Link
             href={`/p/${params.studio}/${params.pkg}`}
-            className="inline-block px-5 py-2.5 text-white text-sm font-medium rounded-lg hover:opacity-90 transition-opacity"
-            style={{ backgroundColor: primary }}
+            className="lx-btn-outline mt-7 !py-2.5 text-[13px]"
           >
             Ver paquete nuevamente
           </Link>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Powered by StudioFlow
+        <p className="mt-6 text-center text-[11px] tracking-wide text-muted-foreground/60">
+          Una experiencia de {studio?.name ?? "StudioFlow"}
         </p>
+      </div>
+    </div>
+  )
+}
+
+function NextStep({
+  icon,
+  title,
+  text,
+}: {
+  icon: React.ReactNode
+  title: string
+  text: string
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-soft text-gold-600">
+        {icon}
+      </span>
+      <div>
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">{text}</p>
       </div>
     </div>
   )

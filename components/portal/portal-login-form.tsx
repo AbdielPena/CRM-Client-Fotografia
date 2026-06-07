@@ -52,28 +52,28 @@ export function PortalLoginForm() {
       className="mt-6 space-y-3"
     >
       <label className="block">
-        <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Email
         </span>
         <div className="relative">
-          <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="tu@email.com"
-            className="w-full rounded-md border border-zinc-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="sf-input-focus w-full rounded-xl border border-border bg-surface py-2.5 pl-9 pr-3 text-sm text-foreground focus:outline-none"
           />
         </div>
       </label>
 
       <label className="block">
-        <span className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Código de acceso
         </span>
         <div className="relative">
-          <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
             required
@@ -81,7 +81,7 @@ export function PortalLoginForm() {
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             placeholder="ABCDEFGH"
             autoComplete="off"
-            className="w-full rounded-md border border-zinc-300 bg-white py-2 pl-9 pr-3 font-mono text-sm uppercase tracking-widest focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            className="sf-input-focus w-full rounded-xl border border-border bg-surface py-2.5 pl-9 pr-3 font-mono text-sm uppercase tracking-widest text-foreground focus:outline-none"
           />
         </div>
       </label>
@@ -89,7 +89,7 @@ export function PortalLoginForm() {
       <button
         type="submit"
         disabled={pending}
-        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+        className="lx-btn-gold mt-2 w-full disabled:opacity-60"
       >
         {pending ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -99,8 +99,8 @@ export function PortalLoginForm() {
         Entrar al portal
       </button>
 
-      <p className="mt-3 text-center text-[11.5px] text-zinc-500 dark:text-zinc-400">
-        ¿No recibiste tu código? Pedíselo a tu fotógrafo.
+      <p className="mt-3 text-center text-[11.5px] text-muted-foreground">
+        ¿No recibiste tu código? Pídeselo a tu fotógrafo.
       </p>
     </form>
   )

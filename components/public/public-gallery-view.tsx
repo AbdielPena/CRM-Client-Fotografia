@@ -12,6 +12,7 @@ import {
   Loader2,
   KeyRound,
   Check,
+  Image as ImageIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -572,7 +573,7 @@ export function PublicGalleryView({
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-[12.5px] font-medium text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-50 px-3 py-1 text-[12.5px] font-medium text-gold-700 dark:bg-gold-500/15 dark:text-gold-300">
             <Heart className="h-3.5 w-3.5" fill="currentColor" />
             {selectionCount}
           </span>
@@ -585,7 +586,7 @@ export function PublicGalleryView({
           className={`border-b ${
             quota.extras > 0
               ? "border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10"
-              : "border-blue-200 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-500/10"
+              : "border-gold-200 bg-gold-50 dark:border-gold-500/30 dark:bg-gold-500/10"
           }`}
         >
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2.5">
@@ -593,7 +594,7 @@ export function PublicGalleryView({
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold ${
                 quota.extras > 0
                   ? "bg-amber-200 text-amber-900 dark:bg-amber-500/30 dark:text-amber-200"
-                  : "bg-blue-200 text-blue-900 dark:bg-blue-500/30 dark:text-blue-200"
+                  : "bg-gold-100 text-gold-800 dark:bg-gold-500/30 dark:text-gold-200"
               }`}
             >
               {quota.selected} / {quota.included}{" "}
@@ -618,9 +619,9 @@ export function PublicGalleryView({
                 . Tu fotógrafo te confirmará el detalle.
               </p>
             ) : (
-              <p className="text-[12.5px] text-blue-900 dark:text-blue-200">
+              <p className="text-[12.5px] text-gold-800 dark:text-gold-200">
                 Te quedan <strong>{quota.remaining}</strong> dentro de tu paquete.
-                Si elegís más, contarán como extras.
+                Si eliges más, contarán como extras.
               </p>
             )}
           </div>
@@ -654,7 +655,7 @@ export function PublicGalleryView({
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors",
                 activeCollId === null
-                  ? "border-rose-500 bg-rose-50 text-rose-700 dark:border-rose-400 dark:bg-rose-500/15 dark:text-rose-300"
+                  ? "border-gold-500 bg-gold-50 text-gold-700 dark:border-gold-400 dark:bg-gold-500/15 dark:text-gold-300"
                   : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
               )}
             >
@@ -673,7 +674,7 @@ export function PublicGalleryView({
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors",
                   c.id === activeCollId
-                    ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-500 dark:bg-blue-500/15 dark:text-blue-300"
+                    ? "border-gold-600 bg-gold-50 text-gold-700 dark:border-gold-500 dark:bg-gold-500/15 dark:text-gold-300"
                     : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
                 )}
               >
@@ -699,13 +700,13 @@ export function PublicGalleryView({
                     }
                   }}
                   placeholder="Nombre (ej: Para imprimir)"
-                  className="h-7 rounded-full border border-zinc-300 bg-white px-3 text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  className="h-7 rounded-full border border-zinc-300 bg-white px-3 text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                 />
                 <button
                   type="button"
                   onClick={() => void createCollection()}
                   disabled={!newCollName.trim()}
-                  className="rounded-full bg-blue-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  className="rounded-full bg-gold-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-gold-700 disabled:opacity-50"
                 >
                   Crear
                 </button>
@@ -766,7 +767,7 @@ export function PublicGalleryView({
                   }
                   className={cn(
                     "group relative aspect-square overflow-hidden rounded-md bg-zinc-200 transition-all dark:bg-zinc-800",
-                    marked && "ring-2 ring-rose-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
+                    marked && "ring-2 ring-gold-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
                   )}
                 >
                   {a.thumbUrl ? (
@@ -791,7 +792,7 @@ export function PublicGalleryView({
                     className={cn(
                       "absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full backdrop-blur transition-all",
                       marked
-                        ? "bg-rose-500 text-white opacity-100 shadow-md hover:bg-rose-600"
+                        ? "bg-gold-500 text-white opacity-100 shadow-md hover:bg-gold-600"
                         : "bg-white/85 text-zinc-700 opacity-0 hover:bg-white group-hover:opacity-100",
                     )}
                     aria-label={marked ? "Quitar de selección" : "Agregar a selección"}
@@ -810,7 +811,7 @@ export function PublicGalleryView({
         <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-3">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold-100 text-gold-600 dark:bg-gold-500/20 dark:text-gold-300">
                 <Heart className="h-4 w-4" fill="currentColor" />
               </span>
               <div>
@@ -831,7 +832,7 @@ export function PublicGalleryView({
               type="button"
               onClick={() => void submitActive()}
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-rose-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-500 to-gold-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-105 disabled:opacity-60"
             >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -915,33 +916,36 @@ function EmailPrompt({
 }) {
   const [email, setEmail] = useState("")
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4 dark:bg-zinc-950">
+    <div className="client-luxe relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
+      <div className="bg-luxe-radial pointer-events-none absolute inset-0" />
       <form
         onSubmit={(e) => {
           e.preventDefault()
           if (email.includes("@")) onSubmit(email.trim().toLowerCase())
         }}
-        className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+        className="lx-card animate-fade-in-up relative w-full max-w-sm p-8 text-center"
       >
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-white shadow-luxe">
+          <ImageIcon className="h-5 w-5" />
+        </div>
+        <p className="lx-overline mb-2">Tu galería</p>
+        <h1 className="font-serif text-2xl font-semibold text-foreground">
           {galleryName}
         </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">
           Ingresa tu email para acceder a las fotos y guardar tu selección.
         </p>
         <input
           type="email"
           required
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="tu@email.com"
-          className="mt-6 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="sf-input-focus mt-6 w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-center text-sm text-foreground focus:outline-none"
         />
-        <button
-          type="submit"
-          className="mt-4 w-full rounded-md bg-blue-600 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-        >
-          Ver fotos
+        <button type="submit" className="lx-btn-gold mt-4 w-full">
+          Ver mis fotos
         </button>
       </form>
     </div>
@@ -993,7 +997,7 @@ function Lightbox({
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                 isMarked
-                  ? "bg-rose-500 text-white hover:bg-rose-600"
+                  ? "bg-gold-500 text-white hover:bg-gold-600"
                   : "bg-white/15 text-white hover:bg-white/25",
               )}
               title={`${isMarked ? "Quitar de" : "Agregar a"} ${contextLabel}`}
@@ -1087,15 +1091,15 @@ function PinGate({
   void token
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 dark:bg-zinc-900">
-        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+    <div className="client-luxe fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="lx-card w-full max-w-sm p-6">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-white">
           <KeyRound className="h-5 w-5" />
         </div>
-        <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+        <h3 className="font-serif text-lg font-semibold text-foreground">
           Ingresa tu PIN de descarga
         </h3>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="mt-1 text-sm text-muted-foreground">
           Tu fotógrafo te dio un código para descargar las fotos sin marca de agua.
         </p>
         <input
@@ -1104,19 +1108,19 @@ function PinGate({
           onChange={(e) => setPin(e.target.value.toUpperCase())}
           onKeyDown={(e) => e.key === "Enter" && void submit()}
           placeholder="ABCDEFGH"
-          className="mt-4 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-lg uppercase tracking-widest text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          className="sf-input-focus mt-4 w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-center font-mono text-lg uppercase tracking-widest text-foreground focus:outline-none"
         />
         <div className="mt-4 flex gap-2">
           <button
             onClick={onClose}
-            className="flex-1 rounded-md bg-zinc-100 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200"
+            className="lx-btn-outline flex-1 !py-2.5 text-sm"
           >
             Cancelar
           </button>
           <button
             onClick={() => void submit()}
             disabled={pending || !pin.trim()}
-            className="flex-1 rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="lx-btn-gold flex-1 !py-2.5 text-sm disabled:opacity-50"
           >
             {pending ? "Validando…" : "Descargar"}
           </button>

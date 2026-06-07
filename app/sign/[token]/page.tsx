@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
+import { Check, X } from "lucide-react"
 
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import {
@@ -142,6 +143,41 @@ export default async function ContractSigningPage({
   )
 }
 
+function SignTerminal({
+  tone,
+  title,
+  text,
+}: {
+  tone: "success" | "danger"
+  title: string
+  text: string
+}) {
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+      <div className="bg-luxe-radial pointer-events-none absolute inset-0" />
+      <div className="lx-card animate-fade-in-up relative w-full max-w-md p-10 text-center">
+        <div
+          className={`mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full text-white ${
+            tone === "success"
+              ? "bg-gradient-to-br from-gold-400 to-gold-600"
+              : "bg-gradient-to-br from-red-400 to-red-600"
+          }`}
+        >
+          {tone === "success" ? (
+            <Check className="h-7 w-7" />
+          ) : (
+            <X className="h-7 w-7" />
+          )}
+        </div>
+        <h1 className="font-serif text-2xl font-semibold text-foreground">{title}</h1>
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">
+          {text}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 function SignedConfirmation({
   signedAt,
   title,
@@ -150,68 +186,28 @@ function SignedConfirmation({
   title: string
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4 dark:bg-zinc-950">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-10 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/20">
-          <svg
-            className="h-8 w-8 text-emerald-600 dark:text-emerald-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M5 13l4 4L19 7"
-            />
-          </svg>
-        </div>
-        <h1 className="mb-2 text-xl font-bold text-zinc-900 dark:text-zinc-100">
-          Contrato firmado
-        </h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          {title} fue firmado{" "}
-          {signedAt
-            ? `el ${new Date(signedAt).toLocaleDateString("es", {
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              })}`
-            : "anteriormente"}
-          . Te enviamos una copia por email.
-        </p>
-      </div>
-    </div>
+    <SignTerminal
+      tone="success"
+      title="Contrato firmado"
+      text={`${title} fue firmado ${
+        signedAt
+          ? `el ${new Date(signedAt).toLocaleDateString("es", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}`
+          : "anteriormente"
+      }. Te enviamos una copia por email.`}
+    />
   )
 }
 
 function InvalidLink() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4 dark:bg-zinc-950">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-10 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20">
-          <svg
-            className="h-8 w-8 text-red-500"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </div>
-        <h1 className="mb-2 text-xl font-bold text-zinc-900 dark:text-zinc-100">
-          Enlace no válido
-        </h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Este enlace de firma expiró o fue anulado. Contactá a tu fotógrafo.
-        </p>
-      </div>
-    </div>
+    <SignTerminal
+      tone="danger"
+      title="Enlace no válido"
+      text="Este enlace de firma expiró o fue anulado. Contacta a tu fotógrafo."
+    />
   )
 }

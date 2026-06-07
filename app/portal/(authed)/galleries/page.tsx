@@ -9,6 +9,7 @@ import {
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { getAssetThumbUrl } from "@/server/services/gallery.service"
 import { formatDateShort } from "@/lib/utils/currency"
+import { PortalHeader, PortalEmpty } from "@/components/portal/portal-ui"
 
 export const dynamic = "force-dynamic"
 
@@ -30,7 +31,6 @@ export default async function PortalGalleriesPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const galleries = (galleriesRaw ?? []) as any[]
 
-  // Resolver thumb de portada
   const coverIds = galleries
     .map((g) => g.cover_asset_id as string | null)
     .filter(Boolean) as string[]
@@ -45,7 +45,6 @@ export default async function PortalGalleriesPage() {
     }
   }
 
-  // Cargar tokens activos para link público
   const galleryIds = galleries.map((g) => g.id as string)
   const { data: tokensRaw } =
     galleryIds.length > 0
@@ -67,7 +66,7 @@ export default async function PortalGalleriesPage() {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const renderCard = (g: any) => {
+  const renderCard = (g: any, i: number) => {
     const cover = g.cover_asset_id ? thumbs[g.cover_asset_id] : null
     const token = tokenByGallery[g.id] as string | undefined
     const isExpired =
@@ -81,49 +80,51 @@ export default async function PortalGalleriesPage() {
         href={href}
         target={clickable ? "_blank" : undefined}
         rel={clickable ? "noopener noreferrer" : undefined}
-        className="group block overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900"
+        className="lx-card lx-card-hover group block animate-fade-in-up overflow-hidden p-0"
+        style={{ animationDelay: `${Math.min(i * 60, 360)}ms` }}
       >
-        <div className="relative aspect-[4/3] bg-zinc-100 dark:bg-zinc-800">
+        <div className="relative aspect-[4/3] overflow-hidden bg-muted">
           {cover ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={cover}
               alt={g.name}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-zinc-400">
-              <ImageIcon className="h-8 w-8" />
+            <div className="flex h-full w-full items-center justify-center text-muted-foreground/60">
+              <ImageIcon className="h-9 w-9" />
             </div>
           )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
           {isExpired && (
-            <span className="absolute right-2 top-2 rounded-full bg-rose-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+            <span className="absolute right-3 top-3 rounded-full bg-red-600/95 px-2.5 py-0.5 text-[10px] font-semibold text-white shadow-sm">
               Vencida
             </span>
           )}
         </div>
-        <div className="p-4">
-          <p className="font-semibold text-zinc-900 group-hover:text-rose-600 dark:text-zinc-100">
+        <div className="p-5">
+          <p className="font-serif text-lg font-semibold text-foreground transition-colors group-hover:text-gold-700">
             {g.name}
           </p>
-          <div className="mt-1 flex items-center gap-2 text-[12px] text-zinc-500 dark:text-zinc-400">
+          <div className="mt-1.5 flex items-center gap-2 text-[12px] text-muted-foreground">
             <span>
               {g.asset_count ?? 0} foto{(g.asset_count ?? 0) === 1 ? "" : "s"}
             </span>
             <span>·</span>
             <span>{formatDateShort(new Date(g.created_at))}</span>
-            {clickable && <ExternalLink className="ml-auto h-3.5 w-3.5" />}
+            {clickable && <ExternalLink className="ml-auto h-3.5 w-3.5 text-gold-600" />}
           </div>
           {isExpired ? (
-            <p className="mt-2 text-[11px] font-medium text-rose-600 dark:text-rose-400">
-              Esta galería venció. Pedile acceso a tu fotógrafo.
+            <p className="mt-2.5 text-[11px] font-medium text-red-600">
+              Esta galería venció. Pídele acceso a tu fotógrafo.
             </p>
           ) : g.expires_at ? (
-            <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <p className="mt-2.5 text-[11px] text-muted-foreground">
               Disponible hasta {formatDateShort(new Date(g.expires_at))}
             </p>
           ) : !token ? (
-            <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+            <p className="mt-2.5 text-[11px] text-amber-600">
               Tu fotógrafo aún no compartió esta galería públicamente.
             </p>
           ) : null}
@@ -136,50 +137,54 @@ export default async function PortalGalleriesPage() {
   const delivery = galleries.filter((g) => g.gallery_type === "final_delivery")
 
   return (
-    <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Tus galerías</h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Acá vas a ver las galerías que tu fotógrafo te compartió.
-        </p>
-      </header>
+    <div className="space-y-10">
+      <PortalHeader
+        eyebrow="Tus recuerdos"
+        title="Tus galerías"
+        description="Aquí verás las galerías que tu fotógrafo compartió contigo."
+      />
 
       {galleries.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-          <ImageIcon className="mx-auto h-8 w-8 text-zinc-400" />
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Aún no tenés galerías. Cuando tu fotógrafo cree una, va a aparecer acá.
-          </p>
-        </div>
+        <PortalEmpty
+          icon={ImageIcon}
+          title="Aún no tienes galerías"
+          description="Cuando tu fotógrafo cree una, aparecerá aquí lista para disfrutar."
+        />
       ) : (
         <>
           {delivery.length > 0 && (
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                  ✨ Entrega final
-                </h2>
-                <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
-                  Tus fotos editadas, listas para ver y descargar.
-                </p>
+            <section className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="h-5 w-1 rounded-full bg-gradient-to-b from-gold-400 to-gold-600" />
+                <div>
+                  <h2 className="font-serif text-xl font-semibold text-foreground">
+                    Entrega final
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground">
+                    Tus fotos editadas, listas para ver y descargar.
+                  </p>
+                </div>
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {delivery.map(renderCard)}
               </div>
             </section>
           )}
 
           {selection.length > 0 && (
-            <section className="space-y-3">
-              <div>
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                  📷 Selección
-                </h2>
-                <p className="text-[13px] text-zinc-500 dark:text-zinc-400">
-                  Elegí tus fotos favoritas y envíalas a tu fotógrafo.
-                </p>
+            <section className="space-y-4">
+              <div className="flex items-center gap-3">
+                <span className="h-5 w-1 rounded-full bg-gradient-to-b from-gold-400 to-gold-600" />
+                <div>
+                  <h2 className="font-serif text-xl font-semibold text-foreground">
+                    Selección
+                  </h2>
+                  <p className="text-[13px] text-muted-foreground">
+                    Elige tus fotos favoritas y envíalas a tu fotógrafo.
+                  </p>
+                </div>
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {selection.map(renderCard)}
               </div>
             </section>

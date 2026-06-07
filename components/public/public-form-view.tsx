@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { Check, Loader2 } from 'lucide-react'
 import type { FormSchema, FormField } from '@/lib/forms/types'
 
 interface PublicFormViewProps {
@@ -31,8 +32,6 @@ export function PublicFormView({
   )
   const [isPending, startTransition] = useTransition()
   const [submitted, setSubmitted] = useState(false)
-
-  const primary = studio?.primary_color ?? '#111827'
 
   function setField(key: string, value: unknown) {
     setData((prev) => ({ ...prev, [key]: value }))
@@ -90,7 +89,6 @@ export function PublicFormView({
           return
         }
         setSubmitted(true)
-        // Si venimos del wizard de booking, volver al siguiente paso
         if (returnTo) {
           window.location.href = returnTo
           return
@@ -104,38 +102,52 @@ export function PublicFormView({
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl border border-gray-200 p-10 max-w-md w-full text-center shadow-sm">
-          <h1 className="text-xl font-bold text-gray-900 mb-2">¡Formulario enviado!</h1>
-          <p className="text-sm text-gray-500">Gracias. Tu fotógrafo recibirá tus respuestas.</p>
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+        <div className="bg-luxe-radial pointer-events-none absolute inset-0" />
+        <div className="lx-card animate-fade-in-up relative w-full max-w-md p-10 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-white">
+            <Check className="h-7 w-7" />
+          </div>
+          <h1 className="font-serif text-2xl font-semibold text-foreground">
+            ¡Formulario enviado!
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Gracias. Tu fotógrafo recibirá tus respuestas.
+          </p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <span className="text-sm font-semibold text-gray-900">
+    <div className="min-h-screen">
+      <header className="lx-glass sticky top-0 z-20">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3.5">
+          <span className="font-serif text-base font-semibold text-foreground">
             {studio?.name ?? 'Studio'}
           </span>
-          <span className="text-xs text-gray-400">Formulario</span>
+          <span className="lx-overline">Formulario</span>
         </div>
-      </div>
+      </header>
 
-      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto p-4 space-y-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h1 className="text-lg font-bold text-gray-900">{template.name}</h1>
+      <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-6 px-4 py-8">
+        <div className="lx-card animate-fade-in-up p-7">
+          <h1 className="font-serif text-2xl font-semibold text-foreground">
+            {template.name}
+          </h1>
           {template.description && (
-            <p className="text-sm text-gray-500 mt-1">{template.description}</p>
+            <p className="mt-1.5 text-[15px] text-muted-foreground">
+              {template.description}
+            </p>
           )}
           {schema.description && (
-            <p className="text-sm text-gray-600 mt-3">{schema.description}</p>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              {schema.description}
+            </p>
           )}
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+        <div className="lx-card space-y-5 p-7">
           {schema.fields.filter(isVisible).map((field) => (
             <FormFieldRenderer
               key={field.key}
@@ -148,27 +160,26 @@ export function PublicFormView({
         </div>
 
         {errors._form && (
-          <p className="text-sm text-center px-4 py-3 bg-red-50 text-red-700 rounded-lg">
+          <p className="rounded-xl bg-red-50 px-4 py-3 text-center text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
             {errors._form}
           </p>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
             onClick={handleSaveProgress}
             disabled={isPending}
-            className="flex-1 py-3 border border-gray-200 rounded-xl font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            className="lx-btn-outline flex-1 disabled:opacity-40"
           >
             Guardar avance
           </button>
           <button
             type="submit"
             disabled={isPending}
-            className="flex-1 py-3 rounded-xl font-medium text-white disabled:opacity-40"
-            style={{ background: primary }}
+            className="lx-btn-gold flex-1 disabled:opacity-40"
           >
-            {isPending ? 'Enviando…' : 'Enviar formulario'}
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Enviar formulario'}
           </button>
         </div>
       </form>
@@ -188,17 +199,17 @@ function FormFieldRenderer({
   onChange: (v: unknown) => void
 }) {
   const common =
-    'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400'
+    'sf-input-focus w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground focus:outline-none'
 
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label className="mb-1.5 block text-sm font-medium text-foreground">
         {field.label}
         {field.required && <span className="text-red-500"> *</span>}
       </label>
-      {field.help && <p className="text-xs text-gray-500 mb-2">{field.help}</p>}
+      {field.help && <p className="mb-2 text-xs text-muted-foreground">{field.help}</p>}
       {renderInput(field, value, onChange, common)}
-      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   )
 }
@@ -284,13 +295,14 @@ function renderInput(
           {(field.options ?? []).map((o) => (
             <label
               key={o.value}
-              className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+              className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
             >
               <input
                 type="radio"
                 name={field.key}
                 checked={str === o.value}
                 onChange={() => onChange(o.value)}
+                className="accent-gold-600"
               />
               {o.label}
             </label>
@@ -299,18 +311,19 @@ function renderInput(
       )
     case 'checkbox':
       return (
-        <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
           <input
             type="checkbox"
             checked={value === true}
             onChange={(e) => onChange(e.target.checked)}
+            className="h-4 w-4 accent-gold-600"
           />
           {field.placeholder ?? 'Acepto'}
         </label>
       )
     case 'file':
       return (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           (Subida de archivos aún no disponible — próximamente)
         </p>
       )

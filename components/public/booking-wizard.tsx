@@ -12,6 +12,7 @@ import {
   Clock,
 } from "lucide-react"
 
+import { cn } from "@/lib/utils/cn"
 import { SignaturePad, type SignaturePadHandle } from "@/components/public/signature-pad"
 import { notifyPaymentIntentAction } from "@/server/actions/booking-flow.actions"
 import type { FormField, FormSchema } from "@/lib/forms/types"
@@ -58,7 +59,6 @@ function fmtDate(d: string | null) {
 }
 
 export function BookingWizard(props: BookingWizardProps) {
-  const { color } = props.studio
   const [idx, setIdx] = useState(0)
   const step = props.steps[idx] ?? "done"
   const advance = () => setIdx((i) => Math.min(i + 1, props.steps.length - 1))
@@ -94,7 +94,6 @@ export function BookingWizard(props: BookingWizardProps) {
   async function submitForm() {
     if (!props.pendingForm) return advance()
     setFormErr(null)
-    // Validación mínima de requeridos visibles
     for (const f of props.pendingForm.schema.fields ?? []) {
       if (f.visibleIf) {
         const src = String(formData[f.visibleIf.key] ?? "")
@@ -185,34 +184,49 @@ export function BookingWizard(props: BookingWizardProps) {
     : null
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-cream-50 to-background p-4 sm:p-6">
       <div className="w-full max-w-lg">
         {/* Logo */}
-        <div className="mb-4 flex items-center justify-center">
+        <div className="mb-5 flex items-center justify-center">
           {props.studio.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={props.studio.logoUrl} alt={props.studio.name} className="h-8 w-auto" />
+            <img
+              src={props.studio.logoUrl}
+              alt={props.studio.name}
+              className="h-11 w-11 rounded-full object-cover ring-1 ring-border"
+            />
           ) : (
-            <span className="text-sm font-semibold" style={{ color }}>
+            <span className="font-serif text-lg font-semibold text-foreground">
               {props.studio.name}
             </span>
           )}
         </div>
 
-        <div className="rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
+        <div className="lx-card animate-fade-in-up p-6 sm:p-8">
           {/* Stepper */}
           {step !== "plan" && step !== "done" && dotSteps.length > 0 && (
-            <div className="mb-5 flex items-center justify-center gap-2">
+            <div className="mb-6 flex items-center justify-center gap-2">
               {dotSteps.map((s, i) => (
                 <div key={s} className="flex items-center gap-2">
                   <div
-                    className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                    style={{ background: i < dotIndex ? "#10b981" : i === dotIndex ? color : "#d1d5db" }}
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold transition-colors",
+                      i < dotIndex
+                        ? "bg-gradient-to-br from-gold-400 to-gold-600 text-white"
+                        : i === dotIndex
+                          ? "bg-brand-soft text-gold-700 ring-2 ring-gold-400/40"
+                          : "bg-muted text-muted-foreground",
+                    )}
                   >
                     {i < dotIndex ? <Check className="h-3.5 w-3.5" /> : i + 1}
                   </div>
                   {i < dotSteps.length - 1 && (
-                    <div className="h-0.5 w-6" style={{ background: i < dotIndex ? "#10b981" : "#e5e7eb" }} />
+                    <div
+                      className={cn(
+                        "h-0.5 w-6 rounded-full",
+                        i < dotIndex ? "bg-gold-400" : "bg-border",
+                      )}
+                    />
                   )}
                 </div>
               ))}
@@ -222,19 +236,24 @@ export function BookingWizard(props: BookingWizardProps) {
           {/* ───────── PASO 1: PLAN ───────── */}
           {step === "plan" && (
             <div>
-              <div className="mb-5 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: `${color}1a` }}>
-                  <Sparkles className="h-6 w-6" style={{ color }} />
+              <div className="mb-6 text-center">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-soft">
+                  <Sparkles className="h-6 w-6 text-gold-600" />
                 </div>
-                <h1 className="text-2xl font-bold text-foreground">¡Hola, {firstName}!</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="lx-overline mb-2">Reserva confirmada para ti</p>
+                <h1 className="font-serif text-3xl font-semibold text-foreground">
+                  ¡Hola, {firstName}!
+                </h1>
+                <p className="mt-2 text-sm text-muted-foreground">
                   Tu solicitud fue aprobada. Esto fue lo que seleccionaste:
                 </p>
               </div>
-              <div className="rounded-2xl border border-border bg-muted/40 p-5">
+              <div className="rounded-2xl border border-border bg-cream-50 p-5">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="text-lg font-bold text-foreground">{props.plan.packageName}</h2>
-                  <span className="whitespace-nowrap text-lg font-bold tabular-nums text-foreground">
+                  <h2 className="font-serif text-xl font-semibold text-foreground">
+                    {props.plan.packageName}
+                  </h2>
+                  <span className="whitespace-nowrap font-serif text-xl font-semibold tabular-nums text-foreground">
                     {money(props.plan.total, props.plan.currency)}
                   </span>
                 </div>
@@ -242,15 +261,18 @@ export function BookingWizard(props: BookingWizardProps) {
                   {props.plan.eventType && <Row k="Tipo de sesión" v={props.plan.eventType} />}
                   {eventDate && <Row k="Fecha" v={eventDate} />}
                   {props.plan.location && <Row k="Ubicación" v={props.plan.location} />}
-                  <Row k="Reserva para confirmar" v={`${money(props.plan.depositAmount, props.plan.currency)} (${props.plan.depositPercent}%)`} />
+                  <Row
+                    k="Reserva para confirmar"
+                    v={`${money(props.plan.depositAmount, props.plan.currency)} (${props.plan.depositPercent}%)`}
+                  />
                 </dl>
                 {props.plan.includes.length > 0 && (
                   <div className="mt-4 border-t border-border/60 pt-4">
-                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Incluye</p>
+                    <p className="lx-overline mb-2.5">Incluye</p>
                     <ul className="space-y-1.5">
                       {props.plan.includes.map((inc, i) => (
                         <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                          <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
+                          <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-gold-600" />
                           {inc}
                         </li>
                       ))}
@@ -258,7 +280,7 @@ export function BookingWizard(props: BookingWizardProps) {
                   </div>
                 )}
               </div>
-              <PrimaryBtn color={color} onClick={advance}>
+              <PrimaryBtn onClick={advance}>
                 Continuar <ArrowRight className="h-4 w-4" />
               </PrimaryBtn>
             </div>
@@ -267,7 +289,7 @@ export function BookingWizard(props: BookingWizardProps) {
           {/* ───────── PASO 2: CUESTIONARIO ───────── */}
           {step === "form" && props.pendingForm && (
             <div>
-              <h2 className="mb-1 text-lg font-bold text-foreground">
+              <h2 className="mb-1 font-serif text-xl font-semibold text-foreground">
                 {props.pendingForm.schema.title ?? "Cuestionario"}
               </h2>
               {props.pendingForm.schema.description && (
@@ -280,13 +302,12 @@ export function BookingWizard(props: BookingWizardProps) {
                     field={f}
                     value={formData[f.key]}
                     data={formData}
-                    color={color}
                     onChange={(v) => setFormData((prev) => ({ ...prev, [f.key]: v }))}
                   />
                 ))}
               </div>
               {formErr && <ErrBox>{formErr}</ErrBox>}
-              <PrimaryBtn color={color} onClick={submitForm} busy={busy}>
+              <PrimaryBtn onClick={submitForm} busy={busy}>
                 Continuar <ArrowRight className="h-4 w-4" />
               </PrimaryBtn>
             </div>
@@ -295,20 +316,21 @@ export function BookingWizard(props: BookingWizardProps) {
           {/* ───────── PASO 3: CONTRATO ───────── */}
           {step === "contract" && (
             <div>
-              <h2 className="mb-3 text-lg font-bold text-foreground">Contrato de servicios</h2>
+              <h2 className="mb-3 font-serif text-xl font-semibold text-foreground">
+                Contrato de servicios
+              </h2>
               <div
-                className="mb-4 max-h-72 overflow-y-auto rounded-xl border border-border bg-background p-4 text-sm leading-relaxed text-foreground [&_h1]:text-base [&_h1]:font-bold [&_h2]:font-semibold"
+                className="mb-4 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface p-4 text-sm leading-relaxed text-foreground [&_h1]:text-base [&_h1]:font-bold [&_h2]:font-semibold"
                 dangerouslySetInnerHTML={{ __html: props.contractHtml ?? "<p>Contrato no disponible.</p>" }}
               />
               <label className="mb-1 block text-sm font-medium text-foreground">Tu nombre completo</label>
               <input
                 value={signerName}
                 onChange={(e) => setSignerName(e.target.value)}
-                className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2"
-                style={{ outlineColor: color }}
+                className="sf-input-focus mb-3 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm focus:outline-none"
               />
               <label className="mb-1 block text-sm font-medium text-foreground">Firma</label>
-              <div className="mb-3 rounded-xl border border-border bg-background">
+              <div className="mb-3 rounded-xl border border-border bg-surface">
                 <SignaturePad ref={padRef} />
               </div>
               <label className="mb-3 flex cursor-pointer items-start gap-2 text-sm text-foreground">
@@ -316,12 +338,12 @@ export function BookingWizard(props: BookingWizardProps) {
                   type="checkbox"
                   checked={agreed}
                   onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4"
+                  className="mt-0.5 h-4 w-4 accent-gold-600"
                 />
                 He leído y acepto los términos del contrato.
               </label>
               {contractErr && <ErrBox>{contractErr}</ErrBox>}
-              <PrimaryBtn color={color} onClick={submitContract} busy={busy}>
+              <PrimaryBtn onClick={submitContract} busy={busy}>
                 Firmar y continuar <ArrowRight className="h-4 w-4" />
               </PrimaryBtn>
             </div>
@@ -330,38 +352,40 @@ export function BookingWizard(props: BookingWizardProps) {
           {/* ───────── PASO 4: PAGO ───────── */}
           {step === "pay" && (
             <div>
-              <h2 className="mb-1 text-lg font-bold text-foreground">¿Cómo pagar tu reserva?</h2>
+              <h2 className="mb-1 font-serif text-xl font-semibold text-foreground">
+                ¿Cómo pagar tu reserva?
+              </h2>
               <p className="mb-4 text-sm text-muted-foreground">
                 Para confirmar tu sesión, realiza el pago de la reserva ({props.plan.depositPercent}%).
               </p>
-              <div className="mb-4 rounded-2xl border border-border bg-muted/40 p-4">
+              <div className="mb-4 rounded-2xl border border-border bg-cream-50 p-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Total de la sesión</span>
                   <span className="font-medium tabular-nums text-foreground">{money(props.plan.total, props.plan.currency)}</span>
                 </div>
                 <div className="mt-1.5 flex items-center justify-between">
                   <span className="text-sm font-semibold text-foreground">A pagar hoy</span>
-                  <span className="text-lg font-bold tabular-nums" style={{ color }}>
+                  <span className="font-serif text-xl font-semibold tabular-nums text-gold-700">
                     {money(props.plan.depositAmount, props.plan.currency)}
                   </span>
                 </div>
               </div>
               <div className="mb-4">
-                <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="lx-overline mb-2 flex items-center gap-1.5">
                   <Landmark className="h-3.5 w-3.5" /> Transferencia bancaria
-                </div>
+                </p>
                 {props.payment.instructions ? (
-                  <pre className="whitespace-pre-wrap rounded-xl border border-border bg-background p-3 font-sans text-sm text-foreground">
+                  <pre className="whitespace-pre-wrap rounded-xl border border-border bg-surface p-3 font-sans text-sm text-foreground">
                     {props.payment.instructions}
                   </pre>
                 ) : (
-                  <p className="rounded-xl border border-border bg-background p-3 text-sm text-muted-foreground">
+                  <p className="rounded-xl border border-border bg-surface p-3 text-sm text-muted-foreground">
                     El estudio te compartirá los datos de pago.
                   </p>
                 )}
               </div>
               {waHref && (
-                <a href={waHref} target="_blank" rel="noopener noreferrer" className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100">
+                <a href={waHref} target="_blank" rel="noopener noreferrer" className="mb-4 flex w-full items-center justify-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100">
                   <MessageCircle className="h-4 w-4" /> Enviar comprobante por WhatsApp
                 </a>
               )}
@@ -370,13 +394,13 @@ export function BookingWizard(props: BookingWizardProps) {
                 onChange={(e) => setPayMsg(e.target.value)}
                 rows={2}
                 placeholder="Mensaje para el estudio (opcional): ya hice la transferencia, te envío el voucher."
-                className="mb-3 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2"
+                className="sf-input-focus mb-3 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm focus:outline-none"
               />
               {payErr && <ErrBox>{payErr}</ErrBox>}
-              <PrimaryBtn color={color} onClick={submitPayment} busy={busy}>
+              <PrimaryBtn onClick={submitPayment} busy={busy}>
                 <CheckCircle2 className="h-4 w-4" /> Notificar pago y reservar
               </PrimaryBtn>
-              <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              <p className="mt-3 text-center text-[11px] text-muted-foreground">
                 Tu sesión se confirma cuando el estudio verifique el pago.
               </p>
             </div>
@@ -385,25 +409,36 @@ export function BookingWizard(props: BookingWizardProps) {
           {/* ───────── DONE ───────── */}
           {step === "done" && (
             <div className="text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full text-white" style={{ background: props.finalState === "paid" ? "#10b981" : "#f59e0b" }}>
-                {props.finalState === "paid" ? <Check className="h-6 w-6" /> : <Clock className="h-6 w-6" />}
+              <div
+                className={cn(
+                  "mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full text-white",
+                  props.finalState === "paid"
+                    ? "bg-gradient-to-br from-gold-400 to-gold-600"
+                    : "bg-gradient-to-br from-amber-400 to-amber-500",
+                )}
+              >
+                {props.finalState === "paid" ? <Check className="h-7 w-7" /> : <Clock className="h-7 w-7" />}
               </div>
-              <h2 className="text-lg font-bold text-foreground">
-                {props.finalState === "paid" ? "¡Sesión confirmada! 🎉" : "¡Gracias! Recibimos tu aviso de pago"}
+              <h2 className="font-serif text-2xl font-semibold text-foreground">
+                {props.finalState === "paid" ? "¡Sesión confirmada!" : "¡Gracias! Recibimos tu aviso de pago"}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
                 {props.finalState === "paid"
-                  ? "Recibimos tu pago. Te contactaremos con los detalles finales."
-                  : "Tu sesión quedará confirmada cuando el estudio verifique el pago. Te avisaremos."}
+                  ? "Recibimos tu pago. Te contactaremos con los detalles finales de tu experiencia."
+                  : "Tu sesión quedará confirmada cuando el estudio verifique el pago. Te avisaremos muy pronto."}
               </p>
               {props.payment.invoiceId && (
-                <a href={`/i/${props.payment.invoiceId}`} className="mt-4 inline-block text-sm font-medium hover:underline" style={{ color }}>
+                <a href={`/i/${props.payment.invoiceId}`} className="mt-5 inline-block text-sm font-medium text-gold-700 hover:underline">
                   Ver mi factura
                 </a>
               )}
             </div>
           )}
         </div>
+
+        <p className="mt-5 text-center text-[11px] tracking-wide text-muted-foreground/60">
+          Una experiencia de {props.studio.name}
+        </p>
       </div>
     </div>
   )
@@ -427,12 +462,10 @@ function ErrBox({ children }: { children: React.ReactNode }) {
 }
 
 function PrimaryBtn({
-  color,
   onClick,
   busy,
   children,
 }: {
-  color: string
   onClick: () => void
   busy?: boolean
   children: React.ReactNode
@@ -441,8 +474,7 @@ function PrimaryBtn({
     <button
       onClick={onClick}
       disabled={busy}
-      className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-      style={{ background: color }}
+      className="lx-btn-gold mt-6 w-full disabled:opacity-50"
     >
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : children}
     </button>
@@ -453,13 +485,11 @@ function FieldInput({
   field,
   value,
   data,
-  color,
   onChange,
 }: {
   field: FormField
   value: unknown
   data: Record<string, unknown>
-  color: string
   onChange: (v: unknown) => void
 }) {
   // Condicional
@@ -468,7 +498,7 @@ function FieldInput({
     if (src !== field.visibleIf.equals) return null
   }
   const base =
-    "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2"
+    "sf-input-focus w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm focus:outline-none"
   const label = (
     <label className="mb-1 block text-sm font-medium text-foreground">
       {field.label}
@@ -510,7 +540,7 @@ function FieldInput({
         <div className="space-y-1.5">
           {(field.options ?? []).map((o) => (
             <label key={o.value} className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-              <input type="radio" name={field.key} checked={value === o.value} onChange={() => onChange(o.value)} />
+              <input type="radio" name={field.key} checked={value === o.value} onChange={() => onChange(o.value)} className="accent-gold-600" />
               {o.label}
             </label>
           ))}
@@ -521,7 +551,7 @@ function FieldInput({
   if (field.type === "checkbox") {
     return (
       <label className="flex cursor-pointer items-start gap-2 text-sm text-foreground">
-        <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4" />
+        <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} className="mt-0.5 h-4 w-4 accent-gold-600" />
         {field.label}
       </label>
     )

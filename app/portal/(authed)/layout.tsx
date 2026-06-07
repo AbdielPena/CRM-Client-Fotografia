@@ -1,16 +1,5 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
-import Link from "next/link"
-import {
-  LayoutDashboard,
-  ImageIcon,
-  Receipt,
-  CreditCard,
-  CalendarCheck,
-  FileText,
-  Package as PackageIcon,
-  LogOut,
-} from "lucide-react"
 
 import {
   PORTAL_COOKIE_NAME,
@@ -18,6 +7,7 @@ import {
 } from "@/server/services/client-portal.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { PortalLogoutButton } from "@/components/portal/portal-logout-button"
+import { PortalNav } from "@/components/portal/portal-nav"
 
 export const dynamic = "force-dynamic"
 
@@ -48,65 +38,46 @@ export default async function PortalAuthedLayout({
     studios: { name: string; logo_url: string | null } | null
   }
 
-  const nav = [
-    { href: "/portal", label: "Inicio", icon: LayoutDashboard },
-    { href: "/portal/galleries", label: "Galerías", icon: ImageIcon },
-    { href: "/portal/deliveries", label: "Entregas", icon: PackageIcon },
-    { href: "/portal/contracts", label: "Contratos", icon: FileText },
-    { href: "/portal/invoices", label: "Facturas", icon: Receipt },
-    { href: "/portal/payments", label: "Pagos", icon: CreditCard },
-    { href: "/portal/bookings", label: "Reservas", icon: CalendarCheck },
-  ]
+  const studioName = c.studios?.name ?? "Tu portal"
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+    <div className="client-luxe min-h-screen bg-background">
+      <header className="sticky top-0 z-30 lx-glass">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 pt-3.5 pb-3 sm:px-6">
           <div className="flex items-center gap-3">
             {c.studios?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={c.studios.logo_url}
-                alt={c.studios.name}
-                className="h-8 w-8 rounded-md object-cover"
+                alt={studioName}
+                className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
               />
             ) : (
-              <div className="grid h-8 w-8 place-items-center rounded-md bg-zinc-900 text-xs font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900">
-                {(c.studios?.name ?? "S").slice(0, 1).toUpperCase()}
+              <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 font-serif text-base font-semibold text-white">
+                {studioName.slice(0, 1).toUpperCase()}
               </div>
             )}
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                {c.studios?.name ?? "Tu portal"}
+              <p className="truncate font-serif text-[15px] font-semibold text-foreground">
+                {studioName}
               </p>
-              <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                Hola, {c.name}
+              <p className="truncate text-[11px] text-muted-foreground">
+                Hola, {c.name.split(" ")[0]}
               </p>
             </div>
           </div>
           <PortalLogoutButton />
         </div>
 
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-1 text-sm">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-            >
-              <item.icon className="h-3.5 w-3.5" />
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <PortalNav />
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+        {children}
+      </main>
 
-      <footer className="mx-auto max-w-6xl px-4 py-6 text-center text-[11px] text-zinc-400">
-        Portal privado — solo vos podés ver esta información.
-        <span className="mx-1">·</span>
-        <LogOut className="inline h-3 w-3" /> Cerrá sesión cuando termines.
+      <footer className="mx-auto max-w-6xl px-4 pb-10 pt-4 text-center text-[11px] tracking-wide text-muted-foreground/70">
+        Portal privado de {studioName} · Solo tú puedes ver esta información.
       </footer>
     </div>
   )

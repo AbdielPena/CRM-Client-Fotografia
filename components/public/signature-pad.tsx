@@ -138,7 +138,7 @@ export const SignaturePad = forwardRef<
 
   return (
     <div className={className}>
-      <div className="relative rounded-xl border-2 border-dashed border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+      <div className="relative rounded-xl bg-surface">
         <canvas
           ref={canvasRef}
           onPointerDown={start}
@@ -150,19 +150,19 @@ export const SignaturePad = forwardRef<
           style={{ touchAction: "none" }}
         />
         {empty && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-zinc-400">
-            Firmá acá con el dedo o el mouse
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted-foreground/70">
+            Firma aquí con el dedo o el mouse
           </div>
         )}
       </div>
-      <div className="mt-2 flex justify-between gap-2">
-        <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400">
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="text-[11.5px] text-muted-foreground">
           Tu firma se guarda como imagen junto con la fecha, hora e IP.
         </p>
         <button
           type="button"
           onClick={clear}
-          className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-gold-300 hover:text-gold-700"
         >
           <Eraser className="h-3 w-3" />
           Limpiar

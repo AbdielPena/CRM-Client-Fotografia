@@ -19,21 +19,21 @@ import {
   type DeliveryStatus,
 } from "@/server/services/client-delivery.service"
 import { PortalDeliveryReviewMarker } from "@/components/portal/portal-delivery-review-marker"
+import { PortalHeader, PortalEmpty } from "@/components/portal/portal-ui"
 
 export const dynamic = "force-dynamic"
 
 const STATUS_LABEL: Record<DeliveryStatus, string> = {
   pending: "En preparación",
-  delivered: "Lista para vos",
+  delivered: "Lista para ti",
   reviewed: "Vista",
 }
 
 const STATUS_COLOR: Record<DeliveryStatus, string> = {
-  pending: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  pending: "bg-muted text-muted-foreground",
   delivered:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-  reviewed:
-    "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+    "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  reviewed: "bg-brand-soft text-gold-700",
 }
 
 export default async function PortalDeliveriesPage() {
@@ -46,47 +46,40 @@ export default async function PortalDeliveriesPage() {
   )
 
   return (
-    <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-          Tus entregas finales
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Acá vas a encontrar las fotos editadas, archivos y enlaces que tu
-          fotógrafo te compartió.
-        </p>
-      </header>
+    <div className="space-y-8">
+      <PortalHeader
+        eyebrow="Tus fotos"
+        title="Tus entregas finales"
+        description="Aquí encontrarás las fotos editadas, archivos y enlaces que tu fotógrafo compartió contigo."
+      />
 
       {visible.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-          <Package className="mx-auto h-8 w-8 text-zinc-400" />
-          <p className="mt-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Aún no hay entregas
-          </p>
-          <p className="mt-1 text-[12.5px] text-zinc-500 dark:text-zinc-400">
-            Te avisaremos por email apenas tu fotógrafo cargue tus fotos editadas.
-          </p>
-        </div>
+        <PortalEmpty
+          icon={Package}
+          title="Aún no hay entregas"
+          description="Te avisaremos por email apenas tu fotógrafo cargue tus fotos editadas."
+        />
       ) : (
-        <div className="space-y-3">
-          {visible.map((d) => (
+        <div className="space-y-4">
+          {visible.map((d, i) => (
             <div
               key={d.id}
-              className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+              className="lx-card animate-fade-in-up overflow-hidden p-0"
+              style={{ animationDelay: `${Math.min(i * 60, 300)}ms` }}
             >
               <PortalDeliveryReviewMarker
                 deliveryId={d.id}
                 alreadyReviewed={d.status === "reviewed"}
               />
-              <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+              <div className="border-b border-border px-6 py-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                    <div className="flex items-center gap-2.5">
+                      <h2 className="font-serif text-lg font-semibold text-foreground">
                         {d.title}
                       </h2>
                       <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-medium ${STATUS_COLOR[d.status]}`}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${STATUS_COLOR[d.status]}`}
                       >
                         {d.status === "delivered" && <Send className="h-2.5 w-2.5" />}
                         {d.status === "reviewed" && <Check className="h-2.5 w-2.5" />}
@@ -94,12 +87,12 @@ export default async function PortalDeliveriesPage() {
                       </span>
                     </div>
                     {d.description && (
-                      <p className="mt-1 text-[12.5px] text-zinc-600 dark:text-zinc-400">
+                      <p className="mt-1.5 text-[13px] text-muted-foreground">
                         {d.description}
                       </p>
                     )}
                   </div>
-                  <span className="text-[11px] text-zinc-400">
+                  <span className="whitespace-nowrap text-[11px] text-muted-foreground">
                     {new Intl.DateTimeFormat("es", {
                       day: "2-digit",
                       month: "short",
@@ -111,22 +104,24 @@ export default async function PortalDeliveriesPage() {
 
               {((d.files as DeliveryFile[]).length > 0 ||
                 (d.external_links as ExtLink[]).length > 0) && (
-                <div className="grid grid-cols-1 gap-2 p-5 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2.5 p-6 sm:grid-cols-2">
                   {(d.files as DeliveryFile[]).map((f) => (
                     <a
                       key={f.url}
                       href={f.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group inline-flex items-center gap-3 rounded-lg border border-zinc-200 bg-white p-3 transition-shadow hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900"
+                      className="group inline-flex items-center gap-3 rounded-xl border border-border bg-surface p-3.5 transition-all hover:border-gold-300 hover:shadow-luxe"
                     >
-                      <Download className="h-4 w-4 flex-shrink-0 text-zinc-500 group-hover:text-rose-600" />
+                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-soft text-gold-600">
+                        <Download className="h-4 w-4" />
+                      </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <p className="truncate text-sm font-medium text-foreground">
                           {f.name}
                         </p>
                         {f.size && (
-                          <p className="text-[11px] text-zinc-500">
+                          <p className="text-[11px] text-muted-foreground">
                             {fmtBytes(f.size)}
                           </p>
                         )}
@@ -139,18 +134,20 @@ export default async function PortalDeliveriesPage() {
                       href={l.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="group inline-flex items-center gap-3 rounded-lg border border-zinc-200 bg-white p-3 transition-shadow hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900"
+                      className="group inline-flex items-center gap-3 rounded-xl border border-border bg-surface p-3.5 transition-all hover:border-gold-300 hover:shadow-luxe"
                     >
-                      <LinkIcon className="h-4 w-4 flex-shrink-0 text-zinc-500 group-hover:text-rose-600" />
+                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-soft text-gold-600">
+                        <LinkIcon className="h-4 w-4" />
+                      </span>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <p className="truncate text-sm font-medium text-foreground">
                           {l.label}
                         </p>
-                        <p className="truncate text-[11px] text-zinc-500">
+                        <p className="truncate text-[11px] text-muted-foreground">
                           {l.url}
                         </p>
                       </div>
-                      <ExternalLink className="h-3.5 w-3.5 text-zinc-400" />
+                      <ExternalLink className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                     </a>
                   ))}
                 </div>

@@ -9,6 +9,7 @@ import {
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { formatDateShort } from "@/lib/utils/currency"
+import { PortalHeader, PortalEmpty } from "@/components/portal/portal-ui"
 
 export const dynamic = "force-dynamic"
 
@@ -17,14 +18,11 @@ export default async function PortalContractsPage() {
   if (!session) return null
 
   const supabase = createSupabaseServiceClient()
-  // Proyectos del cliente → contratos
   const { data: projects } = await supabase
     .from("projects")
     .select("id")
     .eq("client_id", session.clientId)
-  const projectIds = (
-    (projects ?? []) as Array<{ id: string }>
-  ).map((p) => p.id)
+  const projectIds = ((projects ?? []) as Array<{ id: string }>).map((p) => p.id)
 
   const { data: contractsRaw } =
     projectIds.length > 0
@@ -41,49 +39,63 @@ export default async function PortalContractsPage() {
   const contracts = (contractsRaw ?? []) as any[]
 
   return (
-    <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-          Tus contratos
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Acá podés revisar y firmar los contratos que te envió tu fotógrafo.
-        </p>
-      </header>
+    <div className="space-y-8">
+      <PortalHeader
+        eyebrow="Documentos"
+        title="Tus contratos"
+        description="Revisa y firma los contratos que te envió tu fotógrafo."
+      />
 
       {contracts.length === 0 ? (
-        <Empty
-          icon={<FileText className="mx-auto h-8 w-8 text-zinc-400" />}
-          msg="Sin contratos todavía."
+        <PortalEmpty
+          icon={FileText}
+          title="Sin contratos todavía"
+          description="Cuando tu fotógrafo te envíe un contrato, lo verás aquí para firmarlo."
         />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {contracts.map((c) => {
-              const canSign =
-                c.signing_token &&
-                c.status !== "signed" &&
-                (!c.expires_at || new Date(c.expires_at).getTime() > Date.now())
-              return (
-                <li key={c.id} className="flex items-center gap-4 px-5 py-4">
-                  <FileText className="h-5 w-5 flex-shrink-0 text-zinc-400" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-zinc-900 dark:text-zinc-100">
-                      {c.title}
-                    </p>
-                    <p className="text-[12px] text-zinc-500 dark:text-zinc-400">
-                      {c.signed_at
-                        ? `Firmado ${formatDateShort(new Date(c.signed_at))}`
-                        : c.sent_at
-                          ? `Enviado ${formatDateShort(new Date(c.sent_at))}`
-                          : `Creado ${formatDateShort(new Date(c.created_at))}`}
-                    </p>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {contracts.map((c, i) => {
+            const signed = c.status === "signed"
+            const canSign =
+              c.signing_token &&
+              !signed &&
+              (!c.expires_at || new Date(c.expires_at).getTime() > Date.now())
+            return (
+              <div
+                key={c.id}
+                className="lx-card animate-fade-in-up p-5"
+                style={{ animationDelay: `${Math.min(i * 50, 300)}ms` }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                        signed
+                          ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+                          : "bg-brand-soft text-gold-600"
+                      }`}
+                    >
+                      <FileText className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">{c.title}</p>
+                      <p className="text-[12px] text-muted-foreground">
+                        {c.signed_at
+                          ? `Firmado ${formatDateShort(new Date(c.signed_at))}`
+                          : c.sent_at
+                            ? `Enviado ${formatDateShort(new Date(c.sent_at))}`
+                            : `Creado ${formatDateShort(new Date(c.created_at))}`}
+                      </p>
+                    </div>
                   </div>
                   <StatusBadge status={String(c.status)} />
+                </div>
+
+                <div className="mt-4 flex items-center justify-end gap-2 border-t border-border pt-4">
                   <Link
                     href={`/contract-print/${c.id}`}
                     target="_blank"
-                    className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-gold-300 hover:text-gold-700"
                   >
                     <Printer className="h-3 w-3" />
                     PDF
@@ -92,27 +104,18 @@ export default async function PortalContractsPage() {
                     <Link
                       href={`/sign/${c.signing_token}`}
                       target="_blank"
-                      className="inline-flex items-center gap-1.5 rounded-md bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700"
+                      className="lx-btn-gold !px-4 !py-1.5 text-xs"
                     >
                       <Pen className="h-3 w-3" />
                       Firmar
                     </Link>
                   )}
-                </li>
-              )
-            })}
-          </ul>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
-    </div>
-  )
-}
-
-function Empty({ icon, msg }: { icon: React.ReactNode; msg: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center dark:border-zinc-700 dark:bg-zinc-900">
-      {icon}
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{msg}</p>
     </div>
   )
 }

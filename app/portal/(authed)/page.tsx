@@ -16,6 +16,7 @@ import {
 } from "@/server/services/client-portal.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { formatCurrency, formatDateShort } from "@/lib/utils/currency"
+import { cn } from "@/lib/utils/cn"
 
 export const dynamic = "force-dynamic"
 
@@ -80,13 +81,16 @@ export default async function PortalHomePage() {
     .reduce((s, p) => s + Number(p.amount ?? 0), 0)
   const currency = invoices[0]?.currency ?? "USD"
 
+  const hasOverdue = totalDue > 0
+
   const cards: Array<{
     href: string
     icon: React.ComponentType<{ className?: string }>
     label: string
     value: string
     sub?: string
-    accent: string
+    tint: string
+    border?: string
   }> = [
     {
       href: "/portal/galleries",
@@ -94,7 +98,7 @@ export default async function PortalHomePage() {
       label: "Galerías",
       value: String(galleryCount),
       sub: galleryCount === 0 ? "Aún sin galerías" : "para ver tus fotos",
-      accent: "from-rose-500/15 to-rose-500/0 text-rose-600 dark:text-rose-400",
+      tint: "bg-brand-soft text-gold-600",
     },
     {
       href: "/portal/deliveries",
@@ -102,8 +106,7 @@ export default async function PortalHomePage() {
       label: "Entregas",
       value: "—",
       sub: "fotos editadas finales",
-      accent:
-        "from-emerald-500/15 to-emerald-500/0 text-emerald-600 dark:text-emerald-400",
+      tint: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
     },
     {
       href: "/portal/invoices",
@@ -111,8 +114,10 @@ export default async function PortalHomePage() {
       label: "Pendiente de pago",
       value: formatCurrency(totalDue, currency),
       sub: `${invoices.length} factura${invoices.length === 1 ? "" : "s"}`,
-      accent:
-        "from-amber-500/15 to-amber-500/0 text-amber-600 dark:text-amber-400",
+      tint: hasOverdue
+        ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+        : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
+      border: hasOverdue ? "border-amber-300/70" : undefined,
     },
     {
       href: "/portal/payments",
@@ -120,8 +125,7 @@ export default async function PortalHomePage() {
       label: "Pagado",
       value: formatCurrency(totalPaid, currency),
       sub: `${payments.length} pago${payments.length === 1 ? "" : "s"}`,
-      accent:
-        "from-sky-500/15 to-sky-500/0 text-sky-600 dark:text-sky-400",
+      tint: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
     },
     {
       href: "/portal/contracts",
@@ -129,8 +133,7 @@ export default async function PortalHomePage() {
       label: "Contratos",
       value: String(contracts.length),
       sub: contracts.some((c) => c.status === "signed") ? "firmado" : "pendientes",
-      accent:
-        "from-violet-500/15 to-violet-500/0 text-violet-600 dark:text-violet-400",
+      tint: "bg-brand-soft text-gold-600",
     },
     {
       href: "/portal/bookings",
@@ -140,47 +143,51 @@ export default async function PortalHomePage() {
       sub: bookings[0]?.event_date
         ? `próxima: ${formatDateShort(new Date(bookings[0].event_date))}`
         : undefined,
-      accent:
-        "from-indigo-500/15 to-indigo-500/0 text-indigo-600 dark:text-indigo-400",
+      tint: "bg-brand-soft text-gold-600",
     },
   ]
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-          Tu portal
+    <div className="space-y-8">
+      <header className="animate-fade-in-up">
+        <p className="lx-overline mb-2">Tu espacio</p>
+        <h1 className="font-serif text-3xl font-semibold text-foreground sm:text-4xl">
+          Bienvenida a tu portal
         </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Acá tenés todo lo relacionado con tu sesión: galerías, entregas, contratos,
-          facturas y pagos.
+        <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
+          Aquí tienes todo lo relacionado con tu experiencia: galerías, entregas,
+          contratos, facturas y pagos.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((c) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {cards.map((c, i) => (
           <Link
             key={c.href}
             href={c.href}
-            className={`group relative overflow-hidden rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900`}
+            className={cn(
+              "lx-card lx-card-hover group animate-fade-in-up p-6",
+              c.border,
+            )}
+            style={{ animationDelay: `${Math.min(i * 60, 360)}ms` }}
           >
-            <div
-              className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${c.accent}`}
-            />
-            <div className="relative flex items-center justify-between">
-              <c.icon className="h-5 w-5 opacity-80" />
-              <ArrowRight className="h-4 w-4 text-zinc-400 transition-transform group-hover:translate-x-0.5" />
+            <div className="flex items-center justify-between">
+              <span
+                className={cn(
+                  "flex h-11 w-11 items-center justify-center rounded-full",
+                  c.tint,
+                )}
+              >
+                <c.icon className="h-5 w-5" />
+              </span>
+              <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
             </div>
-            <p className="relative mt-4 text-[12px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              {c.label}
-            </p>
-            <p className="relative mt-0.5 text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">
+            <p className="lx-overline mt-5">{c.label}</p>
+            <p className="mt-1 font-serif-soft text-3xl font-semibold tabular-nums text-foreground">
               {c.value}
             </p>
             {c.sub && (
-              <p className="relative mt-0.5 text-[12px] text-zinc-500 dark:text-zinc-400">
-                {c.sub}
-              </p>
+              <p className="mt-1 text-[13px] text-muted-foreground">{c.sub}</p>
             )}
           </Link>
         ))}
