@@ -1,23 +1,19 @@
 -- ============================================================================
 -- LIMPIEZA: tablas con RLS habilitado pero SIN policy (advisor rls_enabled_no_policy).
+-- Se les agrega una policy explícita de denegación a anon/authenticated
+-- (el service_role salta RLS para los escritos internos).
+--      - audit_logs            (histórico; usado por el hub vía service_role)
+--      - stripe_webhook_events (para webhooks de Stripe)
 --
--- 1) Tablas MUERTAS del hub multi-sistema ya decomisionado (F8). Sin referencias
---    en código, sin FKs entrantes, prácticamente vacías. Se eliminan.
---      - cross_system_events (0 filas)
---      - integration_mappings (0 filas)
---      - sync_jobs           (0 filas)
---      - external_systems    (4 filas de config vieja del hub)
--- 2) Tablas SOLO-servicio que conservamos (datos / uso futuro) pero que no deben
---    ser accesibles por clientes. Se les agrega una policy explícita de denegación
---    a anon/authenticated (el service_role salta RLS para los escritos internos).
---      - audit_logs            (403 filas históricas; el app usa activity_log)
---      - stripe_webhook_events (0 filas; para cuando se cableen webhooks de Stripe)
+-- ⚠️ CORRECCIÓN: una versión previa de esta migración TAMBIÉN eliminaba
+-- (DROP TABLE) external_systems / integration_mappings / cross_system_events /
+-- sync_jobs creyéndolas "muertas". ERROR: esas tablas pertenecen al repo
+-- `studio-hub` (el HUB las usa en runtime para enrutar/SSO a los sistemas), y
+-- la base Supabase es COMPARTIDA entre varios repos (studioflow, studio-hub,
+-- finanzapp, inventario). Eliminarlas rompió hub.abbypixel.com
+-- ("Sistema no disponible"). Los DROP fueron removidos y las tablas
+-- restauradas en 20260606000400_restore_hub_external_systems_tables.sql.
 -- ============================================================================
-
-DROP TABLE IF EXISTS public.cross_system_events CASCADE;
-DROP TABLE IF EXISTS public.integration_mappings CASCADE;
-DROP TABLE IF EXISTS public.sync_jobs CASCADE;
-DROP TABLE IF EXISTS public.external_systems CASCADE;
 
 DROP POLICY IF EXISTS audit_logs_no_client_access ON public.audit_logs;
 CREATE POLICY audit_logs_no_client_access
