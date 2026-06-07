@@ -10,6 +10,7 @@ import {
   setActiveCalendar,
   disconnectGoogleCalendar,
   importGoogleEvents,
+  backfillProjectsToGoogle,
   linkCalendarEventToEntity,
   registerCalendarWatch,
 } from '@/server/services/google-calendar.service'
@@ -68,6 +69,12 @@ export async function setActiveCalendarAction(formData: FormData) {
   // que el usuario vea sus eventos existentes ya en /calendar.
   await importGoogleEvents(session.studioId, { fullSync: true }).catch((err) => {
     console.error('[setActiveCalendar] initial import failed', err)
+  })
+
+  // BACKFILL: empujar a Google las sesiones FUTURAS que se crearon mientras
+  // Google estaba desconectado (reservas recibidas sin vínculo). Best-effort.
+  await backfillProjectsToGoogle(session.studioId).catch((err) => {
+    console.error('[setActiveCalendar] backfill to Google failed', err)
   })
 
   // Registrar watch para que Google nos notifique cambios (push notifications

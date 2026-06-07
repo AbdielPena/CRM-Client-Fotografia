@@ -638,6 +638,44 @@ export async function syncProjectById(
 }
 
 /**
+ * BACKFILL: empuja a Google todas las sesiones (proyectos) FUTURAS que aún no
+ * tienen evento en Google. Resuelve el caso "recibí reservas con Google
+ * desconectado y al reconectar no aparecían": se llama al vincular Google +
+ * elegir calendario, para subir lo que se creó mientras estaba desconectado.
+ *
+ * - Solo de hoy en adelante (no tiene sentido empujar sesiones pasadas).
+ * - Solo los que NO tienen google_event_id (idempotente; no duplica).
+ * - Secuencial para no chocar con el rate limit de Google.
+ */
+export async function backfillProjectsToGoogle(
+  studioId: string,
+): Promise<{ synced: number; total: number }> {
+  const integration = await loadIntegration(studioId)
+  if (!integration?.config.calendarId) return { synced: 0, total: 0 }
+
+  const supabase = createSupabaseServiceClient()
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: projects } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .is('google_event_id', null)
+    .not('event_date', 'is', null)
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .limit(500)
+
+  const ids = ((projects ?? []) as Array<{ id: string }>).map((p) => p.id)
+  let synced = 0
+  for (const id of ids) {
+    const ok = await syncProjectById(studioId, id)
+    if (ok) synced++
+  }
+  return { synced, total: ids.length }
+}
+
+/**
  * Versión best-effort de deleteProjectEvent que jamás lanza.
  */
 export async function deleteProjectEventSafe(
