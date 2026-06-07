@@ -62,7 +62,6 @@ export default async function PublicInvoicePage({
   const contract = contractRes.data
 
   const currency = invoice.currency ?? "DOP"
-  const accent = studio?.primary_color ?? "#7c3aed"
   const totalNum = Number(invoice.total ?? 0)
   const paidNum = Number(invoice.amount_paid ?? 0)
   const balanceNum = Math.max(totalNum - paidNum, 0)
@@ -123,106 +122,102 @@ export default async function PublicInvoicePage({
     })
   }
 
+  const bannerClass = isPaid
+    ? "from-emerald-500 to-emerald-600"
+    : isOverdue
+      ? "from-red-500 to-red-600"
+      : "from-gold-500 to-gold-600"
+
   return (
-    <div className="min-h-screen bg-neutral-50 py-10 px-4">
-      <div className="max-w-2xl mx-auto">
+    <div className="client-luxe relative min-h-screen overflow-hidden bg-background px-4 py-10">
+      <div className="bg-luxe-radial pointer-events-none absolute inset-0" />
+      <div className="relative mx-auto max-w-2xl">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="mb-6 flex items-center gap-3">
           {studio?.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={studio.logo_url}
               alt={studio.name ?? "Studio"}
-              className="h-10 w-10 rounded-full object-cover"
+              className="h-11 w-11 rounded-full object-cover ring-1 ring-border"
             />
           ) : (
-            <div
-              className="h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold"
-              style={{ background: accent }}
-            >
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 font-serif font-semibold text-white">
               {(studio?.name ?? "S").charAt(0).toUpperCase()}
             </div>
           )}
           <div>
-            <div className="text-xs uppercase tracking-wide text-neutral-500">
-              Factura · {studio?.name ?? "Studio"}
+            <div className="lx-overline">Factura · {studio?.name ?? "Studio"}</div>
+            <div className="font-serif text-lg font-semibold text-foreground">
+              {invoice.invoice_number}
             </div>
-            <div className="font-semibold text-neutral-900">{invoice.invoice_number}</div>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl border border-neutral-200 shadow-sm overflow-hidden">
+        <div className="lx-card animate-fade-in-up overflow-hidden p-0">
           {/* Banner de estado */}
           <div
-            className="px-6 py-4 flex items-center justify-between text-white"
-            style={{ background: isPaid ? "#10b981" : isOverdue ? "#ef4444" : accent }}
+            className={`flex items-center justify-between bg-gradient-to-br px-6 py-5 text-white ${bannerClass}`}
           >
             <div>
               <div className="text-xs opacity-90">
                 {isPaid ? "Factura pagada" : isOverdue ? "Factura vencida" : "Pago pendiente"}
               </div>
-              <div className="text-xl font-semibold mt-0.5">{totalFormatted}</div>
+              <div className="mt-0.5 font-serif-soft text-3xl font-semibold">
+                {totalFormatted}
+              </div>
             </div>
             {installmentLabel && (
-              <div className="text-xs bg-white/20 px-3 py-1 rounded-full">{installmentLabel}</div>
+              <div className="rounded-full bg-white/20 px-3 py-1 text-xs">{installmentLabel}</div>
             )}
           </div>
 
           {/* Detalles */}
-          <div className="p-6 space-y-5">
+          <div className="space-y-5 p-6">
             <div>
-              <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
-                Facturado a
-              </div>
-              <div className="text-neutral-900 font-medium">{client?.name ?? "—"}</div>
-              {client?.email && <div className="text-sm text-neutral-500">{client.email}</div>}
+              <div className="lx-overline mb-1">Facturado a</div>
+              <div className="font-medium text-foreground">{client?.name ?? "—"}</div>
+              {client?.email && (
+                <div className="text-sm text-muted-foreground">{client.email}</div>
+              )}
             </div>
 
             {project && (
               <div>
-                <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
-                  Proyecto
-                </div>
-                <div className="text-neutral-900 font-medium">{project.name}</div>
-                <div className="text-sm text-neutral-500">
+                <div className="lx-overline mb-1">Proyecto</div>
+                <div className="font-medium text-foreground">{project.name}</div>
+                <div className="text-sm text-muted-foreground">
                   {formatEventType(project.event_type)}
                   {project.event_date && ` · ${formatDate(project.event_date)}`}
                 </div>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-neutral-100">
+            <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
               <div>
-                <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
-                  Total
-                </div>
-                <div className="text-neutral-900 font-semibold">{totalFormatted}</div>
+                <div className="lx-overline mb-1">Total</div>
+                <div className="font-semibold tabular-nums text-foreground">{totalFormatted}</div>
               </div>
               <div>
-                <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
-                  Pagado
-                </div>
-                <div className="text-neutral-900 font-semibold">{paidFormatted}</div>
+                <div className="lx-overline mb-1">Pagado</div>
+                <div className="font-semibold tabular-nums text-foreground">{paidFormatted}</div>
               </div>
               {invoice.due_date && !isPaid && (
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
-                    Vence
-                  </div>
-                  <div className="text-neutral-900 font-semibold">
+                  <div className="lx-overline mb-1">Vence</div>
+                  <div className="font-semibold text-foreground">
                     {formatDate(invoice.due_date)}
                   </div>
                 </div>
               )}
               {!isPaid && (
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
-                    Saldo
-                  </div>
+                  <div className="lx-overline mb-1">Saldo</div>
                   <div
-                    className="font-semibold"
-                    style={{ color: isOverdue ? "#ef4444" : accent }}
+                    className={`font-serif-soft text-xl font-semibold tabular-nums ${
+                      isOverdue ? "text-red-600" : "text-gold-700"
+                    }`}
                   >
                     {balanceFormatted}
                   </div>
@@ -230,10 +225,8 @@ export default async function PublicInvoicePage({
               )}
               {invoice.paid_at && (
                 <div>
-                  <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
-                    Pagada el
-                  </div>
-                  <div className="text-neutral-900 font-semibold">
+                  <div className="lx-overline mb-1">Pagada el</div>
+                  <div className="font-semibold text-foreground">
                     {formatDate(invoice.paid_at)}
                   </div>
                 </div>
@@ -242,19 +235,17 @@ export default async function PublicInvoicePage({
 
             {/* Plan de pago (cuotas dentro de la misma factura) */}
             {plan.length > 0 && (
-              <div className="pt-4 border-t border-neutral-100">
-                <div className="text-xs uppercase tracking-wide text-neutral-500 mb-2">
-                  Plan de pago · {installmentTotal} cuotas
-                </div>
+              <div className="border-t border-border pt-4">
+                <div className="lx-overline mb-2">Plan de pago · {installmentTotal} cuotas</div>
                 <div className="space-y-2">
                   {plan.map((c, i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded-xl border border-neutral-200 px-3 py-2.5"
+                      className="flex items-center justify-between rounded-xl border border-border bg-surface px-3.5 py-2.5"
                     >
                       <div>
-                        <div className="text-sm font-medium text-neutral-900">{c.label}</div>
-                        <div className="text-xs text-neutral-500">
+                        <div className="text-sm font-medium text-foreground">{c.label}</div>
+                        <div className="text-xs text-muted-foreground">
                           {c.state === "paid"
                             ? "Pagada"
                             : c.state === "partial"
@@ -263,16 +254,16 @@ export default async function PublicInvoicePage({
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-neutral-900">
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
                           {formatMoney(c.amount, currency)}
                         </span>
                         <span
-                          className={`text-[11px] px-2 py-0.5 rounded-full ${
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                             c.state === "paid"
-                              ? "bg-emerald-100 text-emerald-700"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                               : c.state === "partial"
-                                ? "bg-amber-100 text-amber-700"
-                                : "bg-neutral-100 text-neutral-500"
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                                : "bg-muted text-muted-foreground"
                           }`}
                         >
                           {c.state === "paid" ? "Pagada" : c.state === "partial" ? "Parcial" : "Pendiente"}
@@ -286,11 +277,7 @@ export default async function PublicInvoicePage({
 
             {/* CTA contrato pendiente */}
             {contract && contract.status !== "signed" && !isPaid && (
-              <Link
-                href={`/sign/${contract.signing_token}`}
-                className="block w-full text-center rounded-xl px-4 py-3 text-white font-medium hover:opacity-90 transition"
-                style={{ background: accent }}
-              >
+              <Link href={`/sign/${contract.signing_token}`} className="lx-btn-gold w-full">
                 Revisar y firmar contrato →
               </Link>
             )}
@@ -299,13 +286,13 @@ export default async function PublicInvoicePage({
 
         {/* Info de pago */}
         {!isPaid && (
-          <div className="mt-6 text-sm text-neutral-600 text-center">
+          <div className="mt-6 text-center text-sm text-muted-foreground">
             Para coordinar el pago, contacta directamente a {studio?.name ?? "tu fotógrafo"}
             {client?.email && " respondiendo al correo"}.
           </div>
         )}
 
-        <div className="mt-10 text-center text-xs text-neutral-400">
+        <div className="mt-10 text-center text-[11px] tracking-wide text-muted-foreground/60">
           Enviado por {studio?.name ?? "StudioFlow"}
         </div>
       </div>
