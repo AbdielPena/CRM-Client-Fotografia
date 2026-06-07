@@ -75,3 +75,4 @@ next-build.zip
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 .deploy-tmp/
+.git-commit-msg.txt
