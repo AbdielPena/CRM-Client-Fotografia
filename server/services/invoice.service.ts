@@ -184,7 +184,7 @@ export async function createInvoice(
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unitPrice,
-      amount: item.quantity * item.unitPrice,
+      // `amount` es columna GENERADA (quantity * unit_price) — no se puede insertar.
       sort_order: idx,
     })),
   )
@@ -297,7 +297,7 @@ export async function updateInvoice(
       description: item.description,
       quantity: item.quantity,
       unit_price: item.unitPrice,
-      amount: item.quantity * item.unitPrice,
+      // `amount` es columna GENERADA (quantity * unit_price) — no se puede insertar.
       sort_order: idx,
     })),
   )
