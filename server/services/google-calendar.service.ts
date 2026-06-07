@@ -167,31 +167,51 @@ export async function saveIntegration(
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
   const email = parseEmailFromIdToken(tokens.id_token)
 
-  const config: StoredConfig = {
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-    expiresAt,
-    scope: tokens.scope,
-    email: email ?? undefined,
-  }
-
-  // Upsert manual (no hay unique constraint en (studio_id, service) pero sí
-  // asumimos 1 fila por service — limpiar primero por consistencia)
-  await supabase
+  // UPSERT ATÓMICO (antes era DELETE+INSERT: si el INSERT fallaba, el estudio
+  // quedaba sin integración = "se desvinculó"). Buscamos la fila existente y
+  // hacemos UPDATE; si no existe, INSERT. Nunca borramos primero.
+  const { data: existing } = await supabase
     .from('studio_integrations')
-    .delete()
+    .select('id, config')
     .eq('studio_id', studioId)
     .eq('service', 'google_calendar')
+    .maybeSingle()
 
-  const { error } = await supabase.from('studio_integrations').insert({
-    studio_id: studioId,
-    service: 'google_calendar',
-    is_enabled: true,
-    config,
-    last_verified_at: new Date().toISOString(),
-  })
+  const prevCfg = (existing?.config ?? {}) as StoredConfig
+  const config: StoredConfig = {
+    // Conservar calendarId/calendarName/syncToken al reconectar (no obligar a
+    // re-elegir calendario cada vez).
+    ...prevCfg,
+    accessToken: tokens.access_token,
+    // Google a veces no reenvía refresh_token; conservar el previo si falta.
+    refreshToken: tokens.refresh_token ?? prevCfg.refreshToken,
+    expiresAt,
+    scope: tokens.scope ?? prevCfg.scope,
+    email: email ?? prevCfg.email,
+  }
 
-  if (error) throw error
+  if (existing) {
+    const { error } = await supabase
+      .from('studio_integrations')
+      .update({
+        is_enabled: true,
+        config,
+        last_verified_at: new Date().toISOString(),
+        last_error: null,
+        last_error_at: null,
+      })
+      .eq('id', existing.id)
+    if (error) throw error
+  } else {
+    const { error } = await supabase.from('studio_integrations').insert({
+      studio_id: studioId,
+      service: 'google_calendar',
+      is_enabled: true,
+      config,
+      last_verified_at: new Date().toISOString(),
+    })
+    if (error) throw error
+  }
 }
 
 async function loadIntegration(
@@ -244,7 +264,33 @@ export async function getAccessToken(studioId: string): Promise<string | null> {
 
   if (!needsRefresh) return config.accessToken!
 
-  const fresh = await refreshAccessToken(config.refreshToken)
+  let fresh: OAuthTokens
+  try {
+    fresh = await refreshAccessToken(config.refreshToken)
+  } catch (err) {
+    // El refresh falló. En vez de reventar al caller (y dejar el calendario sin
+    // sincronizar de forma silenciosa), registramos el error visible en la UI.
+    // Si el refresh_token está muerto (revocado/expirado — típico cuando la
+    // pantalla de consentimiento OAuth sigue en "Testing", que caduca el token
+    // a los 7 días), deshabilitamos para pedir reconexión clara — sin borrar la
+    // fila ni perder el calendario elegido.
+    const msg = err instanceof Error ? err.message : 'refresh_failed'
+    const deadToken =
+      /invalid_grant|unauthorized_client|invalid_client|expired or revoked/i.test(msg)
+    const svc = createSupabaseServiceClient()
+    await svc
+      .from('studio_integrations')
+      .update({
+        last_error: deadToken
+          ? 'La conexión con Google expiró o fue revocada. Vuelve a conectar Google Calendar. (Para que no caduque cada 7 días, publica la pantalla de consentimiento OAuth en Google Cloud Console.)'
+          : `Error temporal refrescando Google Calendar: ${msg.slice(0, 250)}`,
+        last_error_at: new Date().toISOString(),
+        ...(deadToken ? { is_enabled: false } : {}),
+      })
+      .eq('id', id)
+    return null
+  }
+
   const newExpiresAt = new Date(Date.now() + fresh.expires_in * 1000).toISOString()
   await updateIntegrationConfig(id, {
     accessToken: fresh.access_token,
