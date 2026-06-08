@@ -463,6 +463,21 @@ export async function publishGallery(
     })()
   }
 
+  // Si el plan incluye entregables impresos: habilita la selección de impresión
+  // y avisa al cliente por email. Best-effort.
+  if (gType === "final_delivery") {
+    void (async () => {
+      try {
+        const { maybeEnablePrintSelection } = await import(
+          "./print-selection.service"
+        )
+        await maybeEnablePrintSelection(galleryId)
+      } catch (err) {
+        console.error("[gallery] maybeEnablePrintSelection failed", err)
+      }
+    })()
+  }
+
   return updated
 }
 

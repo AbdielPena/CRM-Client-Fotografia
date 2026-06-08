@@ -22,6 +22,8 @@ import {
   galleryStyleTokens,
   resolveCoverConfig,
 } from "@/lib/galleries/templates"
+import { PrintSelectionPanel } from "@/components/public/print-selection-panel"
+import type { GalleryPrintState } from "@/server/services/print-selection.service"
 
 type Asset = {
   id: string
@@ -185,11 +187,13 @@ export function PublicGalleryView({
   gallery,
   assets,
   studio,
+  printState = null,
 }: {
   token: string
   gallery: Gallery
   assets: Asset[]
   studio: Studio
+  printState?: GalleryPrintState | null
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState<number | null>(null)
@@ -884,6 +888,17 @@ export function PublicGalleryView({
             setPinPrompt(null)
             window.location.href = u.pathname + u.search
           }}
+        />
+      )}
+
+      {/* Selección para impresión (si el plan la incluye y está habilitada) */}
+      {printState?.enabled && (
+        <PrintSelectionPanel
+          token={token}
+          assets={assets.map((a) => ({ id: a.id, thumbUrl: a.thumbUrl }))}
+          initialState={printState}
+          clientEmail={email}
+          clientName={null}
         />
       )}
 

@@ -8,6 +8,7 @@ import {
   validateGalleryToken,
 } from "@/server/services/gallery.service"
 import { getPublicBrandingByStudioId } from "@/server/services/studio-branding.service"
+import { getGalleryPrintState } from "@/server/services/print-selection.service"
 import { GalleryPasswordGate } from "@/components/public/gallery-password-gate"
 import { PublicGalleryView } from "@/components/public/public-gallery-view"
 
@@ -71,6 +72,9 @@ export default async function PublicGalleryPage({ params }: PageProps) {
   // Branding del estudio (white-label): logo, color, footer.
   const branding = await getPublicBrandingByStudioId(view.gallery.studioId)
 
+  // Estado de selección de impresión (si el plan la incluye y está habilitada).
+  const printState = await getGalleryPrintState(view.gallery.id)
+
   return (
     <PublicGalleryView
       token={params.token}
@@ -88,6 +92,7 @@ export default async function PublicGalleryPage({ params }: PageProps) {
         hideBranding: branding?.hide_studioflow_branding ?? false,
         footerHtml: branding?.custom_footer_html ?? null,
       }}
+      printState={printState}
     />
   )
 }

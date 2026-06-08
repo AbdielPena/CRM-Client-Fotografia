@@ -229,6 +229,32 @@ export async function removePrintSelection(input: {
   return { ok: true }
 }
 
+/**
+ * Al publicar la galería de ENTREGA FINAL: si el plan incluye impresos, habilita
+ * la selección de impresión y avisa al cliente por email. Best-effort, idempotente.
+ */
+export async function maybeEnablePrintSelection(galleryId: string): Promise<boolean> {
+  const gallery = await loadGallery(galleryId)
+  if (!gallery) return false
+  const e = await resolveGalleryEntitlements(gallery)
+  if (!e.enabled || !hasPrintEntitlements(e)) return false
+
+  const sb = untypedService()
+  if (!gallery.print_selection_enabled) {
+    await sb
+      .from("galleries")
+      .update({ print_selection_enabled: true, updated_at: new Date().toISOString() })
+      .eq("id", galleryId)
+  }
+  try {
+    const { onPrintSelectionEnabled } = await import("./print-email.service")
+    await onPrintSelectionEnabled(galleryId)
+  } catch (err) {
+    console.error("[print] onPrintSelectionEnabled failed", err)
+  }
+  return true
+}
+
 export async function submitGalleryPrintSelection(input: {
   galleryId: string
   lock?: boolean
