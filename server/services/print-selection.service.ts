@@ -255,6 +255,22 @@ export async function maybeEnablePrintSelection(galleryId: string): Promise<bool
   return true
 }
 
+/** Admin: cierra (bloquea) o reabre la selección de impresión de una galería. */
+export async function setGalleryPrintLock(
+  studioId: string,
+  galleryId: string,
+  locked: boolean,
+): Promise<{ ok: true }> {
+  const sb = untypedService()
+  const { error } = await sb
+    .from("galleries")
+    .update({ print_locked: locked, updated_at: new Date().toISOString() })
+    .eq("id", galleryId)
+    .eq("studio_id", studioId)
+  if (error) throw new PrintSelectionError("LOCK_FAILED", error.message)
+  return { ok: true }
+}
+
 export async function submitGalleryPrintSelection(input: {
   galleryId: string
   lock?: boolean

@@ -1,6 +1,7 @@
 import { Printer, Download, Package, Frame, BookOpen, Check } from "lucide-react"
 
 import type { GalleryPrintState } from "@/server/services/print-selection.service"
+import { PrintLockToggle } from "@/components/galleries/print-lock-toggle"
 
 export function PrintProductionPanel({
   galleryId,
@@ -31,15 +32,22 @@ export function PrintProductionPanel({
             Producción de impresión
           </h2>
         </div>
-        {state.submitted ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
-            <Check className="h-3 w-3" /> Cliente envió su selección
-          </span>
-        ) : state.enabled ? (
-          <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-            Selección abierta
-          </span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {state.submitted ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300">
+              <Check className="h-3 w-3" /> Cliente envió su selección
+            </span>
+          ) : state.locked ? (
+            <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+              Selección cerrada
+            </span>
+          ) : state.enabled ? (
+            <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
+              Selección abierta
+            </span>
+          ) : null}
+          <PrintLockToggle galleryId={galleryId} locked={state.locked} />
+        </div>
       </div>
 
       {/* Resumen por categoría */}

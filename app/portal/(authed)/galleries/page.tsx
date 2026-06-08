@@ -1,6 +1,6 @@
 import { cookies } from "next/headers"
 import Link from "next/link"
-import { ImageIcon, ExternalLink } from "lucide-react"
+import { ImageIcon, ExternalLink, Printer, Check } from "lucide-react"
 
 import {
   PORTAL_COOKIE_NAME,
@@ -8,6 +8,10 @@ import {
 } from "@/server/services/client-portal.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { getAssetThumbUrl } from "@/server/services/gallery.service"
+import {
+  getGalleryPrintState,
+  type GalleryPrintState,
+} from "@/server/services/print-selection.service"
 import { formatDateShort } from "@/lib/utils/currency"
 import { PortalHeader, PortalEmpty } from "@/components/portal/portal-ui"
 
@@ -74,6 +78,7 @@ export default async function PortalGalleriesPage() {
       (!!g.expires_at && new Date(g.expires_at).getTime() < Date.now())
     const clickable = !!token && !isExpired
     const href = clickable ? `/g/${token}` : "#"
+    const ps = printStates[g.id]
     return (
       <Link
         key={g.id}
@@ -128,6 +133,26 @@ export default async function PortalGalleriesPage() {
               Tu fotógrafo aún no compartió esta galería públicamente.
             </p>
           ) : null}
+
+          {ps?.enabled && (
+            <div className="mt-3 rounded-lg border border-gold-200/60 bg-gold-50/50 p-2.5 dark:border-gold-500/20 dark:bg-gold-500/5">
+              <p className="flex items-center gap-1.5 text-[11px] font-semibold text-gold-700">
+                <Printer className="h-3 w-3" /> Selección de impresión
+                {ps.submitted && (
+                  <span className="ml-auto inline-flex items-center gap-0.5 text-emerald-600">
+                    <Check className="h-3 w-3" /> Enviada
+                  </span>
+                )}
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10.5px] text-muted-foreground">
+                {ps.categories.map((c) => (
+                  <span key={c.key}>
+                    {c.label} {c.used}/{c.allowed}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </Link>
     )
@@ -135,6 +160,14 @@ export default async function PortalGalleriesPage() {
 
   const selection = galleries.filter((g) => g.gallery_type !== "final_delivery")
   const delivery = galleries.filter((g) => g.gallery_type === "final_delivery")
+
+  // Estado de selección de impresión por galería de entrega final (resumen portal).
+  const printStates: Record<string, GalleryPrintState | null> = {}
+  await Promise.all(
+    delivery.map(async (g) => {
+      printStates[g.id] = await getGalleryPrintState(g.id as string)
+    }),
+  )
 
   return (
     <div className="space-y-10">
