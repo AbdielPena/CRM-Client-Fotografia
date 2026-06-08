@@ -16,11 +16,13 @@ import { getCollectionsByGallery } from "@/server/services/gallery-collection.se
 import { getSetsByGallery } from "@/server/services/gallery-set.service"
 import { getPinsByGallery } from "@/server/services/gallery-download-pin.service"
 import { getGallerySelectionQuota } from "@/server/services/selection-quota.service"
+import { getGalleryPrintState } from "@/server/services/print-selection.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { GalleryDetailTabs } from "@/components/galleries/gallery-detail-tabs"
 import { GalleryExtrasInvoiceButton } from "@/components/galleries/gallery-extras-invoice-button"
+import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
 
 export const metadata: Metadata = { title: "Detalle de galería" }
 
@@ -100,6 +102,9 @@ export default async function GalleryDetailPage({
     webUrl: getAssetWebUrl(a.web_key),
   }))
 
+  // Estado de selección de impresión (para el panel de producción).
+  const printState = await getGalleryPrintState(galleryId)
+
   return (
     <>
       <AppTopbar unreadNotifications={unread} />
@@ -161,6 +166,10 @@ export default async function GalleryDetailPage({
             )}
           </div>
         </div>
+      </div>
+
+      <div className="px-6 lg:px-8">
+        <PrintProductionPanel galleryId={galleryId} state={printState} />
       </div>
 
       <GalleryDetailTabs
