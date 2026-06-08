@@ -4,6 +4,18 @@ import { revalidatePath } from "next/cache"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { createPackage, updatePackage, deletePackage } from "@/server/services/package.service"
 import { createPackageSchema, updatePackageSchema } from "@/lib/validations/package.schema"
+import { normalizeEntitlements, type PrintEntitlements } from "@/lib/print/entitlements"
+
+function parsePrintEntitlements(
+  raw: FormDataEntryValue | null,
+): PrintEntitlements | undefined {
+  if (typeof raw !== "string" || !raw) return undefined
+  try {
+    return normalizeEntitlements(JSON.parse(raw))
+  } catch {
+    return undefined
+  }
+}
 
 export async function createPackageAction(formData: FormData) {
   const session = await requireStudioAuth()
@@ -27,7 +39,11 @@ export async function createPackageAction(formData: FormData) {
     return { error: parsed.error.flatten().fieldErrors }
   }
 
-  await createPackage(session.studioId, parsed.data)
+  await createPackage(
+    session.studioId,
+    parsed.data,
+    parsePrintEntitlements(formData.get("printEntitlements")),
+  )
   revalidatePath("/settings/packages")
   return { success: true }
 }
@@ -53,7 +69,12 @@ export async function updatePackageAction(packageId: string, formData: FormData)
     return { error: parsed.error.flatten().fieldErrors }
   }
 
-  await updatePackage(session.studioId, packageId, parsed.data)
+  await updatePackage(
+    session.studioId,
+    packageId,
+    parsed.data,
+    parsePrintEntitlements(formData.get("printEntitlements")),
+  )
   revalidatePath("/settings/packages")
   return { success: true }
 }

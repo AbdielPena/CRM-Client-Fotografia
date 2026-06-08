@@ -23,6 +23,8 @@ import {
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
+import { PrintEntitlementsEditor } from "./print-entitlements-editor"
+import type { PrintEntitlements } from "@/lib/print/entitlements"
 
 interface Package {
   id: string
@@ -38,6 +40,7 @@ interface Package {
   isActive: boolean
   contractTemplateId?: string
   formTemplateId?: string
+  printEntitlements?: PrintEntitlements
 }
 
 interface TemplateOption {
@@ -534,6 +537,8 @@ function PackageForm({
             </p>
           )}
         </div>
+
+        <PrintEntitlementsEditor defaultValue={defaultValues?.printEntitlements} />
 
         <div className="flex items-center gap-3 sm:col-span-2">
           <button

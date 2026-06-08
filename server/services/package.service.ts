@@ -9,6 +9,7 @@ import type {
   CreatePackageInput,
   UpdatePackageInput,
 } from '@/lib/validations/package.schema'
+import type { PrintEntitlements } from '@/lib/print/entitlements'
 
 // Convierte el campo `includes` (string multi-línea) a array jsonb
 function parseIncludes(value: string | undefined | null): string[] {
@@ -79,7 +80,11 @@ export async function getPackageById(studioId: string, packageId: string) {
   return data
 }
 
-export async function createPackage(studioId: string, data: CreatePackageInput) {
+export async function createPackage(
+  studioId: string,
+  data: CreatePackageInput,
+  printEntitlements?: PrintEntitlements,
+) {
   const explicit = data.slug?.trim() || ''
   const base = explicit || buildSlug(data.name) || 'paquete'
   const slug = await uniqueSlug(studioId, base)
@@ -101,6 +106,9 @@ export async function createPackage(studioId: string, data: CreatePackageInput) 
   }
   // delivery_days aún no está en los tipos generados (columna nueva)
   ;(insert as Record<string, unknown>).delivery_days = data.deliveryDays ?? null
+  if (printEntitlements !== undefined) {
+    ;(insert as Record<string, unknown>).print_entitlements = printEntitlements
+  }
   return packagesRepo.create(insert)
 }
 
@@ -108,6 +116,7 @@ export async function updatePackage(
   studioId: string,
   packageId: string,
   data: UpdatePackageInput,
+  printEntitlements?: PrintEntitlements,
 ) {
   const existing = await packagesRepo.findById(packageId)
   if (!existing || existing.studio_id !== studioId) {
@@ -115,6 +124,7 @@ export async function updatePackage(
   }
 
   const patch: Record<string, unknown> = {}
+  if (printEntitlements !== undefined) patch.print_entitlements = printEntitlements
   if (data.name !== undefined) patch.name = data.name
   if (data.description !== undefined)
     patch.description = data.description || null

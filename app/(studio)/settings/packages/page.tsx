@@ -1,5 +1,6 @@
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getPackages } from "@/server/services/package.service"
+import { normalizeEntitlements } from "@/lib/print/entitlements"
 import { getContractTemplates } from "@/server/services/contract.service"
 import { listFormTemplates } from "@/server/services/form.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
@@ -53,6 +54,7 @@ export default async function PackagesSettingsPage() {
             is_active: boolean
             default_contract_template_id: string | null
             default_form_template_id: string | null
+            print_entitlements?: unknown
           }>).map((p) => ({
             id: p.id,
             name: p.name,
@@ -67,6 +69,7 @@ export default async function PackagesSettingsPage() {
             isActive: p.is_active,
             contractTemplateId: p.default_contract_template_id ?? undefined,
             formTemplateId: p.default_form_template_id ?? undefined,
+            printEntitlements: normalizeEntitlements(p.print_entitlements),
           }))}
         />
       </div>
