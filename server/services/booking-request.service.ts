@@ -371,6 +371,24 @@ export async function countPendingBookingRequests(
   return count ?? 0
 }
 
+/**
+ * Solicitudes "en proceso" que el estudio debe atender o dar seguimiento:
+ * nuevas por revisar (pending_review) + aprobadas esperando pago del cliente
+ * (awaiting_payment). Alimenta el badge flotante de "Solicitudes".
+ */
+export async function countOpenBookingRequests(
+  studioId: string,
+): Promise<number> {
+  const supabase = createSupabaseServerClient()
+  const { count, error } = await supabase
+    .from('booking_requests')
+    .select('*', { count: 'exact', head: true })
+    .eq('studio_id', studioId)
+    .in('status', ['pending_review', 'awaiting_payment'])
+  if (error) throwServiceError("BOOKING_COUNT_FAILED", error)
+  return count ?? 0
+}
+
 /** Carga studio + request + package en un solo round-trip para emails. */
 async function loadContextForEmail(studioId: string, requestId: string) {
   const svc = createSupabaseServiceClient()

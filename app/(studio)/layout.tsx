@@ -7,7 +7,7 @@ import {
 } from "@/components/layout/sidebar-context"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
-import { countPendingBookingRequests } from "@/server/services/booking-request.service"
+import { countOpenBookingRequests } from "@/server/services/booking-request.service"
 
 export default async function StudioLayout({
   children,
@@ -17,7 +17,7 @@ export default async function StudioLayout({
   const session = await requireStudioAuth()
   const [unread, pendingRequests] = await Promise.all([
     countUnreadNotifications(session.studioId),
-    countPendingBookingRequests(session.studioId).catch(() => 0),
+    countOpenBookingRequests(session.studioId).catch(() => 0),
   ])
 
   const cookieStore = cookies()
