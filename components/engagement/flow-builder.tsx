@@ -19,6 +19,12 @@ import { toast } from "sonner"
 
 import { createCustomEngagementAutomationAction } from "@/server/actions/engagement.actions"
 import { draftEngagementMessageAction } from "@/server/actions/engagement-ai.actions"
+import { whatsAppVersionOfTemplateAction } from "@/server/actions/whatsapp-templates.actions"
+
+export interface EmailTemplateOption {
+  slug: string
+  label: string
+}
 
 type TriggerType = "date_birthday" | "date_inactivity" | "date_final_delivery"
 
@@ -56,7 +62,11 @@ const TRIGGERS: Array<{ type: TriggerType; label: string; icon: typeof Cake }> =
 const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground focus:border-brand focus:outline-none"
 
-export function FlowBuilder() {
+export function FlowBuilder({
+  emailTemplates = [],
+}: {
+  emailTemplates?: EmailTemplateOption[]
+}) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const idRef = useRef(1)
@@ -214,7 +224,7 @@ export function FlowBuilder() {
                   </button>
                 </div>
               </div>
-              <BlockConfig block={b} update={(p) => updateBlock(b.id, p)} />
+              <BlockConfig block={b} update={(p) => updateBlock(b.id, p)} emailTemplates={emailTemplates} />
             </div>
           )
         })}
@@ -252,7 +262,15 @@ export function FlowBuilder() {
   )
 }
 
-function BlockConfig({ block, update }: { block: Block; update: (p: Record<string, unknown>) => void }) {
+function BlockConfig({
+  block,
+  update,
+  emailTemplates,
+}: {
+  block: Block
+  update: (p: Record<string, unknown>) => void
+  emailTemplates: EmailTemplateOption[]
+}) {
   const c = block.config
   if (block.type === "wait") {
     return (
@@ -267,7 +285,7 @@ function BlockConfig({ block, update }: { block: Block; update: (p: Record<strin
     return <SendEmailConfig c={c} update={update} />
   }
   if (block.type === "send_whatsapp") {
-    return <SendWhatsAppConfig c={c} update={update} />
+    return <SendWhatsAppConfig c={c} update={update} emailTemplates={emailTemplates} />
   }
   if (block.type === "request_review") {
     return <p className="text-[12px] text-muted-foreground">Envía la solicitud de reseña con tu link de feedback ({"{{review_link}}"}). El cliente con 4★+ va a Google/Facebook.</p>
@@ -302,13 +320,24 @@ function BlockConfig({ block, update }: { block: Block; update: (p: Record<strin
 function SendWhatsAppConfig({
   c,
   update,
+  emailTemplates,
 }: {
   c: Record<string, unknown>
   update: (p: Record<string, unknown>) => void
+  emailTemplates: EmailTemplateOption[]
 }) {
   const [drafting, startDraft] = useTransition()
   const [draft, setDraft] = useState<string | null>(null)
   const [brief, setBrief] = useState("")
+
+  const useEmailTemplate = (slug: string) => {
+    if (!slug) return
+    startDraft(async () => {
+      const r = await whatsAppVersionOfTemplateAction(slug)
+      if (r.ok) setDraft(r.text)
+      else toast.error(r.error)
+    })
+  }
 
   const doDraft = () => {
     if (!brief.trim()) {
@@ -351,6 +380,29 @@ function SendWhatsAppConfig({
       <p className="text-[11px] text-muted-foreground">
         El primer dato <code>{"{{1}}"}</code> de la plantilla se llena con el nombre del cliente. La plantilla debe estar <strong>aprobada en Meta</strong> (WhatsApp Manager → Plantillas) y enviarse desde un número de producción.
       </p>
+
+      {emailTemplates.length > 0 && (
+        <div>
+          <label className="mb-1 block text-[12px] text-muted-foreground">
+            Usar el contenido de una plantilla de email
+          </label>
+          <select
+            defaultValue=""
+            onChange={(e) => useEmailTemplate(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— Elegir plantilla de email —</option>
+            {emailTemplates.map((t) => (
+              <option key={t.slug} value={t.slug}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Convierte tu plantilla de email a texto de WhatsApp (aparece abajo) para crearla en Meta.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2 rounded-lg border border-emerald-400/40 bg-emerald-50/50 p-3 dark:bg-emerald-950/20">
         <label className="flex items-center gap-1 text-[12px] font-medium text-emerald-700 dark:text-emerald-300">
