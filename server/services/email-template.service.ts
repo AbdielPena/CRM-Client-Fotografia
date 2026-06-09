@@ -44,6 +44,13 @@ export type TemplateSlug =
   | "delivery_ready"
   // Otros
   | "prints_ready"
+  // Client Engagement Hub
+  | "engagement_birthday_soon"
+  | "engagement_birthday_greeting"
+  | "engagement_post_delivery"
+  | "engagement_reengagement"
+  | "engagement_review_request"
+  | "engagement_generic"
 
 export type TemplateVariable = {
   key: string
@@ -57,7 +64,7 @@ export const TEMPLATE_CATALOG: Record<
   {
     label: string
     description: string
-    category: "client" | "booking" | "contract" | "invoice" | "gallery" | "delivery"
+    category: "client" | "booking" | "contract" | "invoice" | "gallery" | "delivery" | "engagement"
     defaultSubject: string
     defaultBodyHtml: string
     variables: TemplateVariable[]
@@ -372,6 +379,86 @@ export const TEMPLATE_CATALOG: Record<
       `<p>Hola {{client_name}},</p><p>Tus impresiones ya están listas para retirar.</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "Juan" },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  engagement_birthday_soon: {
+    label: "Cumpleaños — antes",
+    description: "Saludo previo al cumpleaños del cliente (Engagement Hub).",
+    category: "engagement",
+    defaultSubject: "🎂 Ya casi es tu cumpleaños, {{client_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}} 👋</p><p>Ya falta poco para tu cumpleaños. Esperamos que este nuevo año esté lleno de momentos increíbles.</p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "birthday", label: "Cumpleaños", example: "20 may" },
+      { key: "discount_code", label: "Código de descuento", example: "CUMPLE20" },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  engagement_birthday_greeting: {
+    label: "Cumpleaños — el día",
+    description: "Felicitación el día del cumpleaños del cliente (Engagement Hub).",
+    category: "engagement",
+    defaultSubject: "🎉 ¡Feliz cumpleaños, {{client_name}}!",
+    defaultBodyHtml:
+      `<p>¡Feliz cumpleaños {{client_name}}! 🎉</p><p>Esperamos que disfrutes muchísimo tu día. Gracias por permitirnos formar parte de momentos tan especiales.</p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "discount_code", label: "Código de descuento", example: "CUMPLE20" },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  engagement_post_delivery: {
+    label: "Post-entrega — feedback",
+    description: "Agradecimiento + encuesta tras la entrega final (Engagement Hub).",
+    category: "engagement",
+    defaultSubject: "¿Cómo fue tu experiencia con {{studio_name}}?",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>¡Gracias por confiar en nosotros para {{project_name}}! Nos encantaría saber cómo fue tu experiencia.</p><p><a href="{{review_link}}">Cuéntanos aquí →</a></p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "project_name", label: "Proyecto", example: "Quinceañera" },
+      { key: "delivery_date", label: "Fecha de entrega", example: "08 jun 2026" },
+      { key: "review_link", label: "Link de encuesta/reseña", example: "https://..." },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  engagement_reengagement: {
+    label: "Reactivación — inactividad",
+    description: "Reconecta con clientes que no reservan hace tiempo (Engagement Hub).",
+    category: "engagement",
+    defaultSubject: "Hace tiempo que no hablamos 😊",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>Hace tiempo que no hablamos 😊 Queríamos saludarte y mostrarte nuestras nuevas experiencias.</p><p>Si reservas pronto, usa <strong>{{discount_code}}</strong>.</p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "discount_code", label: "Código de descuento", example: "VUELVE15" },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  engagement_review_request: {
+    label: "Solicitud de reseña / testimonio",
+    description: "Pide una reseña en Google/Facebook o un testimonio (Engagement Hub).",
+    category: "engagement",
+    defaultSubject: "Nos encantaría conocer tu opinión, {{client_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>Nos encantaría conocer tu opinión. Tu reseña nos ayuda muchísimo.</p><p><a href="{{review_link}}">Dejar mi reseña →</a></p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "review_link", label: "Link de reseña", example: "https://g.page/..." },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  engagement_generic: {
+    label: "Engagement — genérico",
+    description: "Plantilla base editable para campañas de fidelización (Engagement Hub).",
+    category: "engagement",
+    defaultSubject: "Un mensaje de {{studio_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>Queríamos saludarte.</p><p>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
       { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
     ],
   },

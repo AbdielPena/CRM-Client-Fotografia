@@ -23,6 +23,9 @@ import { AppTopbar } from "@/components/layout/app-topbar"
 import { GalleryDetailTabs } from "@/components/galleries/gallery-detail-tabs"
 import { GalleryExtrasInvoiceButton } from "@/components/galleries/gallery-extras-invoice-button"
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
+import { DriveBackupPanel } from "@/components/galleries/drive-backup-panel"
+import { getGoogleDriveStatus } from "@/server/services/gallery-drive.service"
+import { getDriveBackupStatusAction } from "@/server/actions/gallery-drive.actions"
 
 export const metadata: Metadata = { title: "Detalle de galería" }
 
@@ -105,6 +108,11 @@ export default async function GalleryDetailPage({
   // Estado de selección de impresión (para el panel de producción).
   const printState = await getGalleryPrintState(galleryId)
 
+  // Entrega a Google Drive (solo galerías de entrega final).
+  const isFinalDelivery = (gallery.gallery_type ?? "selection") === "final_delivery"
+  const driveStatus = isFinalDelivery ? await getGoogleDriveStatus(session.studioId) : null
+  const driveBackup = isFinalDelivery ? await getDriveBackupStatusAction(galleryId) : null
+
   return (
     <>
       <AppTopbar unreadNotifications={unread} />
@@ -170,6 +178,15 @@ export default async function GalleryDetailPage({
 
       <div className="px-6 lg:px-8">
         <PrintProductionPanel galleryId={galleryId} state={printState} />
+        {isFinalDelivery && driveStatus && (
+          <DriveBackupPanel
+            galleryId={galleryId}
+            connected={driveStatus.connected}
+            needsReconnect={driveStatus.needsReconnect}
+            driveEmail={driveStatus.email}
+            initialStatus={driveBackup}
+          />
+        )}
       </div>
 
       <GalleryDetailTabs

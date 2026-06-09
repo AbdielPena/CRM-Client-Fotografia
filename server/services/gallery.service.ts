@@ -492,6 +492,19 @@ export async function publishGallery(
     })()
   }
 
+  // Engagement Hub: dispara automatizaciones de "entrega final" (gracias /
+  // feedback / reseña post-entrega). Best-effort.
+  if (gType === "final_delivery") {
+    void (async () => {
+      try {
+        const { enrollByFinalDelivery } = await import("./engagement.service")
+        await enrollByFinalDelivery(studioId, galleryId)
+      } catch (err) {
+        console.error("[gallery] engagement enrollByFinalDelivery failed", err)
+      }
+    })()
+  }
+
   return updated
 }
 

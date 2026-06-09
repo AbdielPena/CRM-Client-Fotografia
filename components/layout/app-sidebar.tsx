@@ -43,6 +43,7 @@ import {
   Workflow,
   Activity,
   Bot,
+  HeartHandshake,
   type LucideIcon,
 } from "lucide-react"
 
@@ -134,6 +135,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: "link", href: "/ai-assistant", label: "AI Assistant", icon: Bot },
       { type: "link", href: "/automations", label: "Automatizaciones", icon: Sparkles },
+      { type: "link", href: "/engagement", label: "Engagement Hub", icon: HeartHandshake },
       { type: "link", href: "/settings/webhooks", label: "Webhooks salientes", icon: Webhook },
       { type: "link", href: "/settings/api", label: "API y tokens", icon: Key },
     ],

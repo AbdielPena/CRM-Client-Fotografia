@@ -28,6 +28,9 @@ const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3'
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
+  // Drive: acceso SOLO a archivos/carpetas creados por la app (mínimo privilegio).
+  // Habilita el backup de galerías de entrega a Google Drive.
+  'https://www.googleapis.com/auth/drive.file',
   'openid',
   'email',
 ]
