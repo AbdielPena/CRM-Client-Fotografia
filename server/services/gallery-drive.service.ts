@@ -207,8 +207,8 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
         .eq("id", backupId)
     }
 
-    // Compartir + link.
-    await drive.shareFolder(studioId, projectFolderId, { email: clientEmail })
+    // Compartir como "cualquiera con el enlace" (lector, sin descubrimiento/indexado).
+    await drive.shareFolder(studioId, projectFolderId, {})
     const link = await drive.getFileLink(studioId, projectFolderId)
 
     const total = assets.length * tracks.length
@@ -220,7 +220,7 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
         status: finalStatus,
         web_view_link: link,
         shared_with_email: clientEmail,
-        share_type: clientEmail ? "user" : "anyone_with_link",
+        share_type: "anyone_with_link",
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         last_error: finalStatus === "failed" ? "No se subió ningún archivo" : null,

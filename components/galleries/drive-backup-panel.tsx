@@ -207,10 +207,10 @@ export function DriveBackupPanel({
       {status?.status === "failed" && status.lastError && (
         <p className="mt-2 text-[11.5px] text-red-600">{status.lastError}</p>
       )}
-      {status?.webViewLink && status.sharedWithEmail && status.status === "completed" && (
+      {status?.webViewLink && status.status === "completed" && (
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Compartida con <strong>{status.sharedWithEmail}</strong> (lector). Se le envió el link por
-          correo.
+          <strong>Cualquiera con el enlace</strong> puede verla y descargarla. Se le envió el link al
+          cliente por correo.
         </p>
       )}
     </div>
