@@ -21,6 +21,8 @@ const PUBLIC_PREFIXES = [
   '/sign/', // firma pública de contrato (también abre la factura 50%)
   '/i/', // factura pública
   '/f/', // formularios públicos
+  '/fb/', // feedback / reseñas público (Engagement Hub)
+  '/api/feedback', // submit de feedback público (auth por token)
   '/api/auth', // endpoints de auth
   '/api/webhooks',
   '/api/health',

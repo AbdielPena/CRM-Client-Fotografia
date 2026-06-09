@@ -3,6 +3,7 @@ import "server-only"
 import { untypedService } from "@/server/supabase/untyped"
 import { resolveTemplate, TEMPLATE_CATALOG } from "@/server/services/email-template.service"
 import { enqueueEmail } from "@/server/services/email.service"
+import { getOrCreateFeedbackToken, feedbackUrl } from "@/server/services/engagement-feedback.service"
 
 /**
  * Client Engagement Hub — motor de automatizaciones por FECHA + secuencias.
@@ -487,7 +488,16 @@ export async function advanceEngagementEnrollments(limit = 50): Promise<{ steps:
             await logRun(e.studio_id, e.id, step.id, "send_email", "skipped", undefined, "cliente sin email")
           } else {
             const extraVars = (step.config?.vars as Record<string, string>) ?? {}
-            const vars = { ...cv.vars, ...extraVars }
+            // Genera (o reusa) el link de feedback/reseña del cliente para {{review_link}}.
+            let reviewLink = ""
+            try {
+              reviewLink = feedbackUrl(
+                await getOrCreateFeedbackToken(e.studio_id, e.client_id, e.automation_id),
+              )
+            } catch (err) {
+              console.error("[engagement] review link", err)
+            }
+            const vars = { ...cv.vars, review_link: reviewLink, ...extraVars }
             const slug = (step.config?.template_slug as string) ?? "engagement_generic"
             // Usa el default del CATÁLOGO para el slug (la plantilla bonita), y
             // permite overrides inline del paso. resolveTemplate aún prioriza la
