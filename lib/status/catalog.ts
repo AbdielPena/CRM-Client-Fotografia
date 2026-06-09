@@ -228,6 +228,22 @@ export const STATUS_WORKFLOWS: StatusWorkflow[] = [
     ],
   },
   {
+    key: "seleccion_impresion",
+    name: "Selección de impresión (álbum / marcos / prints)",
+    description:
+      "Al publicar la entrega final, el cliente elige portada de álbum, marcos e impresiones según su plan; el estudio descarga un ZIP organizado por carpetas con los originales.",
+    modules: ["galleries", "packages", "deliveries"],
+    checklist: [
+      { key: "entitlements_plan", label: "El plan define impresos editables (portada, marcos, impresiones)" },
+      { key: "habilita_publicar", label: "Al publicar la entrega final se habilita la selección" },
+      { key: "email_cliente", label: "El cliente recibe el email para elegir sus impresiones" },
+      { key: "seleccion_respeta_plan", label: "El cliente selecciona respetando las cantidades del plan" },
+      { key: "limite_categoria", label: "Se respeta el límite por categoría (no excede el plan)" },
+      { key: "envio_notifica", label: "El cliente envía su selección y el estudio es notificado" },
+      { key: "zip_organizado", label: "El estudio descarga un ZIP organizado por carpetas (originales, máx. calidad)" },
+    ],
+  },
+  {
     key: "correos",
     name: "Correos (cola + envío)",
     description: "Los emails se encolan y se envían vía SMTP/proveedor.",

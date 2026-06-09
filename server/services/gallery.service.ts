@@ -277,14 +277,28 @@ export async function createGallery(
   const galleryType: "selection" | "final_delivery" =
     data.galleryType === "final_delivery" ? "final_delivery" : "selection"
 
+  // Heredar el paquete del proyecto vinculado si no se especificó explícitamente.
+  // Es la única vía por la que una galería de entrega final obtiene su package_id,
+  // necesario para resolver los entitlements de impresión (álbum/marcos/prints).
+  let packageId = data.packageId ?? null
+  if (!packageId && data.projectId) {
+    const { data: proj } = await db
+      .from("projects")
+      .select("package_id")
+      .eq("id", data.projectId)
+      .eq("studio_id", studioId)
+      .maybeSingle()
+    if (proj?.package_id) packageId = proj.package_id as string
+  }
+
   // Heredar defaults del plan (si la galería referencia un paquete).
   let availabilityDays = data.availabilityDays ?? null
   let templateId = data.templateId ?? null
-  if (data.packageId) {
+  if (packageId) {
     const { data: pkg } = await db
       .from("packages")
       .select("gallery_availability_days, gallery_default_template")
-      .eq("id", data.packageId)
+      .eq("id", packageId)
       .eq("studio_id", studioId)
       .maybeSingle()
     if (pkg) {
@@ -314,7 +328,7 @@ export async function createGallery(
       gallery_type: galleryType,
       template_id: templateId,
       availability_days: availabilityDays,
-      package_id: data.packageId ?? null,
+      package_id: packageId,
     })
     .select("*")
     .single()

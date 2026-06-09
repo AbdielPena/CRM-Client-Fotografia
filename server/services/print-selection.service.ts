@@ -239,18 +239,21 @@ export async function maybeEnablePrintSelection(galleryId: string): Promise<bool
   const e = await resolveGalleryEntitlements(gallery)
   if (!e.enabled || !hasPrintEntitlements(e)) return false
 
+  // Solo enviar el email la PRIMERA vez que se habilita (evita duplicados al
+  // re-publicar una galería de entrega final ya habilitada).
+  const wasEnabled = !!gallery.print_selection_enabled
   const sb = untypedService()
-  if (!gallery.print_selection_enabled) {
+  if (!wasEnabled) {
     await sb
       .from("galleries")
       .update({ print_selection_enabled: true, updated_at: new Date().toISOString() })
       .eq("id", galleryId)
-  }
-  try {
-    const { onPrintSelectionEnabled } = await import("./print-email.service")
-    await onPrintSelectionEnabled(galleryId)
-  } catch (err) {
-    console.error("[print] onPrintSelectionEnabled failed", err)
+    try {
+      const { onPrintSelectionEnabled } = await import("./print-email.service")
+      await onPrintSelectionEnabled(galleryId)
+    } catch (err) {
+      console.error("[print] onPrintSelectionEnabled failed", err)
+    }
   }
   return true
 }
