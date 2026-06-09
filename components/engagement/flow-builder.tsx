@@ -13,10 +13,12 @@ import {
   Star,
   Save,
   GripVertical,
+  Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { createCustomEngagementAutomationAction } from "@/server/actions/engagement.actions"
+import { draftEngagementMessageAction } from "@/server/actions/engagement-ai.actions"
 
 type TriggerType = "date_birthday" | "date_inactivity" | "date_final_delivery"
 
@@ -260,16 +262,7 @@ function BlockConfig({ block, update }: { block: Block; update: (p: Record<strin
     )
   }
   if (block.type === "send_email") {
-    return (
-      <div>
-        <label className="mb-1 block text-[12px] text-muted-foreground">Plantilla (editable en Plantillas de email)</label>
-        <select value={String(c.template_slug ?? "engagement_generic")} onChange={(e) => update({ template_slug: e.target.value })} className={inputCls}>
-          {EMAIL_TEMPLATES.map((t) => (
-            <option key={t.slug} value={t.slug}>{t.label}</option>
-          ))}
-        </select>
-      </div>
-    )
+    return <SendEmailConfig c={c} update={update} />
   }
   if (block.type === "request_review") {
     return <p className="text-[12px] text-muted-foreground">Envía la solicitud de reseña con tu link de feedback ({"{{review_link}}"}). El cliente con 4★+ va a Google/Facebook.</p>
@@ -299,4 +292,105 @@ function BlockConfig({ block, update }: { block: Block; update: (p: Record<strin
     return <input value={String(c.title ?? "")} onChange={(e) => update({ title: e.target.value })} placeholder="Texto de la notificación interna" className={inputCls} />
   }
   return null
+}
+
+function SendEmailConfig({
+  c,
+  update,
+}: {
+  c: Record<string, unknown>
+  update: (p: Record<string, unknown>) => void
+}) {
+  const aiOn = !!c.ai_enabled
+  const [previewing, startPreview] = useTransition()
+  const [preview, setPreview] = useState<{ subject: string; body: string } | null>(null)
+
+  const doPreview = () => {
+    const brief = String(c.ai_brief ?? "").trim()
+    if (!brief) {
+      toast.error("Escribe de qué trata el mensaje")
+      return
+    }
+    startPreview(async () => {
+      const r = await draftEngagementMessageAction({
+        channel: "email",
+        brief,
+        clientName: "María (ejemplo)",
+        tone: (c.ai_tone as string) ?? null,
+      })
+      if (r.ok) setPreview({ subject: r.subject, body: r.body })
+      else toast.error(r.error)
+    })
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-2 text-[12.5px] font-medium text-foreground">
+        <input
+          type="checkbox"
+          checked={aiOn}
+          onChange={(e) => update({ ai_enabled: e.target.checked })}
+          className="h-4 w-4 rounded border-border text-brand focus:ring-brand/30"
+        />
+        <Sparkles className="h-3.5 w-3.5 text-brand" /> Redactar con IA (único por cliente)
+      </label>
+
+      {aiOn ? (
+        <div className="space-y-2 rounded-lg border border-brand/30 bg-brand/5 p-3">
+          <label className="block text-[12px] text-muted-foreground">¿De qué trata el mensaje?</label>
+          <textarea
+            value={String(c.ai_brief ?? "")}
+            onChange={(e) => update({ ai_brief: e.target.value })}
+            rows={2}
+            placeholder="Ej: Felicitar el cumpleaños con calidez e invitar a una sesión de fotos."
+            className={inputCls}
+          />
+          <div className="flex items-center gap-2">
+            <input
+              value={String(c.ai_tone ?? "")}
+              onChange={(e) => update({ ai_tone: e.target.value })}
+              placeholder="Tono (opcional): cálido, festivo…"
+              className={`${inputCls} flex-1`}
+            />
+            <button
+              type="button"
+              onClick={doPreview}
+              disabled={previewing}
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-brand bg-card px-2.5 py-1.5 text-[12px] font-medium text-brand transition-colors hover:bg-brand/10 disabled:opacity-50"
+            >
+              {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              Previsualizar
+            </button>
+          </div>
+          {preview && (
+            <div className="rounded-lg border border-border bg-background p-2.5 text-[12px]">
+              <p className="font-semibold text-foreground">{preview.subject || "(sin asunto)"}</p>
+              <div
+                className="mt-1 leading-snug text-muted-foreground [&_p]:mb-1.5"
+                dangerouslySetInnerHTML={{ __html: preview.body }}
+              />
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            La IA escribe un mensaje distinto para cada cliente al enviar. Reemplaza la plantilla.
+          </p>
+        </div>
+      ) : (
+        <div>
+          <label className="mb-1 block text-[12px] text-muted-foreground">Plantilla (editable en Plantillas de email)</label>
+          <select
+            value={String(c.template_slug ?? "engagement_generic")}
+            onChange={(e) => update({ template_slug: e.target.value })}
+            className={inputCls}
+          >
+            {EMAIL_TEMPLATES.map((t) => (
+              <option key={t.slug} value={t.slug}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+    </div>
+  )
 }

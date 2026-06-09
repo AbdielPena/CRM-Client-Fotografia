@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Users, Send, X, Loader2, Megaphone } from "lucide-react"
+import { Users, Send, X, Loader2, Megaphone, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { SEGMENT_LIST, SEGMENT_BY_KEY } from "@/lib/engagement/segments"
@@ -9,18 +9,21 @@ import {
   previewSegmentAction,
   sendSegmentCampaignAction,
 } from "@/server/actions/engagement-segments.actions"
+import { draftEngagementMessageAction } from "@/server/actions/engagement-ai.actions"
 
 export function SegmentCampaigns({ counts }: { counts: Record<string, number> }) {
   const [open, setOpen] = useState<string | null>(null) // segment key
   const [previewCount, setPreviewCount] = useState<number | null>(null)
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
+  const [aiBrief, setAiBrief] = useState("")
   const [pending, start] = useTransition()
 
   const openComposer = (key: string) => {
     setOpen(key)
     setSubject("")
     setBody("<p>Hola {{client_name}},</p>\n<p></p>\n<p>— {{studio_name}}</p>")
+    setAiBrief("")
     setPreviewCount(null)
     start(async () => {
       const r = await previewSegmentAction(key)
@@ -43,6 +46,27 @@ export function SegmentCampaigns({ counts }: { counts: Record<string, number> })
         setOpen(null)
       } else {
         toast.error(r.message ?? "Error")
+      }
+    })
+  }
+
+  const generateAi = () => {
+    if (!aiBrief.trim()) {
+      toast.error("Escribe una idea para la IA")
+      return
+    }
+    const seg = open ? SEGMENT_BY_KEY[open] : null
+    start(async () => {
+      const r = await draftEngagementMessageAction({
+        channel: "email",
+        brief: `${aiBrief}${seg ? ` (para el segmento: ${seg.label})` : ""}`,
+      })
+      if (r.ok) {
+        if (r.subject) setSubject(r.subject)
+        if (r.body) setBody(r.body)
+        toast.success("Mensaje generado con IA")
+      } else {
+        toast.error(r.error)
       }
     })
   }
@@ -107,6 +131,28 @@ export function SegmentCampaigns({ counts }: { counts: Record<string, number> })
                 <>Se enviará a <strong>{previewCount}</strong> cliente(s) con email en este segmento.</>
               )}
             </p>
+            <div className="mb-3 rounded-lg border border-brand/30 bg-brand/5 p-2.5">
+              <label className="mb-1 flex items-center gap-1 text-[12px] font-medium text-brand">
+                <Sparkles className="h-3.5 w-3.5" /> Redactar con IA
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  value={aiBrief}
+                  onChange={(e) => setAiBrief(e.target.value)}
+                  placeholder="Ej: anunciar promo de sesiones navideñas"
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-[13px] text-foreground focus:border-brand focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={generateAi}
+                  disabled={pending}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-brand bg-card px-3 py-2 text-[12px] font-medium text-brand transition-colors hover:bg-brand/10 disabled:opacity-50"
+                >
+                  {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                  Generar
+                </button>
+              </div>
+            </div>
             <label className="mb-1 block text-[12px] font-medium text-foreground">Asunto</label>
             <input
               value={subject}

@@ -1,8 +1,9 @@
 import "server-only"
 
 import { untypedService } from "@/server/supabase/untyped"
-import { resolveTemplate, TEMPLATE_CATALOG } from "@/server/services/email-template.service"
+import { resolveTemplate, renderTemplate, TEMPLATE_CATALOG } from "@/server/services/email-template.service"
 import { enqueueEmail } from "@/server/services/email.service"
+import { draftMessage } from "@/server/services/ai/engagement-ai.service"
 import { getOrCreateFeedbackToken, feedbackUrl } from "@/server/services/engagement-feedback.service"
 
 /**
@@ -445,6 +446,43 @@ async function runSendEmail(e: EnrollmentRow, step: StepRow, slugOverride?: stri
       console.error("[engagement] review link", err)
     }
     const vars = { ...cv.vars, review_link: reviewLink, ...extraVars }
+
+    // Modo IA: redacta el mensaje personalizado con Gemini (gratis) usando el
+    // brief del paso + el nombre del cliente. Si la IA falla, cae a la plantilla.
+    if (
+      !slugOverride &&
+      step.config?.ai_enabled &&
+      typeof step.config?.ai_brief === "string" &&
+      (step.config.ai_brief as string).trim()
+    ) {
+      try {
+        const ai = await draftMessage(e.studio_id, {
+          channel: "email",
+          brief: String(step.config.ai_brief),
+          clientName: cv.name,
+          tone: (step.config?.ai_tone as string) ?? null,
+        })
+        if (!ai.error && ai.body) {
+          const subject = renderTemplate(ai.subject || "Un mensaje de {{studio_name}}", vars)
+          const bodyHtml = renderTemplate(ai.body, vars)
+          await enqueueEmail({
+            studioId: e.studio_id,
+            toEmail: cv.email,
+            toName: cv.name,
+            subject,
+            bodyHtml,
+            fromName: cv.vars.studio_name,
+            relatedEntityType: "client",
+            relatedEntityId: e.client_id,
+          })
+          await logRun(e.studio_id, e.id, step.id, step.block_type, "done", { to: cv.email, ai: true })
+          return
+        }
+      } catch (err) {
+        console.error("[engagement] ai draft failed, fallback a plantilla", err)
+      }
+    }
+
     const slug = slugOverride ?? (step.config?.template_slug as string) ?? "engagement_generic"
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cat = (TEMPLATE_CATALOG as any)[slug] as
