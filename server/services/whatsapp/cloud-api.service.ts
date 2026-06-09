@@ -1,6 +1,10 @@
 import "server-only"
 
 import { untypedService } from "@/server/supabase/untyped"
+import {
+  WHATSAPP_TEMPLATE_CATALOG,
+  type WhatsAppTemplateDef,
+} from "@/lib/whatsapp/meta-templates"
 
 /**
  * WhatsApp Cloud API (Meta Graph API). Credenciales por estudio en
@@ -192,4 +196,130 @@ export async function sendTemplateMessage(
  */
 export async function sendWhatsAppTest(studioId: string, to: string): Promise<SendResult> {
   return sendTemplateMessage(studioId, to, "hello_world", "en_US", [])
+}
+
+// ───────────────────────── Plantillas (Message Templates API) ─────────────────────────
+// Crear/aprobar plantillas por código vía Graph API, sin la UI de Meta.
+// Endpoint: GET/POST /{WABA_ID}/message_templates
+
+export interface TemplateStatus {
+  name: string
+  /** APPROVED | PENDING | REJECTED | PAUSED | DISABLED… */
+  status: string
+  category?: string
+  language?: string
+  id?: string
+}
+
+export interface SyncTemplateResult {
+  name: string
+  label: string
+  ok: boolean
+  /** estado tras crear (PENDING) o el actual si ya existía. */
+  status?: string
+  /** true si ya existía y no se recreó. */
+  skipped?: boolean
+  error?: string
+}
+
+/** Lista las plantillas existentes en la WABA con su estado de aprobación. */
+export async function listWhatsAppTemplates(
+  studioId: string,
+): Promise<{ ok: boolean; templates?: TemplateStatus[]; error?: string }> {
+  const cfg = await getWhatsAppConfig(studioId)
+  if (!cfg) return { ok: false, error: "WhatsApp no está configurado." }
+  if (!cfg.businessAccountId)
+    return { ok: false, error: "Falta el Business Account ID (WABA) en las credenciales." }
+  try {
+    const res = await fetch(
+      `${GRAPH}/${cfg.businessAccountId}/message_templates?fields=name,status,category,language&limit=200`,
+      { headers: { Authorization: `Bearer ${cfg.accessToken}` } },
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (await res.json().catch(() => ({}))) as any
+    if (!res.ok) return { ok: false, error: data?.error?.message ?? `HTTP ${res.status}` }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const templates: TemplateStatus[] = (data?.data ?? []).map((t: any) => ({
+      name: t.name,
+      status: t.status,
+      category: t.category,
+      language: t.language,
+      id: t.id,
+    }))
+    return { ok: true, templates }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error de red." }
+  }
+}
+
+/** Crea una plantilla en Meta (queda en revisión / PENDING). */
+async function createWhatsAppTemplate(
+  cfg: WhatsAppConfig,
+  def: WhatsAppTemplateDef,
+): Promise<SyncTemplateResult> {
+  try {
+    const body = {
+      name: def.name,
+      language: def.language,
+      category: def.category,
+      components: [
+        {
+          type: "BODY",
+          text: def.body,
+          ...(def.example.length > 0 ? { example: { body_text: [def.example] } } : {}),
+        },
+      ],
+    }
+    const res = await fetch(`${GRAPH}/${cfg.businessAccountId}/message_templates`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfg.accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (await res.json().catch(() => ({}))) as any
+    if (!res.ok) {
+      const msg = data?.error?.error_user_msg ?? data?.error?.message ?? `HTTP ${res.status}`
+      console.error("[whatsapp] template create fail", def.name, JSON.stringify(data?.error ?? data).slice(0, 300))
+      return { name: def.name, label: def.label, ok: false, error: msg }
+    }
+    return { name: def.name, label: def.label, ok: true, status: data?.status ?? "PENDING" }
+  } catch (e) {
+    return { name: def.name, label: def.label, ok: false, error: e instanceof Error ? e.message : "Error de red." }
+  }
+}
+
+/**
+ * Sincroniza el catálogo de StudioFlow con Meta: crea las plantillas que aún
+ * no existen en la WABA (las existentes se omiten, conservando su estado).
+ */
+export async function syncWhatsAppTemplates(
+  studioId: string,
+): Promise<{ ok: boolean; error?: string; results?: SyncTemplateResult[] }> {
+  const cfg = await getWhatsAppConfig(studioId)
+  if (!cfg) return { ok: false, error: "WhatsApp no está configurado." }
+  if (!cfg.businessAccountId)
+    return {
+      ok: false,
+      error:
+        "Falta el Business Account ID (WABA). Guárdalo en las credenciales para poder crear plantillas.",
+    }
+
+  // Plantillas ya existentes (por nombre) para no duplicar.
+  const existing = await listWhatsAppTemplates(studioId)
+  if (!existing.ok) return { ok: false, error: existing.error }
+  const byName = new Map((existing.templates ?? []).map((t) => [t.name, t]))
+
+  const results: SyncTemplateResult[] = []
+  for (const def of WHATSAPP_TEMPLATE_CATALOG) {
+    const cur = byName.get(def.name)
+    if (cur) {
+      results.push({ name: def.name, label: def.label, ok: true, skipped: true, status: cur.status })
+      continue
+    }
+    results.push(await createWhatsAppTemplate(cfg, def))
+  }
+  return { ok: true, results }
 }
