@@ -65,6 +65,15 @@ function deriveStages(input: {
 
   const order = STAGE_ORDER
 
+  // Pipeline monótono: alcanzar una etapa posterior implica que las anteriores
+  // ya ocurrieron. Ej.: si el cliente envió su selección, la sesión claramente
+  // se hizo aunque su fecha sea futura — no la dejes "en curso" detrás.
+  let laterDone = false
+  for (let i = order.length - 1; i >= 0; i--) {
+    if (done[order[i]]) laterDone = true
+    else if (laterDone) done[order[i]] = true
+  }
+
   const firstPending = order.find((k) => !done[k]) ?? null
 
   return order.map((key) => {
