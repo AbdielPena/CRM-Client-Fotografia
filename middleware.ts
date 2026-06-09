@@ -24,6 +24,8 @@ const PUBLIC_PREFIXES = [
   '/fb/', // feedback / reseñas público (Engagement Hub)
   '/api/feedback', // submit de feedback público (auth por token)
   '/api/forms', // guardar/enviar formularios públicos (auth por access_token del form_response)
+  '/api/galleries/public', // interacciones de galería pública: favoritos, selección, descargas, print, unlock (auth por token de galería)
+  '/api/contracts/sign', // firma pública de contrato + carga (auth por token del contrato)
   '/api/auth', // endpoints de auth
   '/api/webhooks',
   '/api/health',
