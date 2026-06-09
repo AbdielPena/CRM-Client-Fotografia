@@ -2,8 +2,8 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
-import { Check, Loader2, Palette } from "lucide-react"
+import { useRef, useState, useTransition } from "react"
+import { Check, Crosshair, Loader2, Palette } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -28,6 +28,8 @@ interface AppearanceState {
   buttonLabel: string
   textAlign: GalleryTextAlign
   welcomeText: string
+  focalX: number
+  focalY: number
 }
 
 interface Props {
@@ -39,6 +41,7 @@ interface Props {
     coverConfig: Record<string, unknown>
     subtitle: string | null
     welcomeText: string | null
+    coverImageUrl?: string | null
   }
 }
 
@@ -52,6 +55,7 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial }: Props)
 
   const t = initial.theme ?? {}
   const c = initial.coverConfig ?? {}
+  const coverImageUrl = initial.coverImageUrl ?? null
   const [s, setS] = useState<AppearanceState>({
     templateId: initial.templateId || "classic_proofing",
     mode: t.mode === "dark" ? "dark" : (t.mode === "light" ? "light" : "light"),
@@ -66,7 +70,27 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial }: Props)
     textAlign:
       c.textAlign === "left" || c.textAlign === "right" ? (c.textAlign as GalleryTextAlign) : "center",
     welcomeText: initial.welcomeText ?? "",
+    focalX: numClamp(c.focalX, 0.5, 0, 1),
+    focalY: numClamp(c.focalY, 0.5, 0, 1),
   })
+
+  // Arrastrar el foco de la portada sobre la imagen real.
+  const focusBoxRef = useRef<HTMLDivElement>(null)
+  const [dragging, setDragging] = useState(false)
+
+  function setFocusFromEvent(e: React.PointerEvent) {
+    const box = focusBoxRef.current
+    if (!box) return
+    const rect = box.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+    const x = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+    const y = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))
+    setS((prev) => ({
+      ...prev,
+      focalX: Math.round(x * 1000) / 1000,
+      focalY: Math.round(y * 1000) / 1000,
+    }))
+  }
 
   // Tema efectivo para la previsualización (preset + overrides actuales)
   const effectiveTheme = resolveGalleryTheme(s.templateId, {
@@ -91,8 +115,15 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial }: Props)
             ...(s.columns ? { columns: s.columns } : {}),
           },
           coverConfig: {
+            // Preserva claves que este editor no maneja (imagen/textColor),
+            // porque updateGallery reemplaza el cover_config completo.
+            ...("imageAssetId" in c ? { imageAssetId: c.imageAssetId } : {}),
+            ...("imageUrl" in c ? { imageUrl: c.imageUrl } : {}),
+            ...("textColor" in c ? { textColor: c.textColor } : {}),
             title: s.coverTitle.trim() || null,
             subtitle: s.coverSubtitle.trim() || null,
+            focalX: s.focalX,
+            focalY: s.focalY,
             overlay: s.overlay,
             overlayIntensity: s.overlayIntensity,
             showButton: s.showButton,
@@ -305,54 +336,118 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial }: Props)
         </button>
       </div>
 
-      {/* Previsualización de portada */}
+      {/* Portada — editor de foco (arrastrar sobre la imagen real) */}
       <div className="lg:sticky lg:top-6 lg:self-start">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">Vista previa de portada</p>
-        <div
-          className="relative flex aspect-[3/4] w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-border p-5"
-          style={{
-            background:
-              s.mode === "dark"
-                ? "linear-gradient(160deg,#1b1b22,#0b0b0d)"
-                : "linear-gradient(160deg,#f4f4f5,#e4e4e7)",
-            fontFamily: tokens.fontStack,
-            textAlign: s.textAlign,
-            alignItems: s.textAlign === "left" ? "flex-start" : s.textAlign === "right" ? "flex-end" : "center",
-          }}
-        >
-          {s.overlay !== "none" && (
-            <span
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background: s.overlay === "dark" ? "#000" : "#fff",
-                opacity: s.overlayIntensity,
-              }}
-            />
-          )}
-          <div className="relative z-10">
-            <p
-              className="text-2xl font-semibold leading-tight"
-              style={{ color: tokens.fg }}
+        <div className="mb-2 flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Crosshair className="h-3.5 w-3.5" />
+            Portada — foco
+          </p>
+          {coverImageUrl && (
+            <button
+              type="button"
+              onClick={() => setS((p) => ({ ...p, focalX: 0.5, focalY: 0.5 }))}
+              className="text-[11px] text-muted-foreground hover:text-foreground"
             >
-              {s.coverTitle || "Nombre de la galería"}
-            </p>
-            {s.coverSubtitle && (
-              <p className="mt-1 text-sm" style={{ color: tokens.muted }}>
-                {s.coverSubtitle}
-              </p>
-            )}
-            {s.showButton && (
-              <span
-                className="mt-4 inline-block rounded-full px-4 py-1.5 text-xs font-semibold"
-                style={{ background: tokens.accent, color: "#fff" }}
-              >
-                {s.buttonLabel || (galleryType === "final_delivery" ? "Ver mis fotos" : "Entrar")}
-              </span>
-            )}
-          </div>
+              Centrar
+            </button>
+          )}
         </div>
+
+        {coverImageUrl ? (
+          <div
+            ref={focusBoxRef}
+            onPointerDown={(e) => {
+              setDragging(true)
+              try {
+                ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+              } catch {
+                /* noop */
+              }
+              setFocusFromEvent(e)
+            }}
+            onPointerMove={(e) => {
+              if (dragging) setFocusFromEvent(e)
+            }}
+            onPointerUp={() => setDragging(false)}
+            onPointerCancel={() => setDragging(false)}
+            className="relative aspect-[16/10] w-full touch-none select-none overflow-hidden rounded-2xl border border-border cursor-grab active:cursor-grabbing"
+            style={{ fontFamily: tokens.fontStack }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={coverImageUrl}
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+              style={{ objectPosition: `${s.focalX * 100}% ${s.focalY * 100}%` }}
+            />
+            {s.overlay !== "none" && (
+              <span
+                className="pointer-events-none absolute inset-0"
+                style={{ background: s.overlay === "dark" ? "#000" : "#fff", opacity: s.overlayIntensity }}
+              />
+            )}
+            {/* Texto de la portada (no bloquea el arrastre) */}
+            <div
+              className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-center p-5"
+              style={{
+                textAlign: s.textAlign,
+                alignItems:
+                  s.textAlign === "left" ? "flex-start" : s.textAlign === "right" ? "flex-end" : "center",
+              }}
+            >
+              <p
+                className="text-xl font-semibold leading-tight drop-shadow"
+                style={{ color: s.overlay === "light" ? "#1a1a1a" : "#ffffff" }}
+              >
+                {s.coverTitle || "Nombre de la galería"}
+              </p>
+              {s.coverSubtitle && (
+                <p
+                  className="mt-1 text-xs drop-shadow"
+                  style={{ color: s.overlay === "light" ? "rgba(0,0,0,.7)" : "rgba(255,255,255,.85)" }}
+                >
+                  {s.coverSubtitle}
+                </p>
+              )}
+              {s.showButton && (
+                <span
+                  className="mt-3 inline-block rounded-full px-4 py-1.5 text-xs font-semibold"
+                  style={{ background: tokens.accent, color: "#fff" }}
+                >
+                  {s.buttonLabel || (galleryType === "final_delivery" ? "Ver mis fotos" : "Entrar")}
+                </span>
+              )}
+            </div>
+            {/* Manija del foco */}
+            <span
+              className="pointer-events-none absolute z-20 flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white bg-white/20 shadow-[0_0_0_2px_rgba(0,0,0,.4)] backdrop-blur-[1px]"
+              style={{ left: `${s.focalX * 100}%`, top: `${s.focalY * 100}%` }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-white" />
+            </span>
+          </div>
+        ) : (
+          <div
+            className="relative flex aspect-[16/10] w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border p-5 text-center"
+            style={{
+              background:
+                s.mode === "dark"
+                  ? "linear-gradient(160deg,#1b1b22,#0b0b0d)"
+                  : "linear-gradient(160deg,#f4f4f5,#e4e4e7)",
+            }}
+          >
+            <p className="text-xs text-muted-foreground">
+              Aún no hay foto de portada. Sube fotos (o elige una como portada) para ajustar el foco.
+            </p>
+          </div>
+        )}
+
         <p className="mt-2 text-[11px] text-muted-foreground">
-          La portada usa la imagen de cover real en la galería pública; aquí ves el estilo.
+          {coverImageUrl
+            ? "Arrastra el punto para elegir qué parte de la foto queda centrada en la portada. Recuerda Guardar."
+            : "La portada usa la foto de cover real en la galería pública."}
         </p>
       </div>
     </div>

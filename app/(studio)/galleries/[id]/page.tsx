@@ -105,6 +105,14 @@ export default async function GalleryDetailPage({
     webUrl: getAssetWebUrl(a.web_key),
   }))
 
+  // Imagen de portada para el editor de apariencia (foco): la portada elegida,
+  // o la primera foto completada como respaldo.
+  const coverAsset =
+    assetsWithUrls.find((a) => a.id === gallery.cover_asset_id) ??
+    assetsWithUrls.find((a) => a.status === "completed") ??
+    assetsWithUrls[0]
+  const coverImageUrl = coverAsset?.webUrl ?? coverAsset?.thumbUrl ?? null
+
   // Estado de selección de impresión (para el panel de producción).
   const printState = await getGalleryPrintState(galleryId)
 
@@ -226,6 +234,7 @@ export default async function GalleryDetailPage({
         studioId={session.studioId}
         publicToken={activeToken?.token ?? null}
         activity={activity}
+        coverImageUrl={coverImageUrl}
       />
     </>
   )

@@ -137,6 +137,7 @@ interface Props {
   studioId: string
   publicToken: string | null
   activity: ActivityData
+  coverImageUrl: string | null
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -150,6 +151,7 @@ export function GalleryDetailTabs({
   studioId,
   publicToken,
   activity,
+  coverImageUrl,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
 
@@ -228,6 +230,7 @@ export function GalleryDetailTabs({
               coverConfig: gallery.cover_config,
               subtitle: gallery.subtitle,
               welcomeText: gallery.welcome_text,
+              coverImageUrl,
             }}
           />
         </TabsContent>
