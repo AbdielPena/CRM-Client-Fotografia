@@ -31,6 +31,9 @@ export const createPackageSchema = z.object({
   // default_form_template_id en la tabla packages).
   contractTemplateId: optionalUuid,
   formTemplateId: optionalUuid,
+  // Categoría de servicio (Quinceañeras, Bodas, etc.). Agrupa planes y define
+  // la carpeta raíz en Google Drive. "" / null → sin categoría.
+  serviceCategoryId: optionalUuid,
 })
 
 export const updatePackageSchema = createPackageSchema.partial()

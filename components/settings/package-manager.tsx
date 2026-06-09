@@ -24,6 +24,7 @@ import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
 import { PrintEntitlementsEditor } from "./print-entitlements-editor"
+import { CategoryIcon } from "@/components/shared/icon-selector"
 import type { PrintEntitlements } from "@/lib/print/entitlements"
 
 interface Package {
@@ -40,6 +41,7 @@ interface Package {
   isActive: boolean
   contractTemplateId?: string
   formTemplateId?: string
+  serviceCategoryId?: string
   printEntitlements?: PrintEntitlements
 }
 
@@ -48,11 +50,19 @@ interface TemplateOption {
   name: string
 }
 
+interface CategoryOption {
+  id: string
+  name: string
+  color: string
+  icon: string
+}
+
 interface PackageManagerProps {
   packages: Package[]
   studioSlug?: string
   contractTemplates?: TemplateOption[]
   formTemplates?: TemplateOption[]
+  serviceCategories?: CategoryOption[]
 }
 
 type FormMode = "create" | "edit" | null
@@ -62,6 +72,7 @@ export function PackageManager({
   studioSlug = "",
   contractTemplates = [],
   formTemplates = [],
+  serviceCategories = [],
 }: PackageManagerProps) {
   const [packages, setPackages] = useState(initialPackages)
   const [formMode, setFormMode] = useState<FormMode>(null)
@@ -89,6 +100,40 @@ export function PackageManager({
   }
 
   const editingPackage = packages.find((p) => p.id === editingId)
+
+  // Agrupa los paquetes por categoría de servicio (en el orden de las categorías).
+  // Sin categorías definidas → un solo grupo plano (comportamiento legacy).
+  const categoryById = new Map(serviceCategories.map((c) => [c.id, c]))
+  const packageGroups: {
+    key: string
+    header: React.ReactNode
+    items: Package[]
+  }[] =
+    serviceCategories.length === 0
+      ? [{ key: "__all__", header: null, items: packages }]
+      : (() => {
+          const groups: { key: string; header: React.ReactNode; items: Package[] }[] = []
+          for (const cat of serviceCategories) {
+            const items = packages.filter((p) => p.serviceCategoryId === cat.id)
+            if (items.length === 0) continue
+            groups.push({
+              key: cat.id,
+              header: <CategoryHeader category={cat} count={items.length} />,
+              items,
+            })
+          }
+          const uncategorized = packages.filter(
+            (p) => !p.serviceCategoryId || !categoryById.has(p.serviceCategoryId),
+          )
+          if (uncategorized.length > 0) {
+            groups.push({
+              key: "__none__",
+              header: <CategoryHeader count={uncategorized.length} />,
+              items: uncategorized,
+            })
+          }
+          return groups
+        })()
 
   const handleCreate = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -128,10 +173,13 @@ export function PackageManager({
   }
 
   return (
-    <div className="max-w-5xl space-y-4">
-      {/* Package list */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {packages.map((pkg) => (
+    <div className="max-w-5xl space-y-6">
+      {/* Package list — agrupada por categoría de servicio */}
+      {packageGroups.map((group) => (
+        <div key={group.key} className="space-y-3">
+          {group.header}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {group.items.map((pkg) => (
           <div
             key={pkg.id}
             className={cn(
@@ -246,23 +294,25 @@ export function PackageManager({
               </ConfirmDialog>
             </div>
           </div>
-        ))}
+            ))}
+          </div>
+        </div>
+      ))}
 
-        {/* Add new card */}
-        {formMode !== "create" && (
-          <button
-            onClick={() => setFormMode("create")}
-            className="flex min-h-[160px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card/50 p-5 transition-colors hover:border-border-strong hover:bg-muted"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Plus className="h-5 w-5 text-muted-foreground" />
-            </div>
-            <p className="text-sm font-medium text-muted-foreground">
-              Nuevo paquete
-            </p>
-          </button>
-        )}
-      </div>
+      {/* Add new card */}
+      {formMode !== "create" && (
+        <button
+          onClick={() => setFormMode("create")}
+          className="flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card/50 p-5 transition-colors hover:border-border-strong hover:bg-muted sm:max-w-xs"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+            <Plus className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium text-muted-foreground">
+            Nuevo paquete
+          </p>
+        </button>
+      )}
 
       {/* Create form */}
       {formMode === "create" && (
@@ -273,6 +323,7 @@ export function PackageManager({
           title="Nuevo paquete"
           contractTemplates={contractTemplates}
           formTemplates={formTemplates}
+          serviceCategories={serviceCategories}
         />
       )}
 
@@ -289,8 +340,34 @@ export function PackageManager({
           defaultValues={editingPackage}
           contractTemplates={contractTemplates}
           formTemplates={formTemplates}
+          serviceCategories={serviceCategories}
         />
       )}
+    </div>
+  )
+}
+
+function CategoryHeader({
+  category,
+  count,
+}: {
+  category?: CategoryOption
+  count: number
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-white"
+        style={{ backgroundColor: category?.color ?? "#94a3b8" }}
+      >
+        <CategoryIcon name={category?.icon ?? "tag"} className="h-3.5 w-3.5" />
+      </span>
+      <h3 className="text-sm font-semibold text-foreground">
+        {category?.name ?? "Sin categoría"}
+      </h3>
+      <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+        {count}
+      </span>
     </div>
   )
 }
@@ -303,6 +380,7 @@ function PackageForm({
   defaultValues,
   contractTemplates = [],
   formTemplates = [],
+  serviceCategories = [],
 }: {
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   onCancel: () => void
@@ -311,6 +389,7 @@ function PackageForm({
   defaultValues?: Package
   contractTemplates?: TemplateOption[]
   formTemplates?: TemplateOption[]
+  serviceCategories?: CategoryOption[]
 }) {
   const inputCls =
     "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
@@ -340,6 +419,30 @@ function PackageForm({
             className={inputCls}
             placeholder="ej. Paquete Premium"
           />
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Categoría de servicio
+          </label>
+          <select
+            name="serviceCategoryId"
+            defaultValue={defaultValues?.serviceCategoryId ?? ""}
+            className={inputCls}
+          >
+            <option value="">— Sin categoría —</option>
+            {serviceCategories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Agrupa este plan y define su carpeta raíz en Google Drive.{" "}
+            <a href="/settings/service-categories" className="text-brand hover:underline">
+              Gestionar categorías
+            </a>
+          </p>
         </div>
 
         {defaultValues && (

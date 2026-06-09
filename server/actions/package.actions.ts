@@ -32,6 +32,7 @@ export async function createPackageAction(formData: FormData) {
     isActive: formData.get("isActive") !== "false",
     contractTemplateId: formData.get("contractTemplateId"),
     formTemplateId: formData.get("formTemplateId"),
+    serviceCategoryId: formData.get("serviceCategoryId"),
   }
 
   const parsed = createPackageSchema.safeParse(raw)
@@ -62,6 +63,7 @@ export async function updatePackageAction(packageId: string, formData: FormData)
     isActive: formData.get("isActive") !== "false",
     contractTemplateId: formData.get("contractTemplateId"),
     formTemplateId: formData.get("formTemplateId"),
+    serviceCategoryId: formData.get("serviceCategoryId"),
   }
 
   const parsed = updatePackageSchema.safeParse(raw)

@@ -44,6 +44,7 @@ import {
   Activity,
   Bot,
   HeartHandshake,
+  Tag,
   type LucideIcon,
 } from "lucide-react"
 
@@ -144,6 +145,7 @@ const NAV_GROUPS: NavGroup[] = [
     type: "group",
     label: "Configuración",
     items: [
+      { type: "link", href: "/settings/service-categories", label: "Categorías de Servicios", icon: Tag },
       { type: "link", href: "/settings/packages", label: "Paquetes", icon: Package },
       { type: "link", href: "/settings/forms", label: "Formularios", icon: ClipboardList },
       { type: "link", href: "/settings/contracts", label: "Contratos", icon: FileStack },
