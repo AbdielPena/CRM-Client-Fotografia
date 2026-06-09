@@ -505,6 +505,20 @@ export async function publishGallery(
     })()
   }
 
+  // Galería de SELECCIÓN recién publicada → avisar al cliente que ya puede
+  // elegir sus fotos (con el enlace público). Solo en la PRIMERA publicación
+  // (draft → published), nunca al re-guardar una ya publicada. Best-effort.
+  if (gType !== "final_delivery" && current?.status !== "published") {
+    void (async () => {
+      try {
+        const { onSelectionGalleryPublished } = await import("./selection-email.service")
+        await onSelectionGalleryPublished(galleryId)
+      } catch (err) {
+        console.error("[gallery] onSelectionGalleryPublished failed", err)
+      }
+    })()
+  }
+
   return updated
 }
 
