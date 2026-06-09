@@ -20,6 +20,8 @@ export const createProjectSchema = z.object({
   location: z.string().max(200).optional().or(z.literal("")),
   notes: z.string().max(3000).optional().or(z.literal("")),
   packageId: z.string().optional().or(z.literal("")),
+  // Categoría de servicio. Si se deja vacío, un trigger la hereda del paquete.
+  serviceCategoryId: z.string().uuid().optional().or(z.literal("")).or(z.null()),
   totalAmount: z.coerce.number().min(0).optional(),
   currency: z.string().length(3).default("DOP"),
 })

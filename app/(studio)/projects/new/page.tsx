@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@/server/supabase/server"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { getProjectStatuses } from "@/server/services/project-status.service"
+import { getServiceCategories } from "@/server/services/service-category.service"
 import { createProjectAction } from "@/server/actions/project.actions"
 import Link from "next/link"
 import type { Metadata } from "next"
@@ -28,7 +29,7 @@ export default async function NewProjectPage({
   const session = await requireStudioAuth()
   const supabase = createSupabaseServerClient()
 
-  const [clientsRes, packagesRes, unread, projectStatuses] = await Promise.all([
+  const [clientsRes, packagesRes, unread, projectStatuses, serviceCategories] = await Promise.all([
     supabase
       .from("clients")
       .select("id, name")
@@ -43,6 +44,7 @@ export default async function NewProjectPage({
       .order("name", { ascending: true }),
     countUnreadNotifications(session.studioId),
     getProjectStatuses(session.studioId),
+    getServiceCategories(session.studioId).catch(() => []),
   ])
 
   const clients = clientsRes.data ?? []
@@ -215,6 +217,27 @@ export default async function NewProjectPage({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Categoría de servicio
+                </label>
+                <select
+                  name="serviceCategoryId"
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-card"
+                >
+                  <option value="">— Heredar del paquete —</option>
+                  {serviceCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Define la carpeta en Google Drive. Si lo dejas en blanco, se
+                  hereda del paquete.
+                </p>
               </div>
 
               <div>

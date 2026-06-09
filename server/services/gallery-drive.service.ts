@@ -11,9 +11,12 @@ import { getDriveConnectionStatus } from "@/server/services/google-drive-oauth.s
  * Orquestador: respalda/entrega una galería de ENTREGA FINAL a Google Drive en
  * dos pistas (espejo de print-zip.service pero subiendo a Drive en vez de ZIP):
  *
- *   /StudioFlow Entregas/{cliente}/{proyecto}/
+ *   /StudioFlow Entregas/{categoría}/{cliente}/{proyecto}/
  *       Máxima calidad (originales)/   ← gallery_assets.original_key (sin compresión)
  *       Redes (optimizada)/            ← gallery_assets.web_key (rendition web)
+ *
+ * La {categoría} sale de project.service_category_id (heredada del paquete).
+ * Sin categoría → carpeta "Sin categoría".
  *
  * Comparte por email del cliente (lector) o link no listado. Avisa por email.
  * Reusa el OAuth de Google Calendar (mismo token) vía google-drive.service.
@@ -122,6 +125,7 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     let clientName = "Cliente"
     let clientEmail: string | null = null
     let projectName = gallery?.name ?? "Galería"
+    let categoryFolder = "Sin categoría"
     if (gallery?.client_id) {
       const { data: c } = await sb.from("clients").select("name, email").eq("id", gallery.client_id).maybeSingle()
       const cc = c as { name?: string; email?: string } | null
@@ -129,9 +133,24 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       clientEmail = cc?.email ?? null
     }
     if (gallery?.project_id) {
-      const { data: p } = await sb.from("projects").select("name").eq("id", gallery.project_id).maybeSingle()
-      const pp = p as { name?: string } | null
+      const { data: p } = await sb
+        .from("projects")
+        .select("name, service_category_id")
+        .eq("id", gallery.project_id)
+        .maybeSingle()
+      const pp = p as { name?: string; service_category_id?: string | null } | null
       if (pp?.name) projectName = pp.name
+      // Carpeta de categoría: prioriza drive_folder_name (configurable) sobre el nombre.
+      if (pp?.service_category_id) {
+        const { data: cat } = await sb
+          .from("service_categories")
+          .select("name, drive_folder_name")
+          .eq("id", pp.service_category_id)
+          .maybeSingle()
+        const cc = cat as { name?: string; drive_folder_name?: string | null } | null
+        const folder = cc?.drive_folder_name || cc?.name
+        if (folder) categoryFolder = folder
+      }
     }
 
     // Assets completados.
@@ -151,9 +170,10 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     const tracks: Array<"high_quality" | "social"> =
       b.track === "both" ? ["high_quality", "social"] : [b.track as "high_quality" | "social"]
 
-    // Carpetas: /StudioFlow Entregas/{cliente}/{proyecto}/
+    // Carpetas: /StudioFlow Entregas/{categoría}/{cliente}/{proyecto}/
     const projectFolderId = await drive.ensureFolderPath(studioId, [
       ROOT_FOLDER,
+      sanitize(categoryFolder),
       sanitize(clientName),
       sanitize(projectName),
     ])

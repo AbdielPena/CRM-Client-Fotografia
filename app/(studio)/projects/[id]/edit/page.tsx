@@ -5,6 +5,7 @@ import type { Metadata } from "next"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { getProjectById } from "@/server/services/project.service"
+import { getServiceCategories } from "@/server/services/service-category.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { updateProjectAction } from "@/server/actions/project.actions"
 import { AppTopbar } from "@/components/layout/app-topbar"
@@ -41,7 +42,7 @@ export default async function EditProjectPage({
   const session = await requireStudioAuth()
   const supabase = createSupabaseServerClient()
 
-  const [projectRaw, packagesRes, unread] = await Promise.all([
+  const [projectRaw, packagesRes, unread, serviceCategories] = await Promise.all([
     getProjectById(session.studioId, params.id) as Promise<Rec | null>,
     supabase
       .from("packages")
@@ -50,6 +51,7 @@ export default async function EditProjectPage({
       .is("deleted_at", null)
       .order("name", { ascending: true }),
     countUnreadNotifications(session.studioId),
+    getServiceCategories(session.studioId).catch(() => []),
   ])
 
   if (!projectRaw) notFound()
@@ -204,6 +206,27 @@ export default async function EditProjectPage({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Categoría de servicio
+                </label>
+                <select
+                  name="serviceCategoryId"
+                  defaultValue={(project.service_category_id as string) ?? ""}
+                  className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/60 bg-card"
+                >
+                  <option value="">— Heredar del paquete —</option>
+                  {serviceCategories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Define la carpeta en Google Drive.
+                </p>
               </div>
 
               <div>

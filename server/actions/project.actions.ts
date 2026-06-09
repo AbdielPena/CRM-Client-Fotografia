@@ -25,6 +25,7 @@ export async function createProjectAction(formData: FormData) {
     location: formData.get("location"),
     notes: formData.get("notes"),
     packageId: formData.get("packageId"),
+    serviceCategoryId: formData.get("serviceCategoryId"),
     totalAmount: formData.get("totalAmount"),
     currency: formData.get("currency") || "DOP",
   }
@@ -50,6 +51,7 @@ export async function updateProjectAction(projectId: string, formData: FormData)
     location: formData.get("location"),
     notes: formData.get("notes"),
     packageId: formData.get("packageId"),
+    serviceCategoryId: formData.get("serviceCategoryId"),
     totalAmount: formData.get("totalAmount"),
   }
 

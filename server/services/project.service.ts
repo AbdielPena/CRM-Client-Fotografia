@@ -149,7 +149,7 @@ export async function createProject(
   if (!data.clientId) throw new Error('CLIENT_REQUIRED')
   await assertClientActive(studioId, data.clientId, 'createProject')
 
-  const project = await projectsRepo.create({
+  const insert = {
     studio_id: studioId,
     client_id: data.clientId,
     package_id: data.packageId || null,
@@ -161,7 +161,11 @@ export async function createProject(
     notes: data.notes || null,
     total_amount: data.totalAmount ?? null,
     currency: (data.currency || 'DOP').toUpperCase(),
-  })
+  }
+  // service_category_id: columna nueva (no en tipos). Si va null, el trigger
+  // inherit_project_service_category la hereda del paquete.
+  ;(insert as Record<string, unknown>).service_category_id = data.serviceCategoryId || null
+  const project = await projectsRepo.create(insert)
 
   await logActivity({
     studioId,
@@ -200,6 +204,8 @@ export async function updateProject(
   if (data.location !== undefined) patch.location = data.location || null
   if (data.notes !== undefined) patch.notes = data.notes || null
   if (data.packageId !== undefined) patch.package_id = data.packageId || null
+  if (data.serviceCategoryId !== undefined)
+    patch.service_category_id = data.serviceCategoryId || null
   if (data.totalAmount !== undefined) patch.total_amount = data.totalAmount
 
   const project = await projectsRepo.update(projectId, patch)
