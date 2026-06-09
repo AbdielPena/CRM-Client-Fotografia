@@ -388,14 +388,15 @@ interface StepRow {
 async function clientVars(
   studioId: string,
   clientId: string,
-): Promise<{ email: string | null; name: string; vars: Record<string, string> }> {
+): Promise<{ email: string | null; phone: string | null; name: string; vars: Record<string, string> }> {
   const sb = untypedService()
-  const { data: c } = await sb.from("clients").select("name, email, birthday").eq("id", clientId).maybeSingle()
-  const client = c as { name?: string; email?: string; birthday?: string } | null
+  const { data: c } = await sb.from("clients").select("name, email, birthday, phone").eq("id", clientId).maybeSingle()
+  const client = c as { name?: string; email?: string; birthday?: string; phone?: string } | null
   const { data: s } = await sb.from("studios").select("name").eq("id", studioId).maybeSingle()
   const studioName = (s as { name?: string } | null)?.name ?? "Tu fotógrafo"
   return {
     email: client?.email ?? null,
+    phone: client?.phone ?? null,
     name: client?.name ?? "",
     vars: {
       client_name: client?.name ?? "",
@@ -601,6 +602,55 @@ async function runNotify(e: EnrollmentRow, step: StepRow): Promise<void> {
   }
 }
 
+/**
+ * Bloque: enviar WhatsApp (plantilla aprobada de Meta) vía Cloud API.
+ * Proactivo → requiere una plantilla aprobada. body_vars llena {{1}},{{2}}…
+ * (por defecto el nombre del cliente). Degrada con "skipped" si no hay
+ * teléfono / plantilla / WhatsApp no configurado.
+ */
+async function runSendWhatsApp(e: EnrollmentRow, step: StepRow): Promise<void> {
+  try {
+    const cv = await clientVars(e.studio_id, e.client_id)
+    if (!cv.phone) {
+      await logRun(e.studio_id, e.id, step.id, "send_whatsapp", "skipped", undefined, "cliente sin teléfono")
+      return
+    }
+    const templateName = (step.config?.template_name as string | undefined)?.trim()
+    if (!templateName) {
+      await logRun(e.studio_id, e.id, step.id, "send_whatsapp", "skipped", undefined, "sin plantilla de WhatsApp")
+      return
+    }
+    const lang = (step.config?.lang_code as string | undefined)?.trim() || "es"
+    const rawVars =
+      Array.isArray(step.config?.body_vars) && (step.config!.body_vars as unknown[]).length > 0
+        ? (step.config!.body_vars as string[])
+        : ["{{client_name}}"]
+    const bodyParams = rawVars.map((v) => renderVars(String(v), cv.vars))
+
+    const { sendTemplateMessage } = await import("./whatsapp/cloud-api.service")
+    const r = await sendTemplateMessage(e.studio_id, cv.phone, templateName, lang, bodyParams)
+    if (r.ok) {
+      await logRun(e.studio_id, e.id, step.id, "send_whatsapp", "done", {
+        to: cv.phone,
+        wa_id: r.id,
+        template: templateName,
+      })
+    } else {
+      await logRun(e.studio_id, e.id, step.id, "send_whatsapp", "failed", undefined, r.error)
+    }
+  } catch (err) {
+    await logRun(
+      e.studio_id,
+      e.id,
+      step.id,
+      "send_whatsapp",
+      "failed",
+      undefined,
+      err instanceof Error ? err.message : String(err),
+    )
+  }
+}
+
 /** Avanza inscripciones listas. Devuelve cuántos pasos ejecutó. */
 export async function advanceEngagementEnrollments(limit = 50): Promise<{ steps: number }> {
   const sb = untypedService()
@@ -664,9 +714,10 @@ export async function advanceEngagementEnrollments(limit = 50): Promise<{ steps:
       else if (step.block_type === "create_task") await runCreateTask(e, step)
       else if (step.block_type === "add_tag") await runAddTag(e, step)
       else if (step.block_type === "notify") await runNotify(e, step)
+      else if (step.block_type === "send_whatsapp") await runSendWhatsApp(e, step)
       else {
-        // whatsapp / ai_generate / condition / recommend → Fase 3+.
-        await logRun(e.studio_id, e.id, step.id, step.block_type, "skipped", undefined, "bloque pendiente (Fase 3: WhatsApp/IA/condición)")
+        // ai_generate / condition / recommend → Fase posterior.
+        await logRun(e.studio_id, e.id, step.id, step.block_type, "skipped", undefined, "bloque pendiente (IA generativa/condición)")
       }
 
       stepsRun++

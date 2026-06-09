@@ -31,6 +31,7 @@ interface Block {
 const BLOCK_TYPES = [
   { type: "wait", label: "Esperar", emoji: "⏳" },
   { type: "send_email", label: "Enviar email", emoji: "✉️" },
+  { type: "send_whatsapp", label: "Enviar WhatsApp", emoji: "📲" },
   { type: "request_review", label: "Pedir reseña", emoji: "⭐" },
   { type: "create_task", label: "Crear tarea", emoji: "✅" },
   { type: "add_tag", label: "Aplicar etiqueta", emoji: "🏷️" },
@@ -73,6 +74,7 @@ export function FlowBuilder() {
     const defaults: Record<string, Record<string, unknown>> = {
       wait: { wait_days: 3 },
       send_email: { template_slug: "engagement_generic" },
+      send_whatsapp: { template_name: "", lang_code: "es", body_vars: ["{{client_name}}"] },
       request_review: {},
       create_task: { title: "Seguir con {{client_name}}", due_days: 2, priority: "medium" },
       add_tag: { tag: "" },
@@ -264,6 +266,9 @@ function BlockConfig({ block, update }: { block: Block; update: (p: Record<strin
   if (block.type === "send_email") {
     return <SendEmailConfig c={c} update={update} />
   }
+  if (block.type === "send_whatsapp") {
+    return <SendWhatsAppConfig c={c} update={update} />
+  }
   if (block.type === "request_review") {
     return <p className="text-[12px] text-muted-foreground">Envía la solicitud de reseña con tu link de feedback ({"{{review_link}}"}). El cliente con 4★+ va a Google/Facebook.</p>
   }
@@ -292,6 +297,92 @@ function BlockConfig({ block, update }: { block: Block; update: (p: Record<strin
     return <input value={String(c.title ?? "")} onChange={(e) => update({ title: e.target.value })} placeholder="Texto de la notificación interna" className={inputCls} />
   }
   return null
+}
+
+function SendWhatsAppConfig({
+  c,
+  update,
+}: {
+  c: Record<string, unknown>
+  update: (p: Record<string, unknown>) => void
+}) {
+  const [drafting, startDraft] = useTransition()
+  const [draft, setDraft] = useState<string | null>(null)
+  const [brief, setBrief] = useState("")
+
+  const doDraft = () => {
+    if (!brief.trim()) {
+      toast.error("Escribe de qué trata el mensaje")
+      return
+    }
+    startDraft(async () => {
+      const r = await draftEngagementMessageAction({
+        channel: "whatsapp",
+        brief,
+        clientName: "María (ejemplo)",
+      })
+      if (r.ok) setDraft(r.body)
+      else toast.error(r.error)
+    })
+  }
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <label className="mb-1 block text-[12px] text-muted-foreground">
+          Nombre de la plantilla aprobada en Meta
+        </label>
+        <input
+          value={String(c.template_name ?? "")}
+          onChange={(e) => update({ template_name: e.target.value })}
+          placeholder="ej. cumpleanos_cliente"
+          className={inputCls}
+        />
+      </div>
+      <div className="w-32">
+        <label className="mb-1 block text-[12px] text-muted-foreground">Idioma</label>
+        <input
+          value={String(c.lang_code ?? "es")}
+          onChange={(e) => update({ lang_code: e.target.value })}
+          placeholder="es"
+          className={inputCls}
+        />
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        El primer dato <code>{"{{1}}"}</code> de la plantilla se llena con el nombre del cliente. La plantilla debe estar <strong>aprobada en Meta</strong> (WhatsApp Manager → Plantillas) y enviarse desde un número de producción.
+      </p>
+
+      <div className="space-y-2 rounded-lg border border-emerald-400/40 bg-emerald-50/50 p-3 dark:bg-emerald-950/20">
+        <label className="flex items-center gap-1 text-[12px] font-medium text-emerald-700 dark:text-emerald-300">
+          <Sparkles className="h-3.5 w-3.5" /> ¿No tienes la plantilla? Redáctala con IA
+        </label>
+        <textarea
+          value={brief}
+          onChange={(e) => setBrief(e.target.value)}
+          rows={2}
+          placeholder="Ej: Felicitar el cumpleaños y ofrecer 15% en su próxima sesión."
+          className={inputCls}
+        />
+        <button
+          type="button"
+          onClick={doDraft}
+          disabled={drafting}
+          className="inline-flex items-center gap-1 rounded-lg border border-emerald-500 bg-card px-2.5 py-1.5 text-[12px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+        >
+          {drafting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+          Redactar plantilla
+        </button>
+        {draft && (
+          <div className="rounded-lg border border-border bg-background p-2.5 text-[12px] text-foreground">
+            <p className="whitespace-pre-wrap">{draft}</p>
+            <p className="mt-1.5 text-[10px] text-muted-foreground">
+              Copia este texto y créalo como plantilla en Meta. Cambia el nombre por <code>{"{{1}}"}</code> donde quieras que vaya el nombre del cliente.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function SendEmailConfig({
