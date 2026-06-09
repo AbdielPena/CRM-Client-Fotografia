@@ -7,7 +7,7 @@ import {
 } from "@/components/layout/sidebar-context"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
-import { countOpenBookingRequests } from "@/server/services/booking-request.service"
+import { getSidebarBadges } from "@/server/services/sidebar-badges.service"
 
 export default async function StudioLayout({
   children,
@@ -15,9 +15,11 @@ export default async function StudioLayout({
   children: React.ReactNode
 }) {
   const session = await requireStudioAuth()
-  const [unread, pendingRequests] = await Promise.all([
+  const [unread, badges] = await Promise.all([
     countUnreadNotifications(session.studioId),
-    countOpenBookingRequests(session.studioId).catch(() => 0),
+    getSidebarBadges(session.studioId, session.userId).catch(
+      () => ({}) as Record<string, number>,
+    ),
   ])
 
   const cookieStore = cookies()
@@ -32,7 +34,7 @@ export default async function StudioLayout({
           userEmail={session.email}
           userRole={session.role}
           unreadNotifications={unread}
-          pendingRequests={pendingRequests}
+          badges={badges}
         />
         {/* Ambient Aurora glow detrás del contenido — muy sutil */}
         <main className="relative flex-1 overflow-y-auto">

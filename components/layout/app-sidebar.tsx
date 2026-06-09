@@ -222,8 +222,8 @@ interface AppSidebarProps {
   userEmail: string
   userRole: string
   unreadNotifications?: number
-  /** Solicitudes (booking_requests) pendientes de revisar → badge en "Solicitudes". */
-  pendingRequests?: number
+  /** Conteos de "novedad" por sección (href → número) para los badges flotantes. */
+  badges?: Record<string, number>
 }
 
 export function AppSidebar({
@@ -231,7 +231,7 @@ export function AppSidebar({
   userName,
   userEmail,
   unreadNotifications = 0,
-  pendingRequests = 0,
+  badges = {},
 }: AppSidebarProps) {
   const pathname = usePathname()
   const { collapsed, toggle } = useSidebar()
@@ -407,8 +407,7 @@ export function AppSidebar({
                         {group.items.map((item) => {
                           const Icon = item.icon
                           const active = isActive(item.href)
-                          const badgeCount =
-                            item.href === "/bookings" ? pendingRequests : 0
+                          const badgeCount = badges[item.href] ?? 0
 
                           const linkContent = (
                             <Link
