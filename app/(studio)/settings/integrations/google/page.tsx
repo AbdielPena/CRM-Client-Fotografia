@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, AlertCircle, Link2, RefreshCw } from 'lucide-react'
+import { CalendarDays, CheckCircle2, AlertCircle, Link2, RefreshCw, HardDriveUpload } from 'lucide-react'
 
 import { AppTopbar } from '@/components/layout/app-topbar'
 import { requireStudioAuth } from '@/server/middleware/auth'
@@ -8,12 +8,17 @@ import {
   listUserCalendars,
   type GoogleCalendarOption,
 } from '@/server/services/google-calendar.service'
+import { getDriveConnectionStatus } from '@/server/services/google-drive-oauth.service'
 import {
   connectGoogleCalendarAction,
   disconnectGoogleCalendarAction,
   setActiveCalendarAction,
   syncGoogleCalendarNowAction,
 } from '@/server/actions/google-calendar.actions'
+import {
+  connectGoogleDriveAction,
+  disconnectGoogleDriveAction,
+} from '@/server/actions/google-drive-oauth.actions'
 import { createSupabaseServerClient } from '@/server/supabase/server'
 
 type SearchParams = { error?: string; connected?: string }
@@ -209,8 +214,60 @@ export default async function GoogleCalendarIntegrationPage({
             )}
           </>
         )}
+
+        {/* Google Drive — conexión INDEPENDIENTE (puede ser otra cuenta). */}
+        <DriveIntegrationCard studioId={session.studioId} />
       </div>
     </>
+  )
+}
+
+async function DriveIntegrationCard({ studioId }: { studioId: string }) {
+  const drive = await getDriveConnectionStatus(studioId)
+  return (
+    <section className="sf-card p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+            <HardDriveUpload className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="font-display text-xl text-foreground mb-0.5">
+              Google Drive (entregas)
+            </h2>
+            <p className="text-xs text-muted-foreground max-w-md">
+              Cuenta de Drive donde se suben las galerías de entrega final. Puede ser{' '}
+              <strong>distinta</strong> a la de tu Calendar — ideal una con bastante
+              almacenamiento.
+            </p>
+            {drive.connected && (
+              <p className="text-sm text-foreground mt-2 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                Conectada: <span className="font-medium">{drive.email ?? 'cuenta de Google'}</span>
+              </p>
+            )}
+          </div>
+        </div>
+        {drive.connected && (
+          <form action={disconnectGoogleDriveAction}>
+            <button type="submit" className="text-xs font-medium text-danger hover:text-red-800">
+              Desconectar
+            </button>
+          </form>
+        )}
+      </div>
+      {!drive.connected && (
+        <form action={connectGoogleDriveAction} className="mt-4">
+          <button
+            type="submit"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
+          >
+            <Link2 className="h-4 w-4" />
+            Conectar Google Drive
+          </button>
+        </form>
+      )}
+    </section>
   )
 }
 
