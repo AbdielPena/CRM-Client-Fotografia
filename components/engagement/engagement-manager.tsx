@@ -107,6 +107,12 @@ export function EngagementManager({ automations }: { automations: AutomationRow[
           Ejecutar ahora
         </button>
         <Link
+          href="/engagement/new"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-[13px] font-medium text-foreground transition-colors hover:border-brand"
+        >
+          <Plus className="h-4 w-4" /> Crear automatización
+        </Link>
+        <Link
           href="/settings/emails/templates"
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3.5 py-2 text-[13px] font-medium text-foreground transition-colors hover:border-border-strong"
         >

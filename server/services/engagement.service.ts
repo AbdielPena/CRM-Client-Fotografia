@@ -425,6 +425,144 @@ async function logRun(
   })
 }
 
+function renderVars(tpl: string, vars: Record<string, string>): string {
+  return tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, k) => vars[k] ?? "")
+}
+
+/** Bloque: enviar email (también usado por request_feedback/request_review con slug forzado). */
+async function runSendEmail(e: EnrollmentRow, step: StepRow, slugOverride?: string): Promise<void> {
+  try {
+    const cv = await clientVars(e.studio_id, e.client_id)
+    if (!cv.email) {
+      await logRun(e.studio_id, e.id, step.id, step.block_type, "skipped", undefined, "cliente sin email")
+      return
+    }
+    const extraVars = (step.config?.vars as Record<string, string>) ?? {}
+    let reviewLink = ""
+    try {
+      reviewLink = feedbackUrl(await getOrCreateFeedbackToken(e.studio_id, e.client_id, e.automation_id))
+    } catch (err) {
+      console.error("[engagement] review link", err)
+    }
+    const vars = { ...cv.vars, review_link: reviewLink, ...extraVars }
+    const slug = slugOverride ?? (step.config?.template_slug as string) ?? "engagement_generic"
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cat = (TEMPLATE_CATALOG as any)[slug] as
+      | { defaultSubject: string; defaultBodyHtml: string }
+      | undefined
+    const defSubject =
+      (step.config?.subject as string) ?? cat?.defaultSubject ?? "Un mensaje de {{studio_name}}"
+    const defBody =
+      (step.config?.bodyHtml as string) ??
+      cat?.defaultBodyHtml ??
+      `<p>Hola {{client_name}},</p><p>${(step.config?.message as string) ?? "Queríamos saludarte."}</p><p>— {{studio_name}}</p>`
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tpl = await resolveTemplate(e.studio_id, slug as any, vars, { subject: defSubject, bodyHtml: defBody })
+    await enqueueEmail({
+      studioId: e.studio_id,
+      toEmail: cv.email,
+      toName: cv.name,
+      subject: tpl.subject,
+      bodyHtml: tpl.bodyHtml,
+      fromName: tpl.fromName ?? cv.vars.studio_name,
+      relatedEntityType: "client",
+      relatedEntityId: e.client_id,
+    })
+    await logRun(e.studio_id, e.id, step.id, step.block_type, "done", { to: cv.email })
+  } catch (err) {
+    await logRun(e.studio_id, e.id, step.id, step.block_type, "failed", undefined, err instanceof Error ? err.message : String(err))
+  }
+}
+
+/** Bloque: crear tarea interna (inserción directa, sin actor). */
+async function runCreateTask(e: EnrollmentRow, step: StepRow): Promise<void> {
+  const sb = untypedService()
+  try {
+    const cv = await clientVars(e.studio_id, e.client_id)
+    const title = renderVars((step.config?.title as string) ?? "Seguimiento de fidelización", cv.vars)
+    const description = step.config?.description
+      ? renderVars(step.config.description as string, cv.vars)
+      : `Cliente: ${cv.name}`
+    const priority = (step.config?.priority as string) ?? "medium"
+    const dueDays = Number(step.config?.due_days ?? 0)
+    const dueDate =
+      dueDays > 0 ? new Date(Date.now() + dueDays * 86400000).toISOString().slice(0, 10) : null
+    await sb.from("tasks").insert({
+      studio_id: e.studio_id,
+      title,
+      description,
+      status: "pendiente",
+      priority,
+      entity_type: "client",
+      entity_id: e.client_id,
+      due_date: dueDate,
+      notify_assignee: false,
+      created_by: null,
+    })
+    await logRun(e.studio_id, e.id, step.id, "create_task", "done", { title })
+  } catch (err) {
+    await logRun(e.studio_id, e.id, step.id, "create_task", "failed", undefined, err instanceof Error ? err.message : String(err))
+  }
+}
+
+/** Bloque: aplicar etiqueta al cliente (get-or-create tag + assignment). */
+async function runAddTag(e: EnrollmentRow, step: StepRow): Promise<void> {
+  const sb = untypedService()
+  try {
+    const name = ((step.config?.tag as string) ?? "").trim()
+    if (!name) {
+      await logRun(e.studio_id, e.id, step.id, "add_tag", "skipped", undefined, "sin etiqueta")
+      return
+    }
+    let tagId: string
+    const { data: existing } = await sb
+      .from("tags")
+      .select("id")
+      .eq("studio_id", e.studio_id)
+      .eq("name", name)
+      .maybeSingle()
+    if (existing) {
+      tagId = (existing as { id: string }).id
+    } else {
+      const { data: created, error } = await sb
+        .from("tags")
+        .insert({ studio_id: e.studio_id, name, color: (step.config?.color as string) ?? "#b08a3e" })
+        .select("id")
+        .single()
+      if (error) throw error
+      tagId = (created as { id: string }).id
+    }
+    const { error: aErr } = await sb
+      .from("tag_assignments")
+      .insert({ studio_id: e.studio_id, tag_id: tagId, client_id: e.client_id })
+    if (aErr && (aErr as { code?: string }).code !== "23505") throw aErr
+    await logRun(e.studio_id, e.id, step.id, "add_tag", "done", { tag: name })
+  } catch (err) {
+    await logRun(e.studio_id, e.id, step.id, "add_tag", "failed", undefined, err instanceof Error ? err.message : String(err))
+  }
+}
+
+/** Bloque: notificación interna al estudio. */
+async function runNotify(e: EnrollmentRow, step: StepRow): Promise<void> {
+  const sb = untypedService()
+  try {
+    const cv = await clientVars(e.studio_id, e.client_id)
+    const title = renderVars((step.config?.title as string) ?? "Recordatorio de fidelización", cv.vars)
+    const body = renderVars((step.config?.body as string) ?? `Acción de engagement para ${cv.name}`, cv.vars)
+    await sb.from("notifications").insert({
+      studio_id: e.studio_id,
+      type: "system",
+      title,
+      body,
+      related_entity_type: "client",
+      related_entity_id: e.client_id,
+    })
+    await logRun(e.studio_id, e.id, step.id, "notify", "done")
+  } catch (err) {
+    await logRun(e.studio_id, e.id, step.id, "notify", "failed", undefined, err instanceof Error ? err.message : String(err))
+  }
+}
+
 /** Avanza inscripciones listas. Devuelve cuántos pasos ejecutó. */
 export async function advanceEngagementEnrollments(limit = 50): Promise<{ steps: number }> {
   const sb = untypedService()
@@ -481,66 +619,18 @@ export async function advanceEngagementEnrollments(limit = 50): Promise<{ steps:
         break
       }
 
-      if (step.block_type === "send_email") {
-        try {
-          const cv = await clientVars(e.studio_id, e.client_id)
-          if (!cv.email) {
-            await logRun(e.studio_id, e.id, step.id, "send_email", "skipped", undefined, "cliente sin email")
-          } else {
-            const extraVars = (step.config?.vars as Record<string, string>) ?? {}
-            // Genera (o reusa) el link de feedback/reseña del cliente para {{review_link}}.
-            let reviewLink = ""
-            try {
-              reviewLink = feedbackUrl(
-                await getOrCreateFeedbackToken(e.studio_id, e.client_id, e.automation_id),
-              )
-            } catch (err) {
-              console.error("[engagement] review link", err)
-            }
-            const vars = { ...cv.vars, review_link: reviewLink, ...extraVars }
-            const slug = (step.config?.template_slug as string) ?? "engagement_generic"
-            // Usa el default del CATÁLOGO para el slug (la plantilla bonita), y
-            // permite overrides inline del paso. resolveTemplate aún prioriza la
-            // versión editada por el estudio si existe.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const cat = (TEMPLATE_CATALOG as any)[slug] as
-              | { defaultSubject: string; defaultBodyHtml: string }
-              | undefined
-            const defSubject =
-              (step.config?.subject as string) ?? cat?.defaultSubject ?? "Un mensaje de {{studio_name}}"
-            const defBody =
-              (step.config?.bodyHtml as string) ??
-              cat?.defaultBodyHtml ??
-              `<p>Hola {{client_name}},</p><p>${(step.config?.message as string) ?? "Queríamos saludarte."}</p><p>— {{studio_name}}</p>`
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const tpl = await resolveTemplate(e.studio_id, slug as any, vars, {
-              subject: defSubject,
-              bodyHtml: defBody,
-            })
-            await enqueueEmail({
-              studioId: e.studio_id,
-              toEmail: cv.email,
-              toName: cv.name,
-              subject: tpl.subject,
-              bodyHtml: tpl.bodyHtml,
-              fromName: tpl.fromName ?? cv.vars.studio_name,
-              relatedEntityType: "client",
-              relatedEntityId: e.client_id,
-            })
-            await logRun(e.studio_id, e.id, step.id, "send_email", "done", { to: cv.email })
-          }
-        } catch (err) {
-          await logRun(e.studio_id, e.id, step.id, "send_email", "failed", undefined, err instanceof Error ? err.message : String(err))
-        }
-        stepsRun++
-        currentStepId = step.next_step_id
-        await sb.from("engagement_enrollments").update({ current_step_id: currentStepId }).eq("id", e.id)
-        continue
+      // Bloques de acción: ejecutan y avanzan al siguiente paso.
+      if (step.block_type === "send_email") await runSendEmail(e, step)
+      else if (step.block_type === "request_feedback") await runSendEmail(e, step, "engagement_post_delivery")
+      else if (step.block_type === "request_review") await runSendEmail(e, step, "engagement_review_request")
+      else if (step.block_type === "create_task") await runCreateTask(e, step)
+      else if (step.block_type === "add_tag") await runAddTag(e, step)
+      else if (step.block_type === "notify") await runNotify(e, step)
+      else {
+        // whatsapp / ai_generate / condition / recommend → Fase 3+.
+        await logRun(e.studio_id, e.id, step.id, step.block_type, "skipped", undefined, "bloque pendiente (Fase 3: WhatsApp/IA/condición)")
       }
 
-      // Bloques de fases posteriores (whatsapp/ia/tarea/etiqueta/condición/feedback):
-      // se registran como 'skipped' en Fase 1 y se avanza.
-      await logRun(e.studio_id, e.id, step.id, step.block_type, "skipped", undefined, "bloque no soportado en Fase 1")
       stepsRun++
       currentStepId = step.next_step_id
       await sb.from("engagement_enrollments").update({ current_step_id: currentStepId }).eq("id", e.id)

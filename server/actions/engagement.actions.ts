@@ -8,8 +8,39 @@ import {
   toggleEngagementAutomation,
   deleteEngagementAutomation,
   runEngagementCron,
+  type TriggerType,
+  type StepInput,
 } from "@/server/services/engagement.service"
 import { ENGAGEMENT_PRESETS } from "@/lib/engagement/presets"
+
+/** Flow Builder: crea una automatización personalizada (trigger + lista de bloques). */
+export async function createCustomEngagementAutomationAction(input: {
+  name: string
+  triggerType: string
+  triggerConfig: Record<string, unknown>
+  steps: Array<{ block_type: string; config: Record<string, unknown> }>
+}): Promise<{ ok: boolean; id?: string; message?: string }> {
+  let session
+  try {
+    session = await requireStudioAuth()
+  } catch {
+    return { ok: false, message: "Tu sesión expiró." }
+  }
+  if (!input.name.trim()) return { ok: false, message: "Ponle un nombre a la automatización." }
+  if (!input.steps.length) return { ok: false, message: "Agrega al menos un bloque." }
+  try {
+    const r = await createEngagementAutomation(session.studioId, session.userId, {
+      name: input.name.trim(),
+      triggerType: input.triggerType as TriggerType,
+      triggerConfig: input.triggerConfig,
+      steps: input.steps as StepInput[],
+    })
+    revalidatePath("/engagement")
+    return { ok: true, id: r.id }
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Error" }
+  }
+}
 
 export async function createEngagementPresetAction(
   presetKey: string,
