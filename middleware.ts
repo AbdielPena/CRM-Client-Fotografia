@@ -23,6 +23,7 @@ const PUBLIC_PREFIXES = [
   '/f/', // formularios públicos
   '/fb/', // feedback / reseñas público (Engagement Hub)
   '/api/feedback', // submit de feedback público (auth por token)
+  '/api/forms', // guardar/enviar formularios públicos (auth por access_token del form_response)
   '/api/auth', // endpoints de auth
   '/api/webhooks',
   '/api/health',
