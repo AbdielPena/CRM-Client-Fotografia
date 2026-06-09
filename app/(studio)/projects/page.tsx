@@ -12,6 +12,7 @@ import type { Metadata } from "next"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getProjects } from "@/server/services/project.service"
 import { getProjectStatuses } from "@/server/services/project-status.service"
+import { getServiceCategories } from "@/server/services/service-category.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { formatDate } from "@/lib/utils/currency"
 import { cn } from "@/lib/utils/cn"
@@ -55,23 +56,31 @@ type ViewMode = "grid" | "kanban"
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: { q?: string; status?: string; page?: string; view?: string }
+  searchParams: {
+    q?: string
+    status?: string
+    category?: string
+    page?: string
+    view?: string
+  }
 }) {
   const session = await requireStudioAuth()
   const search = searchParams.q
   const status = searchParams.status
+  const category = searchParams.category
   const page = Number(searchParams.page ?? 1)
   const view: ViewMode = searchParams.view === "kanban" ? "kanban" : "grid"
 
   // En kanban traemos hasta 200 sin paginar; en grid usamos paginación normal.
   const fetchOpts =
     view === "kanban"
-      ? { search, page: 1, pageSize: 200 }
-      : { search, status, page }
+      ? { search, serviceCategoryId: category, page: 1, pageSize: 200 }
+      : { search, status, serviceCategoryId: category, page }
 
-  const [data, statuses, unread] = await Promise.all([
+  const [data, statuses, categories, unread] = await Promise.all([
     getProjects(session.studioId, fetchOpts),
     getProjectStatuses(session.studioId),
+    getServiceCategories(session.studioId).catch(() => []),
     countUnreadNotifications(session.studioId),
   ])
 
@@ -79,10 +88,14 @@ export default async function ProjectsPage({
     key: s.label,
     label: s.label,
   }))
+  const CATEGORY_CHIPS: FilterChip[] = categories.map((c) => ({
+    key: c.id,
+    label: c.name,
+  }))
 
   const buildHref = (overrides: Record<string, string | undefined>) => {
     const params = new URLSearchParams()
-    const merged = { q: search, status, page: undefined, view, ...overrides }
+    const merged = { q: search, status, category, page: undefined, view, ...overrides }
     for (const [k, v] of Object.entries(merged)) {
       if (v) params.set(k, v)
     }
@@ -124,8 +137,18 @@ export default async function ProjectsPage({
               paramName="status"
               current={status}
               chips={STATUS_CHIPS}
-              preserveQuery={{ q: search, view: "grid" }}
+              preserveQuery={{ q: search, category, view: "grid" }}
               className="flex-1"
+            />
+          )}
+
+          {CATEGORY_CHIPS.length > 0 && (
+            <FilterChips
+              baseHref="/projects"
+              paramName="category"
+              current={category}
+              chips={CATEGORY_CHIPS}
+              preserveQuery={{ q: search, status, view }}
             />
           )}
 
@@ -161,16 +184,16 @@ export default async function ProjectsPage({
             <EmptyState
               icon={<FolderOpen className="h-5 w-5" />}
               title={
-                search || status
+                search || status || category
                   ? "No encontramos proyectos"
                   : "Aún no tienes proyectos"
               }
               description={
-                search || status
+                search || status || category
                   ? "Prueba ajustando tu búsqueda o limpia los filtros."
                   : "Crea tu primer proyecto para empezar a gestionar tus sesiones."
               }
-              accent={!search && !status}
+              accent={!search && !status && !category}
             >
               <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
                 <Link href="/projects/new">Nuevo proyecto</Link>
@@ -242,7 +265,7 @@ export default async function ProjectsPage({
                 total={data.total}
                 pageSize={data.pageSize}
                 baseHref="/projects"
-                preserveQuery={{ q: search, status, view: "grid" }}
+                preserveQuery={{ q: search, status, category, view: "grid" }}
                 itemsLabel="proyectos"
               />
             )}

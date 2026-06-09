@@ -18,11 +18,13 @@ import {
   getCashFlow,
   getPLReport,
   getTopClients,
+  getRevenueByCategory,
 } from "@/server/services/reports.service"
 import { getForecast } from "@/server/services/reports-forecast.service"
 import { formatCurrency, formatDate } from "@/lib/utils/currency"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
+import { CategoryIcon } from "@/components/shared/icon-selector"
 import { YearSelect } from "./year-select"
 
 export const metadata: Metadata = { title: "Reportes" }
@@ -35,14 +37,21 @@ export default async function ReportsPage({
   const session = await requireStudioAuth()
   const year = Number(searchParams?.year) || new Date().getFullYear()
 
-  const [unread, pl, cashFlow, aging, topClients, forecast] = await Promise.all([
-    countUnreadNotifications(session.studioId),
-    getPLReport(session.studioId, { year }),
-    getCashFlow(session.studioId, { months: 12 }),
-    getARAging(session.studioId),
-    getTopClients(session.studioId, { limit: 10, year }),
-    getForecast(session.studioId, { months: 6 }).catch(() => []),
-  ])
+  const [unread, pl, cashFlow, aging, topClients, forecast, revenueByCategory] =
+    await Promise.all([
+      countUnreadNotifications(session.studioId),
+      getPLReport(session.studioId, { year }),
+      getCashFlow(session.studioId, { months: 12 }),
+      getARAging(session.studioId),
+      getTopClients(session.studioId, { limit: 10, year }),
+      getForecast(session.studioId, { months: 6 }).catch(() => []),
+      getRevenueByCategory(session.studioId, { year }).catch(() => []),
+    ])
+
+  const categoryRevenueTotal = revenueByCategory.reduce(
+    (s, c) => s + c.totalRevenue,
+    0,
+  )
 
   const totalOutstanding = aging.reduce((s, b) => s + b.total, 0)
   const overdueTotal = aging
@@ -282,6 +291,66 @@ export default async function ReportsPage({
                 </li>
               ))}
             </ol>
+          )}
+        </section>
+
+        {/* Ingresos por categoría de servicio */}
+        <section className="sf-card p-6">
+          <h2 className="mb-4 flex items-center justify-between text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <span>
+              <BarChart3 className="mr-1 inline size-3.5" />
+              Ingresos por Categoría · {year}
+            </span>
+            <span className="normal-case text-xs">
+              Total:{" "}
+              <strong className="text-foreground tabular-nums">
+                {formatCurrency(categoryRevenueTotal)}
+              </strong>
+            </span>
+          </h2>
+          {revenueByCategory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No hay facturas pagadas todavía este año.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {revenueByCategory.map((c) => (
+                <li key={c.categoryId ?? "__none__"}>
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="flex size-6 shrink-0 items-center justify-center rounded-md text-white"
+                        style={{ backgroundColor: c.color }}
+                      >
+                        <CategoryIcon name={c.icon} className="size-3.5" />
+                      </span>
+                      <span className="truncate font-medium text-foreground">
+                        {c.categoryName}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {c.invoiceCount}{" "}
+                        {c.invoiceCount === 1 ? "factura" : "facturas"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right tabular-nums font-semibold">
+                      {formatCurrency(c.totalRevenue)}
+                      <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+                        {c.percentage.toFixed(1)}%
+                      </span>
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${c.percentage}%`,
+                        backgroundColor: c.color,
+                      }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </section>
 

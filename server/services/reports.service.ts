@@ -60,6 +60,16 @@ export type TopClientEntry = {
   averageInvoice: number
 }
 
+export type RevenueByCategoryEntry = {
+  categoryId: string | null
+  categoryName: string
+  color: string
+  icon: string
+  totalRevenue: number
+  invoiceCount: number
+  percentage: number
+}
+
 // ============================================================================
 // P&L (Profit & Loss)
 // ============================================================================
@@ -409,4 +419,96 @@ export async function getTopClients(
       ...c,
       averageInvoice: c.invoiceCount > 0 ? c.totalRevenue / c.invoiceCount : 0,
     }))
+}
+
+// ============================================================================
+// Ingresos por Categoría de Servicio
+// ============================================================================
+
+/**
+ * Ingresos reales (amount_paid de facturas pagadas/parciales) agrupados por la
+ * categoría de servicio del proyecto de cada factura. Proyectos sin categoría
+ * caen en "Sin categoría".
+ */
+export async function getRevenueByCategory(
+  studioId: string,
+  opts: { year?: number } = {},
+): Promise<RevenueByCategoryEntry[]> {
+  const sb = untypedServer()
+
+  let query = sb
+    .from("invoices")
+    .select("amount_paid, sent_at, status, project:projects(service_category_id)")
+    .eq("studio_id", studioId)
+    .in("status", ["paid", "partially_paid"])
+    .is("deleted_at", null)
+
+  if (opts.year) {
+    query = query
+      .gte("sent_at", `${opts.year}-01-01`)
+      .lt("sent_at", `${opts.year + 1}-01-01`)
+  }
+
+  const { data, error } = await query
+  if (error)
+    throwServiceError("REPORT_REVENUE_BY_CATEGORY_FAILED", error, { studioId })
+
+  // Catálogo de categorías para nombre/color/icono.
+  const { data: catsRaw } = await sb
+    .from("service_categories")
+    .select("id, name, color, icon")
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+  const catMeta = new Map<string, { name: string; color: string; icon: string }>()
+  for (const c of (catsRaw ?? []) as Array<{
+    id: string
+    name: string
+    color: string
+    icon: string
+  }>) {
+    catMeta.set(c.id, { name: c.name, color: c.color, icon: c.icon })
+  }
+
+  type Row = {
+    amount_paid: number | string
+    project?:
+      | { service_category_id: string | null }
+      | { service_category_id: string | null }[]
+      | null
+  }
+  const rows = (data ?? []) as Row[]
+
+  const byCat = new Map<
+    string,
+    { categoryId: string | null; totalRevenue: number; invoiceCount: number }
+  >()
+  for (const r of rows) {
+    const proj = Array.isArray(r.project) ? r.project[0] : r.project
+    const catId = proj?.service_category_id ?? null
+    const key = catId ?? "__none__"
+    const e = byCat.get(key) ?? {
+      categoryId: catId,
+      totalRevenue: 0,
+      invoiceCount: 0,
+    }
+    e.totalRevenue += Number(r.amount_paid)
+    e.invoiceCount += 1
+    byCat.set(key, e)
+  }
+
+  const total = Array.from(byCat.values()).reduce((s, e) => s + e.totalRevenue, 0)
+  return Array.from(byCat.values())
+    .map((e) => {
+      const meta = e.categoryId ? catMeta.get(e.categoryId) : null
+      return {
+        categoryId: e.categoryId,
+        categoryName: meta?.name ?? "Sin categoría",
+        color: meta?.color ?? "#94a3b8",
+        icon: meta?.icon ?? "tag",
+        totalRevenue: e.totalRevenue,
+        invoiceCount: e.invoiceCount,
+        percentage: total > 0 ? (e.totalRevenue / total) * 100 : 0,
+      }
+    })
+    .sort((a, b) => b.totalRevenue - a.totalRevenue)
 }

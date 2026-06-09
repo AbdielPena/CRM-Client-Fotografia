@@ -23,11 +23,12 @@ export async function getProjects(
   opts: {
     status?: string
     search?: string
+    serviceCategoryId?: string
     page?: number
     pageSize?: number
   } = {},
 ) {
-  const { status, search, page = 1, pageSize = 50 } = opts
+  const { status, search, serviceCategoryId, page = 1, pageSize = 50 } = opts
   const supabase = createSupabaseServerClient()
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
@@ -48,6 +49,9 @@ export async function getProjects(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (status) query = query.eq('status', status as any)
+  // service_category_id es columna nueva (no en tipos) → cast
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (serviceCategoryId) query = query.eq('service_category_id' as any, serviceCategoryId)
   if (search && search.trim()) {
     const term = `%${search.trim()}%`
     query = query.ilike('name', term)
