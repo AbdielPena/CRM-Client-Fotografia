@@ -221,6 +221,8 @@ interface AppSidebarProps {
   userEmail: string
   userRole: string
   unreadNotifications?: number
+  /** Solicitudes (booking_requests) pendientes de revisar → badge en "Solicitudes". */
+  pendingRequests?: number
 }
 
 export function AppSidebar({
@@ -228,6 +230,7 @@ export function AppSidebar({
   userName,
   userEmail,
   unreadNotifications = 0,
+  pendingRequests = 0,
 }: AppSidebarProps) {
   const pathname = usePathname()
   const { collapsed, toggle } = useSidebar()
@@ -403,6 +406,8 @@ export function AppSidebar({
                         {group.items.map((item) => {
                           const Icon = item.icon
                           const active = isActive(item.href)
+                          const badgeCount =
+                            item.href === "/bookings" ? pendingRequests : 0
 
                           const linkContent = (
                             <Link
@@ -425,6 +430,11 @@ export function AppSidebar({
                                   active ? "text-brand" : "text-muted-foreground/90",
                                 )}
                               />
+                              {badgeCount > 0 && collapsed && (
+                                <span className="absolute right-1 top-1 min-w-[14px] rounded-full bg-danger px-0.5 text-center text-[8px] font-bold leading-[14px] text-danger-foreground">
+                                  {badgeCount > 9 ? "9+" : badgeCount}
+                                </span>
+                              )}
                               <motion.span
                                 animate={collapsed ? "collapsed" : "expanded"}
                                 variants={labelVariants}
@@ -436,6 +446,11 @@ export function AppSidebar({
                               >
                                 {item.label}
                               </motion.span>
+                              {badgeCount > 0 && !collapsed && (
+                                <span className="ml-auto min-w-[18px] rounded-full bg-danger px-1.5 text-center text-[10px] font-bold leading-[18px] text-danger-foreground">
+                                  {badgeCount > 99 ? "99+" : badgeCount}
+                                </span>
+                              )}
                             </Link>
                           )
 

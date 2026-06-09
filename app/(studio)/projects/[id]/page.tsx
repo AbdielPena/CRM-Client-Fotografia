@@ -24,6 +24,12 @@ import {
   Truck,
   History,
   Image as ImageIcon,
+  User,
+  Mail,
+  Phone,
+  Instagram,
+  Globe,
+  FolderOpen,
 } from "lucide-react"
 import Link from "next/link"
 import type { Metadata } from "next"
@@ -122,28 +128,50 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       })
     : formResponsesEarly
 
-  // Pagos, entregas e historial de actividad del proyecto
-  const [{ data: paymentsRaw }, { data: deliveriesRaw }, activity] =
-    await Promise.all([
-      supabase
-        .from("payments")
-        .select(
-          "id, amount, currency, status, method, received_at, created_at, invoice_id",
-        )
-        .eq("studio_id", session.studioId)
-        .eq("project_id", params.id)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("client_deliveries")
-        .select("id, title, status, delivered_at, gallery_id, created_at")
-        .eq("studio_id", session.studioId)
-        .eq("project_id", params.id)
-        .order("created_at", { ascending: false }),
-      getEntityActivity(session.studioId, "project", params.id),
-    ])
+  // Pagos, entregas, historial e (otros proyectos del mismo cliente)
+  const clientId = (client?.id as string | undefined) ?? null
+  const [
+    { data: paymentsRaw },
+    { data: deliveriesRaw },
+    activity,
+    { data: otherProjectsRaw },
+  ] = await Promise.all([
+    supabase
+      .from("payments")
+      .select(
+        "id, amount, currency, status, method, received_at, created_at, invoice_id",
+      )
+      .eq("studio_id", session.studioId)
+      .eq("project_id", params.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("client_deliveries")
+      .select("id, title, status, delivered_at, gallery_id, created_at")
+      .eq("studio_id", session.studioId)
+      .eq("project_id", params.id)
+      .order("created_at", { ascending: false }),
+    getEntityActivity(session.studioId, "project", params.id),
+    clientId
+      ? supabase
+          .from("projects")
+          .select("id, name, status, event_type, event_date")
+          .eq("studio_id", session.studioId)
+          .eq("client_id", clientId)
+          .neq("id", params.id)
+          .is("deleted_at", null)
+          .order("event_date", { ascending: false, nullsFirst: false })
+          .limit(8)
+      : Promise.resolve({ data: [] as Rec[] }),
+  ])
   const payments = (paymentsRaw ?? []) as Rec[]
   const deliveries = (deliveriesRaw ?? []) as Rec[]
+  const otherProjects = (otherProjectsRaw ?? []) as Rec[]
+
+  // Total pagado (suma de pagos completados/recibidos) — visión financiera del cliente
+  const totalPaid = payments
+    .filter((p) => ["completed", "received", "paid", "succeeded"].includes(String(p.status)))
+    .reduce((s, p) => s + Number(p.amount ?? 0), 0)
 
   const publicBaseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? ""
 
@@ -358,6 +386,128 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
         {/* Sidebar */}
         <div className="space-y-6">
+          {/* Perfil del cliente — este apartado funciona como hub del cliente */}
+          {client && (
+            <div className="sf-card p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <h2 className="text-sm font-semibold text-foreground">Cliente</h2>
+                </div>
+                <Link
+                  href={`/clients/${client.id}`}
+                  className="text-xs font-medium text-primary hover:text-primary/80"
+                >
+                  Ver perfil →
+                </Link>
+              </div>
+
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-brand-soft text-base font-bold text-brand">
+                  {(clientLabel || "?").charAt(0).toUpperCase()}
+                </div>
+                <Link href={`/clients/${client.id}`} className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-foreground hover:text-primary">
+                    {clientLabel}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    Ver historial completo
+                  </span>
+                </Link>
+              </div>
+
+              <dl className="space-y-2.5 text-xs">
+                {client.email ? (
+                  <div className="flex items-center gap-2.5">
+                    <Mail className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    <a
+                      href={`mailto:${String(client.email)}`}
+                      className="truncate text-foreground hover:text-primary"
+                    >
+                      {String(client.email)}
+                    </a>
+                  </div>
+                ) : null}
+                {client.phone || client.whatsapp ? (
+                  <div className="flex items-center gap-2.5">
+                    <Phone className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    <a
+                      href={`tel:${String(client.phone ?? client.whatsapp)}`}
+                      className="text-foreground hover:text-primary"
+                    >
+                      {String(client.phone ?? client.whatsapp)}
+                    </a>
+                  </div>
+                ) : null}
+                {client.instagram_handle ? (
+                  <div className="flex items-center gap-2.5">
+                    <Instagram className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    <span className="truncate text-foreground">
+                      @{String(client.instagram_handle).replace(/^@/, "")}
+                    </span>
+                  </div>
+                ) : null}
+                {client.website_url ? (
+                  <div className="flex items-center gap-2.5">
+                    <Globe className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                    <a
+                      href={String(client.website_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate text-foreground hover:text-primary"
+                    >
+                      {String(client.website_url).replace(/^https?:\/\//, "")}
+                    </a>
+                  </div>
+                ) : null}
+              </dl>
+
+              {totalPaid > 0 && (
+                <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-xs">
+                  <span className="text-muted-foreground">Pagado (este proyecto)</span>
+                  <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(totalPaid, currency)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Otros proyectos del cliente */}
+          {otherProjects.length > 0 && (
+            <div className="sf-card p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">
+                  Otros proyectos del cliente ({otherProjects.length})
+                </h2>
+              </div>
+              <div className="space-y-1">
+                {otherProjects.map((p) => (
+                  <Link
+                    key={String(p.id)}
+                    href={`/projects/${p.id}`}
+                    className="-mx-2 flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-foreground">
+                        {String(p.name)}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {TYPE_LABELS[String(p.event_type ?? "")] ??
+                          String(p.event_type ?? "")}
+                        {p.event_date
+                          ? ` · ${formatDateShort(new Date(String(p.event_date)))}`
+                          : ""}
+                      </p>
+                    </div>
+                    <StatusBadge status={String(p.status)} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Project details */}
           <div className="sf-card p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4">Detalles</h2>

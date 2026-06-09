@@ -7,6 +7,7 @@ import {
 } from "@/components/layout/sidebar-context"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
+import { countPendingBookingRequests } from "@/server/services/booking-request.service"
 
 export default async function StudioLayout({
   children,
@@ -14,7 +15,10 @@ export default async function StudioLayout({
   children: React.ReactNode
 }) {
   const session = await requireStudioAuth()
-  const unread = await countUnreadNotifications(session.studioId)
+  const [unread, pendingRequests] = await Promise.all([
+    countUnreadNotifications(session.studioId),
+    countPendingBookingRequests(session.studioId).catch(() => 0),
+  ])
 
   const cookieStore = cookies()
   const sidebarCollapsed = cookieStore.get(SIDEBAR_COOKIE_NAME)?.value === "1"
@@ -28,6 +32,7 @@ export default async function StudioLayout({
           userEmail={session.email}
           userRole={session.role}
           unreadNotifications={unread}
+          pendingRequests={pendingRequests}
         />
         {/* Ambient Aurora glow detrás del contenido — muy sutil */}
         <main className="relative flex-1 overflow-y-auto">
