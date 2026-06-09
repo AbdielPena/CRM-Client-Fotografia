@@ -5,6 +5,7 @@ import { untypedService } from "@/server/supabase/untyped"
 import { resolveTemplate } from "@/server/services/email-template.service"
 import { enqueueEmail } from "@/server/services/email.service"
 import * as drive from "@/server/services/google-drive.service"
+import { getDriveConnectionStatus } from "@/server/services/google-drive-oauth.service"
 
 /**
  * Orquestador: respalda/entrega una galería de ENTREGA FINAL a Google Drive en
@@ -312,18 +313,9 @@ async function sendDriveLinkEmail(input: {
 export async function getGoogleDriveStatus(
   studioId: string,
 ): Promise<{ connected: boolean; email: string | null; needsReconnect: boolean }> {
-  const sb = untypedService()
-  const { data } = await sb
-    .from("studio_integrations")
-    .select("config")
-    .eq("studio_id", studioId)
-    .eq("service", "google_calendar")
-    .maybeSingle()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cfg = (data as any)?.config ?? null
-  if (!cfg?.refreshToken) return { connected: false, email: null, needsReconnect: false }
-  const hasDrive = typeof cfg.scope === "string" && cfg.scope.includes("drive.file")
-  return { connected: hasDrive, email: cfg.email ?? null, needsReconnect: !hasDrive }
+  // Conexión de Drive DEDICADA (service='google_drive'), separada de Calendar.
+  const s = await getDriveConnectionStatus(studioId)
+  return { connected: s.connected, email: s.email, needsReconnect: false }
 }
 
 /** Worker: drena backups pendientes (llamado por el cron endpoint). */

@@ -5,13 +5,14 @@ import {
   exchangeCodeForTokens,
   saveIntegration,
 } from '@/server/services/google-calendar.service'
+import { saveDriveIntegration } from '@/server/services/google-drive-oauth.service'
 import { getAuthContext } from '@/server/supabase/auth-context'
 
 /**
- * Callback de Google OAuth. El state se firma con HMAC para evitar CSRF
- * y recuperar el studioId.
+ * Callback de Google OAuth (Calendar y Drive comparten este callback).
+ * El state se firma con HMAC para evitar CSRF y recuperar el studioId.
  *
- * Formato state: `<base64(studioId)>.<hmac>`
+ * Formato state payload: `<studioId>` (calendar) o `<studioId>|drive` (drive).
  */
 
 function verifyState(state: string): string | null {
@@ -59,10 +60,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL(`${redirectBase}?error=missing_params`, appBase))
   }
 
-  const studioIdFromState = verifyState(state)
-  if (!studioIdFromState) {
+  const decoded = verifyState(state)
+  if (!decoded) {
     return NextResponse.redirect(new URL(`${redirectBase}?error=invalid_state`, appBase))
   }
+  // Payload: `<studioId>` (calendar) o `<studioId>|drive` (drive).
+  const [studioIdFromState, svc] = decoded.split('|')
+  const isDrive = svc === 'drive'
 
   // Doble check: la sesión activa debe corresponder al studioId del state
   const ctx = await getAuthContext()
@@ -72,7 +76,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const tokens = await exchangeCodeForTokens(code)
-    await saveIntegration(studioIdFromState, tokens)
+    if (isDrive) {
+      await saveDriveIntegration(studioIdFromState, tokens)
+    } else {
+      await saveIntegration(studioIdFromState, tokens)
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'unknown'
     return NextResponse.redirect(
@@ -80,5 +88,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  return NextResponse.redirect(new URL(`${redirectBase}?connected=1`, appBase))
+  return NextResponse.redirect(
+    new URL(`${redirectBase}?connected=1${isDrive ? '&drive=1' : ''}`, appBase),
+  )
 }

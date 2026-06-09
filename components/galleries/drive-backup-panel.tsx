@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import Link from "next/link"
 import {
   HardDriveUpload,
   ExternalLink,
@@ -17,6 +16,7 @@ import {
   getDriveBackupStatusAction,
 } from "@/server/actions/gallery-drive.actions"
 import type { DriveBackupStatus } from "@/lib/galleries/drive-types"
+import { connectGoogleDriveAction } from "@/server/actions/google-drive-oauth.actions"
 
 type DriveTrack = "social" | "high_quality" | "both"
 
@@ -31,7 +31,6 @@ const ACTIVE = new Set(["pending", "running", "uploading"])
 export function DriveBackupPanel({
   galleryId,
   connected,
-  needsReconnect,
   driveEmail,
   initialStatus,
 }: {
@@ -91,7 +90,7 @@ export function DriveBackupPanel({
   const card =
     "mt-4 rounded-xl border border-border bg-card p-5"
 
-  if (needsReconnect || !connected) {
+  if (!connected) {
     return (
       <div className={card}>
         <div className="mb-2 flex items-center gap-2">
@@ -99,17 +98,18 @@ export function DriveBackupPanel({
           <h2 className="text-sm font-semibold text-foreground">Entrega en Google Drive</h2>
         </div>
         <p className="text-[12.5px] text-muted-foreground">
-          {needsReconnect
-            ? "Tu cuenta de Google está conectada pero sin permiso de Drive. Reconéctala para habilitar la entrega a Drive."
-            : "Conecta tu cuenta de Google (con permiso de Drive) para subir las galerías de entrega a Drive."}
+          Conecta una cuenta de Google Drive para subir las entregas. Puede ser{" "}
+          <strong>distinta</strong> a la de tu Calendar (ideal: una con bastante almacenamiento).
         </p>
-        <Link
-          href="/settings/integrations/google"
-          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[12.5px] font-semibold text-brand-foreground transition-colors hover:bg-brand/90"
-        >
-          <Link2 className="h-3.5 w-3.5" />
-          {needsReconnect ? "Reconectar Google con Drive" : "Conectar Google"}
-        </Link>
+        <form action={connectGoogleDriveAction}>
+          <button
+            type="submit"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-[12.5px] font-semibold text-brand-foreground transition-colors hover:bg-brand/90"
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            Conectar Google Drive
+          </button>
+        </form>
       </div>
     )
   }

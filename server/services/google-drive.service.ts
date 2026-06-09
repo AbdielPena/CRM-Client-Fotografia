@@ -1,10 +1,11 @@
 import "server-only"
 
-import { getAccessToken } from "@/server/services/google-calendar.service"
+import { getDriveAccessToken } from "@/server/services/google-drive-oauth.service"
 
 /**
  * Cliente de Google Drive (scope `drive.file` — solo archivos/carpetas creados
- * por la app). Reusa el MISMO OAuth de Google Calendar (getAccessToken).
+ * por la app). Usa la conexión de Drive DEDICADA (service='google_drive'),
+ * separada de Google Calendar, para poder usar una cuenta de Drive distinta.
  *
  * Usado por gallery-drive.service para respaldar/entregar galerías de entrega
  * final a Drive en dos pistas (Redes / Máxima calidad).
@@ -24,7 +25,7 @@ export class DriveNotConnectedError extends Error {
 }
 
 async function authHeader(studioId: string): Promise<string> {
-  const token = await getAccessToken(studioId)
+  const token = await getDriveAccessToken(studioId)
   if (!token) throw new DriveNotConnectedError()
   return `Bearer ${token}`
 }
