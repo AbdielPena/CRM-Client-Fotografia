@@ -13,6 +13,10 @@ import { GalleryPasswordGate } from "@/components/public/gallery-password-gate"
 import { PublicGalleryView } from "@/components/public/public-gallery-view"
 
 export const dynamic = "force-dynamic"
+// Sin esto, Next cachea los GET de Supabase (Data Cache, por URL de la query) y
+// la vista pública sirve ajustes viejos de la galería (portada/foco/título…)
+// aunque el estudio ya los haya cambiado. force-no-store = siempre datos frescos.
+export const fetchCache = "force-no-store"
 
 type PageProps = { params: { token: string } }
 
