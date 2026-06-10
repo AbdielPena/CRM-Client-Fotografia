@@ -80,49 +80,78 @@ type NavGroup = {
   items: NavLink[]
 }
 
+// Navegación organizada por función y flujo de trabajo:
+// adquirir → operar → producir → cobrar → comunicar → automatizar → analizar → configurar.
 const NAV_GROUPS: NavGroup[] = [
   {
     type: "group",
-    label: "Principal",
+    label: "Inicio",
     items: [
       { type: "link", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
-      { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
-      { type: "link", href: "/tasks", label: "Tareas", icon: CheckSquare },
-      { type: "link", href: "/chat", label: "Chat interno", icon: MessageCircle },
     ],
   },
   {
+    // El "quién": conseguir y gestionar clientes y sus trabajos.
     type: "group",
-    label: "CRM",
+    label: "Clientes",
     items: [
+      { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
+      { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
       { type: "link", href: "/projects", label: "Proyectos", icon: FolderOpen },
+    ],
+  },
+  {
+    // Cockpit diario, transversal a todos los clientes.
+    type: "group",
+    label: "Operaciones",
+    items: [
       { type: "link", href: "/calendar", label: "Calendario", icon: CalendarDays },
+      { type: "link", href: "/tasks", label: "Tareas", icon: CheckSquare },
+    ],
+  },
+  {
+    // Ejecutar y entregar el trabajo fotográfico.
+    type: "group",
+    label: "Producción",
+    items: [
       { type: "link", href: "/deliveries", label: "Pipeline / Entregas", icon: Workflow },
       { type: "link", href: "/galleries", label: "Galerías", icon: ImageIcon },
     ],
   },
   {
+    // El dinero, los acuerdos y los activos.
     type: "group",
-    label: "Documentos",
-    items: [
-      { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
-      { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
-    ],
-  },
-  // Módulos del monolito unificado (F3, F5, F6). Aparecen como sección dedicada
-  // — antes vivían en sistemas separados con SSO federado, ahora son nativos.
-  {
-    type: "group",
-    label: "Módulos",
+    label: "Negocio",
     items: [
       { type: "link", href: "/finance/transactions", label: "Finanzas", icon: Wallet },
+      { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
+      { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
       { type: "link", href: "/inventory/items", label: "Inventario", icon: Boxes },
-      { type: "link", href: "/mail/inbox", label: "Correo", icon: Mail },
     ],
   },
   {
+    // Todos los canales de mensajería, internos y externos.
+    type: "group",
+    label: "Comunicación",
+    items: [
+      { type: "link", href: "/mail/inbox", label: "Correo", icon: Mail },
+      { type: "link", href: "/settings/whatsapp", label: "WhatsApp", icon: MessageCircle },
+      { type: "link", href: "/chat", label: "Chat interno", icon: MessageCircle },
+      { type: "link", href: "/engagement", label: "Engagement Hub", icon: HeartHandshake },
+    ],
+  },
+  {
+    // Trabajo que el sistema hace solo.
+    type: "group",
+    label: "Automatización",
+    items: [
+      { type: "link", href: "/ai-assistant", label: "AI Assistant", icon: Bot },
+      { type: "link", href: "/automations", label: "Automatizaciones", icon: Sparkles },
+    ],
+  },
+  {
+    // Mirar los datos.
     type: "group",
     label: "Análisis",
     items: [
@@ -131,43 +160,42 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    type: "group",
-    label: "Automatización",
-    items: [
-      { type: "link", href: "/ai-assistant", label: "AI Assistant", icon: Bot },
-      { type: "link", href: "/automations", label: "Automatizaciones", icon: Sparkles },
-      { type: "link", href: "/engagement", label: "Engagement Hub", icon: HeartHandshake },
-      { type: "link", href: "/settings/whatsapp", label: "WhatsApp", icon: MessageCircle },
-      { type: "link", href: "/settings/webhooks", label: "Webhooks salientes", icon: Webhook },
-      { type: "link", href: "/settings/api", label: "API y tokens", icon: Key },
-    ],
-  },
-  {
+    // Cómo opera el estudio: catálogo, plantillas, marca y fiscal.
     type: "group",
     label: "Configuración",
     items: [
       { type: "link", href: "/settings/service-categories", label: "Categorías de Servicios", icon: Tag },
       { type: "link", href: "/settings/packages", label: "Paquetes", icon: Package },
       { type: "link", href: "/settings/forms", label: "Formularios", icon: ClipboardList },
-      { type: "link", href: "/settings/contracts", label: "Contratos", icon: FileStack },
+      { type: "link", href: "/settings/contracts", label: "Plantillas de contrato", icon: FileStack },
       { type: "link", href: "/settings/project-templates", label: "Plantillas de proyecto", icon: Layers },
       { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },
-      { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },
       { type: "link", href: "/settings/branding", label: "Marca y personalización", icon: Layers },
+      { type: "link", href: "/settings/domain", label: "Dominio", icon: Globe },
+      { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },
       { type: "link", href: "/settings/fiscal", label: "Fiscal RD (NCF/ITBIS)", icon: Landmark },
     ],
   },
   {
+    // Conexiones con sistemas externos.
     type: "group",
-    label: "Cuenta",
+    label: "Integraciones",
     items: [
-      { type: "link", href: "/settings/domain", label: "Dominio", icon: Globe },
       {
         type: "link",
         href: "/settings/integrations/google",
         label: "Google Calendar",
         icon: CalendarClock,
       },
+      { type: "link", href: "/settings/webhooks", label: "Webhooks salientes", icon: Webhook },
+      { type: "link", href: "/settings/api", label: "API y tokens", icon: Key },
+    ],
+  },
+  {
+    // Cuenta, equipo, seguridad y recuperación.
+    type: "group",
+    label: "Cuenta",
+    items: [
       { type: "link", href: "/settings", label: "Ajustes generales", icon: Settings },
       { type: "link", href: "/settings/billing", label: "Plan y facturación", icon: CreditCard },
       { type: "link", href: "/settings/members", label: "Miembros del studio", icon: Users },
