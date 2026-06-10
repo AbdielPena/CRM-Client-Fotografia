@@ -61,6 +61,7 @@ export async function transitionProjectStatus(
   studioId: string,
   projectId: string,
   intent: ProjectIntent,
+  opts?: { dispatch?: boolean },
 ): Promise<{ moved: boolean; toLabel: string | null }> {
   try {
     const targetLabel = await findStatusLabelByIntent(studioId, intent)
@@ -84,7 +85,7 @@ export async function transitionProjectStatus(
       return { moved: false, toLabel: targetLabel }
     }
 
-    await setProjectStatus(studioId, projectId, targetLabel)
+    await setProjectStatus(studioId, projectId, targetLabel, opts)
     return { moved: true, toLabel: targetLabel }
   } catch (err) {
     console.error("[automation] transitionProjectStatus failed", {

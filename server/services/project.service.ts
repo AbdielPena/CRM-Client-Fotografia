@@ -186,6 +186,27 @@ export async function createProject(
     await syncProjectById(studioId, project.id).catch(() => {})
   }
 
+  // Evento de automatización (best-effort).
+  void (async () => {
+    try {
+      const { dispatchAutomationEvent } = await import('./automation.service')
+      await dispatchAutomationEvent({
+        studioId,
+        event: 'project.created',
+        entityType: 'project',
+        entityId: project.id,
+        payload: {
+          project_id: project.id,
+          client_id: project.client_id,
+          event_type: project.event_type,
+          event_date: project.event_date,
+        },
+      })
+    } catch (err) {
+      console.error('[project] dispatch project.created failed', err)
+    }
+  })()
+
   return project
 }
 

@@ -313,6 +313,27 @@ export async function signContract(
     console.error('[signContract] post-sign hook failed', err)
   }
 
+  // Evento de automatización (best-effort). Corre con service-role (firma por
+  // token público), así que el dispatcher funciona sin sesión de studio.
+  void (async () => {
+    try {
+      const { dispatchAutomationEvent } = await import('./automation.service')
+      await dispatchAutomationEvent({
+        studioId: signed.studio_id as string,
+        event: 'contract.signed',
+        entityType: 'contract',
+        entityId: signed.id as string,
+        payload: {
+          contract_id: signed.id,
+          client_id: (signed as { client_id?: string | null }).client_id ?? null,
+          project_id: (signed as { project_id?: string | null }).project_id ?? null,
+        },
+      })
+    } catch (err) {
+      console.error('[signContract] dispatch contract.signed failed', err)
+    }
+  })()
+
   return signed
 }
 

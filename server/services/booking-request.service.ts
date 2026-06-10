@@ -268,6 +268,27 @@ export async function createPublicBookingRequest(
     }
   }
 
+  // Evento de automatización (best-effort). Corre en contexto público/anon; el
+  // dispatcher usa service-role, así que funciona sin sesión de studio.
+  void (async () => {
+    try {
+      const { dispatchAutomationEvent } = await import('./automation.service')
+      await dispatchAutomationEvent({
+        studioId: studio.id,
+        event: 'booking.received',
+        entityType: 'booking_request',
+        entityId: created.id,
+        payload: {
+          booking_id: created.id,
+          client_email: email,
+          event_type: input.eventType?.trim() || pkg.event_type,
+        },
+      })
+    } catch (err) {
+      console.error('[createPublicBookingRequest] dispatch booking.received failed', err)
+    }
+  })()
+
   return { status: 'ok', requestId: created.id }
 }
 

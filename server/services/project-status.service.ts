@@ -125,13 +125,32 @@ export async function deleteProjectStatus(
   if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
 }
 
-/** Cambia el estado de un proyecto (por label). */
+/**
+ * Cambia el estado de un proyecto (por label).
+ *
+ * Emite el evento de automatización `project.status_changed` (best-effort) solo
+ * si el status realmente cambió. `opts.dispatch:false` lo suprime — lo usa la
+ * acción de automatización `update_project_status` para no auto-dispararse en
+ * bucle (una regla con trigger status_changed + acción update_project_status).
+ */
 export async function setProjectStatus(
   studioId: string,
   projectId: string,
   newStatusLabel: string,
+  opts?: { dispatch?: boolean },
 ): Promise<void> {
   const supabase = createSupabaseServerClient()
+
+  // Status previo para el payload from→to del evento.
+  const { data: prev } = await supabase
+    .from('projects')
+    .select('status')
+    .eq('id', projectId)
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  const fromStatus = (prev as { status: string | null } | null)?.status ?? null
+
   const { error } = await supabase
     .from('projects')
     .update({ status: newStatusLabel, updated_at: new Date().toISOString() })
@@ -140,4 +159,21 @@ export async function setProjectStatus(
     .is('deleted_at', null)
 
   if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
+
+  if (opts?.dispatch !== false && fromStatus !== newStatusLabel) {
+    void (async () => {
+      try {
+        const { dispatchAutomationEvent } = await import('./automation.service')
+        await dispatchAutomationEvent({
+          studioId,
+          event: 'project.status_changed',
+          entityType: 'project',
+          entityId: projectId,
+          payload: { project_id: projectId, from: fromStatus, to: newStatusLabel },
+        })
+      } catch (err) {
+        console.error('[project-status] dispatch project.status_changed failed', err)
+      }
+    })()
+  }
 }

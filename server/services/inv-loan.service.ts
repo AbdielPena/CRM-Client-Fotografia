@@ -288,6 +288,26 @@ export async function createInvLoan(
     },
   })
 
+  // Evento de automatización (best-effort).
+  void (async () => {
+    try {
+      const { dispatchAutomationEvent } = await import("./automation.service")
+      await dispatchAutomationEvent({
+        studioId,
+        event: "inv_loan.created",
+        entityType: "inv_loan",
+        entityId: loanRow.id,
+        payload: {
+          loan_id: loanRow.id,
+          responsible_id: data.responsibleId,
+          items_count: data.items.length,
+        },
+      })
+    } catch (err) {
+      console.error("[inv-loan] dispatch inv_loan.created failed", err)
+    }
+  })()
+
   return loanRow
 }
 
@@ -400,6 +420,24 @@ export async function returnInvLoan(
     action: allReturned ? "inv_loan.returned" : "inv_loan.partial_return",
     metadata: { item_count: data.items.length },
   })
+
+  // Evento de automatización solo en devolución TOTAL (best-effort).
+  if (allReturned) {
+    void (async () => {
+      try {
+        const { dispatchAutomationEvent } = await import("./automation.service")
+        await dispatchAutomationEvent({
+          studioId,
+          event: "inv_loan.returned",
+          entityType: "inv_loan",
+          entityId: data.loanId,
+          payload: { loan_id: data.loanId, items_count: data.items.length },
+        })
+      } catch (err) {
+        console.error("[inv-loan] dispatch inv_loan.returned failed", err)
+      }
+    })()
+  }
 
   return { loanId: data.loanId, status: newLoanStatus, returnedAt }
 }

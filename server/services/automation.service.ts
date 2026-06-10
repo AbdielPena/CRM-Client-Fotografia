@@ -531,16 +531,100 @@ async function actionSendEmail(
   ctx: { studioId: string; entityType?: string; entityId?: string; payload?: Record<string, unknown> },
   cfg: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const templateSlug = String(cfg.template_slug ?? "")
-  const toAddress = (ctx.payload?.email as string) ?? (cfg.to as string)
-  if (!toAddress) throw new Error("send_email requires recipient (payload.email or config.to)")
+  const templateSlug = String(cfg.template_slug ?? "").trim()
+  if (!templateSlug) {
+    throw new Error("send_email requiere action_config.template_slug")
+  }
 
-  // V1: log only — la integración real con EmailQueue se hace en V2 del módulo Mail
-  // Dejamos el hook listo pero no enviamos para no spamear sin que el user lo
-  // confirme. El user puede ver el log en /automations/[id] runs.
+  // El slug debe existir en el catálogo central (sino no hay subject/body por defecto).
+  const { TEMPLATE_CATALOG, resolveTemplate } = await import(
+    "./email-template.service"
+  )
+  const catalog = (
+    TEMPLATE_CATALOG as Record<string, { defaultSubject: string; defaultBodyHtml: string }>
+  )[templateSlug]
+  if (!catalog) {
+    throw new Error(`send_email: template_slug desconocido "${templateSlug}"`)
+  }
+
+  // Resolver destinatario: payload.email → config.to → email del cliente (client_id).
+  // Los eventos invoice.* / project.* no traen email en el payload pero sí client_id.
+  let toAddress =
+    (ctx.payload?.email as string | undefined) ?? (cfg.to as string | undefined)
+  let toName =
+    (ctx.payload?.name as string | undefined) ??
+    (ctx.payload?.client_name as string | undefined)
+
+  const clientId =
+    (ctx.payload?.client_id as string | undefined) ??
+    (ctx.entityType === "client" ? ctx.entityId : undefined)
+
+  if (!toAddress && clientId) {
+    const sb = untypedService()
+    const { data: client } = await sb
+      .from("clients")
+      .select("email, name")
+      .eq("studio_id", ctx.studioId)
+      .eq("id", clientId)
+      .maybeSingle()
+    if (client) {
+      toAddress = (client as { email: string | null }).email ?? undefined
+      toName = toName ?? ((client as { name: string | null }).name ?? undefined)
+    }
+  }
+
+  if (!toAddress) {
+    throw new Error(
+      "send_email: sin destinatario (payload.email, config.to, o client_id resoluble)",
+    )
+  }
+
+  // Variables del template: el payload del evento (strings/números) + overrides
+  // explícitos de action_config.vars. client_name se deriva del nombre resuelto.
+  const payloadVars: Record<string, string> = {}
+  for (const [k, v] of Object.entries(ctx.payload ?? {})) {
+    if (v != null && (typeof v === "string" || typeof v === "number")) {
+      payloadVars[k] = String(v)
+    }
+  }
+  const cfgVars =
+    cfg.vars && typeof cfg.vars === "object"
+      ? (cfg.vars as Record<string, string>)
+      : {}
+  const vars: Record<string, string | null | undefined> = {
+    client_name: toName ?? "",
+    ...payloadVars,
+    ...cfgVars,
+  }
+
+  const resolved = await resolveTemplate(
+    ctx.studioId,
+    templateSlug as Parameters<typeof resolveTemplate>[1],
+    vars,
+    { subject: catalog.defaultSubject, bodyHtml: catalog.defaultBodyHtml },
+  )
+
+  const { enqueueEmail } = await import("./email.service")
+  const subject =
+    (cfg.subject as string | undefined)?.trim() || resolved.subject
+
+  const queueId = await enqueueEmail({
+    studioId: ctx.studioId,
+    toEmail: toAddress,
+    toName: toName ?? null,
+    subject,
+    bodyHtml: resolved.bodyHtml,
+    fromName: resolved.fromName,
+    replyTo: resolved.replyTo,
+    templateSlug,
+    relatedEntityType: ctx.entityType ?? null,
+    relatedEntityId: ctx.entityId ?? null,
+    metadata: { automation_rule_id: rule.id },
+  })
+
   return {
-    skipped: "send_email action is stubbed in V1 — implement via email-queue.service",
-    intended_recipient: toAddress,
+    email_queue_id: queueId,
+    recipient: toAddress,
     template_slug: templateSlug,
     rule_id: rule.id,
   }
@@ -593,11 +677,13 @@ async function actionUpdateProjectStatus(
     const { transitionProjectStatus } = await import(
       "./project-automation.service"
     )
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // dispatch:false → este cambio de status NO re-emite project.status_changed,
+    // evitando que la propia regla se auto-dispare en bucle.
     const result = await transitionProjectStatus(
       ctx.studioId,
       ctx.entityId,
       intent as Parameters<typeof transitionProjectStatus>[2],
+      { dispatch: false },
     )
     return { project_id: ctx.entityId, intent, ...result }
   } catch {

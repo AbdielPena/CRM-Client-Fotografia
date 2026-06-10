@@ -519,6 +519,29 @@ export async function publishGallery(
     })()
   }
 
+  // Evento de automatización (best-effort). Solo en la PRIMERA publicación
+  // (cualquier tipo de galería), no al re-guardar una ya publicada.
+  if (current?.status !== "published") {
+    void (async () => {
+      try {
+        const { dispatchAutomationEvent } = await import("./automation.service")
+        await dispatchAutomationEvent({
+          studioId,
+          event: "gallery.published",
+          entityType: "gallery",
+          entityId: galleryId,
+          payload: {
+            gallery_id: galleryId,
+            client_id: (current as { client_id?: string | null } | null)?.client_id ?? null,
+            gallery_type: gType ?? null,
+          },
+        })
+      } catch (err) {
+        console.error("[gallery] dispatch gallery.published failed", err)
+      }
+    })()
+  }
+
   return updated
 }
 

@@ -439,7 +439,7 @@ export async function returnInvRental(
 
   const { data: rental } = await sb
     .from("inv_rentals")
-    .select("id, code, status")
+    .select("id, code, status, client_id")
     .eq("id", data.rentalId)
     .eq("studio_id", studioId)
     .maybeSingle()
@@ -529,6 +529,30 @@ export async function returnInvRental(
     action: allReturned ? "inv_rental.returned" : "inv_rental.partial_return",
     metadata: { lines_returned: data.items.length },
   })
+
+  // Evento de automatización solo cuando el alquiler queda COMPLETO (devolución
+  // total). Best-effort.
+  if (allReturned) {
+    void (async () => {
+      try {
+        const { dispatchAutomationEvent } = await import("./automation.service")
+        await dispatchAutomationEvent({
+          studioId,
+          event: "inv_rental.completed",
+          entityType: "inv_rental",
+          entityId: data.rentalId,
+          payload: {
+            rental_id: data.rentalId,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            client_id: (rental as any)?.client_id ?? null,
+            items_count: data.items.length,
+          },
+        })
+      } catch (err) {
+        console.error("[inv-rental] dispatch inv_rental.completed failed", err)
+      }
+    })()
+  }
 
   return {
     rentalId: data.rentalId,
