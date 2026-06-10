@@ -8,6 +8,7 @@ import { countUnreadNotifications } from "@/server/services/notification.service
 import {
   getAssetThumbUrl,
   getAssetWebUrl,
+  getFavoriteSelections,
   getGalleryActivity,
   getGalleryAssets,
   getGalleryById,
@@ -38,15 +39,17 @@ export default async function GalleryDetailPage({
   const session = await requireStudioAuth()
   const galleryId = params.id
 
-  const [gallery, assets, collections, sets, pins, activity, unread] = await Promise.all([
-    getGalleryById(session.studioId, galleryId),
-    getGalleryAssets(session.studioId, galleryId),
-    getCollectionsByGallery(session.studioId, galleryId),
-    getSetsByGallery(session.studioId, galleryId),
-    getPinsByGallery(session.studioId, galleryId),
-    getGalleryActivity(session.studioId, galleryId),
-    countUnreadNotifications(session.studioId),
-  ])
+  const [gallery, assets, collections, sets, pins, activity, unread, favoriteSelections] =
+    await Promise.all([
+      getGalleryById(session.studioId, galleryId),
+      getGalleryAssets(session.studioId, galleryId),
+      getCollectionsByGallery(session.studioId, galleryId),
+      getSetsByGallery(session.studioId, galleryId),
+      getPinsByGallery(session.studioId, galleryId),
+      getGalleryActivity(session.studioId, galleryId),
+      countUnreadNotifications(session.studioId),
+      getFavoriteSelections(galleryId),
+    ])
 
   if (!gallery) notFound()
 
@@ -113,6 +116,20 @@ export default async function GalleryDetailPage({
     assetsWithUrls.find((a) => a.status === "completed") ??
     assetsWithUrls[0]
   const coverImageUrl = coverAsset?.webUrl ?? coverAsset?.thumbUrl ?? null
+
+  // Selecciones por favoritos (flujo "Avisar al fotógrafo") con marca de enviada.
+  const submittedBy =
+    (gallery as unknown as { selection_submitted_by?: string | null })
+      .selection_submitted_by ?? null
+  const submittedAt =
+    (gallery as unknown as { selection_submitted_at?: string | null })
+      .selection_submitted_at ?? null
+  const favSelections = favoriteSelections.map((f) => ({
+    clientEmail: f.clientEmail,
+    assetIds: f.assetIds,
+    submitted: !!submittedBy && f.clientEmail === submittedBy,
+    submittedAt: submittedBy && f.clientEmail === submittedBy ? submittedAt : null,
+  }))
 
   // Estado de selección de impresión (para el panel de producción).
   const printState = await getGalleryPrintState(galleryId)
@@ -242,6 +259,7 @@ export default async function GalleryDetailPage({
         assets={assetsWithUrls}
         sets={sets}
         collections={collections}
+        favoriteSelections={favSelections}
         pins={pins}
         studioId={session.studioId}
         publicToken={activeToken?.token ?? null}

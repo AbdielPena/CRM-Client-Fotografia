@@ -556,6 +556,38 @@ export async function setGalleryEmbed(
   return { embedEnabled: row.embed_enabled, embedToken: row.embed_token }
 }
 
+export type FavoriteSelection = {
+  clientEmail: string
+  assetIds: string[]
+}
+
+/**
+ * Selecciones hechas con FAVORITOS (❤️), agrupadas por email del cliente.
+ * Es el flujo de "Avisar al fotógrafo" (submitClientSelection toma los
+ * favoritos como la selección) — la pestaña Selecciones del estudio las
+ * muestra junto a las listas nombradas (gallery_collections).
+ */
+export async function getFavoriteSelections(
+  galleryId: string,
+): Promise<FavoriteSelection[]> {
+  const supabase = svc()
+  const { data } = await supabase
+    .from("gallery_favorites")
+    .select("client_email, asset_id, created_at")
+    .eq("gallery_id", galleryId)
+    .order("created_at", { ascending: true })
+  const map = new Map<string, string[]>()
+  for (const r of (data ?? []) as Array<{ client_email: string; asset_id: string }>) {
+    const arr = map.get(r.client_email) ?? []
+    arr.push(r.asset_id)
+    map.set(r.client_email, arr)
+  }
+  return Array.from(map.entries()).map(([clientEmail, assetIds]) => ({
+    clientEmail,
+    assetIds,
+  }))
+}
+
 export async function deleteGallery(
   studioId: string,
   _actorId: string,

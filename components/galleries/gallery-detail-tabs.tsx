@@ -106,6 +106,14 @@ type CollectionRow = {
   created_at: string
 }
 
+/** Selección hecha con favoritos ❤️ (flujo "Avisar al fotógrafo"). */
+type FavoriteSelectionRow = {
+  clientEmail: string
+  assetIds: string[]
+  submitted: boolean
+  submittedAt: string | null
+}
+
 type PinRow = {
   id: string
   label: string | null
@@ -133,6 +141,7 @@ interface Props {
   assets: Asset[]
   sets: SetRow[]
   collections: CollectionRow[]
+  favoriteSelections?: FavoriteSelectionRow[]
   pins: PinRow[]
   studioId: string
   publicToken: string | null
@@ -147,6 +156,7 @@ export function GalleryDetailTabs({
   assets,
   sets,
   collections,
+  favoriteSelections = [],
   pins,
   studioId,
   publicToken,
@@ -208,6 +218,7 @@ export function GalleryDetailTabs({
           <SelectionsTab
             galleryId={gallery.id}
             collections={collections}
+            favorites={favoriteSelections}
             assets={assets}
           />
         </TabsContent>
@@ -444,18 +455,26 @@ function SetsTab({
 function SelectionsTab({
   galleryId,
   collections,
+  favorites,
   assets,
 }: {
   galleryId: string
   collections: CollectionRow[]
+  favorites: FavoriteSelectionRow[]
   assets: Asset[]
 }) {
   const router = useRouter()
   const [creating, setCreating] = React.useState(false)
   const [name, setName] = React.useState("")
   const [pending, startTransition] = useTransition()
+  // La clave activa puede ser una lista (id) o una selección por favoritos ("fav:<email>").
+  // Por defecto: la selección ENVIADA > primera de favoritos > primera lista.
   const [selectedColl, setSelectedColl] = React.useState<string | null>(
-    collections[0]?.id ?? null,
+    favorites.find((f) => f.submitted)
+      ? `fav:${favorites.find((f) => f.submitted)!.clientEmail}`
+      : favorites[0]
+        ? `fav:${favorites[0].clientEmail}`
+        : (collections[0]?.id ?? null),
   )
   const [items, setItems] = React.useState<
     Array<{ id: string; asset_id: string; original_name: string; thumbUrl: string | null }>
@@ -495,9 +514,10 @@ function SelectionsTab({
     })
   }
 
-  // Cargar items de la selección activa via fetch /api
+  // Cargar items de la selección activa via fetch /api (solo listas; los
+  // favoritos ya vienen resueltos en memoria desde `assets`).
   React.useEffect(() => {
-    if (!selectedColl) {
+    if (!selectedColl || selectedColl.startsWith("fav:")) {
       setItems([])
       return
     }
@@ -510,9 +530,15 @@ function SelectionsTab({
   }, [selectedColl, galleryId])
 
   const activeColl = collections.find((c) => c.id === selectedColl) ?? null
+  const activeFav = selectedColl?.startsWith("fav:")
+    ? (favorites.find((f) => `fav:${f.clientEmail}` === selectedColl) ?? null)
+    : null
+  const favItems = activeFav
+    ? assets.filter((a) => activeFav.assetIds.includes(a.id))
+    : []
 
   const copyFilenames = () => {
-    const names = items.map((i) => i.original_name).join(", ")
+    const names = (activeFav ? favItems.map((a) => a.original_name) : items.map((i) => i.original_name)).join(", ")
     navigator.clipboard.writeText(names)
     toast.success("Lista copiada al portapapeles")
   }
@@ -523,7 +549,7 @@ function SelectionsTab({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-[13px] font-semibold text-foreground">
-            Listas ({collections.length})
+            Selecciones ({favorites.length + collections.length})
           </p>
           {!creating && (
             <button
@@ -568,11 +594,53 @@ function SelectionsTab({
         )}
 
         <div className="space-y-1">
-          {collections.length === 0 && !creating && (
+          {collections.length === 0 && favorites.length === 0 && !creating && (
             <p className="rounded-lg border border-dashed border-border bg-card/40 px-3 py-4 text-center text-[12px] text-muted-foreground">
-              Aún no hay listas. Cuando el cliente cree selecciones, aparecerán acá.
+              Aún no hay selecciones. Cuando el cliente marque favoritas ❤️ o
+              cree listas, aparecerán acá.
             </p>
           )}
+
+          {/* Selecciones por favoritos ❤️ — el flujo "Avisar al fotógrafo" */}
+          {favorites.map((f) => {
+            const key = `fav:${f.clientEmail}`
+            const active = key === selectedColl
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSelectedColl(key)}
+                className={cn(
+                  "group flex w-full items-start justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
+                  active
+                    ? "border-brand bg-brand-soft"
+                    : "border-border bg-card hover:border-border-strong",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <Heart className="h-3 w-3 flex-shrink-0 fill-current text-rose-500" />
+                    <p
+                      className={cn(
+                        "truncate text-[12.5px] font-semibold",
+                        active ? "text-brand" : "text-foreground",
+                      )}
+                    >
+                      Favoritas
+                    </p>
+                    {f.submitted && <Send className="h-3 w-3 flex-shrink-0 text-brand" />}
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {f.clientEmail}
+                  </p>
+                </div>
+                <span className="flex-shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground tabular-nums">
+                  {f.assetIds.length}
+                </span>
+              </button>
+            )
+          })}
+
           {collections.map((c) => {
             const active = c.id === selectedColl
             return (
@@ -618,9 +686,71 @@ function SelectionsTab({
 
       {/* Detalle selección */}
       <div className="min-w-0">
-        {!activeColl ? (
+        {activeFav ? (
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Heart className="h-4 w-4 fill-current text-rose-500" />
+                  <h3 className="truncate text-[15px] font-semibold text-foreground">
+                    Favoritas
+                  </h3>
+                  {activeFav.submitted && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[10.5px] font-semibold text-brand">
+                      <Send className="h-3 w-3" />
+                      Enviada
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  {favItems.length} foto{favItems.length === 1 ? "" : "s"} ·{" "}
+                  {activeFav.clientEmail}
+                  {activeFav.submittedAt &&
+                    ` · enviada ${new Date(activeFav.submittedAt).toLocaleDateString("es-DO")}`}
+                </p>
+              </div>
+              <button
+                onClick={copyFilenames}
+                disabled={favItems.length === 0}
+                className="inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-muted px-2.5 text-[12px] font-medium text-foreground hover:bg-muted/70 disabled:opacity-40"
+              >
+                <Copy className="h-3 w-3" />
+                Copiar nombres
+              </button>
+            </div>
+
+            {favItems.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-card/40 px-6 py-12 text-center text-sm text-muted-foreground">
+                Las fotos de esta selección ya no están en la galería.
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+                {favItems.map((a) => (
+                  <div
+                    key={a.id}
+                    className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                    title={a.original_name}
+                  >
+                    {a.thumbUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={a.thumbUrl}
+                        alt={a.original_name}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      {a.original_name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : !activeColl ? (
           <div className="rounded-xl border border-dashed border-border bg-card/40 px-6 py-16 text-center text-sm text-muted-foreground">
-            Seleccioná una lista para ver las fotos elegidas.
+            Seleccioná una selección para ver las fotos elegidas.
           </div>
         ) : (
           <div className="space-y-4">
