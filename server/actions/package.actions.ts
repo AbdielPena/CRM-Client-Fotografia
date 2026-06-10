@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache"
 import { requireStudioAuth } from "@/server/middleware/auth"
-import { createPackage, updatePackage, deletePackage } from "@/server/services/package.service"
+import {
+  createPackage,
+  updatePackage,
+  deletePackage,
+  getPackageDeleteImpact,
+} from "@/server/services/package.service"
 import { createPackageSchema, updatePackageSchema } from "@/lib/validations/package.schema"
 import { normalizeEntitlements, type PrintEntitlements } from "@/lib/print/entitlements"
 
@@ -79,6 +84,17 @@ export async function updatePackageAction(packageId: string, formData: FormData)
   )
   revalidatePath("/settings/packages")
   return { success: true }
+}
+
+/** Qué arrastraría eliminar el paquete (proyectos/galerías/facturas en cascada). */
+export async function packageDeleteImpactAction(packageId: string) {
+  const session = await requireStudioAuth()
+  try {
+    const impact = await getPackageDeleteImpact(session.studioId, packageId)
+    return { ok: true as const, impact }
+  } catch {
+    return { ok: false as const, error: "No se pudo calcular el impacto." }
+  }
 }
 
 export async function deletePackageAction(packageId: string) {

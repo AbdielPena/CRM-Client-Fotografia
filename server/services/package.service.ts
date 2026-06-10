@@ -161,6 +161,58 @@ export async function updatePackage(
   return packagesRepo.update(packageId, patch)
 }
 
+export type PackageDeleteImpact = {
+  projects: number
+  galleries: number
+  invoices: number
+  projectNames: string[]
+}
+
+/**
+ * Calcula qué arrastraría eliminar el paquete (cascade_delete_package borra
+ * los proyectos que lo usan y, por proyecto: contratos, facturas, pagos,
+ * notas y galerías). Alimenta el diálogo de confirmación fuerte.
+ */
+export async function getPackageDeleteImpact(
+  studioId: string,
+  packageId: string,
+): Promise<PackageDeleteImpact> {
+  const { createSupabaseServiceClient } = await import('@/server/supabase/service')
+  const supabase = createSupabaseServiceClient()
+
+  const { data: projRows } = await supabase
+    .from('projects')
+    .select('id, name')
+    .eq('studio_id', studioId)
+    .eq('package_id', packageId)
+    .is('deleted_at', null)
+  const projects = (projRows ?? []) as Array<{ id: string; name: string }>
+  if (projects.length === 0) {
+    return { projects: 0, galleries: 0, invoices: 0, projectNames: [] }
+  }
+  const ids = projects.map((p) => p.id)
+
+  const [{ count: galleries }, { count: invoices }] = await Promise.all([
+    supabase
+      .from('galleries')
+      .select('id', { count: 'exact', head: true })
+      .in('project_id', ids)
+      .is('deleted_at', null),
+    supabase
+      .from('invoices')
+      .select('id', { count: 'exact', head: true })
+      .in('project_id', ids)
+      .is('deleted_at', null),
+  ])
+
+  return {
+    projects: projects.length,
+    galleries: galleries ?? 0,
+    invoices: invoices ?? 0,
+    projectNames: projects.map((p) => p.name).slice(0, 5),
+  }
+}
+
 export async function deletePackage(studioId: string, packageId: string) {
   const existing = await packagesRepo.findById(packageId)
   if (!existing || existing.studio_id !== studioId) {

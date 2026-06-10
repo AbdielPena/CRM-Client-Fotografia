@@ -7,8 +7,8 @@ import {
   createPackageAction,
   updatePackageAction,
   deletePackageAction,
+  packageDeleteImpactAction,
 } from "@/server/actions/package.actions"
-import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { formatCurrency } from "@/lib/utils/currency"
 import {
   Plus,
@@ -21,6 +21,8 @@ import {
   Link as LinkIcon,
   Copy,
   ExternalLink,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -80,6 +82,7 @@ export function PackageManager({
   const [packages, setPackages] = useState(initialPackages)
   const [formMode, setFormMode] = useState<FormMode>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [deletingPkg, setDeletingPkg] = useState<Package | null>(null)
   const [isPending, startTransition] = useTransition()
 
   // Mantiene la lista local sincronizada cuando el server re-renderiza tras
@@ -182,7 +185,9 @@ export function PackageManager({
     const result = await deletePackageAction(packageId)
     if (result?.success) {
       setPackages((prev) => prev.filter((p) => p.id !== packageId))
+      setDeletingPkg(null)
       toast.success("Paquete eliminado")
+      router.refresh()
     }
   }
 
@@ -295,17 +300,13 @@ export function PackageManager({
                 <Pencil className="h-3.5 w-3.5" />
                 Editar
               </button>
-              <ConfirmDialog
+              <button
+                onClick={() => setDeletingPkg(pkg)}
                 title="Eliminar paquete"
-                description={`¿Eliminar el paquete "${pkg.name}"?`}
-                confirmLabel="Eliminar"
-                danger
-                onConfirm={() => handleDelete(pkg.id)}
+                className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
               >
-                <button className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </ConfirmDialog>
+                <Trash2 className="h-4 w-4" />
+              </button>
             </div>
           </div>
             ))}
@@ -350,6 +351,150 @@ export function PackageManager({
           />
         </Modal>
       )}
+
+      {/* Confirmación fuerte de eliminación (impacto en cascada + escribir el nombre) */}
+      {deletingPkg && (
+        <Modal onClose={() => setDeletingPkg(null)}>
+          <DangerDeletePackageDialog
+            pkg={deletingPkg}
+            onCancel={() => setDeletingPkg(null)}
+            onConfirm={() => handleDelete(deletingPkg.id)}
+          />
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+/** Diálogo de eliminación con doble seguro: muestra el impacto real en cascada
+ *  (proyectos/galerías/facturas que se irían) y exige escribir el nombre del
+ *  paquete para habilitar el botón. Así no se puede eliminar por error. */
+function DangerDeletePackageDialog({
+  pkg,
+  onCancel,
+  onConfirm,
+}: {
+  pkg: Package
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const [impact, setImpact] = useState<{
+    projects: number
+    galleries: number
+    invoices: number
+    projectNames: string[]
+  } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [typed, setTyped] = useState("")
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    packageDeleteImpactAction(pkg.id)
+      .then((r) => {
+        if (r.ok) setImpact(r.impact)
+      })
+      .finally(() => setLoading(false))
+  }, [pkg.id])
+
+  const nameMatches = typed.trim() === pkg.name.trim()
+  const hasCascade = (impact?.projects ?? 0) > 0
+
+  return (
+    <div className="rounded-xl border border-danger/40 bg-card p-6">
+      <div className="mb-4 flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-danger/10 text-danger">
+          <AlertTriangle className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-foreground">
+            Eliminar &quot;{pkg.name}&quot;
+          </h3>
+          <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+            Esta acción no se puede deshacer desde aquí.
+          </p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Calculando qué se vería afectado…
+        </div>
+      ) : hasCascade ? (
+        <div className="rounded-lg border border-danger/30 bg-danger/5 px-4 py-3">
+          <p className="text-[13px] font-semibold text-danger">
+            ⚠️ Este paquete está EN USO. Eliminarlo borrará también:
+          </p>
+          <ul className="mt-2 space-y-1 text-[12.5px] text-foreground">
+            <li>
+              • <strong>{impact!.projects}</strong> proyecto{impact!.projects === 1 ? "" : "s"}
+              {impact!.projectNames.length > 0 && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  ({impact!.projectNames.join(", ")}
+                  {impact!.projects > impact!.projectNames.length ? "…" : ""})
+                </span>
+              )}
+            </li>
+            {impact!.galleries > 0 && (
+              <li>
+                • <strong>{impact!.galleries}</strong> galería{impact!.galleries === 1 ? "" : "s"} (con
+                las selecciones de tus clientes)
+              </li>
+            )}
+            {impact!.invoices > 0 && (
+              <li>
+                • <strong>{impact!.invoices}</strong> factura{impact!.invoices === 1 ? "" : "s"} con sus
+                pagos
+              </li>
+            )}
+            <li>• Contratos, notas y formularios de esos proyectos</li>
+          </ul>
+          <p className="mt-2 text-[12px] text-muted-foreground">
+            💡 Si solo quieres retirarlo del catálogo, mejor edítalo y márcalo{" "}
+            <strong>inactivo</strong> — conserva los proyectos e historial.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-lg bg-muted/40 px-4 py-3 text-[12.5px] text-muted-foreground">
+          Este paquete no tiene proyectos vinculados — eliminarlo no afecta nada más.
+        </div>
+      )}
+
+      <div className="mt-4">
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Para confirmar, escribe el nombre exacto del paquete:
+        </label>
+        <input
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          placeholder={pkg.name}
+          autoFocus
+          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-danger focus:outline-none focus:ring-2 focus:ring-danger/20"
+        />
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          disabled={!nameMatches || loading || deleting}
+          onClick={() => {
+            setDeleting(true)
+            onConfirm()
+          }}
+          className="inline-flex items-center gap-2 rounded-lg bg-danger px-5 py-2.5 text-sm font-medium text-danger-foreground transition-colors hover:bg-danger/90 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          Eliminar definitivamente
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg bg-muted px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/70"
+        >
+          Cancelar
+        </button>
+      </div>
     </div>
   )
 }
