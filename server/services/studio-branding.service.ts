@@ -1,6 +1,6 @@
 import "server-only"
 
-import { untypedServer, untypedService } from "@/server/supabase/untyped"
+import { untypedService } from "@/server/supabase/untyped"
 import { throwServiceError } from "@/lib/utils/api-error"
 import { logActivity } from "./activity.service"
 
@@ -77,7 +77,9 @@ export async function getStudioBranding(
 export async function getPublicBrandingByStudioId(
   studioId: string,
 ): Promise<Partial<StudioBranding> | null> {
-  const sb = untypedServer()
+  // service_role: lectura pública (galerías /g, booking) — no depende de una RLS
+  // permisiva sobre studio_branding. Scoping explícito por studio_id abajo.
+  const sb = untypedService()
   const { data } = await sb
     .from("studio_branding")
     .select(
@@ -98,7 +100,7 @@ export async function getPublicBrandingByStudioId(
 export async function getStudioByCustomDomain(
   domain: string,
 ): Promise<{ studioId: string; branding: StudioBranding } | null> {
-  const sb = untypedServer()
+  const sb = untypedService()
   const { data } = await sb
     .from("studio_branding")
     .select("*")

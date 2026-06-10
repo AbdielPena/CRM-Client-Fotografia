@@ -27,6 +27,13 @@ function getSecret(): string {
     process.env["NEXTAUTH_SECRET"] ??
     "dev-portal-secret-change-me"
   if (s === "dev-portal-secret-change-me") {
+    // Fail-closed: en producción JAMÁS firmar sesiones del portal con el secret
+    // de dev (sería forjable → suplantación de clientes). Romper es preferible.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "[client-portal] OAUTH_STATE_SECRET / NEXTAUTH_SECRET no configurado en producción",
+      )
+    }
     console.warn(
       "[client-portal] usando secret de dev. Configurá OAUTH_STATE_SECRET para producción.",
     )
