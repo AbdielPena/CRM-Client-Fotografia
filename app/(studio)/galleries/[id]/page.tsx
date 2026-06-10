@@ -21,6 +21,7 @@ import { createSupabaseServerClient } from "@/server/supabase/server"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { GalleryDetailTabs } from "@/components/galleries/gallery-detail-tabs"
+import { GalleryDeleteButton } from "@/components/galleries/gallery-delete-button"
 import { GalleryExtrasInvoiceButton } from "@/components/galleries/gallery-extras-invoice-button"
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
 import { DriveBackupPanel } from "@/components/galleries/drive-backup-panel"
@@ -180,6 +181,17 @@ export default async function GalleryDetailPage({
                 Ver pública
               </a>
             )}
+            <GalleryDeleteButton
+              galleryId={gallery.id}
+              galleryName={gallery.name}
+              assetCount={gallery.asset_count}
+              selectionSubmitted={gallery.selection_submitted ?? false}
+              selectionSubmittedBy={
+                (gallery as unknown as { selection_submitted_by?: string | null })
+                  .selection_submitted_by ?? null
+              }
+              clientLabel={clientLabel}
+            />
           </div>
         </div>
       </div>
