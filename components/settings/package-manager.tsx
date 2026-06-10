@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useCallback, useEffect, useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import {
   createPackageAction,
   updatePackageAction,
@@ -74,10 +76,22 @@ export function PackageManager({
   formTemplates = [],
   serviceCategories = [],
 }: PackageManagerProps) {
+  const router = useRouter()
   const [packages, setPackages] = useState(initialPackages)
   const [formMode, setFormMode] = useState<FormMode>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // Mantiene la lista local sincronizada cuando el server re-renderiza tras
+  // crear/editar/eliminar (revalidate / router.refresh) → la card refleja el cambio.
+  useEffect(() => {
+    setPackages(initialPackages)
+  }, [initialPackages])
+
+  const closeForm = useCallback(() => {
+    setFormMode(null)
+    setEditingId(null)
+  }, [])
 
   const buildPublicUrl = (slug?: string) => {
     if (!slug || !studioSlug) return ""
@@ -142,8 +156,8 @@ export function PackageManager({
       const result = await createPackageAction(fd)
       if (result?.success) {
         toast.success("Paquete creado")
-        setFormMode(null)
-        ;(e.target as HTMLFormElement).reset()
+        closeForm()
+        router.refresh()
       }
     })
   }
@@ -158,8 +172,8 @@ export function PackageManager({
       const result = await updatePackageAction(packageId, fd)
       if (result?.success) {
         toast.success("Paquete actualizado")
-        setFormMode(null)
-        setEditingId(null)
+        closeForm()
+        router.refresh()
       }
     })
   }
@@ -299,50 +313,90 @@ export function PackageManager({
         </div>
       ))}
 
-      {/* Add new card */}
-      {formMode !== "create" && (
-        <button
-          onClick={() => setFormMode("create")}
-          className="flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card/50 p-5 transition-colors hover:border-border-strong hover:bg-muted sm:max-w-xs"
+      {/* Add new card — siempre visible (el formulario ahora es una ventana modal) */}
+      <button
+        onClick={() => {
+          setEditingId(null)
+          setFormMode("create")
+        }}
+        className="flex min-h-[120px] w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card/50 p-5 transition-colors hover:border-border-strong hover:bg-muted sm:max-w-xs"
+      >
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+          <Plus className="h-5 w-5 text-muted-foreground" />
+        </div>
+        <p className="text-sm font-medium text-muted-foreground">Nuevo paquete</p>
+      </button>
+
+      {/* Ventana modal de crear / editar paquete */}
+      {(formMode === "create" || (formMode === "edit" && editingPackage)) && (
+        <Modal onClose={closeForm}>
+          <PackageForm
+            onSubmit={
+              formMode === "edit" && editingPackage
+                ? (e) => handleUpdate(editingPackage.id, e)
+                : handleCreate
+            }
+            onCancel={closeForm}
+            isPending={isPending}
+            title={
+              formMode === "edit" && editingPackage
+                ? `Editando: ${editingPackage.name}`
+                : "Nuevo paquete"
+            }
+            defaultValues={formMode === "edit" ? editingPackage : undefined}
+            contractTemplates={contractTemplates}
+            formTemplates={formTemplates}
+            serviceCategories={serviceCategories}
+          />
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+/** Ventana modal centrada con backdrop, cierre por Escape / clic afuera, y
+ *  bloqueo de scroll del body mientras está abierta. */
+function Modal({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    document.addEventListener("keydown", onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div className="relative flex min-h-full items-center justify-center p-4 sm:p-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
+          className="relative w-full max-w-2xl"
+          role="dialog"
+          aria-modal="true"
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-            <Plus className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <p className="text-sm font-medium text-muted-foreground">
-            Nuevo paquete
-          </p>
-        </button>
-      )}
-
-      {/* Create form */}
-      {formMode === "create" && (
-        <PackageForm
-          onSubmit={handleCreate}
-          onCancel={() => setFormMode(null)}
-          isPending={isPending}
-          title="Nuevo paquete"
-          contractTemplates={contractTemplates}
-          formTemplates={formTemplates}
-          serviceCategories={serviceCategories}
-        />
-      )}
-
-      {/* Edit form */}
-      {formMode === "edit" && editingPackage && (
-        <PackageForm
-          onSubmit={(e) => handleUpdate(editingPackage.id, e)}
-          onCancel={() => {
-            setFormMode(null)
-            setEditingId(null)
-          }}
-          isPending={isPending}
-          title={`Editando: ${editingPackage.name}`}
-          defaultValues={editingPackage}
-          contractTemplates={contractTemplates}
-          formTemplates={formTemplates}
-          serviceCategories={serviceCategories}
-        />
-      )}
+          {children}
+        </motion.div>
+      </div>
     </div>
   )
 }
