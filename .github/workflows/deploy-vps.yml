@@ -88,7 +88,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" -o StrictHostKeyChecking=no \
             "$SSH_USER@$SSH_HOST" "BRANCH=$DEPLOY_BRANCH bash -lse" <<'REMOTE'
-            set -e
+            set -euo pipefail
             cd ~/htdocs/my.abbypixel.com
             export NVM_DIR=$HOME/.nvm
             [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" || true
@@ -100,13 +100,24 @@ jobs:
             echo "=== npm ci ==="
             npm ci --no-audit --no-fund --silent
 
-            echo "=== next build ==="
-            npm run build
+            echo "=== limpiar build temporal previo (si quedó de un deploy fallido) ==="
+            rm -rf .next.new
 
-            echo "=== pm2 restart studioflow ==="
+            echo "=== next build -> .next.new (el .next vivo NO se toca) ==="
+            # NEXT_DIST_DIR redirige la salida del build (lo lee next.config.mjs).
+            # El proceso pm2 viejo sigue sirviendo desde .next durante TODO el build.
+            NEXT_DIST_DIR=.next.new npm run build
+
+            echo "=== verificar que el build temporal es valido ==="
+            test -f .next.new/BUILD_ID || { echo 'BUILD FALLIDO: no hay .next.new/BUILD_ID, abortando sin tocar prod'; exit 1; }
+
+            echo "=== SWAP atomico de carpeta + restart ==="
+            rm -rf .next.old
+            mv .next .next.old
+            mv .next.new .next
             pm2 restart studioflow --update-env
 
-            echo "=== status ==="
+            echo "=== status (rollback disponible en .next.old) ==="
             pm2 status studioflow
           REMOTE
 

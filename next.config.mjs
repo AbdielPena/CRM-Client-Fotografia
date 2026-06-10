@@ -19,6 +19,10 @@ const nextConfig = {
     ],
   },
   poweredByHeader: false, // ocultar X-Powered-By: Next.js
+  // Permite redirigir la salida del build a un dir temporal (.next.new) durante
+  // el deploy, para luego hacer swap atómico y NO servir un .next a medias.
+  // Default = '.next' (sin cambios en `next start`). Ver .github/workflows/deploy-vps.yml.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   compress: true, // gzip de respuestas (cPanel también puede manejarlo)
   productionBrowserSourceMaps: false, // no exponer sourcemaps en prod
   // En shared hosting (BanaHosting/cPanel) el límite de threads es bajo —
