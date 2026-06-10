@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Search,
@@ -33,9 +34,10 @@ const QUICK_ACTIONS = [
   { href: "/projects/new", label: "Nuevo proyecto", icon: FolderPlus },
   { href: "/invoices/new", label: "Nueva factura", icon: Receipt },
   { href: "/contracts/new", label: "Nuevo contrato", icon: FileText },
-  { href: "/packages/new", label: "Nuevo paquete", icon: Package },
+  // Paquetes se crean/editan por modal en ajustes (no hay /packages/new)
+  { href: "/settings/packages", label: "Nuevo paquete", icon: Package },
   // Módulos del monolito unificado — el quick action permite atajos cross-módulo
-  { href: "/finance/transactions/new", label: "Nueva transacción", icon: Package },
+  { href: "/finance/transactions", label: "Nueva transacción", icon: Package },
   { href: "/inventory/items/new", label: "Nuevo equipo", icon: Package },
 ] as const
 
@@ -51,8 +53,17 @@ export function AppTopbar({
   unreadNotifications = 0,
   className,
 }: AppTopbarProps) {
+  const router = useRouter()
   const [quickOpen, setQuickOpen] = React.useState(false)
   const quickRef = React.useRef<HTMLDivElement | null>(null)
+  const searchRef = React.useRef<HTMLInputElement | null>(null)
+
+  const onSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const value = searchRef.current?.value.trim() ?? ""
+    if (value.length < 2) return
+    router.push(`/search?q=${encodeURIComponent(value)}`)
+  }
 
   React.useEffect(() => {
     if (!quickOpen) return
@@ -75,15 +86,18 @@ export function AppTopbar({
     <div className={cn("flex flex-col", className)}>
       {/* ========== Sticky control bar — Lumen, alto h-12, sutil ========== */}
       <div className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border bg-background/85 px-6 backdrop-blur-md lg:px-8">
-        {/* Search */}
-        <div className="relative max-w-sm flex-1">
+        {/* Search — Enter navega a /search?q=… */}
+        <form onSubmit={onSearchSubmit} role="search" className="relative max-w-sm flex-1">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
             aria-hidden="true"
           />
           <input
+            ref={searchRef}
             type="search"
-            placeholder="Buscar..."
+            name="q"
+            placeholder="Buscar clientes, proyectos…"
+            aria-label="Buscar en el estudio"
             className={cn(
               "h-8 w-full rounded-lg border border-transparent bg-muted/60 pl-8 pr-3 text-[13px] text-foreground",
               "placeholder:text-muted-foreground",
@@ -92,7 +106,7 @@ export function AppTopbar({
               "focus:border-brand/40 focus:bg-background focus:outline-none focus:ring-2 focus:ring-brand/20",
             )}
           />
-        </div>
+        </form>
 
         <div className="ml-auto flex items-center gap-1">
           {/* Quick New */}

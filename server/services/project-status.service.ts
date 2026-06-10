@@ -1,4 +1,4 @@
-'use server only'
+import 'server-only'
 
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
