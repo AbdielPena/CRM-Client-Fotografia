@@ -323,9 +323,9 @@ export async function getFeedbackSummary(studioId: string): Promise<FeedbackSumm
 }
 
 /**
- * Envía el email "engagement_review_request" al cliente con su link /fb/<token>.
- * Lo dispara el hook de `setProjectStatus` cuando el proyecto pasa a "completado".
- * Es idempotente: reusa token pendiente si ya existe.
+ * Envía el email "engagement_review_request" Y el WhatsApp "solicitud_resena"
+ * al cliente con su link /fb/<token>. Lo dispara el hook de `setProjectStatus`
+ * cuando el proyecto pasa a "completado". Es idempotente: reusa token pendiente.
  */
 export async function sendReviewRequestEmail(
   studioId: string,
@@ -335,40 +335,61 @@ export async function sendReviewRequestEmail(
   const sb = untypedService()
   const { data: clientRow } = await sb
     .from("clients")
-    .select("name, email")
+    .select("name, email, phone")
     .eq("id", clientId)
     .maybeSingle()
-  const client = clientRow as { name: string | null; email: string | null } | null
-  if (!client?.email) return // sin email no se puede mandar
+  const client = clientRow as { name: string | null; email: string | null; phone: string | null } | null
+  if (!client) return
 
   const { data: studioRow } = await sb.from("studios").select("name").eq("id", studioId).maybeSingle()
   const studioName = (studioRow as { name?: string } | null)?.name ?? ""
 
   const token = await getOrCreateFeedbackToken(studioId, clientId)
   const link = feedbackUrl(token)
-  const vars = {
-    client_name: client.name ?? "",
-    review_link: link,
-    studio_name: studioName,
-  }
-  const defaults = TEMPLATE_CATALOG.engagement_review_request
-  const tpl = await resolveTemplate(studioId, "engagement_review_request", vars, {
-    subject: defaults.defaultSubject,
-    bodyHtml: defaults.defaultBodyHtml,
-  })
 
-  await enqueueEmail({
-    studioId,
-    toEmail: client.email,
-    toName: client.name,
-    subject: tpl.subject,
-    bodyHtml: tpl.bodyHtml,
-    fromName: tpl.fromName,
-    replyTo: tpl.replyTo,
-    templateSlug: "engagement_review_request",
-    relatedEntityType: projectId ? "project" : "client",
-    relatedEntityId: projectId ?? clientId,
-  })
+  // ─── 1) Email ─────────────────────────────────────────────────────────
+  if (client.email) {
+    const vars = {
+      client_name: client.name ?? "",
+      review_link: link,
+      studio_name: studioName,
+    }
+    const defaults = TEMPLATE_CATALOG.engagement_review_request
+    const tpl = await resolveTemplate(studioId, "engagement_review_request", vars, {
+      subject: defaults.defaultSubject,
+      bodyHtml: defaults.defaultBodyHtml,
+    })
+    await enqueueEmail({
+      studioId,
+      toEmail: client.email,
+      toName: client.name,
+      subject: tpl.subject,
+      bodyHtml: tpl.bodyHtml,
+      fromName: tpl.fromName,
+      replyTo: tpl.replyTo,
+      templateSlug: "engagement_review_request",
+      relatedEntityType: projectId ? "project" : "client",
+      relatedEntityId: projectId ?? clientId,
+    })
+  }
+
+  // ─── 2) WhatsApp (plantilla "solicitud_resena") ───────────────────────
+  // Best-effort: si WA no está configurado o el cliente no tiene teléfono,
+  // simplemente no se envía. No queremos romper el flujo principal.
+  if (client.phone) {
+    try {
+      const { sendTemplateMessage } = await import("./whatsapp/cloud-api.service")
+      await sendTemplateMessage(
+        studioId,
+        client.phone,
+        "solicitud_resena",
+        "es",
+        [client.name ?? "amig@"],
+      )
+    } catch (err) {
+      console.error("[engagement] WhatsApp review request failed", err)
+    }
+  }
 }
 
 export interface AdminReview {
