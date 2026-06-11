@@ -175,5 +175,30 @@ export async function setProjectStatus(
         console.error('[project-status] dispatch project.status_changed failed', err)
       }
     })()
+
+    // Si el nuevo status indica "proyecto completado" (label normalizado),
+    // dispara el email de solicitud de reseña al cliente. Fire-and-forget.
+    void (async () => {
+      try {
+        const { isCompletedStatusLabel, sendReviewRequestEmail } = await import(
+          './engagement-feedback.service'
+        )
+        if (!isCompletedStatusLabel(newStatusLabel)) return
+        if (isCompletedStatusLabel(fromStatus)) return // ya estaba completado
+
+        const sb = createSupabaseServiceClient()
+        const { data: row } = await sb
+          .from('projects')
+          .select('client_id')
+          .eq('id', projectId)
+          .eq('studio_id', studioId)
+          .maybeSingle()
+        const clientId = (row as { client_id: string | null } | null)?.client_id
+        if (!clientId) return
+        await sendReviewRequestEmail(studioId, clientId, projectId)
+      } catch (err) {
+        console.error('[project-status] sendReviewRequestEmail failed', err)
+      }
+    })()
   }
 }

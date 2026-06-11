@@ -7,24 +7,28 @@ import { getSegmentCounts } from "@/server/services/engagement-segments.service"
 import {
   getFeedbackSummary,
   getReviewConfig,
+  listAllReviews,
 } from "@/server/services/engagement-feedback.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { EngagementManager } from "@/components/engagement/engagement-manager"
 import { SegmentCampaigns } from "@/components/engagement/segment-campaigns"
 import { FeedbackPanel } from "@/components/engagement/feedback-panel"
+import { PublishedReviewsManager } from "@/components/engagement/published-reviews-manager"
 
 export const metadata: Metadata = { title: "Client Engagement Hub" }
 export const dynamic = "force-dynamic"
 
 export default async function EngagementPage() {
   const session = await requireStudioAuth()
-  const [automations, segmentCounts, feedbackSummary, reviewConfig, unread] = await Promise.all([
-    listEngagementAutomations(session.studioId),
-    getSegmentCounts(session.studioId),
-    getFeedbackSummary(session.studioId),
-    getReviewConfig(session.studioId),
-    countUnreadNotifications(session.studioId),
-  ])
+  const [automations, segmentCounts, feedbackSummary, reviewConfig, allReviews, unread] =
+    await Promise.all([
+      listEngagementAutomations(session.studioId),
+      getSegmentCounts(session.studioId),
+      getFeedbackSummary(session.studioId),
+      getReviewConfig(session.studioId),
+      listAllReviews(session.studioId),
+      countUnreadNotifications(session.studioId),
+    ])
 
   return (
     <>
@@ -43,6 +47,9 @@ export default async function EngagementPage() {
             summary={feedbackSummary}
             config={{ googleUrl: reviewConfig.googleUrl, facebookUrl: reviewConfig.facebookUrl }}
           />
+        </div>
+        <div className="max-w-5xl">
+          <PublishedReviewsManager reviews={allReviews} />
         </div>
       </div>
     </>
