@@ -300,6 +300,15 @@ export async function notifyClientFinalDeliveryAction(input: {
     await publishGallery(ctx.studioId, ctx.userId, galleryId)
   }
 
+  // Entrega final implica descarga: si la galería venía de selección con
+  // descargas apagadas, encenderlas — el cliente DEBE poder bajar sus fotos.
+  await sb
+    .from("galleries")
+    .update({ allow_download: true })
+    .eq("id", galleryId)
+    .eq("studio_id", ctx.studioId)
+    .eq("allow_download", false)
+
   // 1) Token público
   const { url, token: _token } = await createGalleryShareToken(ctx.studioId, galleryId, {
     expiresAt: null,
