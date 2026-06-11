@@ -537,10 +537,37 @@ function SelectionsTab({
     ? assets.filter((a) => activeFav.assetIds.includes(a.id))
     : []
 
-  const copyFilenames = () => {
-    const names = (activeFav ? favItems.map((a) => a.original_name) : items.map((i) => i.original_name)).join(", ")
-    navigator.clipboard.writeText(names)
-    toast.success("Lista copiada al portapapeles")
+  const [copyOpen, setCopyOpen] = React.useState(false)
+  type CopyFormat = "original" | "jpg" | "arw" | "none"
+  type CopySep = "comma" | "newline"
+  const [copyFormat, setCopyFormat] = React.useState<CopyFormat>("none")
+  const [copySep, setCopySep] = React.useState<CopySep>("newline")
+
+  const rawNames = activeFav
+    ? favItems.map((a) => a.original_name)
+    : items.map((i) => i.original_name)
+
+  const formatNames = (
+    names: string[],
+    format: CopyFormat,
+    sep: CopySep,
+  ): string => {
+    const stripExt = (n: string) => n.replace(/\.[^./\\]+$/, "")
+    const mapped = names.map((n) => {
+      if (format === "original") return n
+      if (format === "none") return stripExt(n)
+      return `${stripExt(n)}.${format}`
+    })
+    return mapped.join(sep === "comma" ? ", " : "\n")
+  }
+
+  const openCopyDialog = () => setCopyOpen(true)
+
+  const doCopy = () => {
+    const text = formatNames(rawNames, copyFormat, copySep)
+    navigator.clipboard.writeText(text)
+    toast.success(`${rawNames.length} nombre${rawNames.length === 1 ? "" : "s"} copiado${rawNames.length === 1 ? "" : "s"}`)
+    setCopyOpen(false)
   }
 
   return (
@@ -710,7 +737,7 @@ function SelectionsTab({
                 </p>
               </div>
               <button
-                onClick={copyFilenames}
+                onClick={openCopyDialog}
                 disabled={favItems.length === 0}
                 className="inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-muted px-2.5 text-[12px] font-medium text-foreground hover:bg-muted/70 disabled:opacity-40"
               >
@@ -777,7 +804,7 @@ function SelectionsTab({
               </div>
               <div className="flex flex-shrink-0 items-center gap-2">
                 <button
-                  onClick={copyFilenames}
+                  onClick={openCopyDialog}
                   disabled={items.length === 0}
                   className="inline-flex h-8 items-center gap-1.5 rounded-md bg-muted px-2.5 text-[12px] font-medium text-foreground hover:bg-muted/70 disabled:opacity-40"
                 >
@@ -851,6 +878,121 @@ function SelectionsTab({
           </div>
         )}
       </div>
+
+      {/* Diálogo de copia con opciones de formato/separador */}
+      {copyOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setCopyOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  Copiar nombres
+                </h3>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                  {rawNames.length} archivo{rawNames.length === 1 ? "" : "s"} seleccionado{rawNames.length === 1 ? "" : "s"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCopyOpen(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Formato */}
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Formato
+            </p>
+            <div className="mb-4 grid grid-cols-2 gap-1.5">
+              {([
+                { v: "none", label: "Sin extensión", hint: "IMG_0123" },
+                { v: "original", label: "Tal cual", hint: "IMG_0123.ARW" },
+                { v: "jpg", label: "Forzar .jpg", hint: "IMG_0123.jpg" },
+                { v: "arw", label: "Forzar .arw", hint: "IMG_0123.arw" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setCopyFormat(opt.v)}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-left transition-colors",
+                    copyFormat === opt.v
+                      ? "border-brand bg-brand/5"
+                      : "border-border bg-background hover:border-border-strong",
+                  )}
+                >
+                  <p className="text-[12.5px] font-medium text-foreground">
+                    {opt.label}
+                  </p>
+                  <p className="font-mono text-[10.5px] text-muted-foreground">
+                    {opt.hint}
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            {/* Separador */}
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Separador
+            </p>
+            <div className="mb-4 grid grid-cols-2 gap-1.5">
+              {([
+                { v: "newline", label: "Línea por línea" },
+                { v: "comma", label: "Coma (, )" },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setCopySep(opt.v)}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-[12.5px] font-medium transition-colors",
+                    copySep === opt.v
+                      ? "border-brand bg-brand/5 text-foreground"
+                      : "border-border bg-background text-muted-foreground hover:border-border-strong",
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Preview */}
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Vista previa
+            </p>
+            <pre className="mb-4 max-h-40 overflow-auto rounded-lg border border-border bg-muted/50 p-2.5 font-mono text-[11px] leading-relaxed text-foreground whitespace-pre-wrap">
+              {formatNames(rawNames.slice(0, 6), copyFormat, copySep)}
+              {rawNames.length > 6 ? `\n…y ${rawNames.length - 6} más` : ""}
+            </pre>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCopyOpen(false)}
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-[12.5px] text-muted-foreground hover:border-border-strong"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={doCopy}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-1.5 text-[12.5px] font-semibold text-brand-foreground hover:bg-brand/90"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copiar al portapapeles
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
