@@ -12,6 +12,8 @@ export type ProjectStatus = {
   position: number
   is_default: boolean
   created_at: string
+  /** Intent del flujo automático asignado en Settings (null = solo keywords). */
+  auto_intent: string | null
 }
 
 /** Lista todos los estados del studio ordenados por posición. */
@@ -56,16 +58,37 @@ export async function createProjectStatus(
   return data as ProjectStatus
 }
 
-/** Actualiza label y/o color de un estado. */
+/** Actualiza label, color y/o auto_intent de un estado. */
 export async function updateProjectStatus(
   studioId: string,
   statusId: string,
-  patch: { label?: string; color?: string },
+  patch: { label?: string; color?: string; autoIntent?: string | null },
 ): Promise<void> {
-  const supabase = createSupabaseServerClient()
+  // Cast a any: los tipos generados aún no incluyen auto_intent (existe en DB).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createSupabaseServerClient() as any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dbPatch: Record<string, any> = {}
+  if (patch.label !== undefined) dbPatch.label = patch.label
+  if (patch.color !== undefined) dbPatch.color = patch.color
+  if (patch.autoIntent !== undefined) {
+    // Si se asigna un intent que ya tiene otro estado, liberarlo primero
+    // (el índice único parcial lo exige).
+    if (patch.autoIntent !== null) {
+      await supabase
+        .from('project_statuses')
+        .update({ auto_intent: null })
+        .eq('studio_id', studioId)
+        .eq('auto_intent', patch.autoIntent)
+        .neq('id', statusId)
+    }
+    dbPatch.auto_intent = patch.autoIntent
+  }
+  if (Object.keys(dbPatch).length === 0) return
+
   const { error } = await supabase
     .from('project_statuses')
-    .update(patch)
+    .update(dbPatch)
     .eq('id', statusId)
     .eq('studio_id', studioId)
 

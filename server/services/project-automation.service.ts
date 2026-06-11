@@ -33,6 +33,8 @@ function normalize(s: string): string {
 
 /**
  * Resuelve el label del studio que mejor matchea con el intent.
+ * 1º: estado con auto_intent asignado explícitamente en Settings.
+ * 2º (fallback): keyword matching sobre el label.
  * Retorna null si ningún status del studio matchea.
  */
 async function findStatusLabelByIntent(
@@ -40,6 +42,12 @@ async function findStatusLabelByIntent(
   intent: ProjectIntent,
 ): Promise<string | null> {
   const statuses = await getProjectStatuses(studioId)
+
+  const explicit = statuses.find(
+    (s) => (s as { auto_intent?: string | null }).auto_intent === intent,
+  )
+  if (explicit) return explicit.label
+
   const keywords = INTENT_KEYWORDS[intent]
   // Ordenamos por position para preferir el "más temprano" cuando hay múltiples matches
   // (ej: si hay "Consulta inicial" y "Consulta seguimiento", queremos el primero).

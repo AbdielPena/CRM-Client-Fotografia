@@ -17,6 +17,7 @@ type Status = {
   color: string
   position: number
   is_default: boolean
+  auto_intent?: string | null
 }
 
 const PRESET_COLORS = [
@@ -25,11 +26,25 @@ const PRESET_COLORS = [
   "#ef4444", "#f97316", "#84cc16", "#06b6d4",
 ]
 
+/** Eventos del flujo que mueven el proyecto automáticamente a un estado. */
+const AUTO_INTENTS: Array<{ value: string; label: string }> = [
+  { value: "consulta", label: "Cliente nuevo / consulta" },
+  { value: "reservado", label: "Reserva confirmada" },
+  { value: "sesion_realizada", label: "Sesión realizada" },
+  { value: "esperando_seleccion", label: "Galería enviada (esperando selección)" },
+  { value: "edicion", label: "Selección recibida (en edición)" },
+  { value: "entregado", label: "Entrega final publicada" },
+]
+
+const intentLabel = (v: string | null | undefined) =>
+  AUTO_INTENTS.find((i) => i.value === v)?.label ?? null
+
 export function ProjectStatusManager({ initialStatuses }: { initialStatuses: Status[] }) {
   const [statuses, setStatuses] = useState(initialStatuses)
   const [editing, setEditing] = useState<string | null>(null)
   const [editLabel, setEditLabel] = useState("")
   const [editColor, setEditColor] = useState("")
+  const [editIntent, setEditIntent] = useState<string>("")
   const [showCreate, setShowCreate] = useState(false)
   const [newLabel, setNewLabel] = useState("")
   const [newColor, setNewColor] = useState("#6366f1")
@@ -62,18 +77,29 @@ export function ProjectStatusManager({ initialStatuses }: { initialStatuses: Sta
     setEditing(s.id)
     setEditLabel(s.label)
     setEditColor(s.color)
+    setEditIntent(s.auto_intent ?? "")
   }
 
   const saveEdit = (id: string) => {
     const fd = new FormData()
     fd.append("label", editLabel)
     fd.append("color", editColor)
+    fd.append("autoIntent", editIntent)
     startTransition(async () => {
       const res = await updateProjectStatusAction(id, fd)
       if (res.error) { toast.error(res.error); return }
       toast.success("Estado actualizado")
       setStatuses((prev) =>
-        prev.map((s) => s.id === id ? { ...s, label: editLabel, color: editColor } : s),
+        prev.map((s) => {
+          if (s.id === id) {
+            return { ...s, label: editLabel, color: editColor, auto_intent: editIntent || null }
+          }
+          // El intent es único por studio — quitárselo al que lo tenía antes.
+          if (editIntent && s.auto_intent === editIntent) {
+            return { ...s, auto_intent: null }
+          }
+          return s
+        }),
       )
       setEditing(null)
     })
@@ -129,49 +155,75 @@ export function ProjectStatusManager({ initialStatuses }: { initialStatuses: Sta
 
             {/* Label o form de edición */}
             {editing === s.id ? (
-              <div className="flex flex-1 items-center gap-2">
-                <input
-                  autoFocus
-                  value={editLabel}
-                  onChange={(e) => setEditLabel(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveEdit(s.id)
-                    if (e.key === "Escape") setEditing(null)
-                  }}
-                  className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
-                />
-                {/* Color picker */}
-                <div className="flex flex-wrap gap-1">
-                  {PRESET_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setEditColor(c)}
-                      className={`h-4 w-4 rounded-full transition-transform hover:scale-110 ${
-                        editColor === c ? "ring-2 ring-offset-1 ring-foreground" : ""
-                      }`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={editLabel}
+                    onChange={(e) => setEditLabel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveEdit(s.id)
+                      if (e.key === "Escape") setEditing(null)
+                    }}
+                    className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  />
+                  {/* Color picker */}
+                  <div className="flex flex-wrap gap-1">
+                    {PRESET_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setEditColor(c)}
+                        className={`h-4 w-4 rounded-full transition-transform hover:scale-110 ${
+                          editColor === c ? "ring-2 ring-offset-1 ring-foreground" : ""
+                        }`}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => saveEdit(s.id)}
+                    className="text-brand hover:text-brand/80"
+                  >
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(null)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => saveEdit(s.id)}
-                  className="text-brand hover:text-brand/80"
-                >
-                  <Check className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(null)}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] text-muted-foreground whitespace-nowrap">
+                    Automatización:
+                  </label>
+                  <select
+                    value={editIntent}
+                    onChange={(e) => setEditIntent(e.target.value)}
+                    className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  >
+                    <option value="">Sin automatización</option>
+                    {AUTO_INTENTS.map((i) => (
+                      <option key={i.value} value={i.value}>
+                        {i.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             ) : (
               <>
-                <span className="flex-1 text-sm font-medium text-foreground">{s.label}</span>
+                <span className="flex-1 text-sm font-medium text-foreground">
+                  {s.label}
+                  {intentLabel(s.auto_intent) && (
+                    <span className="ml-2 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand">
+                      ⚡ {intentLabel(s.auto_intent)}
+                    </span>
+                  )}
+                </span>
                 {s.is_default && (
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Default

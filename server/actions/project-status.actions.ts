@@ -31,9 +31,19 @@ const createProjectStatusSchema = z.object({
   color: hexColorSchema.default('#6b7280'),
 })
 
+const autoIntentSchema = z.enum([
+  'consulta',
+  'reservado',
+  'sesion_realizada',
+  'esperando_seleccion',
+  'edicion',
+  'entregado',
+])
+
 const updateProjectStatusSchema = z.object({
   label: labelSchema.optional(),
   color: hexColorSchema.optional(),
+  autoIntent: autoIntentSchema.nullable().optional(),
 })
 
 const reorderSchema = z.object({
@@ -78,10 +88,12 @@ export async function updateProjectStatusAction(
 
   const rawLabel = String(formData.get('label') ?? '').trim()
   const rawColor = String(formData.get('color') ?? '').trim()
+  const rawIntent = formData.get('autoIntent') // null si no vino; '' = quitar intent
 
-  const raw: { label?: string; color?: string } = {}
+  const raw: { label?: string; color?: string; autoIntent?: string | null } = {}
   if (rawLabel) raw.label = rawLabel
   if (rawColor) raw.color = rawColor
+  if (rawIntent !== null) raw.autoIntent = String(rawIntent).trim() || null
 
   const parseRes = updateProjectStatusSchema.safeParse(raw)
   if (!parseRes.success) {

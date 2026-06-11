@@ -1590,6 +1590,16 @@ export async function submitClientSelection(
     console.error("[submitClientSelection] over-limit check failed", err)
   }
 
+  // Transición del proyecto → "En edición" (best-effort). El flujo de
+  // colecciones (submitCollection) ya lo hacía; este es el flujo de
+  // favoritos ❤️ "Avisar al fotógrafo" que lo tenía faltante.
+  try {
+    const { onSelectionSubmitted } = await import("./project-automation.service")
+    await onSelectionSubmitted(gallery.studio_id, galleryId)
+  } catch (err) {
+    console.error("[submitClientSelection] onSelectionSubmitted falló:", err)
+  }
+
   return { ok: true, count: favIds.length }
 }
 
