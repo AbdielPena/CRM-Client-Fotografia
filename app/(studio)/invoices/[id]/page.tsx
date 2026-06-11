@@ -2,7 +2,7 @@ import { notFound } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getInvoiceById } from "@/server/services/invoice.service"
 import { getTaxConfig } from "@/server/services/fiscal-ncf.service"
-import { getFinAccountsWithBalances } from "@/server/services/fin-account.service"
+import { listFinanzAppAccounts } from "@/server/services/finanzapp-bridge.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { countUnreadNotifications } from "@/server/services/notification.service"
@@ -48,10 +48,10 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     }
   }
 
-  type FinAccountList = Awaited<ReturnType<typeof getFinAccountsWithBalances>>
+  type FinAccountList = Awaited<ReturnType<typeof listFinanzAppAccounts>>
   async function loadFinAccounts(): Promise<FinAccountList> {
     try {
-      return await getFinAccountsWithBalances(session.studioId, { activaOnly: true })
+      return await listFinanzAppAccounts(session.studioId)
     } catch {
       return []
     }
@@ -68,11 +68,12 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
 
   if (!invoice) notFound()
 
+  // FinanzApp es DOP — el modal solo muestra moneda si difiere de la factura.
   const accountOptions = finAccounts.map((a) => ({
     id: a.id,
     nombre: a.nombre,
-    bancoNombre: a.banco?.nombre ?? null,
-    currency: a.currency,
+    bancoNombre: a.banco ?? null,
+    currency: "DOP",
   }))
 
   const client = pickFirst(invoice.client)

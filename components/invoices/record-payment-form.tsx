@@ -168,7 +168,7 @@ export function RecordPaymentForm({
               ))}
             </select>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              El balance de esta cuenta subirá con este pago.
+              El ingreso se registrará en tu app de Finanzas contra esta cuenta.
             </p>
           </div>
         )}

@@ -2,7 +2,7 @@
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { createSupabaseServerClient } from "@/server/supabase/server"
-import { setDefaultFinanceAccount } from "@/server/services/fin-account.service"
+import { setDefaultFinanzAppAccount } from "@/server/services/finanzapp-bridge.service"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -73,17 +73,17 @@ export async function updateStudioAction(input: UpdateStudioInput) {
 }
 
 /**
- * Settea (o limpia) la cuenta de Finanzas a la que se asignan por defecto
- * los pagos de facturas (Stripe y manuales). Pasar `null` la desactiva.
+ * Settea (o limpia) la cuenta de FinanzApp (fi.abbypixel.com) a la que se
+ * asignan por defecto los pagos de facturas (Stripe y manuales).
+ * Pasar `null` la desactiva.
  */
 export async function updateDefaultFinanceAccountAction(
   accountId: string | null,
 ) {
   const session = await requireStudioAuth()
   try {
-    await setDefaultFinanceAccount(session.studioId, session.userId, accountId)
+    await setDefaultFinanzAppAccount(session.studioId, session.userId, accountId)
     revalidatePath("/settings")
-    revalidatePath("/finance/accounts")
     return { success: true as const }
   } catch (err) {
     const message =

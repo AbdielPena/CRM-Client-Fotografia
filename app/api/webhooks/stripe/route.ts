@@ -3,8 +3,7 @@ import Stripe from "stripe"
 import { createClient } from "@supabase/supabase-js"
 import { createId } from "@paralleldrive/cuid2"
 import { SUPABASE_URL } from "@/server/supabase/env"
-import { recordIncomeFromInvoice } from "@/server/services/fin-transaction.service"
-import { resolveDestinationAccount } from "@/server/services/fin-account.service"
+import { recordIncomeToFinanzApp } from "@/server/services/finanzapp-bridge.service"
 
 // Stripe webhook necesita service role para bypass de RLS.
 // El secret SUPABASE_SERVICE_ROLE_KEY NO se expone al cliente.
@@ -46,7 +45,7 @@ export async function POST(req: NextRequest) {
 
         const { data: invoice } = await admin
           .from("invoices")
-          .select("id, total, currency, client_id")
+          .select("id, total, currency, client_id, invoice_number, client:clients(name)")
           .eq("id", invoiceId)
           .eq("studio_id", studioId)
           .is("deleted_at", null)
@@ -78,35 +77,40 @@ export async function POST(req: NextRequest) {
 
         console.log(`[Stripe] Payment recorded for invoice ${invoiceId}: $${amountPaid}`)
 
-        // Cross-módulo F5 wire-up: crear fin_transactions.income idempotente
-        // (external_reference = payment:<id> UNIQUE garantiza no duplicados
-        // en webhook retries y soporta pagos parciales múltiples).
-        // Non-fatal: si falla, el payment ya está registrado y el income se
-        // puede recrear manualmente desde /finance/transactions.
+        // Wire-up CRM → FinanzApp (fi.abbypixel.com): registrar el ingreso en
+        // la app de finanzas del usuario (cuenta default del studio).
+        // Idempotente vía external_reference = crm-payment:<id>.
+        // Non-fatal: si falla, el payment ya está registrado en el CRM.
         try {
-          const accountId = await resolveDestinationAccount(studioId)
-          const result = await recordIncomeFromInvoice(studioId, "stripe-webhook", {
-            invoiceId,
-            amount: amountPaid,
-            currency: pi.currency.toUpperCase(),
-            paidAt: new Date().toISOString(),
-            paymentReference: pi.id,
-            clientId: (invoice as { client_id: string | null }).client_id ?? undefined,
+          const inv = invoice as {
+            client_id: string | null
+            invoice_number: string | null
+            client?: { name?: string | null } | Array<{ name?: string | null }> | null
+          }
+          const clientRel = Array.isArray(inv.client) ? inv.client[0] : inv.client
+          const result = await recordIncomeToFinanzApp(studioId, "stripe-webhook", {
             paymentId,
-            accountId: accountId ?? undefined,
+            amount: amountPaid,
+            paidAt: new Date().toISOString(),
+            description: `Pago factura ${inv.invoice_number ?? invoiceId.slice(0, 8)} (Stripe)`,
+            clientName: clientRel?.name ?? null,
+            reference: pi.id,
+            currency: pi.currency.toUpperCase(),
           })
-          if (result.alreadyExisted) {
+          if (result.skipped) {
+            console.log(`[Stripe→FinanzApp] skipped (${result.skipped}) for invoice ${invoiceId}`)
+          } else if (result.alreadyExisted) {
             console.log(
-              `[Stripe→Finance] income already existed for invoice ${invoiceId} (idempotent retry)`,
+              `[Stripe→FinanzApp] income already existed for invoice ${invoiceId} (idempotent retry)`,
             )
           } else {
             console.log(
-              `[Stripe→Finance] income created tx_id=${result.transactionId} for invoice ${invoiceId}`,
+              `[Stripe→FinanzApp] income created tx_id=${result.transactionId} for invoice ${invoiceId}`,
             )
           }
         } catch (finErr) {
           console.warn(
-            `[Stripe→Finance] recordIncomeFromInvoice failed (non-fatal, payment registered):`,
+            `[Stripe→FinanzApp] recordIncomeToFinanzApp failed (non-fatal, payment registered):`,
             finErr,
           )
         }

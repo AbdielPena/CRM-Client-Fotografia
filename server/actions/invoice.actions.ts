@@ -126,11 +126,6 @@ export async function recordPaymentAction(invoiceId: string, formData: FormData)
   revalidatePath(`/invoices/${invoiceId}`)
   revalidatePath("/invoices")
   revalidatePath("/projects")
-  // El fin_transactions se crea en segundo plano dentro de markInvoicePaid
-  // (best-effort), así que invalidamos también las vistas de Finanzas para
-  // que se vea el ingreso y el nuevo balance al volver a esa pestaña.
-  revalidatePath("/finance/transactions")
-  revalidatePath("/finance/accounts")
   return { success: true, ...result }
 }
 

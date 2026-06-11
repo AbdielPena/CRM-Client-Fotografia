@@ -553,37 +553,38 @@ export async function markInvoicePaid(
     metadata: { amount: paymentData.amount, method: paymentData.method },
   })
 
-  // Wire-up CRM → Finanzas: crear fin_transactions de ingreso + mover balance
-  // de la cuenta destino. Best-effort, no bloquea la respuesta. Para 'stripe'
-  // lo salteamos: el webhook ya emite su propio fin_transactions cuando el
-  // payment_intent se confirma (evitamos doble INSERT, aunque la idempotency
-  // key lo cubriría también).
+  // Wire-up CRM → FinanzApp (fi.abbypixel.com): registrar el ingreso en la
+  // app de finanzas del usuario, contra la cuenta elegida en el modal.
+  // Best-effort, no bloquea la respuesta. Para 'stripe' lo salteamos: el
+  // webhook ya lo registra cuando el payment_intent se confirma.
   if (paymentId && paymentData.method !== 'stripe') {
     void (async () => {
       try {
-        const { resolveDestinationAccount } = await import(
-          './fin-account.service'
+        const { recordIncomeToFinanzApp } = await import(
+          './finanzapp-bridge.service'
         )
-        const { recordIncomeFromInvoice } = await import(
-          './fin-transaction.service'
-        )
-        const accountId = await resolveDestinationAccount(
-          studioId,
-          paymentData.accountId,
-        )
-        await recordIncomeFromInvoice(studioId, actorId, {
-          invoiceId,
-          amount: paymentData.amount,
-          currency: existing.currency,
-          paidAt: receivedAt.toISOString(),
-          paymentReference: paymentData.reference ?? undefined,
-          clientId: existing.client_id ?? undefined,
+        let clientName: string | null = null
+        if (existing.client_id) {
+          const { data: client } = await createSupabaseServiceClient()
+            .from('clients')
+            .select('name')
+            .eq('id', existing.client_id)
+            .maybeSingle()
+          clientName = (client?.name as string | null) ?? null
+        }
+        await recordIncomeToFinanzApp(studioId, actorId, {
           paymentId,
-          accountId: accountId ?? undefined,
+          amount: paymentData.amount,
+          paidAt: receivedAt.toISOString(),
+          accountId: paymentData.accountId ?? null,
+          description: `Pago factura ${existing.invoice_number ?? invoiceId.slice(0, 8)}`,
+          clientName,
+          reference: paymentData.reference ?? null,
+          currency: existing.currency ?? 'DOP',
         })
       } catch (err) {
         console.error(
-          '[invoice→finance] recordIncomeFromInvoice failed (non-fatal):',
+          '[invoice→finanzapp] recordIncomeToFinanzApp failed (non-fatal):',
           err,
         )
       }

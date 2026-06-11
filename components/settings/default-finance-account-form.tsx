@@ -45,9 +45,14 @@ export function DefaultFinanceAccountForm({ accounts, currentAccountId }: Props)
           </h2>
         </div>
         <p className="text-xs text-muted-foreground">
-          Aún no has creado ninguna cuenta. Crea una desde{" "}
-          <a href="/finance/accounts" className="text-primary hover:underline">
-            Finanzas → Cuentas
+          No se encontraron cuentas en tu app de Finanzas. Créalas en{" "}
+          <a
+            href="https://fi.abbypixel.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary hover:underline"
+          >
+            fi.abbypixel.com
           </a>{" "}
           y vuelve aquí para elegir cuál recibe los pagos por defecto.
         </p>
@@ -64,8 +69,9 @@ export function DefaultFinanceAccountForm({ accounts, currentAccountId }: Props)
         </h2>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
-        Cuando registras un pago a una factura, el dinero entra a esta cuenta y
-        su balance sube. Puedes cambiarla por pago en cada caso.
+        Cuando registras un pago a una factura, el ingreso se registra en tu app
+        de Finanzas (fi.abbypixel.com) contra esta cuenta. Puedes cambiarla por
+        pago en cada caso.
       </p>
 
       <div className="space-y-3">
