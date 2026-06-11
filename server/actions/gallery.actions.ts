@@ -253,6 +253,8 @@ export async function notifyClientFinalDeliveryAction(input: {
 }): Promise<{
   url: string
   driveLink: string | null
+  /** ready = link disponible · running = respaldo en curso · unavailable = Drive no conectado */
+  driveStatus: "ready" | "running" | "unavailable"
   sentEmail: boolean
   sentWhatsapp: boolean
   whatsappLink: string | null
@@ -285,6 +287,7 @@ export async function notifyClientFinalDeliveryAction(input: {
     return {
       url: "",
       driveLink: null,
+      driveStatus: "unavailable",
       sentEmail: false,
       sentWhatsapp: false,
       whatsappLink: null,
@@ -302,7 +305,9 @@ export async function notifyClientFinalDeliveryAction(input: {
     expiresAt: null,
   })
 
-  // 2) Link de Drive (si existe backup)
+  // 2) Link de Drive. Si no hay backup con link, disparamos uno automáticamente
+  //    (sube por categoría: quinceañera/boda/estudio/exterior — gallery-drive.service).
+  //    El worker manda el link al cliente por email al terminar.
   const { data: driveRow } = await sb
     .from("gallery_drive_backups")
     .select("web_view_link, status")
@@ -310,8 +315,50 @@ export async function notifyClientFinalDeliveryAction(input: {
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle()
-  const driveLink =
+  let driveLink =
     (driveRow as { web_view_link: string | null; status: string } | null)?.web_view_link ?? null
+  let driveStatus: "ready" | "running" | "unavailable" = driveLink ? "ready" : "unavailable"
+
+  if (!driveLink) {
+    try {
+      const { getGoogleDriveStatus, enqueueGalleryDriveBackup, runGalleryDriveBackup } =
+        await import("@/server/services/gallery-drive.service")
+      const drive = await getGoogleDriveStatus(ctx.studioId)
+      if (drive.connected) {
+        const existingStatus = (driveRow as { status: string } | null)?.status
+        if (existingStatus === "pending" || existingStatus === "running" || existingStatus === "uploading") {
+          driveStatus = "running" // ya hay uno en curso
+        } else {
+          const backupId = await enqueueGalleryDriveBackup(ctx.studioId, galleryId, {
+            track: "both",
+            createdBy: ctx.userId,
+          })
+          driveStatus = "running"
+          // Fire-and-forget: al completar guarda web_view_link y emailea al cliente.
+          void runGalleryDriveBackup(backupId).catch((e) => {
+            console.error("[notifyFinalDelivery] drive backup failed", e)
+          })
+          // Espera corta por si la galería es chica y termina rápido (≤10s).
+          for (let i = 0; i < 5; i++) {
+            await new Promise((r) => setTimeout(r, 2000))
+            const { data: fresh } = await sb
+              .from("gallery_drive_backups")
+              .select("web_view_link")
+              .eq("id", backupId)
+              .maybeSingle()
+            const link = (fresh as { web_view_link: string | null } | null)?.web_view_link
+            if (link) {
+              driveLink = link
+              driveStatus = "ready"
+              break
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[notifyFinalDelivery] drive auto-backup error", e)
+    }
+  }
 
   // 3) Datos del cliente + studio
   const { data: cliRow } = await sb
@@ -407,10 +454,29 @@ export async function notifyClientFinalDeliveryAction(input: {
     waLink = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}`
   }
 
+  // 7) Transición del proyecto → "Entregado" + tarea de impresiones (best-effort).
+  try {
+    const { data: gProj } = await sb
+      .from("galleries")
+      .select("project_id")
+      .eq("id", galleryId)
+      .maybeSingle()
+    const projectId = (gProj as { project_id: string | null } | null)?.project_id
+    if (projectId && (sentEmail || sentWhatsapp)) {
+      const { onFinalDeliveryPublished } = await import(
+        "@/server/services/project-automation.service"
+      )
+      await onFinalDeliveryPublished(ctx.studioId, projectId)
+    }
+  } catch (e) {
+    console.error("[notifyFinalDelivery] project transition failed", e)
+  }
+
   revalidatePath(`/galleries/${galleryId}`)
   return {
     url,
     driveLink,
+    driveStatus,
     sentEmail,
     sentWhatsapp,
     whatsappLink: waLink,

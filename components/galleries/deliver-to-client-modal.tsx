@@ -10,6 +10,7 @@ import { notifyClientFinalDeliveryAction } from "@/server/actions/gallery.action
 type Result = {
   url: string
   driveLink: string | null
+  driveStatus: "ready" | "running" | "unavailable"
   sentEmail: boolean
   sentWhatsapp: boolean
   whatsappLink: string | null
@@ -287,6 +288,20 @@ function ResultPanel({
             label="Google Drive"
             value={result.driveLink}
           />
+        )}
+        {!result.driveLink && result.driveStatus === "running" && (
+          <div className="flex items-center gap-2 rounded-lg border border-sky-300/50 bg-sky-50 px-3 py-2 text-[12px] text-sky-800 dark:bg-sky-500/10 dark:text-sky-200">
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+            <span>
+              Subiendo fotos a Google Drive en este momento. Cuando termine, el cliente
+              recibirá el link por email automáticamente y también aparecerá en esta galería.
+            </span>
+          </div>
+        )}
+        {!result.driveLink && result.driveStatus === "unavailable" && (
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
+            Google Drive no está conectado — conectalo en Ajustes para respaldar entregas automáticamente.
+          </div>
         )}
         {result.whatsappLink && (
           <CopyRow
