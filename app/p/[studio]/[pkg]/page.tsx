@@ -63,27 +63,18 @@ type StudioRow = {
 async function fetchPackage(studioSlug: string, packageSlug: string) {
   const supabase = createSupabasePublicClient()
 
-  const studioRes = await supabase
+  const { data: studioRaw } = await supabase
     .from("studios_public")
     .select(
       "id, name, slug, logo_url, primary_color, secondary_color, website, email, phone, city, country, currency",
     )
     .eq("slug", studioSlug)
     .maybeSingle()
-  console.error(
-    "[/p] studios_public:",
-    JSON.stringify({
-      slug: studioSlug,
-      data: studioRes.data,
-      error: studioRes.error,
-      status: studioRes.status,
-    }),
-  )
 
-  const studio = studioRes.data as (StudioRow & { id: string }) | null
+  const studio = studioRaw as (StudioRow & { id: string }) | null
   if (!studio) return null
 
-  const pkgRes = await supabase
+  const { data: pkg } = await supabase
     .from("packages_public")
     .select(
       "id, studio_id, name, slug, description, long_description, price, currency, duration_hours, edited_photos, includes, cover_image_url, gallery_images, event_type, reserve_due_in_days, deposit_percent",
@@ -91,19 +82,10 @@ async function fetchPackage(studioSlug: string, packageSlug: string) {
     .eq("studio_id", studio.id)
     .eq("slug", packageSlug)
     .maybeSingle()
-  console.error(
-    "[/p] packages_public:",
-    JSON.stringify({
-      slug: packageSlug,
-      data: pkgRes.data,
-      error: pkgRes.error,
-      status: pkgRes.status,
-    }),
-  )
 
-  if (!pkgRes.data) return null
+  if (!pkg) return null
 
-  return { studio: studio as unknown as StudioRow, pkg: pkgRes.data as unknown as PackageRow }
+  return { studio: studio as unknown as StudioRow, pkg: pkg as unknown as PackageRow }
 }
 
 export async function generateMetadata({
