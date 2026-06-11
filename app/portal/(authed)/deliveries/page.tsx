@@ -18,8 +18,12 @@ import {
   type ExternalLink as ExtLink,
   type DeliveryStatus,
 } from "@/server/services/client-delivery.service"
+import { createSupabaseServiceClient } from "@/server/supabase/service"
+import { getAssetThumbUrl } from "@/server/services/gallery.service"
 import { PortalDeliveryReviewMarker } from "@/components/portal/portal-delivery-review-marker"
 import { PortalHeader, PortalEmpty } from "@/components/portal/portal-ui"
+import Link from "next/link"
+import { Sparkles, ArrowRight } from "lucide-react"
 
 export const dynamic = "force-dynamic"
 
@@ -45,6 +49,56 @@ export default async function PortalDeliveriesPage() {
     (d) => d.status === "delivered" || d.status === "reviewed",
   )
 
+  // Galerías de entrega final del cliente (las fotos editadas como galería).
+  // Cast a any: gallery_type no está en los tipos generados de la tabla.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createSupabaseServiceClient() as any
+  const { data: galRaw } = await supabase
+    .from("galleries")
+    .select("id, name, cover_asset_id, asset_count, created_at")
+    .eq("client_id", session.clientId)
+    .eq("gallery_type", "final_delivery")
+    .eq("status", "published")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finalGalleries = (galRaw ?? []) as any[]
+
+  // Portadas + tokens públicos de esas galerías
+  const coverIds = finalGalleries
+    .map((g) => g.cover_asset_id as string | null)
+    .filter(Boolean) as string[]
+  const thumbs: Record<string, string | null> = {}
+  if (coverIds.length > 0) {
+    const { data } = await supabase
+      .from("gallery_assets")
+      .select("id, thumb_key")
+      .in("id", coverIds)
+    for (const r of (data ?? []) as Array<{ id: string; thumb_key: string | null }>) {
+      thumbs[r.id] = getAssetThumbUrl(r.thumb_key)
+    }
+  }
+  const galleryIds = finalGalleries.map((g) => g.id as string)
+  const tokenByGallery: Record<string, string> = {}
+  if (galleryIds.length > 0) {
+    const { data: toks } = await supabase
+      .from("gallery_share_tokens")
+      .select("gallery_id, token, revoked_at, expires_at")
+      .in("gallery_id", galleryIds)
+    for (const t of (toks ?? []) as Array<{
+      gallery_id: string
+      token: string
+      revoked_at: string | null
+      expires_at: string | null
+    }>) {
+      if (t.revoked_at) continue
+      if (t.expires_at && new Date(t.expires_at).getTime() < Date.now()) continue
+      if (!tokenByGallery[t.gallery_id]) tokenByGallery[t.gallery_id] = t.token
+    }
+  }
+
+  const nothingAtAll = visible.length === 0 && finalGalleries.length === 0
+
   return (
     <div className="space-y-8">
       <PortalHeader
@@ -53,7 +107,52 @@ export default async function PortalDeliveriesPage() {
         description="Aquí encontrarás las fotos editadas, archivos y enlaces que tu fotógrafo compartió contigo."
       />
 
-      {visible.length === 0 ? (
+      {/* Galerías de entrega final */}
+      {finalGalleries.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {finalGalleries.map((g, i) => {
+            const cover = g.cover_asset_id ? thumbs[g.cover_asset_id] : null
+            const token = tokenByGallery[g.id]
+            const href = token ? `/g/${token}` : "/portal/galleries"
+            return (
+              <Link
+                key={g.id}
+                href={href}
+                target={token ? "_blank" : undefined}
+                className="lx-card lx-card-hover group animate-fade-in-up overflow-hidden p-0"
+                style={{ animationDelay: `${Math.min(i * 60, 300)}ms` }}
+              >
+                <div className="relative aspect-[16/9] bg-brand-soft">
+                  {cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={cover} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-gold-500">
+                      <Sparkles className="h-7 w-7" />
+                    </div>
+                  )}
+                  <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[10.5px] font-semibold text-gold-700 shadow-sm">
+                    <Sparkles className="h-3 w-3" /> Entrega final
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2 px-5 py-4">
+                  <div className="min-w-0">
+                    <p className="truncate font-serif text-base font-semibold text-foreground">
+                      {g.name}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground">
+                      {g.asset_count ?? 0} foto{(g.asset_count ?? 0) === 1 ? "" : "s"} · ver y descargar
+                    </p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" />
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+
+      {nothingAtAll ? (
         <PortalEmpty
           icon={Package}
           title="Aún no hay entregas"

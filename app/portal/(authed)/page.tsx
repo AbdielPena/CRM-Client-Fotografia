@@ -28,15 +28,22 @@ export default async function PortalHomePage() {
 
   const supabase = createSupabaseServiceClient()
 
-  const [galRes, invRes, payRes, bookRes, contRes] = await Promise.all([
+  const [galRes, delivRes, invRes, payRes, bookRes, contRes] = await Promise.all([
+    // Galerías del cliente (todas) + cuáles son entrega final
     supabase
       .from("galleries")
-      .select("id", { count: "exact", head: true })
+      .select("id, gallery_type")
+      .eq("client_id", session.clientId)
+      .is("deleted_at", null),
+    // Entregas manuales (client_deliveries) ya entregadas/vistas
+    supabase
+      .from("client_deliveries")
+      .select("id, status")
       .eq("client_id", session.clientId)
       .is("deleted_at", null),
     supabase
       .from("invoices")
-      .select("id, total_amount, status, currency, due_date")
+      .select("id, total, status, currency, due_date")
       .eq("client_id", session.clientId)
       .is("deleted_at", null),
     supabase
@@ -63,7 +70,18 @@ export default async function PortalHomePage() {
       ),
   ])
 
-  const galleryCount = galRes.count ?? 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const galleriesAll = (galRes.data ?? []) as any[]
+  const galleryCount = galleriesAll.length
+  const finalDeliveryGalleries = galleriesAll.filter(
+    (g) => g.gallery_type === "final_delivery",
+  ).length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const manualDeliveries = ((delivRes.data ?? []) as any[]).filter(
+    (d) => d.status === "delivered" || d.status === "reviewed",
+  ).length
+  // "Entregas" del cliente = galerías de entrega final + entregas manuales listas.
+  const deliveryCount = finalDeliveryGalleries + manualDeliveries
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const invoices = (invRes.data ?? []) as any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,7 +93,7 @@ export default async function PortalHomePage() {
 
   const totalDue = invoices
     .filter((i) => i.status !== "paid" && i.status !== "void")
-    .reduce((s, i) => s + Number(i.total_amount ?? 0), 0)
+    .reduce((s, i) => s + Number(i.total ?? 0), 0)
   const totalPaid = payments
     .filter((p) => p.status === "completed" || p.status === "succeeded")
     .reduce((s, p) => s + Number(p.amount ?? 0), 0)
@@ -104,8 +122,9 @@ export default async function PortalHomePage() {
       href: "/portal/deliveries",
       icon: PackageIcon,
       label: "Entregas",
-      value: "—",
-      sub: "fotos editadas finales",
+      value: String(deliveryCount),
+      sub:
+        deliveryCount === 0 ? "aún sin entregas" : "fotos editadas finales",
       tint: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
     },
     {

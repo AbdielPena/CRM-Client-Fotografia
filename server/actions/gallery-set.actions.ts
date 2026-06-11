@@ -86,6 +86,17 @@ export async function enableFinalDeliveryAction(
     await createSet(session.studioId, validGalleryId, s)
     created++
   }
+
+  // Marcar la galería como entrega final — así el portal del cliente, la vista
+  // pública y los reportes la reconocen como tal (no como selección).
+  const { createSupabaseServiceClient } = await import("@/server/supabase/service")
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (createSupabaseServiceClient() as any)
+    .from("galleries")
+    .update({ gallery_type: "final_delivery" })
+    .eq("id", validGalleryId)
+    .eq("studio_id", session.studioId)
+
   revalidatePath(`/galleries/${validGalleryId}`)
   return { created }
 }

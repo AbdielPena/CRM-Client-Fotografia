@@ -309,6 +309,16 @@ export async function notifyClientFinalDeliveryAction(input: {
     .eq("studio_id", ctx.studioId)
     .eq("allow_download", false)
 
+  // Marcar como entrega final (si venía reciclada de selección) — así el portal
+  // y los reportes la reconocen como entrega y no como galería de selección.
+  if (gallery.gallery_type !== "final_delivery") {
+    await sb
+      .from("galleries")
+      .update({ gallery_type: "final_delivery" })
+      .eq("id", galleryId)
+      .eq("studio_id", ctx.studioId)
+  }
+
   // 1) Token público
   const { url, token: _token } = await createGalleryShareToken(ctx.studioId, galleryId, {
     expiresAt: null,
