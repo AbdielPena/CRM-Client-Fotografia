@@ -295,6 +295,106 @@ export async function updateFinAccount(
   return row as FinAccountRow
 }
 
+// ============================================================================
+// Default account resolver — para wire-up CRM → Finanzas
+// ============================================================================
+
+/**
+ * Resuelve qué cuenta de Finanzas recibe un pago entrante.
+ *
+ *   - Si `explicitAccountId` viene → valida que sea del studio y esté activa,
+ *     y la devuelve. Si la validación falla (cuenta inactiva, ajena, borrada)
+ *     devolvemos null en lugar de tirar — un pago no debe fallar por un mal
+ *     selector; queda sin asignar y se categoriza después.
+ *   - Si no viene → lee `studios.default_finance_account_id`.
+ *   - Si no hay default tampoco → null. El fin_transactions queda sin cuenta.
+ *
+ * Lo usan: markInvoicePaid (pasa el accountId del modal) y el webhook de
+ * Stripe (siempre sin explicit → usa el default del studio).
+ */
+export async function resolveDestinationAccount(
+  studioId: string,
+  explicitAccountId?: string | null,
+): Promise<string | null> {
+  const sb = untypedServer()
+
+  if (explicitAccountId) {
+    const { data } = await sb
+      .from("fin_accounts")
+      .select("id")
+      .eq("id", explicitAccountId)
+      .eq("studio_id", studioId)
+      .eq("activa", true)
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (data) return (data as { id: string }).id
+    // explicit inválido → caer al default
+  }
+
+  const { data: studio } = await sb
+    .from("studios")
+    .select("default_finance_account_id")
+    .eq("id", studioId)
+    .maybeSingle()
+
+  const defaultId = (studio as { default_finance_account_id: string | null } | null)
+    ?.default_finance_account_id
+  if (!defaultId) return null
+
+  // Validar que la default todavía exista y esté activa
+  const { data: defaultAccount } = await sb
+    .from("fin_accounts")
+    .select("id")
+    .eq("id", defaultId)
+    .eq("studio_id", studioId)
+    .eq("activa", true)
+    .is("deleted_at", null)
+    .maybeSingle()
+
+  return defaultAccount ? (defaultAccount as { id: string }).id : null
+}
+
+/**
+ * Actualiza la cuenta default del studio. La cuenta debe pertenecer al
+ * studio y estar activa; si no, tira error.
+ */
+export async function setDefaultFinanceAccount(
+  studioId: string,
+  actorId: string,
+  accountId: string | null,
+): Promise<void> {
+  const sb = untypedService()
+
+  if (accountId) {
+    const { data } = await sb
+      .from("fin_accounts")
+      .select("id")
+      .eq("id", accountId)
+      .eq("studio_id", studioId)
+      .eq("activa", true)
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (!data) throw new Error("FIN_ACCOUNT_NOT_FOUND")
+  }
+
+  const { error } = await sb
+    .from("studios")
+    .update({ default_finance_account_id: accountId })
+    .eq("id", studioId)
+
+  if (error)
+    throwServiceError("STUDIO_UPDATE_FAILED", error, { studioId, accountId })
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: "studio",
+    entityId: studioId,
+    action: "studio.default_finance_account.updated",
+    metadata: { account_id: accountId },
+  })
+}
+
 /**
  * Soft delete. Blockea si la cuenta tiene transactions activas (consistencia
  * con el balance — no queremos transactions huérfanas).

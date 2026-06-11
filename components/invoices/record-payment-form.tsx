@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import { recordPaymentAction } from "@/server/actions/invoice.actions"
 import { formatCurrency } from "@/lib/utils/currency"
 import { toast } from "sonner"
-import { CreditCard } from "lucide-react"
+import { CreditCard, Wallet } from "lucide-react"
 
 // Valores válidos del enum payment_method en Supabase
 const PAYMENT_METHODS = [
@@ -19,12 +19,23 @@ const PAYMENT_METHODS = [
   { value: "other", label: "Otro" },
 ]
 
+export type AccountOption = {
+  id: string
+  nombre: string
+  bancoNombre?: string | null
+  currency: string
+}
+
 interface RecordPaymentFormProps {
   invoiceId: string
   balance: number
   currency: string
   /** Monto de la cuota de reserva (1ª cuota) para llenado rápido. */
   depositAmount?: number
+  /** Cuentas de Finanzas activas del studio para el selector "Cuenta destino". */
+  accounts?: AccountOption[]
+  /** ID de la cuenta a preseleccionar (studios.default_finance_account_id). */
+  defaultAccountId?: string | null
 }
 
 export function RecordPaymentForm({
@@ -32,6 +43,8 @@ export function RecordPaymentForm({
   balance,
   currency,
   depositAmount = 0,
+  accounts = [],
+  defaultAccountId = null,
 }: RecordPaymentFormProps) {
   // Si la reserva aún no se cubre, pre-llenar con la reserva; si no, con el saldo.
   const showDepositQuick = depositAmount > 0 && depositAmount < balance
@@ -133,6 +146,32 @@ export function RecordPaymentForm({
             ))}
           </select>
         </div>
+
+        {accounts.length > 0 && (
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1">
+              <Wallet className="h-3.5 w-3.5" />
+              Cuenta destino
+            </label>
+            <select
+              name="accountId"
+              defaultValue={defaultAccountId ?? ""}
+              className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand bg-card"
+            >
+              <option value="">— Sin cuenta (categorizar después) —</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nombre}
+                  {a.bancoNombre ? ` · ${a.bancoNombre}` : ""}
+                  {a.currency !== currency ? ` (${a.currency})` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              El balance de esta cuenta subirá con este pago.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="block text-xs font-medium text-muted-foreground mb-1">Fecha de pago</label>

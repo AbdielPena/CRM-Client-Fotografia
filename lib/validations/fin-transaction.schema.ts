@@ -110,6 +110,20 @@ export const recordIncomeFromInvoiceSchema = z.object({
   paymentReference: z.preprocess(emptyAsUndefined, z.string().max(150).optional()),
   /** Si la invoice ya tiene client_id (CRM), lo pasamos para enlazar. */
   clientId: z.preprocess(emptyAsUndefined, z.string().uuid().optional()),
+  /**
+   * UUID del row en `payments` que originó este ingreso. Cuando viene, la
+   * idempotency key pasa a ser `payment:<id>` (un fin_transactions por pago
+   * real, soporta pagos parciales). Si no viene, se cae al modo legacy
+   * `invoice:<id>` (un solo ingreso por factura — mantiene retrocompatibilidad
+   * con transactions ya existentes).
+   */
+  paymentId: z.preprocess(emptyAsUndefined, z.string().uuid().optional()),
+  /**
+   * Cuenta de Finanzas a la que entra el dinero. Cuando viene, el
+   * fin_transactions queda con cuenta_id asignado y el balance de esa cuenta
+   * sube. Si no viene, queda null (categorizable después desde la UI).
+   */
+  accountId: z.preprocess(emptyAsUndefined, z.string().uuid().optional()),
 })
 
 export type RecordIncomeFromInvoiceInput = z.infer<typeof recordIncomeFromInvoiceSchema>

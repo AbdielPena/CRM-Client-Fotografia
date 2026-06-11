@@ -99,6 +99,8 @@ export async function recordPaymentAction(invoiceId: string, formData: FormData)
   const method = formData.get("method") as string
   const reference = formData.get("reference") as string
   const paidAt = formData.get("paidAt") as string
+  const accountIdRaw = formData.get("accountId") as string | null
+  const accountId = accountIdRaw && accountIdRaw.trim() ? accountIdRaw.trim() : undefined
 
   if (!amount || amount <= 0) return { error: "Monto inválido" }
   if (!method) return { error: "Selecciona un método de pago" }
@@ -108,6 +110,7 @@ export async function recordPaymentAction(invoiceId: string, formData: FormData)
     method,
     reference: reference || undefined,
     paidAt: paidAt ? new Date(paidAt) : undefined,
+    accountId,
   })
 
   // Automatización: al registrar un pago, el proyecto pasa a "Reservado"
@@ -123,6 +126,11 @@ export async function recordPaymentAction(invoiceId: string, formData: FormData)
   revalidatePath(`/invoices/${invoiceId}`)
   revalidatePath("/invoices")
   revalidatePath("/projects")
+  // El fin_transactions se crea en segundo plano dentro de markInvoicePaid
+  // (best-effort), así que invalidamos también las vistas de Finanzas para
+  // que se vea el ingreso y el nuevo balance al volver a esa pestaña.
+  revalidatePath("/finance/transactions")
+  revalidatePath("/finance/accounts")
   return { success: true, ...result }
 }
 

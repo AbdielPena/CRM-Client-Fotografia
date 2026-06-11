@@ -299,9 +299,12 @@ export type RecordIncomeResult =
  * fin_transactions de tipo='ingreso' idempotente.
  *
  * Idempotencia:
- *   - external_reference = `invoice:<invoiceId>` (UNIQUE en el schema)
- *   - Si ya existe → devolvemos el row existing con alreadyExisted=true
- *   - El webhook de Stripe puede reenviarse N veces sin duplicar el income
+ *   - Si viene `paymentId` → external_reference = `payment:<paymentId>` (un
+ *     ingreso por cada row real en `payments`, soporta pagos parciales).
+ *   - Si NO viene → cae a `invoice:<invoiceId>` (modo legacy, un ingreso por
+ *     factura). Mantiene retrocompat con transactions existentes.
+ *   - external_reference es UNIQUE parcial (where deleted_at is null) →
+ *     retries no duplican; si ya existe devolvemos alreadyExisted=true.
  *
  * Categorización automática:
  *   - Si el studio tiene una fin_categories `tipo='ingreso'` con nombre
@@ -309,9 +312,10 @@ export type RecordIncomeResult =
  *     y el user puede categorizar después desde la UI.
  *
  * cuenta_id:
- *   - Por ahora null (no auto-asignamos cuenta). El user puede editar después
- *     vía updateFinTransaction. En el futuro, settings.default_account_id
- *     resolvería esto automáticamente.
+ *   - Si viene `accountId` → se asigna y el balance de esa cuenta sube.
+ *   - Si no viene → queda null (categorizable después desde la UI).
+ *   - El caller (markInvoicePaid / Stripe webhook) resuelve la cuenta con
+ *     `resolveDestinationAccount` antes de invocarnos.
  */
 export async function recordIncomeFromInvoice(
   studioId: string,
@@ -319,7 +323,9 @@ export async function recordIncomeFromInvoice(
   data: RecordIncomeFromInvoiceInput,
 ): Promise<RecordIncomeResult> {
   const sb = untypedService()
-  const externalRef = `invoice:${data.invoiceId}`
+  const externalRef = data.paymentId
+    ? `payment:${data.paymentId}`
+    : `invoice:${data.invoiceId}`
 
   // 1. Check si ya existe (idempotencia rápida)
   const { data: existing } = await sb
@@ -360,6 +366,7 @@ export async function recordIncomeFromInvoice(
     descripcion: `Pago factura ${data.invoiceId.slice(0, 8)}`,
     fecha,
     categoria_id: defaultCat?.id ?? null,
+    cuenta_id: data.accountId ?? null,
     invoice_id: data.invoiceId,
     client_id: data.clientId ?? null,
     external_reference: externalRef,

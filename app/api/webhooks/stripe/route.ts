@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js"
 import { createId } from "@paralleldrive/cuid2"
 import { SUPABASE_URL } from "@/server/supabase/env"
 import { recordIncomeFromInvoice } from "@/server/services/fin-transaction.service"
+import { resolveDestinationAccount } from "@/server/services/fin-account.service"
 
 // Stripe webhook necesita service role para bypass de RLS.
 // El secret SUPABASE_SERVICE_ROLE_KEY NO se expone al cliente.
@@ -54,10 +55,11 @@ export async function POST(req: NextRequest) {
         if (!invoice) break
 
         const amountPaid = pi.amount_received / 100 // Stripe usa centavos
+        const paymentId = createId()
 
         // El trigger `apply_payment_to_invoice` recalcula amount_paid/status automáticamente.
         const { error: insertError } = await admin.from("payments").insert({
-          id: createId(),
+          id: paymentId,
           studio_id: studioId,
           invoice_id: invoiceId,
           amount: amountPaid,
@@ -77,10 +79,12 @@ export async function POST(req: NextRequest) {
         console.log(`[Stripe] Payment recorded for invoice ${invoiceId}: $${amountPaid}`)
 
         // Cross-módulo F5 wire-up: crear fin_transactions.income idempotente
-        // (external_reference UNIQUE garantiza no duplicados en webhook retries).
+        // (external_reference = payment:<id> UNIQUE garantiza no duplicados
+        // en webhook retries y soporta pagos parciales múltiples).
         // Non-fatal: si falla, el payment ya está registrado y el income se
         // puede recrear manualmente desde /finance/transactions.
         try {
+          const accountId = await resolveDestinationAccount(studioId)
           const result = await recordIncomeFromInvoice(studioId, "stripe-webhook", {
             invoiceId,
             amount: amountPaid,
@@ -88,6 +92,8 @@ export async function POST(req: NextRequest) {
             paidAt: new Date().toISOString(),
             paymentReference: pi.id,
             clientId: (invoice as { client_id: string | null }).client_id ?? undefined,
+            paymentId,
+            accountId: accountId ?? undefined,
           })
           if (result.alreadyExisted) {
             console.log(

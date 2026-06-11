@@ -2,6 +2,7 @@
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { createSupabaseServerClient } from "@/server/supabase/server"
+import { setDefaultFinanceAccount } from "@/server/services/fin-account.service"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -69,6 +70,27 @@ export async function updateStudioAction(input: UpdateStudioInput) {
 
   revalidatePath("/settings")
   return { success: true }
+}
+
+/**
+ * Settea (o limpia) la cuenta de Finanzas a la que se asignan por defecto
+ * los pagos de facturas (Stripe y manuales). Pasar `null` la desactiva.
+ */
+export async function updateDefaultFinanceAccountAction(
+  accountId: string | null,
+) {
+  const session = await requireStudioAuth()
+  try {
+    await setDefaultFinanceAccount(session.studioId, session.userId, accountId)
+    revalidatePath("/settings")
+    revalidatePath("/finance/accounts")
+    return { success: true as const }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "No se pudo actualizar la cuenta default"
+    console.error("[updateDefaultFinanceAccountAction] failed", err)
+    return { success: false as const, error: message }
+  }
 }
 
 export async function updateStudioLogoAction(logoUrl: string) {

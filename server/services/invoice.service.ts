@@ -505,6 +505,12 @@ export async function markInvoicePaid(
     method: string
     reference?: string
     paidAt?: Date
+    /**
+     * Cuenta de Finanzas a la que entra el dinero. Si viene, se asigna al
+     * fin_transactions de ingreso y el balance de esa cuenta sube. Si no
+     * viene, se intenta resolver vía `studios.default_finance_account_id`.
+     */
+    accountId?: string
   },
 ) {
   const existing = await invoicesRepo.findById(invoiceId)
@@ -515,23 +521,28 @@ export async function markInvoicePaid(
   const supabase = createSupabaseServerClient()
   const receivedAt = paymentData.paidAt ?? new Date()
 
-  const { error } = await supabase.from('payments').insert({
-    studio_id: studioId,
-    invoice_id: invoiceId,
-    project_id: existing.project_id,
-    client_id: existing.client_id,
-    amount: paymentData.amount,
-    currency: existing.currency,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    method: paymentData.method as any,
-    status: 'completed',
-    transaction_reference: paymentData.reference ?? null,
-    received_at: receivedAt.toISOString(),
-    confirmed_at: receivedAt.toISOString(),
-    confirmed_by: actorId || null,
-  })
+  const { data: paymentRow, error } = await supabase
+    .from('payments')
+    .insert({
+      studio_id: studioId,
+      invoice_id: invoiceId,
+      project_id: existing.project_id,
+      client_id: existing.client_id,
+      amount: paymentData.amount,
+      currency: existing.currency,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      method: paymentData.method as any,
+      status: 'completed',
+      transaction_reference: paymentData.reference ?? null,
+      received_at: receivedAt.toISOString(),
+      confirmed_at: receivedAt.toISOString(),
+      confirmed_by: actorId || null,
+    })
+    .select('id')
+    .single()
 
   if (error) throwServiceError("PAYMENT_RECORD_FAILED", error, { studioId, invoiceId })
+  const paymentId = (paymentRow as { id: string } | null)?.id ?? null
 
   await logActivity({
     studioId,
@@ -541,6 +552,43 @@ export async function markInvoicePaid(
     action: 'invoice.payment_recorded',
     metadata: { amount: paymentData.amount, method: paymentData.method },
   })
+
+  // Wire-up CRM → Finanzas: crear fin_transactions de ingreso + mover balance
+  // de la cuenta destino. Best-effort, no bloquea la respuesta. Para 'stripe'
+  // lo salteamos: el webhook ya emite su propio fin_transactions cuando el
+  // payment_intent se confirma (evitamos doble INSERT, aunque la idempotency
+  // key lo cubriría también).
+  if (paymentId && paymentData.method !== 'stripe') {
+    void (async () => {
+      try {
+        const { resolveDestinationAccount } = await import(
+          './fin-account.service'
+        )
+        const { recordIncomeFromInvoice } = await import(
+          './fin-transaction.service'
+        )
+        const accountId = await resolveDestinationAccount(
+          studioId,
+          paymentData.accountId,
+        )
+        await recordIncomeFromInvoice(studioId, actorId, {
+          invoiceId,
+          amount: paymentData.amount,
+          currency: existing.currency,
+          paidAt: receivedAt.toISOString(),
+          paymentReference: paymentData.reference ?? undefined,
+          clientId: existing.client_id ?? undefined,
+          paymentId,
+          accountId: accountId ?? undefined,
+        })
+      } catch (err) {
+        console.error(
+          '[invoice→finance] recordIncomeFromInvoice failed (non-fatal):',
+          err,
+        )
+      }
+    })()
+  }
 
   // El trigger ya actualizó el invoice; devolvemos el estado nuevo
   const updated = await invoicesRepo.findById(invoiceId)
