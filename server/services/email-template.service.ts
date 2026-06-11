@@ -363,11 +363,23 @@ export const TEMPLATE_CATALOG: Record<
     category: "delivery",
     defaultSubject: "{{delivery_title}} — tu entrega está lista",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>Tu entrega {{delivery_title}} ya está disponible. Entrá en {{portal_url}}.</p>`,
+      `<p>Hola {{client_name}},</p>
+<p>¡Buenas noticias! Tu entrega <strong>{{delivery_title}}</strong> ya está disponible. Podés verla y descargarla acá: <a href="{{portal_url}}">{{portal_url}}</a></p>
+<div style="margin:20px 0;padding:14px 16px;border-left:3px solid #b89968;background:#fbf6ed;border-radius:4px">
+  <p style="margin:0 0 8px;font-weight:600;color:#1a1614">⏳ Importante — guardá tus fotos antes de 6 meses</p>
+  <p style="margin:0;color:#3a322b;font-size:14px;line-height:1.5">
+    Las fotografías estarán disponibles en tu galería privada por <strong>6 meses</strong> desde hoy.
+    Te recomendamos <strong>descargarlas y guardarlas</strong> en al menos dos lugares (computadora,
+    disco externo o nube personal). Pasado ese plazo, no nos hacemos responsables por la pérdida del material.
+  </p>
+</div>
+<p>Cualquier duda, respondé este correo. ¡Esperamos que te encanten!</p>
+<p>— {{studio_name}}</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "Juan" },
       { key: "delivery_title", label: "Título de entrega", example: "Fotos editadas — Boda" },
       { key: "portal_url", label: "URL del portal", example: "https://..." },
+      { key: "studio_name", label: "Estudio", example: "AbbyPixel" },
     ],
   },
   prints_ready: {
