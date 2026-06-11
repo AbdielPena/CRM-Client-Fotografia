@@ -91,6 +91,38 @@ export async function resolveFinanzAppAccount(
   return null
 }
 
+/**
+ * Reasigna la cuenta de FinanzApp en una transacción YA registrada por el
+ * CRM (caso: pago pendiente que el usuario resuelve desde /finance).
+ * Identifica la tx por external_reference = `crm-payment:<paymentId>`.
+ */
+export async function assignAccountToFinanzAppPayment(
+  studioId: string,
+  paymentId: string,
+  accountId: string,
+): Promise<{ ok: boolean; updated: number; skipped?: "no_workspace" }> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, updated: 0, skipped: "no_workspace" }
+
+  // Validar que la cuenta pertenece al workspace antes de invocar la RPC
+  const accounts = await listFinanzAppAccounts(studioId)
+  if (!accounts.some((a) => a.id === accountId)) {
+    throw new Error("FINZ_ACCOUNT_NOT_FOUND")
+  }
+
+  const sb = untypedService()
+  const { data, error } = await sb.rpc("finz_assign_account_to_tx", {
+    p_workspace_id: workspaceId,
+    p_external_reference: `crm-payment:${paymentId}`,
+    p_cuenta_id: accountId,
+  })
+
+  if (error)
+    throwServiceError("FINZ_ASSIGN_ACCOUNT_FAILED", error, { studioId, paymentId })
+
+  return { ok: true, updated: (data as { updated: number } | null)?.updated ?? 0 }
+}
+
 /** Settea la cuenta default del studio, validando que exista en FinanzApp. */
 export async function setDefaultFinanzAppAccount(
   studioId: string,
@@ -156,12 +188,16 @@ export type RecordIncomeToFinanzAppResult = {
 export async function recordIncomeToFinanzApp(
   studioId: string,
   actorId: string,
-  input: RecordIncomeToFinanzAppInput,
+  input: RecordIncomeToFinanzAppInput & { preResolved?: boolean },
 ): Promise<RecordIncomeToFinanzAppResult> {
   const workspaceId = await getFinanzAppWorkspaceId(studioId)
   if (!workspaceId) return { ok: false, skipped: "no_workspace" }
 
-  const accountId = await resolveFinanzAppAccount(studioId, input.accountId)
+  // Si el caller ya validó la cuenta (markInvoicePaid lo hace al insert),
+  // la usamos tal cual; si no, la resolvemos contra el default del studio.
+  const accountId = input.preResolved
+    ? input.accountId ?? null
+    : await resolveFinanzAppAccount(studioId, input.accountId)
 
   const fecha = (input.paidAt ?? new Date().toISOString()).slice(0, 10)
   const notas =

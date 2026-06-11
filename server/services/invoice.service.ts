@@ -555,23 +555,37 @@ export async function markInvoicePaid(
   const supabase = createSupabaseServerClient()
   const receivedAt = paymentData.paidAt ?? new Date()
 
+  // Resolver la cuenta de FinanzApp ANTES del insert para guardarla en
+  // payments.finanzapp_account_id (null = pendiente de asignar).
+  const { resolveFinanzAppAccount } = await import('./finanzapp-bridge.service')
+  const resolvedAccountId = await resolveFinanzAppAccount(
+    studioId,
+    paymentData.accountId,
+  ).catch(() => null)
+
+  // Payload con la columna nueva finanzapp_account_id; cast a any porque los
+  // tipos generados aún no incluyen la columna (se regenerarán en el siguiente
+  // `supabase gen types`).
+  const paymentPayload = {
+    studio_id: studioId,
+    invoice_id: invoiceId,
+    project_id: existing.project_id,
+    client_id: existing.client_id,
+    amount: paymentData.amount,
+    currency: existing.currency,
+    method: paymentData.method,
+    status: 'completed',
+    transaction_reference: paymentData.reference ?? null,
+    received_at: receivedAt.toISOString(),
+    confirmed_at: receivedAt.toISOString(),
+    confirmed_by: actorId || null,
+    finanzapp_account_id: resolvedAccountId,
+  }
+
   const { data: paymentRow, error } = await supabase
     .from('payments')
-    .insert({
-      studio_id: studioId,
-      invoice_id: invoiceId,
-      project_id: existing.project_id,
-      client_id: existing.client_id,
-      amount: paymentData.amount,
-      currency: existing.currency,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      method: paymentData.method as any,
-      status: 'completed',
-      transaction_reference: paymentData.reference ?? null,
-      received_at: receivedAt.toISOString(),
-      confirmed_at: receivedAt.toISOString(),
-      confirmed_by: actorId || null,
-    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .insert(paymentPayload as any)
     .select('id')
     .single()
 
@@ -609,9 +623,9 @@ export async function markInvoicePaid(
   }
 
   // Wire-up CRM → FinanzApp (fi.abbypixel.com): registrar el ingreso en la
-  // app de finanzas del usuario, contra la cuenta elegida en el modal.
-  // Best-effort, no bloquea la respuesta. Para 'stripe' lo salteamos: el
-  // webhook ya lo registra cuando el payment_intent se confirma.
+  // app de finanzas del usuario, contra la cuenta YA RESUELTA (puede ser null
+  // = pendiente de asignar). Best-effort, no bloquea la respuesta. Para
+  // 'stripe' lo salteamos: el webhook ya lo registra al confirmar el PI.
   if (paymentId && paymentData.method !== 'stripe') {
     void (async () => {
       try {
@@ -631,7 +645,8 @@ export async function markInvoicePaid(
           paymentId,
           amount: paymentData.amount,
           paidAt: receivedAt.toISOString(),
-          accountId: paymentData.accountId ?? null,
+          accountId: resolvedAccountId,
+          preResolved: true,
           description: `Pago factura ${existing.invoice_number ?? invoiceId.slice(0, 8)}`,
           clientName,
           reference: paymentData.reference ?? null,

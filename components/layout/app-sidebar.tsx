@@ -126,9 +126,9 @@ const NAV_GROUPS: NavGroup[] = [
     type: "group",
     label: "Negocio",
     items: [
-      // Finanzas vive en la app externa FinanzApp (decisión: UN solo módulo).
-      // El CRM registra los ingresos allá automáticamente al cobrar facturas.
-      { type: "link", href: "https://fi.abbypixel.com", label: "Finanzas", icon: Wallet, external: true },
+      // /finance del CRM: lista de pagos + cuentas de FinanzApp + cuenta default.
+      // Botón "Abrir FinanzApp" arriba para ir a la app completa.
+      { type: "link", href: "/finance", label: "Finanzas", icon: Wallet },
       { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
       { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
       { type: "link", href: "/inventory/items", label: "Inventario", icon: Boxes },

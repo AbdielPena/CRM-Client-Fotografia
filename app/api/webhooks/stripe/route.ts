@@ -3,7 +3,10 @@ import Stripe from "stripe"
 import { createClient } from "@supabase/supabase-js"
 import { createId } from "@paralleldrive/cuid2"
 import { SUPABASE_URL } from "@/server/supabase/env"
-import { recordIncomeToFinanzApp } from "@/server/services/finanzapp-bridge.service"
+import {
+  recordIncomeToFinanzApp,
+  resolveFinanzAppAccount,
+} from "@/server/services/finanzapp-bridge.service"
 import { mirrorPaymentToFacturacion } from "@/server/services/facturacion-bridge.service"
 
 // Stripe webhook necesita service role para bypass de RLS.
@@ -57,6 +60,12 @@ export async function POST(req: NextRequest) {
         const amountPaid = pi.amount_received / 100 // Stripe usa centavos
         const paymentId = createId()
 
+        // Stripe no permite elegir cuenta en el cobro → siempre cae a la
+        // cuenta default del studio (puede quedar null = pendiente).
+        const stripeAccountId = await resolveFinanzAppAccount(studioId).catch(
+          () => null,
+        )
+
         // El trigger `apply_payment_to_invoice` recalcula amount_paid/status automáticamente.
         const { error: insertError } = await admin.from("payments").insert({
           id: paymentId,
@@ -69,6 +78,7 @@ export async function POST(req: NextRequest) {
           transaction_reference: pi.id,
           stripe_payment_intent_id: pi.id,
           received_at: new Date().toISOString(),
+          finanzapp_account_id: stripeAccountId,
         })
 
         if (insertError) {
