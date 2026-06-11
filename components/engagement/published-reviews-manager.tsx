@@ -60,7 +60,18 @@ export function PublishedReviewsManager({ reviews: initial }: { reviews: AdminRe
     }
   }
 
-  const togglePublish = (rev: AdminReview) =>
+  const togglePublish = (rev: AdminReview) => {
+    // Antes de publicar: validar que tenga lo mínimo para que se vea bien en la web.
+    if (!rev.published) {
+      const missing: string[] = []
+      if (!rev.displayName?.trim()) missing.push("nombre")
+      if (!rev.comment?.trim()) missing.push("comentario")
+      if (missing.length) {
+        toast.error(`Completa primero: ${missing.join(", ")}`)
+        openEdit(rev)
+        return
+      }
+    }
     start(async () => {
       const r = await fetch(`/api/engagement/reviews/${rev.id}`, {
         method: "PATCH",
@@ -73,6 +84,7 @@ export function PublishedReviewsManager({ reviews: initial }: { reviews: AdminRe
         router.refresh()
       } else toast.error("Error al actualizar")
     })
+  }
 
   const remove = (rev: AdminReview) =>
     start(async () => {
