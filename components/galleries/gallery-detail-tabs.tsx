@@ -19,6 +19,7 @@ import {
   Loader2,
   Palette,
   Activity,
+  Sparkles,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -29,7 +30,11 @@ import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-u
 import { GalleryAppearanceTab } from "@/components/galleries/gallery-appearance-tab"
 import { GalleryActivityTab } from "@/components/galleries/gallery-activity-tab"
 
-import { createSetAction, deleteSetAction } from "@/server/actions/gallery-set.actions"
+import {
+  createSetAction,
+  deleteSetAction,
+  enableFinalDeliveryAction,
+} from "@/server/actions/gallery-set.actions"
 import {
   createCollectionAction,
   deleteCollectionAction,
@@ -282,18 +287,26 @@ function PhotosTab({
   sets: SetRow[]
   studioId: string
 }) {
-  // Para galerías de entrega final, exponer los sets como targets del uploader.
+  // Si la galería tiene sets cuyo nombre matchea Redes/Máxima Calidad, mostrar
+  // selector de target. Vale para entrega final O para galerías de selección que
+  // habilitaron entrega final con el botón "+ Habilitar entrega final".
+  const deliverySets = sets
+    .map((s) => ({ set: s, track: inferDeliveryTrack(s.name) }))
+    .filter((x) => x.track !== null)
   const uploadTargets: UploadTarget[] | undefined =
-    gallery.gallery_type === "final_delivery"
-      ? sets.map((s) => ({
-          id: s.id,
-          name: s.name,
-          deliveryTrack: inferDeliveryTrack(s.name),
+    deliverySets.length > 0
+      ? deliverySets.map(({ set, track }) => ({
+          id: set.id,
+          name: set.name,
+          deliveryTrack: track,
         }))
       : undefined
 
   return (
     <div className="space-y-5">
+      {!uploadTargets && (
+        <EnableFinalDeliveryBanner galleryId={gallery.id} />
+      )}
       <AssetUploader galleryId={gallery.id} studioId={studioId} targets={uploadTargets} />
       {assets.length > 0 ? (
         <AssetGrid
@@ -1676,6 +1689,56 @@ function ShareTab({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/** Banner que ofrece habilitar entrega final (crea los 2 sets) en cualquier galería. */
+function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+  const enable = () =>
+    start(async () => {
+      try {
+        const r = await enableFinalDeliveryAction(galleryId)
+        if (r.created > 0) {
+          toast.success(`Entrega final habilitada — ${r.created} carpeta(s) creada(s)`)
+        } else {
+          toast.success("Las carpetas ya existían")
+        }
+        router.refresh()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error al habilitar")
+      }
+    })
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-brand/20 bg-brand-soft/40 p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-brand">
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="text-[13px] font-semibold text-foreground">
+            ¿También querés usar esta galería para la entrega final?
+          </p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            Habilitalo y creamos automáticamente las carpetas{" "}
+            <span className="font-medium text-foreground">💎 Máxima Calidad</span> y{" "}
+            <span className="font-medium text-foreground">📱 Redes Sociales</span> dentro de la misma
+            galería. Tu selección original queda intacta.
+          </p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={enable}
+        disabled={pending}
+        className="inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+      >
+        {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+        Habilitar entrega final
+      </button>
     </div>
   )
 }

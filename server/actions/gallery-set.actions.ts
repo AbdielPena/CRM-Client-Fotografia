@@ -50,6 +50,46 @@ const reorderSetsSchema = z.object({
   orderedIds: z.array(uuidSchema).min(1, "Debe haber al menos un set"),
 })
 
+/**
+ * Habilita el flujo de entrega final en una galería existente creando los 2 sets
+ * estándar ("Máxima Calidad" + "Redes Sociales") si todavía no existen.
+ * Idempotente: si los sets ya están (por nombre), no los duplica.
+ */
+export async function enableFinalDeliveryAction(
+  galleryId: string,
+): Promise<{ created: number }> {
+  const session = await requireStudioAuth()
+  const validGalleryId = uuidSchema.parse(galleryId)
+
+  const { getSetsByGallery } = await import("@/server/services/gallery-set.service")
+  const existing = await getSetsByGallery(session.studioId, validGalleryId)
+
+  const norm = (s: string) =>
+    s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim()
+  const names = new Set(existing.map((s) => norm(s.name)))
+
+  const toCreate = [
+    {
+      name: "Máxima Calidad",
+      description: "JPG full quality — para imprimir y archivar",
+      isPrivate: false,
+    },
+    {
+      name: "Redes Sociales",
+      description: "Versiones comprimidas listas para Instagram/Facebook",
+      isPrivate: false,
+    },
+  ].filter((s) => !names.has(norm(s.name)))
+
+  let created = 0
+  for (const s of toCreate) {
+    await createSet(session.studioId, validGalleryId, s)
+    created++
+  }
+  revalidatePath(`/galleries/${validGalleryId}`)
+  return { created }
+}
+
 export async function createSetAction(
   galleryId: string,
   formData: FormData,
