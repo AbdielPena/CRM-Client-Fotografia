@@ -10,6 +10,8 @@ const schema = z.object({
   filename: z.string().min(1).max(255),
   mimeType: z.string().min(1),
   fileSize: z.number().int().positive().max(200 * 1024 * 1024),
+  setId: z.string().uuid().nullable().optional(),
+  deliveryTrack: z.enum(["social", "high_quality"]).nullable().optional(),
 })
 
 export async function POST(req: NextRequest) {

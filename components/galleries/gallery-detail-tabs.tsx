@@ -25,7 +25,7 @@ import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
 import { AssetGrid } from "@/components/galleries/asset-grid"
-import { AssetUploader } from "@/components/galleries/asset-uploader"
+import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
 import { GalleryAppearanceTab } from "@/components/galleries/gallery-appearance-tab"
 import { GalleryActivityTab } from "@/components/galleries/gallery-activity-tab"
 
@@ -207,7 +207,7 @@ export function GalleryDetailTabs({
         </TabsList>
 
         <TabsContent value="photos" className="mt-5">
-          <PhotosTab gallery={gallery} assets={assets} studioId={studioId} />
+          <PhotosTab gallery={gallery} assets={assets} sets={sets} studioId={studioId} />
         </TabsContent>
 
         <TabsContent value="sets" className="mt-5">
@@ -260,18 +260,41 @@ export function GalleryDetailTabs({
 
 // ─── Photos tab ─────────────────────────────────────────────────────────────
 
+/** Infiere la pista de entrega a partir del nombre del set. */
+function inferDeliveryTrack(name: string): "social" | "high_quality" | null {
+  const n = name
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+  if (/(redes|social|instagram|facebook|web)/.test(n)) return "social"
+  if (/(maxima|calidad|alta|original|print)/.test(n)) return "high_quality"
+  return null
+}
+
 function PhotosTab({
   gallery,
   assets,
+  sets,
   studioId,
 }: {
   gallery: Gallery
   assets: Asset[]
+  sets: SetRow[]
   studioId: string
 }) {
+  // Para galerías de entrega final, exponer los sets como targets del uploader.
+  const uploadTargets: UploadTarget[] | undefined =
+    gallery.gallery_type === "final_delivery"
+      ? sets.map((s) => ({
+          id: s.id,
+          name: s.name,
+          deliveryTrack: inferDeliveryTrack(s.name),
+        }))
+      : undefined
+
   return (
     <div className="space-y-5">
-      <AssetUploader galleryId={gallery.id} studioId={studioId} />
+      <AssetUploader galleryId={gallery.id} studioId={studioId} targets={uploadTargets} />
       {assets.length > 0 ? (
         <AssetGrid
           galleryId={gallery.id}

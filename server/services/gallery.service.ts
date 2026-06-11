@@ -333,7 +333,34 @@ export async function createGallery(
     .select("*")
     .single()
   if (error) throw error
-  return row as GalleryRow
+  const gallery = row as GalleryRow
+
+  // Para galerías de ENTREGA FINAL: crear los 2 sets predefinidos. Cada uno
+  // queda vinculado a un delivery_track distinto vía el nombre — el uploader
+  // lee `set.name` para inferir el track al subir. Si el usuario renombra,
+  // perdemos el binding (cae al selector manual del uploader).
+  if (galleryType === "final_delivery") {
+    await db.from("gallery_sets").insert([
+      {
+        studio_id: studioId,
+        gallery_id: gallery.id,
+        name: "Máxima Calidad",
+        description: "JPG full quality — para imprimir y archivar",
+        sort_order: 0,
+        is_private: false,
+      },
+      {
+        studio_id: studioId,
+        gallery_id: gallery.id,
+        name: "Redes Sociales",
+        description: "Versiones comprimidas listas para Instagram/Facebook",
+        sort_order: 1,
+        is_private: false,
+      },
+    ])
+  }
+
+  return gallery
 }
 
 export type UpdateGalleryInput = Partial<
@@ -633,6 +660,10 @@ export type PrepareUploadParams = {
   filename: string
   mimeType: string
   fileSize: number
+  /** Set destino (carpeta) opcional — el asset se inserta con set_id. */
+  setId?: string | null
+  /** Pista de entrega para galerías final_delivery. */
+  deliveryTrack?: "social" | "high_quality" | null
 }
 
 export type PreparedUpload = {
@@ -674,8 +705,11 @@ export async function prepareAssetUpload(
   const ext = extFromMime(params.mimeType)
   const key = originalKey(studioId, params.galleryId, assetId, ext)
 
-  // Crear row pre-upload con status=pending
-  const { error: insertError } = await supabase.from("gallery_assets").insert({
+  // Crear row pre-upload con status=pending.
+  // Cast a any porque los tipos generados aún no incluyen delivery_track/set_id
+  // en el Insert type — ambos existen en la tabla.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: insertError } = await (supabase as any).from("gallery_assets").insert({
     id: assetId,
     studio_id: studioId,
     gallery_id: params.galleryId,
@@ -685,6 +719,8 @@ export async function prepareAssetUpload(
     file_size: params.fileSize,
     status: "pending",
     original_key: key,
+    set_id: params.setId ?? null,
+    delivery_track: params.deliveryTrack ?? null,
   })
   if (insertError) throw insertError
 
