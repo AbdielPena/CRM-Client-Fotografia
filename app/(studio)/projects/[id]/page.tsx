@@ -10,6 +10,8 @@ import { countUnreadNotifications } from "@/server/services/notification.service
 import { StatusBadge } from "@/components/shared/status-badge"
 import { NoteForm } from "@/components/shared/note-form"
 import { ProjectDetailActions } from "@/components/projects/project-detail-actions"
+import { ClientPortalAccessCard } from "@/components/projects/client-portal-access-card"
+import { ensureClientAccessCode } from "@/server/services/client-portal.service"
 import { WhatsAppSendMenu } from "@/components/whatsapp/whatsapp-send-menu"
 import { FormResponsesPanel } from "@/components/admin/form-responses-panel"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
@@ -130,6 +132,17 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
   // Pagos, entregas, historial e (otros proyectos del mismo cliente)
   const clientId = (client?.id as string | undefined) ?? null
+
+  // Código de acceso al portal (se genera si no existe — idempotente).
+  let portalAccessCode: string | null = null
+  if (clientId) {
+    try {
+      portalAccessCode = await ensureClientAccessCode(session.studioId, clientId)
+    } catch {
+      portalAccessCode = null
+    }
+  }
+  const portalLoginUrl = `${(process.env["NEXT_PUBLIC_APP_URL"] ?? "").replace(/\/$/, "")}/portal/login`
   const [
     { data: paymentsRaw },
     { data: deliveriesRaw },
@@ -471,6 +484,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 </div>
               )}
             </div>
+          )}
+
+          {/* Acceso del cliente al portal */}
+          {client && clientId && (
+            <ClientPortalAccessCard
+              clientId={clientId}
+              clientEmail={(client.email as string | null) ?? null}
+              accessCode={portalAccessCode}
+              portalUrl={portalLoginUrl}
+            />
           )}
 
           {/* Otros proyectos del cliente */}
