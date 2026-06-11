@@ -339,8 +339,12 @@ export async function createGallery(
   // queda vinculado a un delivery_track distinto vía el nombre — el uploader
   // lee `set.name` para inferir el track al subir. Si el usuario renombra,
   // perdemos el binding (cae al selector manual del uploader).
+  // Usamos el service client porque RLS de gallery_sets exige auth_studio_id() y
+  // estamos creando recursos sobre una galería recién insertada — el contexto auth
+  // ya está validado por createGallery arriba.
   if (galleryType === "final_delivery") {
-    await db.from("gallery_sets").insert([
+    const sb = svc()
+    const { error: setsErr } = await sb.from("gallery_sets").insert([
       {
         studio_id: studioId,
         gallery_id: gallery.id,
@@ -358,6 +362,11 @@ export async function createGallery(
         is_private: false,
       },
     ])
+    if (setsErr) {
+      console.error("[createGallery] failed to seed delivery sets", setsErr)
+      // No rompemos la creación de la galería: el usuario puede crear los sets
+      // desde la UI con el botón "Habilitar entrega final".
+    }
   }
 
   return gallery
