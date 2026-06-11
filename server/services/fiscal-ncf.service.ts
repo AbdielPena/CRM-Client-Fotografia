@@ -370,6 +370,19 @@ export async function issueNcfForInvoice(
     },
   })
 
+  // Espejo en la app de Facturación: copia el NCF emitido (como texto, sin
+  // consumir las secuencias de esa app). Best-effort, no bloquea.
+  void (async () => {
+    try {
+      const { mirrorInvoiceToFacturacion } = await import(
+        "./facturacion-bridge.service"
+      )
+      await mirrorInvoiceToFacturacion(studioId, invoiceId)
+    } catch (err) {
+      console.error("[fiscal-ncf→facturacion] mirror (ncf) failed:", err)
+    }
+  })()
+
   return issued
 }
 

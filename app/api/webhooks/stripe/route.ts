@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js"
 import { createId } from "@paralleldrive/cuid2"
 import { SUPABASE_URL } from "@/server/supabase/env"
 import { recordIncomeToFinanzApp } from "@/server/services/finanzapp-bridge.service"
+import { mirrorPaymentToFacturacion } from "@/server/services/facturacion-bridge.service"
 
 // Stripe webhook necesita service role para bypass de RLS.
 // El secret SUPABASE_SERVICE_ROLE_KEY NO se expone al cliente.
@@ -112,6 +113,22 @@ export async function POST(req: NextRequest) {
           console.warn(
             `[Stripe→FinanzApp] recordIncomeToFinanzApp failed (non-fatal, payment registered):`,
             finErr,
+          )
+        }
+
+        // Espejo del pago en la app de Facturación (best-effort)
+        try {
+          await mirrorPaymentToFacturacion(studioId, invoiceId, {
+            id: paymentId,
+            amount: amountPaid,
+            method: "stripe",
+            reference: pi.id,
+            receivedAt: new Date().toISOString(),
+          })
+        } catch (factErr) {
+          console.warn(
+            `[Stripe→Facturacion] mirror failed (non-fatal):`,
+            factErr,
           )
         }
         break

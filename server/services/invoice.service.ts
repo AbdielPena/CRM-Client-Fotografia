@@ -198,6 +198,18 @@ export async function createInvoice(
     metadata: { invoice_number: invoiceNumber, total },
   })
 
+  // Espejo en la app de Facturación (best-effort, no bloquea)
+  void (async () => {
+    try {
+      const { mirrorInvoiceToFacturacion } = await import(
+        './facturacion-bridge.service'
+      )
+      await mirrorInvoiceToFacturacion(studioId, invoice.id)
+    } catch (err) {
+      console.error('[invoice→facturacion] mirror (create) failed:', err)
+    }
+  })()
+
   return invoice
 }
 
@@ -313,6 +325,18 @@ export async function updateInvoice(
 
   // Notificar al cliente del cambio (best-effort, no bloquea)
   await notifyClientInvoiceChanged(studioId, invoiceId, { changeKind: 'edit' })
+
+  // Espejo en la app de Facturación (best-effort, no bloquea)
+  void (async () => {
+    try {
+      const { mirrorInvoiceToFacturacion } = await import(
+        './facturacion-bridge.service'
+      )
+      await mirrorInvoiceToFacturacion(studioId, invoiceId)
+    } catch (err) {
+      console.error('[invoice→facturacion] mirror (update) failed:', err)
+    }
+  })()
 
   return { id: invoiceId, total, status, projectId: existing.project_id ?? null }
 }
@@ -486,6 +510,16 @@ export async function sendInvoice(
     } catch (err) {
       console.error('[invoice] outbound webhook (sent) failed:', err)
     }
+
+    // Espejo en la app de Facturación: estado 'sent' + NCF si se auto-emitió
+    try {
+      const { mirrorInvoiceToFacturacion } = await import(
+        './facturacion-bridge.service'
+      )
+      await mirrorInvoiceToFacturacion(studioId, invoiceId)
+    } catch (err) {
+      console.error('[invoice→facturacion] mirror (sent) failed:', err)
+    }
   })()
 
   return invoice
@@ -552,6 +586,27 @@ export async function markInvoicePaid(
     action: 'invoice.payment_recorded',
     metadata: { amount: paymentData.amount, method: paymentData.method },
   })
+
+  // Espejo del pago en la app de Facturación (best-effort, no bloquea).
+  // También refresca la factura espejo (paidAmount / balance / status).
+  if (paymentId) {
+    void (async () => {
+      try {
+        const { mirrorPaymentToFacturacion } = await import(
+          './facturacion-bridge.service'
+        )
+        await mirrorPaymentToFacturacion(studioId, invoiceId, {
+          id: paymentId,
+          amount: paymentData.amount,
+          method: paymentData.method,
+          reference: paymentData.reference ?? null,
+          receivedAt: receivedAt.toISOString(),
+        })
+      } catch (err) {
+        console.error('[invoice→facturacion] mirror (payment) failed:', err)
+      }
+    })()
+  }
 
   // Wire-up CRM → FinanzApp (fi.abbypixel.com): registrar el ingreso en la
   // app de finanzas del usuario, contra la cuenta elegida en el modal.
@@ -678,6 +733,18 @@ export async function deleteInvoice(
     entityId: invoiceId,
     action: 'invoice.deleted',
   })
+
+  // Espejo en la app de Facturación: marca deletedAt + status CANCELLED
+  void (async () => {
+    try {
+      const { mirrorInvoiceToFacturacion } = await import(
+        './facturacion-bridge.service'
+      )
+      await mirrorInvoiceToFacturacion(studioId, invoiceId)
+    } catch (err) {
+      console.error('[invoice→facturacion] mirror (delete) failed:', err)
+    }
+  })()
 }
 
 // ----------------------------------------------------------------------------
