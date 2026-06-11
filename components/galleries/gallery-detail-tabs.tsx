@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
 import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
+import { DeliverToClientButton } from "@/components/galleries/deliver-to-client-modal"
 import { GalleryAppearanceTab } from "@/components/galleries/gallery-appearance-tab"
 import { GalleryActivityTab } from "@/components/galleries/gallery-activity-tab"
 
@@ -152,6 +153,7 @@ interface Props {
   publicToken: string | null
   activity: ActivityData
   coverImageUrl: string | null
+  client: { name: string | null; email: string | null; phone: string | null } | null
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -167,6 +169,7 @@ export function GalleryDetailTabs({
   publicToken,
   activity,
   coverImageUrl,
+  client,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
 
@@ -212,7 +215,13 @@ export function GalleryDetailTabs({
         </TabsList>
 
         <TabsContent value="photos" className="mt-5">
-          <PhotosTab gallery={gallery} assets={assets} sets={sets} studioId={studioId} />
+          <PhotosTab
+            gallery={gallery}
+            assets={assets}
+            sets={sets}
+            studioId={studioId}
+            client={client}
+          />
         </TabsContent>
 
         <TabsContent value="sets" className="mt-5">
@@ -281,11 +290,13 @@ function PhotosTab({
   assets,
   sets,
   studioId,
+  client,
 }: {
   gallery: Gallery
   assets: Asset[]
   sets: SetRow[]
   studioId: string
+  client: { name: string | null; email: string | null; phone: string | null } | null
 }) {
   // Si la galería tiene sets cuyo nombre matchea Redes/Máxima Calidad, mostrar
   // selector de target. Vale para entrega final O para galerías de selección que
@@ -302,10 +313,29 @@ function PhotosTab({
         }))
       : undefined
 
+  const canDeliver = !!uploadTargets && assets.length > 0 && !!client
   return (
     <div className="space-y-5">
       {!uploadTargets && (
         <EnableFinalDeliveryBanner galleryId={gallery.id} />
+      )}
+      {canDeliver && client && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 dark:bg-emerald-500/5">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-foreground">
+              ¿Listo para entregar a {client.name ?? "tu cliente"}?
+            </p>
+            <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+              Le avisamos por email y/o WhatsApp y te damos los links para compartir manualmente.
+            </p>
+          </div>
+          <DeliverToClientButton
+            galleryId={gallery.id}
+            clientName={client.name}
+            clientEmail={client.email}
+            clientPhone={client.phone}
+          />
+        </div>
       )}
       <AssetUploader galleryId={gallery.id} studioId={studioId} targets={uploadTargets} />
       {assets.length > 0 ? (

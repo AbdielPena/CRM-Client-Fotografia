@@ -241,6 +241,183 @@ export async function shareGalleryAction(
   return result
 }
 
+/**
+ * Notifica al cliente que su entrega final está lista por los canales
+ * elegidos (email/whatsapp) y devuelve los links (web + Drive si existe)
+ * para que el fotógrafo pueda compartirlos también de forma manual.
+ */
+export async function notifyClientFinalDeliveryAction(input: {
+  galleryId: string
+  sendEmail: boolean
+  sendWhatsapp: boolean
+}): Promise<{
+  url: string
+  driveLink: string | null
+  sentEmail: boolean
+  sentWhatsapp: boolean
+  whatsappLink: string | null
+  errors: string[]
+}> {
+  const ctx = await requireStudioAuth()
+  const galleryId = uuidSchema.parse(input.galleryId)
+
+  const supabase = createSupabaseServerClient()
+  const { untypedService } = await import("@/server/supabase/untyped")
+  const sb = untypedService()
+
+  // Galería + cliente + studio
+  const { data: gRow } = await supabase
+    .from("galleries")
+    .select("id, name, client_id, gallery_type, status")
+    .eq("id", galleryId)
+    .eq("studio_id", ctx.studioId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  const gallery = gRow as {
+    id: string
+    name: string
+    client_id: string | null
+    gallery_type: string
+    status: string
+  } | null
+  if (!gallery) throw new Error("Galería no encontrada")
+  if (!gallery.client_id) {
+    return {
+      url: "",
+      driveLink: null,
+      sentEmail: false,
+      sentWhatsapp: false,
+      whatsappLink: null,
+      errors: ["Esta galería no tiene cliente vinculado"],
+    }
+  }
+
+  // Si está en draft, publicar primero (sin token hacia el cliente no sirve).
+  if (gallery.status === "draft") {
+    await publishGallery(ctx.studioId, ctx.userId, galleryId)
+  }
+
+  // 1) Token público
+  const { url, token: _token } = await createGalleryShareToken(ctx.studioId, galleryId, {
+    expiresAt: null,
+  })
+
+  // 2) Link de Drive (si existe backup)
+  const { data: driveRow } = await sb
+    .from("gallery_drive_backups")
+    .select("web_view_link, status")
+    .eq("gallery_id", galleryId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const driveLink =
+    (driveRow as { web_view_link: string | null; status: string } | null)?.web_view_link ?? null
+
+  // 3) Datos del cliente + studio
+  const { data: cliRow } = await sb
+    .from("clients")
+    .select("name, email, phone")
+    .eq("id", gallery.client_id)
+    .maybeSingle()
+  const client = cliRow as { name: string | null; email: string | null; phone: string | null } | null
+
+  const { data: studioRow } = await sb
+    .from("studios")
+    .select("name")
+    .eq("id", ctx.studioId)
+    .maybeSingle()
+  const studioName = (studioRow as { name?: string } | null)?.name ?? ""
+
+  const errors: string[] = []
+  let sentEmail = false
+  let sentWhatsapp = false
+
+  // 4) Email — plantilla delivery_ready
+  if (input.sendEmail) {
+    if (!client?.email) {
+      errors.push("El cliente no tiene email registrado")
+    } else {
+      try {
+        const { enqueueEmail } = await import("@/server/services/email.service")
+        const { resolveTemplate, TEMPLATE_CATALOG } = await import(
+          "@/server/services/email-template.service"
+        )
+        const defaults = TEMPLATE_CATALOG.delivery_ready
+        const vars = {
+          client_name: client.name ?? "",
+          delivery_title: gallery.name,
+          portal_url: url,
+          studio_name: studioName,
+        }
+        const tpl = await resolveTemplate(ctx.studioId, "delivery_ready", vars, {
+          subject: defaults.defaultSubject,
+          bodyHtml: defaults.defaultBodyHtml,
+        })
+        await enqueueEmail({
+          studioId: ctx.studioId,
+          toEmail: client.email,
+          toName: client.name,
+          subject: tpl.subject,
+          bodyHtml: tpl.bodyHtml,
+          fromName: tpl.fromName,
+          replyTo: tpl.replyTo,
+          templateSlug: "delivery_ready",
+          relatedEntityType: "gallery",
+          relatedEntityId: galleryId,
+        })
+        sentEmail = true
+      } catch (e) {
+        errors.push(`Email: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+  }
+
+  // 5) WhatsApp — plantilla aprobada "entrega_final_lista" (solo {{1}}=nombre)
+  let waLink: string | null = null
+  if (input.sendWhatsapp) {
+    if (!client?.phone) {
+      errors.push("El cliente no tiene teléfono registrado")
+    } else {
+      try {
+        const { sendTemplateMessage } = await import(
+          "@/server/services/whatsapp/cloud-api.service"
+        )
+        const r = await sendTemplateMessage(
+          ctx.studioId,
+          client.phone,
+          "entrega_final_lista",
+          "es",
+          [client.name ?? "amig@"],
+        )
+        if (r.ok) {
+          sentWhatsapp = true
+        } else {
+          errors.push(`WhatsApp: ${r.error ?? "fallo"}`)
+        }
+      } catch (e) {
+        errors.push(`WhatsApp: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
+  }
+
+  // 6) wa.me link manual (siempre, para fallback manual)
+  if (client?.phone) {
+    const phoneDigits = client.phone.replace(/\D/g, "")
+    const msg = `¡Hola ${client.name ?? ""}! 🎁 Tus fotos finales de "${gallery.name}" ya están listas. Acá podés verlas: ${url}`
+    waLink = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(msg)}`
+  }
+
+  revalidatePath(`/galleries/${galleryId}`)
+  return {
+    url,
+    driveLink,
+    sentEmail,
+    sentWhatsapp,
+    whatsappLink: waLink,
+    errors,
+  }
+}
+
 // ─── Galerías 2.0: apariencia / pistas / embed ──────────────────────────────
 
 const appearanceSchema = z.object({

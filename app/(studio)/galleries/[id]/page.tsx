@@ -56,16 +56,20 @@ export default async function GalleryDetailPage({
   // Resolve cliente (si tiene)
   let clientLabel: string | null = null
   let clientEmail: string | null = null
+  let clientName: string | null = null
+  let clientPhone: string | null = null
   if (gallery.client_id) {
     const supabase = createSupabaseServerClient()
     const { data } = await supabase
       .from("clients")
-      .select("name, email")
+      .select("name, email, phone")
       .eq("id", gallery.client_id)
       .maybeSingle()
     if (data) {
-      const c = data as { name: string; email: string | null }
+      const c = data as { name: string; email: string | null; phone: string | null }
       clientEmail = c.email
+      clientName = c.name
+      clientPhone = c.phone
       clientLabel = c.email ? `${c.name} · ${c.email}` : c.name
     }
   }
@@ -265,6 +269,11 @@ export default async function GalleryDetailPage({
         publicToken={activeToken?.token ?? null}
         activity={activity}
         coverImageUrl={coverImageUrl}
+        client={
+          gallery.client_id
+            ? { name: clientName, email: clientEmail, phone: clientPhone }
+            : null
+        }
       />
     </>
   )
