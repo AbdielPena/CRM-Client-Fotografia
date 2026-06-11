@@ -11,6 +11,7 @@ import { getPublicBrandingByStudioId } from "@/server/services/studio-branding.s
 import { getGalleryPrintState } from "@/server/services/print-selection.service"
 import { GalleryPasswordGate } from "@/components/public/gallery-password-gate"
 import { PublicGalleryView } from "@/components/public/public-gallery-view"
+import { FinalDeliveryView } from "@/components/public/final-delivery-view"
 
 export const dynamic = "force-dynamic"
 // Sin esto, Next cachea los GET de Supabase (Data Cache, por URL de la query) y
@@ -75,6 +76,64 @@ export default async function PublicGalleryPage({ params }: PageProps) {
 
   // Branding del estudio (white-label): logo, color, footer.
   const branding = await getPublicBrandingByStudioId(view.gallery.studioId)
+
+  // ── Entrega final ──
+  // Si la galería es de entrega final O tiene fotos clasificadas en pistas
+  // (Máxima Calidad / Redes), el cliente ve la experiencia de entrega:
+  // carpetas explicadas, descargas ZIP y link de Google Drive.
+  const hasDeliveryTracks = view.assets.some(
+    (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
+  )
+  if (view.gallery.galleryType === "final_delivery" || hasDeliveryTracks) {
+    // Cast a any: gallery_drive_backups no está en los tipos generados.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: driveRow } = await (supabase as any)
+      .from("gallery_drive_backups")
+      .select("web_view_link")
+      .eq("gallery_id", view.gallery.id)
+      .not("web_view_link", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const driveLink =
+      (driveRow as { web_view_link: string | null } | null)?.web_view_link ?? null
+
+    // En entrega final solo mostramos las fotos con track asignado (las finales).
+    // Una galería de selección reciclada puede tener además las fotos de prueba
+    // originales sin track — esas no van en la entrega.
+    const deliveryAssets = hasDeliveryTracks
+      ? view.assets.filter(
+          (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
+        )
+      : view.assets
+
+    return (
+      <FinalDeliveryView
+        token={params.token}
+        gallery={{
+          id: view.gallery.id,
+          name: view.gallery.name,
+          description: view.gallery.description,
+          subtitle: view.gallery.subtitle,
+          welcomeText: view.gallery.welcomeText,
+          eventDate: view.gallery.eventDate,
+          accentColor: view.gallery.accentColor,
+          coverThumbUrl: view.gallery.coverThumbUrl,
+          coverWebUrl: view.gallery.coverWebUrl,
+          allow_download: view.gallery.allow_download,
+        }}
+        assets={deliveryAssets}
+        studio={{
+          name: studioInfo?.studios?.name ?? "StudioFlow",
+          logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+          primaryColor: branding?.primary_color ?? null,
+          hideBranding: branding?.hide_studioflow_branding ?? false,
+          footerHtml: branding?.custom_footer_html ?? null,
+        }}
+        driveLink={driveLink}
+      />
+    )
+  }
 
   // Estado de selección de impresión (si el plan la incluye y está habilitada).
   const printState = await getGalleryPrintState(view.gallery.id)

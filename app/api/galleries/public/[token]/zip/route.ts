@@ -11,6 +11,8 @@ const schema = z.object({
   collectionId: z.string().uuid().optional(),
   assetIds: z.array(z.string().uuid()).max(2000).optional(),
   clientEmail: z.string().email().optional().or(z.literal("")),
+  // "original" solo se honra en galerías de entrega final (fotos ya pagadas).
+  resolution: z.enum(["web", "original"]).optional(),
 })
 
 export async function POST(
@@ -42,12 +44,22 @@ export async function POST(
       return NextResponse.json({ error: "galería no encontrada" }, { status: 404 })
     }
 
+    // Originales: solo para entregas finales (fotos editadas que el cliente ya
+    // pagó). En galerías de selección el público sigue limitado a "web".
+    const isFinalDelivery =
+      view.gallery.galleryType === "final_delivery" ||
+      view.assets.some(
+        (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
+      )
+    const resolution =
+      body.resolution === "original" && isFinalDelivery ? "original" : "web"
+
     const exportRow = await createZipExport(gallery.studio_id, null, {
       galleryId: view.gallery.id,
       scope: body.scope,
       collectionId: body.collectionId,
       assetIds: body.assetIds,
-      resolution: "web", // clientes públicos siempre web (no original)
+      resolution,
       clientEmail: body.clientEmail || null,
       clientIp: ip,
     })
