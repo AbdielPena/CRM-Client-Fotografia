@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
-import { Wallet, AlertCircle, Check } from "lucide-react"
+import { Wallet, AlertCircle, Loader2 } from "lucide-react"
 
 import { assignAccountToPaymentAction } from "@/server/actions/finance.actions"
 
@@ -21,8 +21,9 @@ interface Props {
 }
 
 /**
- * Celda de la lista de pagos: muestra la cuenta actual y, si está pendiente
- * o el usuario quiere cambiarla, abre un selector inline.
+ * Celda de la lista de pagos: muestra la cuenta actual o un dropdown si está
+ * pendiente. Auto-guarda al cambiar la selección — sin botón "confirmar",
+ * para que el usuario no tenga que dar dos clicks.
  */
 export function AssignAccountCell({
   paymentId,
@@ -31,7 +32,6 @@ export function AssignAccountCell({
   accounts,
 }: Props) {
   const [editing, setEditing] = useState(false)
-  const [selected, setSelected] = useState(currentAccountId ?? "")
   const [isPending, startTransition] = useTransition()
 
   if (accounts.length === 0) {
@@ -40,12 +40,19 @@ export function AssignAccountCell({
     )
   }
 
-  const handleSave = () => {
-    if (!selected) return
+  const handleChange = (newAccountId: string) => {
+    if (!newAccountId || newAccountId === currentAccountId) {
+      setEditing(false)
+      return
+    }
     startTransition(async () => {
-      const result = await assignAccountToPaymentAction(paymentId, selected)
+      const result = await assignAccountToPaymentAction(paymentId, newAccountId)
       if (result.success) {
-        toast.success("Cuenta asignada")
+        toast.success(
+          "warning" in result && result.warning
+            ? result.warning
+            : "Cuenta asignada · ingreso registrado en FinanzApp",
+        )
         setEditing(false)
       } else {
         toast.error(result.error ?? "No se pudo asignar")
@@ -59,10 +66,15 @@ export function AssignAccountCell({
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-[12px] text-foreground hover:border-border hover:bg-muted transition-colors"
+          disabled={isPending}
+          className="inline-flex items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-[12px] text-foreground hover:border-border hover:bg-muted transition-colors disabled:opacity-60"
           title="Cambiar cuenta"
         >
-          <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+          {isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+          ) : (
+            <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
           {currentLabel ?? "—"}
         </button>
       )
@@ -71,24 +83,35 @@ export function AssignAccountCell({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-200 transition-colors"
+        disabled={isPending}
+        className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-200 transition-colors disabled:opacity-60"
         title="Asignar cuenta"
       >
-        <AlertCircle className="h-3 w-3" />
+        {isPending ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <AlertCircle className="h-3 w-3" />
+        )}
         Pendiente
       </button>
     )
   }
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       <select
-        value={selected}
-        onChange={(e) => setSelected(e.target.value)}
+        defaultValue={currentAccountId ?? ""}
+        onChange={(e) => handleChange(e.target.value)}
+        onBlur={() => {
+          if (!isPending) setEditing(false)
+        }}
         autoFocus
-        className="rounded-md border border-border bg-card px-2 py-1 text-[12px] focus:outline-none focus:ring-2 focus:ring-brand/30"
+        disabled={isPending}
+        className="rounded-md border border-brand/50 bg-card px-2 py-1 text-[12px] focus:outline-none focus:ring-2 focus:ring-brand/40 disabled:opacity-60"
       >
-        <option value="">— Elegir —</option>
+        <option value="" disabled>
+          — Elegir cuenta —
+        </option>
         {accounts.map((a) => (
           <option key={a.id} value={a.id}>
             {a.nombre}
@@ -96,26 +119,9 @@ export function AssignAccountCell({
           </option>
         ))}
       </select>
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={!selected || isPending}
-        className="inline-flex items-center justify-center rounded-md bg-brand p-1 text-white hover:bg-brand/90 disabled:opacity-50"
-        title="Guardar"
-      >
-        <Check className="h-3.5 w-3.5" />
-      </button>
-      <button
-        type="button"
-        onClick={() => {
-          setEditing(false)
-          setSelected(currentAccountId ?? "")
-        }}
-        disabled={isPending}
-        className="text-[11px] text-muted-foreground hover:text-foreground"
-      >
-        Cancelar
-      </button>
+      {isPending && (
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+      )}
     </div>
   )
 }
