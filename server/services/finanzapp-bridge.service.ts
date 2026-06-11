@@ -211,6 +211,13 @@ export async function recordIncomeToFinanzApp(
       .filter(Boolean)
       .join(" · ") || null
 
+  // Descripción visible en la lista de FinanzApp: incluye el nombre del
+  // cliente para identificar el pago de un vistazo (sin abrir el detalle).
+  const baseDesc = input.description ?? "Pago de factura (CRM)"
+  const descripcion = input.clientName
+    ? `${baseDesc} — ${input.clientName}`
+    : baseDesc
+
   const sb = untypedService()
   const { data, error } = await sb.rpc("finz_record_income", {
     p_workspace_id: workspaceId,
@@ -218,7 +225,7 @@ export async function recordIncomeToFinanzApp(
     p_fecha: fecha,
     p_external_reference: `crm-payment:${input.paymentId}`,
     p_cuenta_id: accountId,
-    p_descripcion: input.description ?? "Pago de factura (CRM)",
+    p_descripcion: descripcion,
     p_cliente: input.clientName ?? null,
     p_notas: notas,
   })
