@@ -45,6 +45,7 @@ import {
   Bot,
   HeartHandshake,
   Tag,
+  MailCheck,
   type LucideIcon,
 } from "lucide-react"
 
@@ -140,6 +141,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Comunicación",
     items: [
       { type: "link", href: "/mail/inbox", label: "Correo", icon: Mail },
+      { type: "link", href: "/notificaciones", label: "Correos enviados", icon: MailCheck },
       { type: "link", href: "/settings/whatsapp", label: "WhatsApp", icon: MessageCircle },
       { type: "link", href: "/chat", label: "Chat interno", icon: MessageCircle },
       { type: "link", href: "/engagement", label: "Engagement Hub", icon: HeartHandshake },
