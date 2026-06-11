@@ -108,6 +108,9 @@ export default async function GalleryDetailPage({
     height: a.height,
     sort_order: a.sort_order,
     set_id: (a as unknown as { set_id: string | null }).set_id ?? null,
+    delivery_track:
+      (a as unknown as { delivery_track: "social" | "high_quality" | null })
+        .delivery_track ?? null,
     is_private: (a as unknown as { is_private: boolean }).is_private ?? false,
     thumbUrl: getAssetThumbUrl(a.thumb_key),
     webUrl: getAssetWebUrl(a.web_key),

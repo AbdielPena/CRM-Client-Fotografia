@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils/cn"
 import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
 import { DeliverToClientButton } from "@/components/galleries/deliver-to-client-modal"
+import { ValidateDeliveryTab } from "@/components/galleries/validate-delivery-tab"
 import { GalleryAppearanceTab } from "@/components/galleries/gallery-appearance-tab"
 import { GalleryActivityTab } from "@/components/galleries/gallery-activity-tab"
 
@@ -87,6 +88,7 @@ type Asset = {
   height: number | null
   sort_order: number
   set_id: string | null
+  delivery_track?: "social" | "high_quality" | null
   is_private: boolean
   thumbUrl: string | null
   webUrl: string | null
@@ -172,6 +174,9 @@ export function GalleryDetailTabs({
   client,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
+  const hasDelivery = assets.some(
+    (a) => a.delivery_track === "social" || a.delivery_track === "high_quality",
+  )
 
   return (
     <div className="px-6 pb-12 pt-6 lg:px-8">
@@ -197,6 +202,11 @@ export function GalleryDetailTabs({
               </span>
             )}
           </TabsTrigger>
+          {hasDelivery && (
+            <TabsTrigger value="validate" className="gap-1.5">
+              <Check className="h-3.5 w-3.5" /> Validar entrega
+            </TabsTrigger>
+          )}
           <TabsTrigger value="pins" className="gap-1.5">
             <KeyRound className="h-3.5 w-3.5" /> PINs
           </TabsTrigger>
@@ -236,6 +246,17 @@ export function GalleryDetailTabs({
             assets={assets}
           />
         </TabsContent>
+
+        {hasDelivery && (
+          <TabsContent value="validate" className="mt-5">
+            <ValidateDeliveryTab
+              galleryId={gallery.id}
+              assets={assets}
+              favorites={favoriteSelections}
+              collections={collections}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="pins" className="mt-5">
           <PinsTab galleryId={gallery.id} pins={pins} />
