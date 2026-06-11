@@ -153,22 +153,40 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       }
     }
 
-    // Assets completados.
+    const tracks: Array<"high_quality" | "social"> =
+      b.track === "both" ? ["high_quality", "social"] : [b.track as "high_quality" | "social"]
+
     const { data: assetsRaw } = await sb
       .from("gallery_assets")
-      .select("id, original_name, original_key, web_key, mime_type")
+      .select("id, original_name, original_key, web_key, mime_type, delivery_track")
       .eq("gallery_id", b.gallery_id)
       .eq("status", "completed")
-    const assets = (assetsRaw ?? []) as Array<{
+    const allAssets = (assetsRaw ?? []) as Array<{
       id: string
       original_name: string | null
       original_key: string | null
       web_key: string | null
       mime_type: string | null
+      delivery_track: "high_quality" | "social" | null
     }>
 
-    const tracks: Array<"high_quality" | "social"> =
-      b.track === "both" ? ["high_quality", "social"] : [b.track as "high_quality" | "social"]
+    // Determinar la pista efectiva de cada foto:
+    //  - Si la galería tiene fotos con delivery_track → SOLO esas son la entrega
+    //    final; las demás (delivery_track=null) son fotos de prueba de la
+    //    selección y NO se respaldan.
+    //  - Si NINGUNA tiene track (entrega final "pura"/vieja) → todas van a
+    //    Máxima Calidad como respaldo.
+    // Cada foto va a UNA sola carpeta (no se duplica en ambas).
+    const hasAnyTrack = allAssets.some((a) => a.delivery_track !== null)
+    const assets = allAssets
+      .map((a) => ({
+        ...a,
+        track: (a.delivery_track ?? (hasAnyTrack ? null : "high_quality")) as
+          | "high_quality"
+          | "social"
+          | null,
+      }))
+      .filter((a) => a.track !== null && tracks.includes(a.track))
 
     // Carpetas: /StudioFlow Entregas/{categoría}/{cliente}/{proyecto}/
     const projectFolderId = await drive.ensureFolderPath(studioId, [
@@ -190,7 +208,7 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
         root_folder_id: projectFolderId,
         high_quality_folder_id: folderIds.high_quality ?? null,
         social_folder_id: folderIds.social ?? null,
-        total_assets: assets.length * tracks.length,
+        total_assets: assets.length,
         updated_at: new Date().toISOString(),
       })
       .eq("id", backupId)
@@ -198,28 +216,29 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     let uploaded = 0
     let bytes = 0
     for (const a of assets) {
-      for (const tr of tracks) {
-        const key = tr === "high_quality" ? a.original_key : a.web_key
-        const bucket = tr === "high_quality" ? ORIGINALS_BUCKET : RENDITIONS_BUCKET
-        if (!key) continue
-        const { data: blob, error } = await storage.storage.from(bucket).download(key)
-        if (error || !blob) {
-          console.error("[gallery-drive] download fail", a.id, tr, error)
-          continue
-        }
-        const buf = Buffer.from(await blob.arrayBuffer())
-        const folderId = folderIds[tr]
-        if (!folderId) continue
-        const ext = tr === "high_quality" ? (a.original_name?.split(".").pop() ?? "jpg") : "webp"
-        const name = `${baseName(a.original_name, a.id)}${tr === "social" ? "_web" : ""}.${ext}`
-        const mime = tr === "high_quality" ? (a.mime_type ?? "image/jpeg") : "image/webp"
-        try {
-          await drive.uploadFile(studioId, folderId, name, buf, mime)
-          uploaded += 1
-          bytes += buf.length
-        } catch (e) {
-          console.error("[gallery-drive] upload fail", a.id, tr, e)
-        }
+      // Cada foto va SOLO a la carpeta de su pista (no se duplica).
+      const tr = a.track
+      if (!tr) continue
+      const key = tr === "high_quality" ? a.original_key : a.web_key
+      const bucket = tr === "high_quality" ? ORIGINALS_BUCKET : RENDITIONS_BUCKET
+      if (!key) continue
+      const { data: blob, error } = await storage.storage.from(bucket).download(key)
+      if (error || !blob) {
+        console.error("[gallery-drive] download fail", a.id, tr, error)
+        continue
+      }
+      const buf = Buffer.from(await blob.arrayBuffer())
+      const folderId = folderIds[tr]
+      if (!folderId) continue
+      const ext = tr === "high_quality" ? (a.original_name?.split(".").pop() ?? "jpg") : "webp"
+      const name = `${baseName(a.original_name, a.id)}${tr === "social" ? "_web" : ""}.${ext}`
+      const mime = tr === "high_quality" ? (a.mime_type ?? "image/jpeg") : "image/webp"
+      try {
+        await drive.uploadFile(studioId, folderId, name, buf, mime)
+        uploaded += 1
+        bytes += buf.length
+      } catch (e) {
+        console.error("[gallery-drive] upload fail", a.id, tr, e)
       }
       await sb
         .from("gallery_drive_backups")
@@ -231,7 +250,7 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     await drive.shareFolder(studioId, projectFolderId, {})
     const link = await drive.getFileLink(studioId, projectFolderId)
 
-    const total = assets.length * tracks.length
+    const total = assets.length
     const finalStatus = uploaded === 0 && total > 0 ? "failed" : uploaded < total ? "partial" : "completed"
 
     await sb
