@@ -76,21 +76,22 @@ const TRACK_META: Record<
   },
 }
 
-/** Polling del export ZIP hasta que está listo; devuelve URL de descarga. */
-async function waitForZip(exportId: string): Promise<string> {
+/** Polling del export ZIP (endpoint público por token) hasta que está listo. */
+async function waitForZip(token: string, exportId: string): Promise<string> {
+  const base = `/api/galleries/public/${token}/zip/${exportId}`
   for (let i = 0; i < 90; i++) {
     await new Promise((r) => setTimeout(r, 2000))
-    const res = await fetch(`/api/galleries/zip/${exportId}`)
+    const res = await fetch(base)
     if (!res.ok) continue
     const data = (await res.json()) as { status: string; error?: string | null }
     if (data.status === "ready" || data.status === "completed") {
-      return `/api/galleries/zip/${exportId}?download=1`
+      return `${base}?download=1`
     }
     if (data.status === "failed") {
-      throw new Error(data.error ?? "El ZIP falló al generarse")
+      throw new Error(data.error ?? "La descarga falló al generarse")
     }
   }
-  throw new Error("El ZIP está tardando demasiado — intentá de nuevo en unos minutos")
+  throw new Error("La descarga está tardando demasiado — intentá de nuevo en unos minutos")
 }
 
 export function FinalDeliveryView({
@@ -107,9 +108,11 @@ export function FinalDeliveryView({
   driveLink: string | null
 }) {
   // Entrega final = experiencia luxury fija (dorado). Solo respetamos un accent
-  // por-galería si el fotógrafo lo definió a propósito; el color del studio se
-  // ignora aquí para garantizar la estética premium (nada de azules/morados).
-  const accent = gallery.accentColor || GOLD
+  // por-galería si es un hex válido; valores legacy tipo "blue"/"violet" (de los
+  // temas de selección) se ignoran para garantizar la estética premium.
+  const accent = /^#[0-9a-fA-F]{3,8}$/.test(gallery.accentColor ?? "")
+    ? (gallery.accentColor as string)
+    : GOLD
 
   const byTrack = useMemo(() => {
     const hq = assets.filter((a) => a.deliveryTrack === "high_quality")
@@ -145,7 +148,7 @@ export function FinalDeliveryView({
         }
         const { exportId } = (await res.json()) as { exportId: string }
         toast.info("Preparando tu ZIP… puede tardar un momento")
-        const url = await waitForZip(exportId)
+        const url = await waitForZip(token, exportId)
         window.location.href = url
         toast.success("¡Descarga iniciada!")
       } catch (e) {
