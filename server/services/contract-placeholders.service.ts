@@ -80,7 +80,7 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
        project:projects(
          id, name, event_type, event_date, location, package_id,
          client:clients(id, name, email, phone, address, city, country),
-         package:packages(id, name, price, currency)
+         package:packages(id, name, price, currency, deposit_percent)
        )`,
     )
     .eq("id", contractId)
@@ -127,12 +127,16 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
   // Invoices del cliente para este proyecto → totales y pagos
   let totalPrice = 0
   let amountPaid = 0
+  // Anticipo (factura de reserva) y saldo de reserva (segunda cuota). Distintos
+  // del "saldo pendiente" (= total − pagado): aquí son los montos fijos del 50/50.
+  let depositAmount = 0
+  let balanceAmount = 0
   let currency = (pkg as { currency?: string } | null)?.currency ?? "USD"
 
   if (project) {
     const { data: invoicesRaw } = await supabase
       .from("invoices")
-      .select("id, total, status, currency, amount_paid")
+      .select("id, total, status, currency, amount_paid, kind, installment_number")
       .eq("project_id", (project as { id: string }).id)
       .is("deleted_at", null)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,6 +146,16 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
       0,
     )
     if (invoices[0]?.currency) currency = invoices[0].currency
+
+    // Anticipo = factura kind='deposit' (o cuota 1); saldo = kind='balance' (o cuota 2)
+    const depInv = invoices.find(
+      (i) => i.kind === "deposit" || i.installment_number === 1,
+    )
+    const balInv = invoices.find(
+      (i) => i.kind === "balance" || i.installment_number === 2,
+    )
+    depositAmount = Number(depInv?.total ?? 0)
+    balanceAmount = Number(balInv?.total ?? 0)
 
     // Sumar pagos completed
     const invoiceIds = invoices.map((i) => i.id as string)
@@ -163,6 +177,14 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
   if (!totalPrice && pkg) {
     // Si no hay invoices todavía, usar el precio del paquete como referencia
     totalPrice = Number((pkg as { price?: number }).price ?? 0)
+  }
+
+  // Fallback del anticipo/saldo: si no hubo facturas de reserva, derivar del
+  // deposit_percent del paquete (default 50%).
+  if (!depositAmount && totalPrice) {
+    const depPct = Number((pkg as { deposit_percent?: number } | null)?.deposit_percent ?? 50)
+    depositAmount = Number(((totalPrice * depPct) / 100).toFixed(2))
+    balanceAmount = Number((totalPrice - depositAmount).toFixed(2))
   }
 
   const remaining = Math.max(0, totalPrice - amountPaid)
@@ -239,6 +261,14 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
     monto_pagado: paidStr,
     remaining_balance: remainingStr,
     saldo_pendiente: remainingStr,
+    // Anticipo (reserva) y saldo de reserva — montos fijos del plan (50/50 por
+    // default), distintos de "saldo pendiente". Para "paga al firmar" / "paga el día".
+    deposit_amount: FORMAT_MONEY(depositAmount, currency),
+    anticipo: FORMAT_MONEY(depositAmount, currency),
+    monto_anticipo: FORMAT_MONEY(depositAmount, currency),
+    balance_amount: FORMAT_MONEY(balanceAmount, currency),
+    saldo_reserva: FORMAT_MONEY(balanceAmount, currency),
+    monto_restante: FORMAT_MONEY(balanceAmount, currency),
     currency,
     moneda: currency,
 
@@ -259,9 +289,9 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
     hoy: todayStr,
     fecha: todayStr,
 
-    // Firma (la imagen se inyecta aparte; aquí solo fecha/nombre legibles)
-    signature_client: signedDate,
-    signature_studio: "",
+    // Firma: NO mapear {{signature_client}}/{{signature_studio}} aquí — esos los
+    // reemplaza injectSignatures() con la imagen real en su posición. Mapearlos
+    // como texto rompería el posicionado. Solo exponemos fecha/nombre legibles.
     signed_name: signerName,
     nombre_firmante: signerName,
     signed_at: signedDate,
