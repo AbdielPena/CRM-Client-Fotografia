@@ -221,12 +221,67 @@ export function TemplateEditor({
               <span className="text-muted-foreground">Asunto:</span>{" "}
               <strong>{previewSubject}</strong>
             </div>
-            <div className="rounded-md border border-border bg-background p-4">
+            {/* Réplica del marco minimalista real del correo (wrapLuxuryEmail) */}
+            <div style={{ background: "#F0F1F4", padding: "20px 10px", borderRadius: 12 }}>
               <div
-                className="prose prose-sm max-w-none text-foreground"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBody) }}
-              />
+                style={{
+                  maxWidth: 600,
+                  margin: "0 auto",
+                  background: "#fff",
+                  border: "1px solid #ECECEF",
+                  borderRadius: 18,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "26px 36px",
+                    textAlign: "center",
+                    borderBottom: "1px solid #ECECEF",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "inline-block",
+                      background: "#1C1C1C",
+                      borderRadius: 12,
+                      padding: "10px 18px",
+                      color: "#fff",
+                      fontWeight: 600,
+                      fontSize: 15,
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    {exampleVars["studio_name"] || "Tu Estudio"}
+                  </span>
+                </div>
+                <div
+                  className="prose prose-sm max-w-none"
+                  style={{
+                    padding: "34px 38px 28px",
+                    fontFamily: "Inter, -apple-system, sans-serif",
+                    fontSize: 15,
+                    lineHeight: 1.7,
+                    color: "#6E6E73",
+                  }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewBody) }}
+                />
+                <div
+                  style={{
+                    padding: "20px 36px 26px",
+                    textAlign: "center",
+                    borderTop: "1px solid #ECECEF",
+                    fontSize: 11.5,
+                    color: "#A1A1A6",
+                  }}
+                >
+                  {exampleVars["studio_name"] || "Tu Estudio"} · Este mensaje es solo para ti.
+                </div>
+              </div>
             </div>
+            <p className="text-[11px] text-muted-foreground">
+              Así se verá dentro del marco real (con tu logo en lugar del nombre, y tu footer con redes/WhatsApp).
+            </p>
           </div>
         </div>
       </div>
