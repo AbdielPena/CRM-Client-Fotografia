@@ -234,7 +234,9 @@ export async function mirrorInvoiceToFacturacion(
         taxAmount: Math.round(lineBase * (taxRate / 100) * 100) / 100,
         lineTotal: Number(it.amount ?? lineBase),
         position: Number(it.sort_order ?? idx),
-        externalSyncStatus: "UNLINKED",
+        // Enum InventorySyncStatus de Facturación: estos ítems vienen del CRM y
+        // no se vinculan al inventario de la app de Facturación.
+        externalSyncStatus: "NOT_REQUIRED",
       }
     })
     const { error: itemsErr } = await fact.from("invoice_items").insert(rows)
