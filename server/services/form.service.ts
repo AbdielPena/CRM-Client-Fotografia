@@ -898,6 +898,65 @@ export async function submitPublicForm(
       const { recomputeProjectDelivery } = await import('./delivery.service')
       await recomputeProjectDelivery(response.studio_id as string, projectId)
     }
+
+    // Tarea "entregar antes del cumpleaños": si el cumpleaños cae ANTES de que
+    // se cumplan las 3 semanas de edición desde la sesión, la entrega normal
+    // llegaría tarde → crear tarea de alta prioridad con fecha límite = cumpleaños.
+    if (projectId && birthday) {
+      const { data: projRow } = await svc
+        .from('projects')
+        .select('event_date, client:clients(name)')
+        .eq('id', projectId)
+        .maybeSingle()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pr = projRow as any
+      const sessionDate = (pr?.event_date as string | null) ?? null
+      const clientName =
+        (Array.isArray(pr?.client) ? pr.client[0]?.name : pr?.client?.name) ??
+        'la quinceañera'
+      if (sessionDate) {
+        const threeWeeks = new Date(sessionDate)
+        threeWeeks.setDate(threeWeeks.getDate() + 21)
+        const bday = new Date(birthday)
+        if (bday >= new Date(sessionDate) && bday < threeWeeks) {
+          // Owner del estudio = actor + asignado (aparece en su lista de tareas)
+          const { data: owner } = await svc
+            .from('studio_members')
+            .select('user_id')
+            .eq('studio_id', response.studio_id as string)
+            .eq('role', 'owner')
+            .limit(1)
+            .maybeSingle()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const ownerId = (owner as any)?.user_id as string | undefined
+          // Evitar duplicado si el formulario se reenvía (untyped: entity_* puede
+          // no estar en los tipos generados)
+          const { untypedService } = await import('@/server/supabase/untyped')
+          const { data: existing } = await untypedService()
+            .from('tasks')
+            .select('id')
+            .eq('entity_type', 'project')
+            .eq('entity_id', projectId)
+            .ilike('title', '%antes del cumpleaños%')
+            .limit(1)
+            .maybeSingle()
+          if (ownerId && !existing) {
+            const { createTask } = await import('./task.service')
+            await createTask(response.studio_id as string, ownerId, {
+              title: `Entregar fotos antes del cumpleaños de ${clientName}`,
+              description: `El cumpleaños (${birthday}) cae antes de las 3 semanas de edición desde la sesión (${sessionDate}). Prioriza la entrega para que llegue antes de la fecha.`,
+              dueDate: birthday,
+              priority: 'high',
+              assignedToUserId: ownerId,
+              entityType: 'project',
+              entityId: projectId,
+              tags: ['cumpleaños', 'entrega'],
+              notifyAssignee: true,
+            })
+          }
+        }
+      }
+    }
   } catch (err) {
     console.error('[submitPublicForm] birthday/delivery mapping failed', err)
   }
