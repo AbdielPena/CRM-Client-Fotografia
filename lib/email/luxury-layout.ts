@@ -24,12 +24,23 @@ export interface LuxuryEmailOptions {
   footerHtml?: string | null
   /** Pie con dirección/contacto. */
   contactLine?: string | null
+  /** Link wa.me del estudio — muestra un botón "Escríbenos por WhatsApp". */
+  whatsappUrl?: string | null
   /** Redes sociales — se muestran como íconos en el footer. */
   social?: {
     instagramUrl?: string | null
     facebookUrl?: string | null
     websiteUrl?: string | null
   } | null
+}
+
+/** Botón verde de WhatsApp para el footer del email. */
+function whatsappRow(url?: string | null): string {
+  if (!url) return ""
+  return `<div style="margin:0 0 16px;text-align:center;">
+    <a href="${escapeAttr(url)}" style="display:inline-block;padding:11px 22px;border-radius:999px;background:#25D366;color:#fff;font-weight:600;font-size:13px;text-decoration:none;">
+      <img src="${ICON_BASE}/whatsapp.png" alt="" width="16" height="16" style="width:16px;height:16px;vertical-align:-3px;margin-right:6px;border:0;" />¿Tienes dudas? Escríbenos por WhatsApp
+    </a></div>`
 }
 
 /** Base pública donde viven los íconos PNG de redes (Gmail no renderiza SVG). */
@@ -109,6 +120,7 @@ export function wrapLuxuryEmail(inner: string, opts: LuxuryEmailOptions): string
 ${inner}
     </div>
     <div class="lx-foot">
+      ${whatsappRow(opts.whatsappUrl)}
       ${socialRow(opts.social)}
       ${footer}
       <p style="margin:8px 0 0;opacity:.8;">Este mensaje es solo para ti.${year === "—" ? "" : ` © ${year}`}</p>

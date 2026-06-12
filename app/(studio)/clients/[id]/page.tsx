@@ -15,7 +15,9 @@ import {
   CalendarCheck,
   Send,
   ExternalLink,
+  MessageCircle,
 } from "lucide-react"
+import { formatDoPhone } from "@/lib/whatsapp/templates"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getClientById } from "@/server/services/client.service"
@@ -544,6 +546,17 @@ export default async function ClientDetailPage({
                       {client.phone}
                     </a>
                   </div>
+                )}
+                {client.phone && formatDoPhone(client.phone) && (
+                  <a
+                    href={`https://wa.me/${formatDoPhone(client.phone)}?text=${encodeURIComponent(`Hola ${client.name ?? ""} 😊`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#25D366] px-3 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    Chat directo por WhatsApp
+                  </a>
                 )}
                 {(client.city || client.country) && (
                   <div className="flex items-center gap-3">

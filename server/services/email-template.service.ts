@@ -373,7 +373,7 @@ export const TEMPLATE_CATALOG: Record<
     disco externo o nube personal). Pasado ese plazo, no nos hacemos responsables por la pérdida del material.
   </p>
 </div>
-<p>Cualquier duda, respondé este correo. ¡Esperamos que te encanten!</p>
+<p>¡Esperamos que te encanten! Si tienes cualquier duda, escríbenos por WhatsApp con el botón de abajo.</p>
 <p>— {{studio_name}}</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "Juan" },
@@ -608,6 +608,7 @@ export async function resolveTemplate(
         accent: branding.accent,
         footerHtml: branding.footerHtml,
         contactLine: branding.contactLine,
+        whatsappUrl: branding.whatsappUrl,
         social: branding.social,
       })
     } catch (e) {
@@ -630,6 +631,7 @@ async function getEmailBranding(studioId: string): Promise<{
   accent: string | null
   footerHtml: string | null
   contactLine: string | null
+  whatsappUrl: string | null
   social: {
     instagramUrl: string | null
     facebookUrl: string | null
@@ -637,6 +639,7 @@ async function getEmailBranding(studioId: string): Promise<{
   }
 }> {
   const { untypedService } = await import("@/server/supabase/untyped")
+  const { formatDoPhone } = await import("@/lib/whatsapp/templates")
   const sb = untypedService()
   const [{ data: studio }, { data: branding }] = await Promise.all([
     sb.from("studios").select("name, email, phone").eq("id", studioId).maybeSingle(),
@@ -658,12 +661,17 @@ async function getEmailBranding(studioId: string): Promise<{
     website_url?: string | null
   } | null
   const contactBits = [s?.email, s?.phone].filter(Boolean) as string[]
+  const waPhone = formatDoPhone(s?.phone)
+  const whatsappUrl = waPhone
+    ? `https://wa.me/${waPhone}?text=${encodeURIComponent("Hola, tengo una consulta 😊")}`
+    : null
   return {
     studioName: s?.name ?? "",
     logoUrl: b?.logo_url ?? null,
     accent: b?.primary_color ?? null,
     footerHtml: b?.custom_footer_html ?? null,
     contactLine: contactBits.length ? contactBits.join(" · ") : null,
+    whatsappUrl,
     social: {
       instagramUrl: b?.instagram_url ?? null,
       facebookUrl: b?.facebook_url ?? null,
