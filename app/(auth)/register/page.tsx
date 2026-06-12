@@ -8,6 +8,10 @@ import { redirect } from "next/navigation"
  * cuenta, al entrar al CRM `requireStudioAuth` lo lleva a /setup y se hace el
  * bootstrap del estudio (mismo Supabase → mismas credenciales).
  */
+// Dinámica: si fuera estática, Next evalúa el redirect en build y cachea un 200
+// en vez de redirigir en cada request.
+export const dynamic = "force-dynamic"
+
 const HUB_SIGNUP_URL = "https://hub.abbypixel.com/login?mode=signup"
 
 export default function RegisterPage() {
