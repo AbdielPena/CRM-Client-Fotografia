@@ -10,12 +10,16 @@
  * renderice como botón dorado; cualquier otro <a> queda como link dorado.
  */
 
-const GOLD = "#b89968"
-const GOLD_DARK = "#9a7d52"
-const INK = "#1a1614"
-const INK_SOFT = "#4a4640"
-const CREAM = "#faf8f4"
-const CARD = "#ffffff"
+// Paleta minimalista (flat, blanco — alineada al rediseño global).
+const INK = "#1C1C1C"
+const INK_SOFT = "#6E6E73"
+const INK_FAINT = "#A1A1A6"
+const BG = "#F0F1F4"
+const CARD = "#FFFFFF"
+const LINE = "#ECECEF"
+// Default de acento = tinta (los estudios pueden sobreescribir con su color).
+const GOLD = INK
+const GOLD_DARK = INK
 
 export interface LuxuryEmailOptions {
   studioName: string
@@ -71,8 +75,8 @@ export function wrapLuxuryEmail(inner: string, opts: LuxuryEmailOptions): string
   const year = "—" // se reemplaza fuera si hace falta; evitamos Date.now() aquí.
 
   const header = opts.logoUrl
-    ? `<img src="${escapeAttr(opts.logoUrl)}" alt="${studio}" height="40" style="height:40px;width:auto;display:block;margin:0 auto;" />`
-    : `<div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:500;letter-spacing:.5px;color:${INK};">${studio}</div>`
+    ? `<img src="${escapeAttr(opts.logoUrl)}" alt="${studio}" height="30" style="height:30px;width:auto;display:block;margin:0 auto;" />`
+    : `<div style="font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;font-size:18px;font-weight:600;letter-spacing:-.01em;color:${INK};">${studio}</div>`
 
   const footer = opts.footerHtml
     ? opts.footerHtml
@@ -85,36 +89,36 @@ export function wrapLuxuryEmail(inner: string, opts: LuxuryEmailOptions): string
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="x-apple-disable-message-reformatting" />
 <style>
-  body { margin:0; padding:0; background:${CREAM}; }
-  .lx-wrap { width:100%; background:${CREAM}; padding:32px 12px; }
-  .lx-card { max-width:560px; margin:0 auto; background:${CARD}; border-radius:18px;
-             overflow:hidden; box-shadow:0 8px 40px -16px rgba(26,22,20,.22); }
-  .lx-rule { height:3px; background:linear-gradient(90deg, ${accent} 0%, ${GOLD_DARK} 100%); }
-  .lx-head { padding:34px 32px 8px; text-align:center; }
-  .lx-body { padding:8px 32px 28px; font-family:'Helvetica Neue',Arial,sans-serif;
-             font-size:15px; line-height:1.62; color:${INK_SOFT}; }
-  .lx-body p { margin:0 0 16px; }
-  .lx-body h1,.lx-body h2 { font-family:Georgia,'Times New Roman',serif; color:${INK};
-             font-weight:500; line-height:1.25; margin:0 0 14px; }
-  .lx-body h1 { font-size:23px; }
-  .lx-body h2 { font-size:19px; }
-  .lx-body strong { color:${INK}; }
-  .lx-body a { color:${GOLD_DARK}; text-decoration:underline; }
+  body { margin:0; padding:0; background:${BG}; }
+  .lx-wrap { width:100%; background:${BG}; padding:36px 12px;
+             font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif; }
+  .lx-card { max-width:540px; margin:0 auto; background:${CARD}; border:1px solid ${LINE};
+             border-radius:18px; overflow:hidden; }
+  .lx-head { padding:26px 32px; text-align:center; border-bottom:1px solid ${LINE}; }
+  .lx-body { padding:30px 32px 26px;
+             font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+             font-size:14px; line-height:1.65; color:${INK_SOFT}; }
+  .lx-body p { margin:0 0 14px; }
+  .lx-body h1,.lx-body h2 { font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif;
+             color:${INK}; font-weight:600; line-height:1.25; margin:0 0 12px;
+             letter-spacing:-.01em; }
+  .lx-body h1 { font-size:21px; }
+  .lx-body h2 { font-size:18px; }
+  .lx-body strong { color:${INK}; font-weight:600; }
+  .lx-body a { color:${INK}; text-decoration:underline; }
   .lx-body a.btn, .lx-body .btn {
-    display:inline-block; margin:6px 0 4px; padding:13px 26px; border-radius:999px;
-    background:${accent}; color:#fff !important; font-weight:600; font-size:14px;
-    text-decoration:none !important; letter-spacing:.2px;
-    box-shadow:0 6px 18px -8px ${accent}; }
-  .lx-foot { padding:20px 32px 30px; text-align:center;
-             font-family:'Helvetica Neue',Arial,sans-serif; font-size:11px;
-             line-height:1.6; color:#9a958c; }
-  .lx-foot a { color:#9a958c; }
+    display:inline-block; margin:6px 0 4px; padding:12px 22px; border-radius:11px;
+    background:${accent}; color:#fff !important; font-weight:500; font-size:14px;
+    text-decoration:none !important; letter-spacing:0; box-shadow:none; }
+  .lx-foot { padding:20px 32px 26px; text-align:center; border-top:1px solid ${LINE};
+             font-family:Inter,-apple-system,'Segoe UI',Arial,sans-serif; font-size:11.5px;
+             line-height:1.6; color:${INK_FAINT}; }
+  .lx-foot a { color:${INK_FAINT}; }
 </style>
 </head>
 <body>
 <div class="lx-wrap">
   <div class="lx-card">
-    <div class="lx-rule"></div>
     <div class="lx-head">${header}</div>
     <div class="lx-body">
 ${inner}
