@@ -25,7 +25,7 @@ export default async function PortalInvoicesPage() {
   const { data: invoicesRaw } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, status, total, currency, due_date, created_at, public_token",
+      "id, invoice_number, status, total, amount_paid, currency, due_date, created_at",
     )
     .eq("client_id", session.clientId)
     .is("deleted_at", null)
@@ -35,7 +35,10 @@ export default async function PortalInvoicesPage() {
 
   const totalDue = invoices
     .filter((i) => i.status !== "paid" && i.status !== "void")
-    .reduce((s, i) => s + Number(i.total ?? 0), 0)
+    .reduce(
+      (s, i) => s + Math.max(0, Number(i.total ?? 0) - Number(i.amount_paid ?? 0)),
+      0,
+    )
   const currency = invoices[0]?.currency ?? "USD"
 
   return (
@@ -93,9 +96,24 @@ export default async function PortalInvoicesPage() {
                 </div>
 
                 <div className="mt-4 flex items-end justify-between gap-3 border-t border-border pt-4">
-                  <span className="font-serif-soft text-2xl font-semibold tabular-nums text-foreground">
-                    {formatCurrency(Number(inv.total ?? 0), inv.currency ?? "USD")}
-                  </span>
+                  <div>
+                    <span className="font-serif-soft text-2xl font-semibold tabular-nums text-foreground">
+                      {formatCurrency(Number(inv.total ?? 0), inv.currency ?? "USD")}
+                    </span>
+                    {Number(inv.amount_paid ?? 0) > 0 && !isPaid && (
+                      <p className="mt-0.5 text-[12px] text-muted-foreground tabular-nums">
+                        Pagado{" "}
+                        {formatCurrency(Number(inv.amount_paid ?? 0), inv.currency ?? "USD")}{" "}
+                        · Saldo{" "}
+                        <strong className="text-foreground">
+                          {formatCurrency(
+                            Math.max(0, Number(inv.total ?? 0) - Number(inv.amount_paid ?? 0)),
+                            inv.currency ?? "USD",
+                          )}
+                        </strong>
+                      </p>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/invoice-print/${inv.id}`}
@@ -105,19 +123,17 @@ export default async function PortalInvoicesPage() {
                       <Printer className="h-3 w-3" />
                       PDF
                     </Link>
-                    {inv.public_token && (
-                      <Link
-                        href={`/i/${inv.public_token}`}
-                        target="_blank"
-                        className={
-                          isPaid
-                            ? "inline-flex items-center rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-gold-300 hover:text-gold-700"
-                            : "lx-btn-gold !px-4 !py-1.5 text-xs"
-                        }
-                      >
-                        {isPaid ? "Ver" : "Pagar ahora"}
-                      </Link>
-                    )}
+                    <Link
+                      href={`/i/${inv.id}`}
+                      target="_blank"
+                      className={
+                        isPaid
+                          ? "inline-flex items-center rounded-full border border-border bg-surface px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-gold-300 hover:text-gold-700"
+                          : "lx-btn-gold !px-4 !py-1.5 text-xs"
+                      }
+                    >
+                      {isPaid ? "Ver" : "Pagar ahora"}
+                    </Link>
                   </div>
                 </div>
               </div>

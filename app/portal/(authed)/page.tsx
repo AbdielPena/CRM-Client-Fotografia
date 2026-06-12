@@ -43,7 +43,7 @@ export default async function PortalHomePage() {
       .is("deleted_at", null),
     supabase
       .from("invoices")
-      .select("id, total, status, currency, due_date")
+      .select("id, total, amount_paid, status, currency, due_date")
       .eq("client_id", session.clientId)
       .is("deleted_at", null),
     supabase
@@ -91,9 +91,15 @@ export default async function PortalHomePage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const contracts = (contRes.data ?? []) as any[]
 
-  const totalDue = invoices
-    .filter((i) => i.status !== "paid" && i.status !== "void")
-    .reduce((s, i) => s + Number(i.total ?? 0), 0)
+  const pendingInvoices = invoices.filter(
+    (i) => i.status !== "paid" && i.status !== "void",
+  )
+  // Saldo real = total − pagado (no el total completo). Una factura pagada a la
+  // mitad debe mostrar solo lo que falta.
+  const totalDue = pendingInvoices.reduce(
+    (s, i) => s + Math.max(0, Number(i.total ?? 0) - Number(i.amount_paid ?? 0)),
+    0,
+  )
   const totalPaid = payments
     .filter((p) => p.status === "completed" || p.status === "succeeded")
     .reduce((s, p) => s + Number(p.amount ?? 0), 0)
@@ -132,7 +138,10 @@ export default async function PortalHomePage() {
       icon: Receipt,
       label: "Pendiente de pago",
       value: formatCurrency(totalDue, currency),
-      sub: `${invoices.length} factura${invoices.length === 1 ? "" : "s"}`,
+      sub:
+        pendingInvoices.length === 0
+          ? "todo al día"
+          : `${pendingInvoices.length} factura${pendingInvoices.length === 1 ? "" : "s"}`,
       tint: hasOverdue
         ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
         : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400",
