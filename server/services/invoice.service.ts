@@ -392,9 +392,11 @@ async function notifyClientInvoiceChanged(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
     const { renderInvoiceUpdate, enqueueEmail } = await import('./email.service')
+    const { getEmailBranding } = await import('./email-template.service')
     const email = renderInvoiceUpdate({
       studioName: studio?.name ?? 'Studio',
       primaryColor: studio?.primary_color ?? '#7c3aed',
+      branding: await getEmailBranding(studioId),
       clientName: String(client.name ?? 'Cliente').split(' ')[0],
       projectName: project?.name ?? null,
       invoiceNumber: invoice.invoice_number,

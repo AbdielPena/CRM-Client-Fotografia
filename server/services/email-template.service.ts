@@ -625,7 +625,7 @@ export async function resolveTemplate(
 }
 
 /** Branding del estudio para el marco de email (logo, color, nombre, footer). */
-async function getEmailBranding(studioId: string): Promise<{
+export async function getEmailBranding(studioId: string): Promise<{
   studioName: string
   logoUrl: string | null
   accent: string | null

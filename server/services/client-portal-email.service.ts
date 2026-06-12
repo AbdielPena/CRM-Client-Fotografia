@@ -50,59 +50,28 @@ export async function sendClientPortalAccessEmail(params: {
     | null
   const studioName = s?.name ?? "Tu fotógrafo"
   const studioEmail = s?.email ?? null
-  const accent = s?.primary_color ?? "#0D0E14"
 
   const portalLogin = `${appUrl()}/portal/login?email=${encodeURIComponent(clientEmail)}&code=${encodeURIComponent(accessCode)}`
   const portalShort = `${appUrl()}/portal/login`
 
-  // Resolver plantilla del studio (si la editó) o usar el HTML hardcoded por defecto
+  // Contenido interno — el marco luxury minimalista (logo + footer) lo añade
+  // `resolveTemplate`. Aquí solo el cuerpo, sin tarjeta ni colores.
   const defaultBodyHtml = `
-  <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;background:#fafafa;padding:24px;color:#18181b">
-    <div style="background:white;border-radius:16px;overflow:hidden;border:1px solid #e4e4e7">
-      <div style="background:linear-gradient(135deg,${accent},${accent}cc);padding:28px 24px;color:white">
-        <h1 style="margin:0;font-size:20px;font-weight:600">Tu portal privado</h1>
-        <p style="margin:6px 0 0;opacity:.85;font-size:14px">${escapeHtml(studioName)}</p>
-      </div>
+  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Acceso privado</p>
+  <h1>Tu portal privado</h1>
+  <p>Hola <strong>${escapeHtml(clientName)}</strong>,</p>
+  <p>Te creamos un acceso privado donde vas a poder ver tus <strong>galerías</strong>, <strong>fotos editadas</strong>, <strong>contratos</strong>, <strong>facturas</strong>, <strong>pagos</strong> y <strong>reservas</strong> en un solo lugar.</p>
 
-      <div style="padding:28px 24px">
-        <p style="margin:0 0 12px">Hola <strong>${escapeHtml(clientName)}</strong>,</p>
-        <p style="margin:0 0 16px;line-height:1.55">
-          Te creamos un acceso privado donde vas a poder ver tus
-          <strong>galerías</strong>, <strong>fotos editadas</strong>,
-          <strong>contratos</strong>, <strong>facturas</strong>,
-          <strong>pagos</strong> y <strong>reservas</strong> en un solo lugar.
-        </p>
+  <div style="margin:26px 0;padding:20px 24px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:16px;text-align:center">
+    <p style="margin:0;font-size:11px;font-weight:600;color:#A1A1A6;text-transform:uppercase;letter-spacing:.08em">Tu código de acceso</p>
+    <p style="margin:8px 0 0;font-family:ui-monospace,SFMono-Regular,monospace;font-size:28px;font-weight:700;letter-spacing:.2em;color:#1C1C1C">${escapeHtml(accessCode)}</p>
+  </div>
 
-        <div style="background:#f4f4f5;border-radius:12px;padding:16px;text-align:center;margin:20px 0">
-          <p style="margin:0;font-size:11px;font-weight:600;color:#71717a;text-transform:uppercase;letter-spacing:.05em">
-            Tu código de acceso
-          </p>
-          <p style="margin:8px 0 0;font-family:ui-monospace,SFMono-Regular,monospace;font-size:28px;font-weight:700;letter-spacing:.2em;color:#18181b">
-            ${escapeHtml(accessCode)}
-          </p>
-        </div>
+  <p style="text-align:center;margin:24px 0 6px"><a class="btn" href="${portalLogin}">Entrar a mi portal</a></p>
 
-        <div style="text-align:center;margin:20px 0">
-          <a href="${portalLogin}" style="display:inline-block;background:${accent};color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">
-            Entrar a tu portal →
-          </a>
-        </div>
-
-        <p style="margin:16px 0 0;font-size:13px;color:#71717a;line-height:1.55">
-          También podés entrar manualmente en
-          <a href="${portalShort}" style="color:${accent};text-decoration:none">${portalShort.replace(/^https?:\/\//, "")}</a>
-          con tu email (<strong>${escapeHtml(clientEmail)}</strong>) y el código de arriba.
-        </p>
-      </div>
-
-      <div style="background:#fafafa;padding:16px 24px;border-top:1px solid #e4e4e7;text-align:center">
-        <p style="margin:0;font-size:12px;color:#a1a1aa">
-          Este email fue enviado por ${escapeHtml(studioName)}.
-          Si no esperabas este mensaje, podés ignorarlo.
-        </p>
-      </div>
-    </div>
-  </div>`
+  <p style="margin:18px 0 0;font-size:13px;color:#6E6E73;line-height:1.6">
+    También puedes entrar manualmente en <a href="${portalShort}">${portalShort.replace(/^https?:\/\//, "")}</a> con tu email (<strong>${escapeHtml(clientEmail)}</strong>) y el código de arriba.
+  </p>`
 
   // Resolver plantilla del studio (si fue editada) o usar default
   const tpl = await resolveTemplate(

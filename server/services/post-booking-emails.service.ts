@@ -6,6 +6,7 @@ import {
   renderContractInvitation,
   renderInvoiceReserve,
 } from './email.service'
+import { getEmailBranding } from './email-template.service'
 
 /**
  * Dispara los 2 emails automáticos post-booking:
@@ -85,9 +86,12 @@ export async function sendAutoContractAndInvoiceEmails(params: {
   const totalFormatted = formatMoney(invoice.total, invoice.currency ?? 'DOP')
   const dueDateFormatted = invoice.due_date ? formatEventDate(invoice.due_date) : null
 
+  const emailBranding = await getEmailBranding(studioId)
+
   const contractEmail = renderContractInvitation({
     studioName: studio.name,
     primaryColor: studio.primary_color ?? '#7c3aed',
+    branding: emailBranding,
     clientName: firstName(client.name),
     projectName: project.name,
     eventType: eventTypeLabel,
@@ -98,6 +102,7 @@ export async function sendAutoContractAndInvoiceEmails(params: {
   const invoiceEmail = renderInvoiceReserve({
     studioName: studio.name,
     primaryColor: studio.primary_color ?? '#7c3aed',
+    branding: emailBranding,
     clientName: firstName(client.name),
     projectName: project.name,
     eventType: eventTypeLabel,

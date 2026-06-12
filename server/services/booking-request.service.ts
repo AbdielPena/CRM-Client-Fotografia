@@ -14,6 +14,7 @@ import {
   renderBookingReceivedForClient,
   renderBookingRejectedForClient,
 } from '@/server/services/email.service'
+import { getEmailBranding } from '@/server/services/email-template.service'
 import { logActivity } from '@/server/services/activity.service'
 import { notify } from '@/server/services/notification.service'
 import {
@@ -238,6 +239,9 @@ export async function createPublicBookingRequest(
     },
   })
 
+  // Branding del estudio (logo, redes, WhatsApp) para el marco de los correos.
+  const emailBranding = await getEmailBranding(studio.id)
+
   // Notificar al studio — best-effort, no queremos fallar la solicitud si el
   // enqueue falla. El worker hace el retry.
   if (studio.email) {
@@ -245,6 +249,7 @@ export async function createPublicBookingRequest(
       const { subject, html } = renderBookingReceivedForStudio({
         studioName: studio.name,
         primaryColor: studio.primary_color ?? '#111827',
+        branding: emailBranding,
         clientName: input.clientName.trim(),
         clientEmail: email,
         clientPhone: input.clientPhone?.trim() || null,
@@ -276,6 +281,7 @@ export async function createPublicBookingRequest(
       const { subject, html } = renderBookingReceivedForClient({
         studioName: studio.name,
         primaryColor: studio.primary_color ?? '#111827',
+        branding: emailBranding,
         clientName: input.clientName.trim(),
         packageName: pkg.name,
         eventDate: input.eventDate,
@@ -822,6 +828,7 @@ export async function resendBookingApproval(params: {
   const { subject, html } = renderBookingApprovedForClient({
     studioName: ctx.studio.name,
     primaryColor: ctx.studio.primary_color ?? '#111827',
+    branding: await getEmailBranding(params.studioId),
     clientName: ctx.request.client_name,
     packageName: ctx.packageName,
     eventDate: ctx.request.event_date,
@@ -1029,6 +1036,7 @@ export async function approveBookingRequest(params: {
       const { subject, html } = renderBookingApprovedForClient({
         studioName: ctx.studio.name,
         primaryColor: ctx.studio.primary_color ?? '#111827',
+        branding: await getEmailBranding(params.studioId),
         clientName: ctx.request.client_name,
         packageName: ctx.packageName,
         eventDate: ctx.request.event_date,
@@ -1121,6 +1129,7 @@ export async function rejectBookingRequest(params: {
       const { subject, html } = renderBookingRejectedForClient({
         studioName: ctx.studio.name,
         primaryColor: ctx.studio.primary_color ?? '#111827',
+        branding: await getEmailBranding(params.studioId),
         clientName: ctx.request.client_name,
         packageName: ctx.packageName,
         eventDate: ctx.request.event_date,

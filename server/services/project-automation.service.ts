@@ -237,17 +237,24 @@ async function confirmBookingAfterPayment(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const studio = studioRow as any
       const { enqueueEmail } = await import("./email.service")
-      const color = studio?.primary_color ?? "#7C3AED"
+      const { getEmailBranding } = await import("./email-template.service")
+      const { wrapLuxuryEmail } = await import("@/lib/email/luxury-layout")
       const firstName = String(b.client_name ?? "").split(" ")[0] || ""
-      const html = `
-        <div style="font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-          <h1 style="font-size: 20px; margin: 0 0 8px;">¡Sesión confirmada${firstName ? `, ${escapeHtmlLocal(firstName)}` : ""}! 🎉</h1>
-          <p style="color: #4b5563; margin: 0 0 16px;">
-            Recibimos tu pago y tu sesión con <strong>${escapeHtmlLocal(studio?.name ?? "el estudio")}</strong>
-            quedó <strong>confirmada</strong>. Te contactaremos con los detalles finales.
-          </p>
-          <p style="color: #6b7280; font-size: 13px; margin: 0;">¡Nos vemos pronto!</p>
-        </div>`
+      const inner = `
+        <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Sesión confirmada</p>
+        <h1>¡Sesión confirmada${firstName ? `, ${escapeHtmlLocal(firstName)}` : ""}! 🎉</h1>
+        <p>Recibimos tu pago y tu sesión con <strong>${escapeHtmlLocal(studio?.name ?? "el estudio")}</strong> quedó <strong>confirmada</strong>. Te contactaremos con los detalles finales para que todo salga perfecto.</p>
+        <p style="font-size:13px;color:#6E6E73">¡Nos vemos pronto! ✨</p>`
+      const branding = await getEmailBranding(studioId)
+      const html = wrapLuxuryEmail(inner, {
+        studioName: studio?.name ?? branding.studioName,
+        logoUrl: branding.logoUrl,
+        accent: branding.accent,
+        footerHtml: branding.footerHtml,
+        contactLine: branding.contactLine,
+        whatsappUrl: branding.whatsappUrl,
+        social: branding.social,
+      })
       await enqueueEmail({
         studioId,
         toEmail: b.client_email,

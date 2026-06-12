@@ -69,7 +69,6 @@ export async function onSelectionGalleryPublished(galleryId: string): Promise<vo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const studio = studioRow as any
   const studioName = studio?.name ?? "Tu fotógrafo"
-  const accent = studio?.primary_color ?? "#b08a3e"
 
   // Enlace público: reusar un token activo o crear uno nuevo.
   let token: string | null = null
@@ -96,33 +95,15 @@ export async function onSelectionGalleryPublished(galleryId: string): Promise<vo
 
   const galleryName = (g.name as string | null) ?? "tu galería"
 
+  // Contenido interno — el marco luxury minimalista (logo + footer) lo añade
+  // `resolveTemplate`. Sin tarjeta ni colores aquí.
   const defaultHtml = `
-  <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;background:#faf7f2;padding:24px;color:#2a2017">
-    <div style="background:white;border-radius:18px;overflow:hidden;border:1px solid #ece3d4">
-      <div style="background:linear-gradient(135deg,${accent},${accent}cc);padding:28px 24px;color:white">
-        <h1 style="margin:0;font-size:21px;font-weight:600">Tu galería está lista 📸</h1>
-        <p style="margin:6px 0 0;opacity:.9;font-size:14px">${escapeHtml(studioName)}</p>
-      </div>
-      <div style="padding:28px 24px">
-        <p style="margin:0 0 12px">Hola <strong>{{client_name}}</strong>,</p>
-        <p style="margin:0 0 16px;line-height:1.6">
-          ¡Las fotos de <strong>{{gallery_name}}</strong> ya están disponibles para que elijas tus
-          favoritas! Entra a tu galería, marca las que más te gusten y envíanos tu selección.
-        </p>
-        <div style="text-align:center;margin:22px 0">
-          <a href="{{gallery_url}}" style="display:inline-block;background:${accent};color:white;text-decoration:none;padding:13px 26px;border-radius:999px;font-weight:600;font-size:14px">
-            Ver y seleccionar mis fotos →
-          </a>
-        </div>
-        <p style="margin:0;font-size:12.5px;color:#8a7a64;text-align:center">
-          Puedes ajustar tu selección hasta que la envíes.
-        </p>
-      </div>
-      <div style="background:#faf7f2;padding:14px 24px;border-top:1px solid #ece3d4;text-align:center">
-        <p style="margin:0;font-size:11.5px;color:#b0a48e">Enviado por ${escapeHtml(studioName)}</p>
-      </div>
-    </div>
-  </div>`
+  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Galería lista</p>
+  <h1>Tu galería está lista 📸</h1>
+  <p>Hola <strong>{{client_name}}</strong>,</p>
+  <p>¡Las fotos de <strong>{{gallery_name}}</strong> ya están disponibles para que elijas tus favoritas! Entra a tu galería, marca las que más te gusten y envíanos tu selección.</p>
+  <p style="text-align:center;margin:28px 0 6px"><a class="btn" href="{{gallery_url}}">Ver y seleccionar mis fotos</a></p>
+  <p style="margin:8px 0 0;font-size:12.5px;color:#A1A1A6;text-align:center">Puedes ajustar tu selección hasta que la envíes.</p>`
 
   const resolved = await resolveTemplate(
     g.studio_id,

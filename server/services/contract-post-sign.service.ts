@@ -23,6 +23,8 @@ import {
   emailContractSignedByStudio,
 } from "@/server/services/contract-emails.service"
 import { enqueueEmail } from "@/server/services/email.service"
+import { getEmailBranding } from "@/server/services/email-template.service"
+import { wrapLuxuryEmail } from "@/lib/email/luxury-layout"
 import { formatCurrency } from "@/lib/utils/currency"
 
 function appBaseUrl(): string {
@@ -122,23 +124,32 @@ async function generateInvoiceAndAdvanceBooking(params: {
     const client = Array.isArray(i?.client) ? i.client[0] : i?.client
     const studio = Array.isArray(i?.studio) ? i.studio[0] : i?.studio
     if (i && client?.email && studio) {
-      const color = studio.primary_color ?? "#7C3AED"
       const payUrl = `${appBaseUrl()}/i/${invoiceId}`
       const amount = formatCurrency(Number(i.total ?? 0), i.currency ?? "DOP")
-      const html = `
-        <div style="font-family: system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px;">
-          <h1 style="font-size: 20px; margin: 0 0 8px;">¡Gracias por firmar, ${escapeHtml(client.name ?? "")}!</h1>
-          <p style="color: #4b5563; margin: 0 0 16px;">
-            Tu contrato quedó firmado. El último paso para <strong>confirmar tu sesión</strong>
-            es realizar el pago de tu factura por <strong>${escapeHtml(amount)}</strong>.
-          </p>
-          <p style="text-align: center; margin: 24px 0;">
-            <a href="${escapeHtml(payUrl)}" style="display: inline-block; background: ${escapeHtml(color)}; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Ver factura y pagar</a>
-          </p>
-          <p style="color: #6b7280; font-size: 13px; margin: 0;">
-            Tu sesión quedará confirmada en cuanto recibamos el pago.
-          </p>
-        </div>`
+      const firstName = (client.name ?? "").trim().split(/\s+/)[0] || "¡Hola!"
+
+      // Mismo marco luxury minimalista que el resto de los correos (header con
+      // logo del estudio, tipografía, footer con redes/WhatsApp).
+      const branding = await getEmailBranding(params.studioId)
+      const inner = `
+        <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Contrato firmado</p>
+        <h1>¡Gracias por firmar, ${escapeHtml(firstName)}!</h1>
+        <p>Tu contrato ya quedó firmado. Solo falta <strong>un último paso</strong> para dejar tu sesión <strong>100% confirmada</strong>: completar el pago de tu factura.</p>
+        <div style="margin:26px 0;padding:22px 24px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:16px;text-align:center">
+          <p style="margin:0 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#A1A1A6">Total a pagar</p>
+          <p style="margin:0;font-size:30px;font-weight:600;color:#1C1C1C;letter-spacing:-.02em">${escapeHtml(amount)}</p>
+        </div>
+        <p style="text-align:center;margin:24px 0 6px"><a class="btn" href="${escapeHtml(payUrl)}">Ver factura y pagar</a></p>
+        <p style="font-size:13px;color:#6E6E73">Apartamos tu fecha en nuestra agenda apenas recibamos el pago. Si tienes cualquier duda, solo responde a este correo — estamos para ayudarte. ✨</p>`
+      const html = wrapLuxuryEmail(inner, {
+        studioName: studio.name ?? branding.studioName,
+        logoUrl: branding.logoUrl,
+        accent: branding.accent,
+        footerHtml: branding.footerHtml,
+        contactLine: branding.contactLine,
+        whatsappUrl: branding.whatsappUrl,
+        social: branding.social,
+      })
       await enqueueEmail({
         studioId: params.studioId,
         toEmail: client.email,

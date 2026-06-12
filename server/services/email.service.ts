@@ -3,6 +3,7 @@ import 'server-only'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
 import { throwServiceError } from '@/lib/utils/api-error'
 import { sendEmail as sendViaSmtp } from './smtp.service'
+import { wrapLuxuryEmail, type LuxuryEmailOptions } from '@/lib/email/luxury-layout'
 import type { Database } from '@/types/supabase'
 
 type EmailInsert = Database['public']['Tables']['email_queue']['Insert']
@@ -124,19 +125,32 @@ function stripHtml(html: string): string {
 // En V2 leerán desde email_templates y harán interpolación {{var}}.
 // ──────────────────────────────────────────────────────────────────────
 
-const brand = (studioName: string, color: string = '#111827') => `
-  <div style="font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; color: #111827;">
-    <div style="border-left: 4px solid ${color}; padding-left: 16px; margin-bottom: 32px;">
-      <p style="margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;">PixelOS</p>
-      <p style="margin: 2px 0 0; font-size: 16px; font-weight: 600;">${escapeHtml(studioName)}</p>
-    </div>
-`
+/**
+ * Branding del estudio para el marco minimalista (logo, redes, WhatsApp, footer).
+ * Lo provee el caller con `getEmailBranding(studioId)`. Opcional: si no se pasa,
+ * el marco muestra el nombre del estudio en texto en lugar del logo.
+ */
+export type EmailBranding = Omit<LuxuryEmailOptions, 'studioName' | 'accent'>
 
-const brandClose = `
-    <hr style="margin: 32px 0; border: none; border-top: 1px solid #e5e7eb;" />
-    <p style="margin: 0; font-size: 11px; color: #9ca3af;">Este correo fue enviado automáticamente por PixelOS.</p>
-  </div>
-`
+/**
+ * Envuelve el cuerpo del email en el marco luxury minimalista compartido
+ * (header con logo del estudio, tipografía Inter, footer con redes/WhatsApp) —
+ * el mismo que usan el resto de los correos del sistema.
+ */
+function frame(
+  inner: string,
+  p: { studioName: string; accent?: string | null; branding?: EmailBranding | null },
+): string {
+  return wrapLuxuryEmail(inner, {
+    studioName: p.studioName,
+    accent: p.accent ?? null,
+    logoUrl: p.branding?.logoUrl ?? null,
+    footerHtml: p.branding?.footerHtml ?? null,
+    contactLine: p.branding?.contactLine ?? null,
+    whatsappUrl: p.branding?.whatsappUrl ?? null,
+    social: p.branding?.social ?? null,
+  })
+}
 
 function escapeHtml(v: string): string {
   return v
@@ -150,6 +164,7 @@ function escapeHtml(v: string): string {
 export function renderBookingReceivedForStudio(params: {
   studioName: string
   primaryColor?: string
+  branding?: EmailBranding | null
   clientName: string
   clientEmail: string
   clientPhone?: string | null
@@ -173,8 +188,7 @@ export function renderBookingReceivedForStudio(params: {
   } = params
 
   const subject = `📬 Nueva solicitud de booking — ${clientName}`
-  const html = `
-${brand(studioName, primaryColor)}
+  const html = frame(`
   <h1 style="margin: 0 0 8px; font-size: 22px;">Tienes una nueva solicitud</h1>
   <p style="margin: 0 0 24px; color: #4b5563;">Alguien completó el formulario público de reserva. Aquí están los detalles:</p>
 
@@ -190,14 +204,14 @@ ${brand(studioName, primaryColor)}
   <div style="margin-top: 28px;">
     <a href="${escapeHtml(adminLink)}" style="display: inline-block; padding: 10px 20px; background: ${escapeHtml(primaryColor)}; color: #fff; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Revisar solicitud</a>
   </div>
-${brandClose}
-`
+`, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }
 
 export function renderBookingApprovedForClient(params: {
   studioName: string
   primaryColor?: string
+  branding?: EmailBranding | null
   clientName: string
   packageName: string
   eventDate: string
@@ -232,8 +246,7 @@ export function renderBookingApprovedForClient(params: {
     ? `<p style="margin: 16px 0 24px; text-align: center;"><a href="${escapeHtml(contractSignUrl)}" style="display: inline-block; background: ${escapeHtml(primaryColor)}; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Continuar con mi reserva</a></p>`
     : ''
 
-  const html = `
-${brand(studioName, primaryColor)}
+  const html = frame(`
   <h1 style="margin: 0 0 8px; font-size: 22px;">¡Gran noticia, ${escapeHtml(clientName)}!</h1>
   <p style="margin: 0 0 24px; color: #4b5563;">Hemos aprobado tu solicitud para el paquete <strong>${escapeHtml(packageName)}</strong> el <strong>${escapeHtml(eventDate)}</strong>.</p>
   <p style="margin: 0 0 16px; color: #4b5563;">Para confirmar tu sesión, continúa con estos pasos: revisa tu plan, completa el formulario y firma el contrato. Al final te mostraremos la factura para realizar el pago.</p>
@@ -241,8 +254,7 @@ ${brand(studioName, primaryColor)}
   ${contractCta}
   ${replyLine}
   <p style="margin: 24px 0 0; color: #4b5563;">Estamos emocionados de trabajar contigo.</p>
-${brandClose}
-`
+`, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }
 
@@ -253,6 +265,7 @@ ${brandClose}
 export function renderBookingReceivedForClient(params: {
   studioName: string
   primaryColor?: string
+  branding?: EmailBranding | null
   clientName: string
   packageName: string
   eventDate: string
@@ -272,22 +285,21 @@ export function renderBookingReceivedForClient(params: {
     ? `<p style="margin: 0 0 12px; color: #6b7280; font-size: 13px;">¿Dudas? Responde a este email o escríbenos a <a href="mailto:${escapeHtml(replyToEmail)}" style="color: ${escapeHtml(primaryColor)};">${escapeHtml(replyToEmail)}</a>.</p>`
     : ''
 
-  const html = `
-${brand(studioName, primaryColor)}
+  const html = frame(`
   <h1 style="margin: 0 0 8px; font-size: 22px;">¡Gracias por escribirnos, ${escapeHtml(clientName)}!</h1>
   <p style="margin: 0 0 16px; color: #4b5563;">Recibimos tu solicitud para el paquete <strong>${escapeHtml(packageName)}</strong> el <strong>${escapeHtml(eventDate)}</strong>. Qué alegría que quieras capturar este momento con nosotros.</p>
   <p style="margin: 0 0 16px; color: #4b5563;">Ya la estamos revisando con cariño. En breve te confirmaremos la disponibilidad y te enviaremos los siguientes pasos para asegurar tu fecha.</p>
   <p style="margin: 0 0 16px; color: #4b5563;">No tienes que hacer nada por ahora — nosotros te escribimos.</p>
   ${replyLine}
   <p style="margin: 24px 0 0; color: #4b5563;">Con cariño,<br/>El equipo de ${escapeHtml(studioName)}</p>
-${brandClose}
-`
+`, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }
 
 export function renderFormInvitationForClient(params: {
   studioName: string
   primaryColor?: string
+  branding?: EmailBranding | null
   clientName: string
   formTitle: string
   formUrl: string
@@ -307,8 +319,7 @@ export function renderFormInvitationForClient(params: {
     ? `<p style="margin: 0 0 12px; color: #6b7280; font-size: 13px;">¿Dudas? Responde a este email o escríbenos a <a href="mailto:${escapeHtml(replyToEmail)}" style="color: ${escapeHtml(primaryColor)};">${escapeHtml(replyToEmail)}</a>.</p>`
     : ''
 
-  const html = `
-${brand(studioName, primaryColor)}
+  const html = frame(`
   <h1 style="margin: 0 0 8px; font-size: 22px;">Hola ${escapeHtml(clientName)}</h1>
   <p style="margin: 0 0 16px; color: #4b5563;">Para que tu sesión con <strong>${escapeHtml(studioName)}</strong> sea perfecta, necesitamos algunos datos más.</p>
   <p style="margin: 0 0 20px; color: #4b5563;">Toma 2-3 minutos y completa el formulario:</p>
@@ -317,14 +328,14 @@ ${brand(studioName, primaryColor)}
   </p>
   <p style="margin: 0 0 8px; color: #9ca3af; font-size: 12px;">Puedes guardar tu avance y volver después desde el mismo enlace.</p>
   ${replyLine}
-${brandClose}
-`
+`, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }
 
 export function renderBookingRejectedForClient(params: {
   studioName: string
   primaryColor?: string
+  branding?: EmailBranding | null
   clientName: string
   packageName: string
   eventDate: string
@@ -332,14 +343,12 @@ export function renderBookingRejectedForClient(params: {
 }) {
   const { studioName, primaryColor = '#111827', clientName, packageName, eventDate, reason } = params
   const subject = `Sobre tu solicitud con ${studioName}`
-  const html = `
-${brand(studioName, primaryColor)}
+  const html = frame(`
   <h1 style="margin: 0 0 8px; font-size: 22px;">Gracias por escribirnos, ${escapeHtml(clientName)}</h1>
   <p style="margin: 0 0 16px; color: #4b5563;">Lamentablemente, no podremos cubrir tu evento del <strong>${escapeHtml(eventDate)}</strong> con el paquete <strong>${escapeHtml(packageName)}</strong>.</p>
   ${reason ? `<div style="padding: 16px; background: #f9fafb; border-radius: 8px; border-left: 3px solid #d1d5db; margin-bottom: 16px;"><p style="margin: 0; color: #4b5563; font-size: 14px;">${escapeHtml(reason)}</p></div>` : ''}
   <p style="margin: 0 0 12px; color: #4b5563;">Agradecemos tu interés y esperamos poder ayudarte en otra oportunidad.</p>
-${brandClose}
-`
+`, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }
 
@@ -350,6 +359,7 @@ ${brandClose}
 export function renderContractInvitation(params: {
   studioName: string
   primaryColor?: string
+  branding?: EmailBranding | null
   clientName: string
   projectName: string
   eventType: string
@@ -367,15 +377,14 @@ export function renderContractInvitation(params: {
   } = params
 
   const subject = `📝 Tu contrato de ${projectName} está listo para firmar`
-  const html = `
-${brand(studioName, primaryColor)}
+  const html = frame(`
   <h1 style="margin: 0 0 12px; font-size: 24px; font-weight: 700;">Hola ${escapeHtml(clientName)}, qué emoción 💜</h1>
   <p style="margin: 0 0 16px; color: #4b5563; font-size: 15px; line-height: 1.6;">
     Ya empezamos a preparar todo para tu <strong>${escapeHtml(eventType)}</strong> del <strong>${escapeHtml(eventDate)}</strong>.
     Aquí está el contrato de tu sesión <strong>${escapeHtml(projectName)}</strong> para que lo revises y firmes digitalmente.
   </p>
 
-  <div style="padding: 20px; background: #faf5ff; border-radius: 12px; border: 1px solid #e9d5ff; margin: 24px 0;">
+  <div style="padding: 20px 22px; background: #F7F7F9; border-radius: 16px; border: 1px solid #ECECEF; margin: 24px 0;">
     <p style="margin: 0 0 8px; font-size: 13px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Siguiente paso</p>
     <p style="margin: 0 0 16px; color: #111827; font-size: 15px; line-height: 1.5;">
       Haz clic en el botón para leer el contrato completo y firmarlo desde tu celular o computadora. Toma menos de 3 minutos.
@@ -385,14 +394,14 @@ ${brand(studioName, primaryColor)}
 
   <p style="margin: 0 0 8px; color: #4b5563; font-size: 14px;">Después de firmar, recibirás automáticamente la factura de la reserva del 50% para apartar tu fecha oficialmente.</p>
   <p style="margin: 16px 0 0; color: #6b7280; font-size: 13px;">Si tienes dudas, respóndenos a este correo. Estamos para ayudarte.</p>
-${brandClose}
-`
+`, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }
 
 export function renderInvoiceReserve(params: {
   studioName: string
   primaryColor?: string
+  branding?: EmailBranding | null
   clientName: string
   projectName: string
   eventType: string
@@ -416,26 +425,25 @@ export function renderInvoiceReserve(params: {
   } = params
 
   const subject = `💳 Reserva tu ${eventType} — Factura ${invoiceNumber}`
-  const html = `
-${brand(studioName, primaryColor)}
+  const html = frame(`
   <h1 style="margin: 0 0 12px; font-size: 24px; font-weight: 700;">${escapeHtml(clientName)}, vamos a apartar tu fecha 📅</h1>
   <p style="margin: 0 0 16px; color: #4b5563; font-size: 15px; line-height: 1.6;">
     Para confirmar oficialmente tu <strong>${escapeHtml(eventType)}</strong> del <strong>${escapeHtml(eventDate)}</strong>,
     realiza el pago del <strong>50% de reserva</strong> de tu proyecto <strong>${escapeHtml(projectName)}</strong>.
   </p>
 
-  <div style="padding: 24px; background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-radius: 12px; border: 1px solid #e9d5ff; margin: 24px 0;">
+  <div style="padding: 22px 24px; background: #F7F7F9; border-radius: 16px; border: 1px solid #ECECEF; margin: 24px 0;">
     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
       <div>
-        <p style="margin: 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em;">Factura</p>
-        <p style="margin: 2px 0 0; font-size: 15px; color: #111827; font-weight: 600;">${escapeHtml(invoiceNumber)}</p>
+        <p style="margin: 0; font-size: 11px; color: #A1A1A6; text-transform: uppercase; letter-spacing: 0.08em;">Factura</p>
+        <p style="margin: 2px 0 0; font-size: 15px; color: #1C1C1C; font-weight: 600;">${escapeHtml(invoiceNumber)}</p>
       </div>
       <div style="text-align: right;">
-        <p style="margin: 0; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em;">Total</p>
-        <p style="margin: 2px 0 0; font-size: 22px; color: ${escapeHtml(primaryColor)}; font-weight: 700;">${escapeHtml(totalFormatted)}</p>
+        <p style="margin: 0; font-size: 11px; color: #A1A1A6; text-transform: uppercase; letter-spacing: 0.08em;">Total</p>
+        <p style="margin: 2px 0 0; font-size: 26px; color: #1C1C1C; font-weight: 700; letter-spacing: -.02em;">${escapeHtml(totalFormatted)}</p>
       </div>
     </div>
-    ${dueDate ? `<p style="margin: 12px 0 0; font-size: 13px; color: #6b7280;">📌 Pagar antes del <strong>${escapeHtml(dueDate)}</strong> para asegurar tu fecha.</p>` : ''}
+    ${dueDate ? `<p style="margin: 12px 0 0; font-size: 13px; color: #6E6E73;">📌 Pagar antes del <strong>${escapeHtml(dueDate)}</strong> para asegurar tu fecha.</p>` : ''}
   </div>
 
   <a href="${escapeHtml(portalUrl)}" style="display: inline-block; padding: 12px 24px; background: ${escapeHtml(primaryColor)}; color: #fff; text-decoration: none; border-radius: 10px; font-size: 15px; font-weight: 600;">Ver factura y pagar →</a>
@@ -444,8 +452,7 @@ ${brand(studioName, primaryColor)}
     El 50% restante se factura automáticamente <strong>7 días antes</strong> del evento. Así te mantienes con todo claro, sin sorpresas.
   </p>
   <p style="margin: 16px 0 0; color: #6b7280; font-size: 13px;">Cualquier duda, respóndenos este correo directamente.</p>
-${brandClose}
-`
+`, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }
 
@@ -457,6 +464,7 @@ ${brandClose}
 export function renderInvoiceUpdate(params: {
   studioName: string
   primaryColor?: string
+  branding?: EmailBranding | null
   clientName: string
   projectName?: string | null
   invoiceNumber: string
@@ -510,12 +518,11 @@ export function renderInvoiceUpdate(params: {
       <span style="font-size: 14px; color: ${color}; font-weight: ${bold ? 700 : 500};">${escapeHtml(value)}</span>
     </div>`
 
-  const html = `
-${brand(studioName, primaryColor)}
+  const html = frame(`
   <h1 style="margin: 0 0 12px; font-size: 22px; font-weight: 700;">${heading}</h1>
   <p style="margin: 0 0 16px; color: #4b5563; font-size: 15px; line-height: 1.6;">${intro}</p>
 
-  <div style="padding: 20px; background: #faf5ff; border-radius: 12px; border: 1px solid #e9d5ff; margin: 24px 0;">
+  <div style="padding: 20px 22px; background: #F7F7F9; border-radius: 16px; border: 1px solid #ECECEF; margin: 24px 0;">
     <p style="margin: 0 0 8px; font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.08em;">Factura ${escapeHtml(invoiceNumber)}</p>
     ${row('Total', totalFormatted)}
     ${row('Pagado', paidFormatted, '#059669')}
@@ -529,7 +536,6 @@ ${brand(studioName, primaryColor)}
       ? '¡Gracias! Tu factura quedó saldada por completo.'
       : 'El saldo restante puede pagarse en cualquier momento. Cualquier duda, respóndenos este correo.'
   }</p>
-${brandClose}
-`
+`, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }

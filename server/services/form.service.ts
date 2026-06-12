@@ -16,6 +16,7 @@ import {
   enqueueEmail,
   renderFormInvitationForClient,
 } from './email.service'
+import { getEmailBranding } from './email-template.service'
 
 // ----------------------------------------------------------------------------
 // Templates (admin)
@@ -603,6 +604,7 @@ export async function sendFormToClient(params: {
   const { subject, html } = renderFormInvitationForClient({
     studioName: studioRow.name,
     primaryColor: studioRow.primary_color ?? '#111827',
+    branding: await getEmailBranding(params.studioId),
     clientName,
     formTitle: templateName,
     formUrl,

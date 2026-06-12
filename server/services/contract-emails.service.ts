@@ -21,7 +21,8 @@ import {
   injectSignatures,
   renderPlaceholders,
 } from "@/server/services/contract-placeholders.service"
-import { resolveTemplate } from "@/server/services/email-template.service"
+import { resolveTemplate, getEmailBranding } from "@/server/services/email-template.service"
+import { wrapLuxuryEmail } from "@/lib/email/luxury-layout"
 
 function appUrl(): string {
   return (process.env["NEXT_PUBLIC_APP_URL"] ?? "http://localhost:3000").replace(
@@ -115,6 +116,13 @@ async function loadContractCtx(contractId: string): Promise<ContractCtx | null> 
   }
 }
 
+/**
+ * Contenido INTERNO del email (encabezado + mensaje + CTA). El marco luxury
+ * minimalista (header con logo del estudio, tipografía, footer, redes) lo añade
+ * `resolveTemplate` al envolver este HTML — por eso aquí devolvemos solo el
+ * cuerpo, sin tarjeta ni barras de color. El botón usa `class="btn"`, que el
+ * marco estiliza con el acento del estudio.
+ */
 function panel(
   ctx: ContractCtx,
   title: string,
@@ -123,25 +131,12 @@ function panel(
   ctaHref?: string,
 ): string {
   return `
-  <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;background:#fafafa;padding:24px;color:#18181b">
-    <div style="background:white;border-radius:16px;overflow:hidden;border:1px solid #e4e4e7">
-      <div style="background:linear-gradient(135deg,${ctx.studioAccent},${ctx.studioAccent}cc);padding:24px;color:white">
-        <h1 style="margin:0;font-size:18px;font-weight:600">${escapeHtml(title)}</h1>
-        <p style="margin:6px 0 0;font-size:13px;opacity:.85">${escapeHtml(ctx.studioName)} · ${escapeHtml(ctx.title)}</p>
-      </div>
-      <div style="padding:24px;font-size:14px;line-height:1.55;color:#27272a">
-        ${message}
-        ${ctaLabel && ctaHref
-          ? `<div style="text-align:center;margin:20px 0 4px">
-               <a href="${ctaHref}" style="display:inline-block;background:${ctx.studioAccent};color:white;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px">${escapeHtml(ctaLabel)}</a>
-             </div>`
-          : ""}
-      </div>
-      <div style="background:#fafafa;padding:14px 24px;border-top:1px solid #e4e4e7;text-align:center">
-        <p style="margin:0;font-size:11.5px;color:#a1a1aa">Enviado por ${escapeHtml(ctx.studioName)}</p>
-      </div>
-    </div>
-  </div>`
+  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">${escapeHtml(ctx.title)}</p>
+  <h1>${escapeHtml(title)}</h1>
+  ${message}
+  ${ctaLabel && ctaHref
+    ? `<p style="text-align:center;margin:28px 0 6px"><a class="btn" href="${ctaHref}">${escapeHtml(ctaLabel)}</a></p>`
+    : ""}`
 }
 
 async function notifyInApp(
@@ -399,24 +394,33 @@ export async function emailContractFinalCopy(contractId: string): Promise<void> 
 
     const portalUrl = `${appUrl()}/portal/login`
 
+    // Contenido interno (sin tarjeta ni colores): el marco luxury lo añade
+    // `resolveTemplate` para la copia al cliente. Para la copia al estudio —que
+    // se envía directa, sin `resolveTemplate`— lo enmarcamos con `frameStudio`.
     const wrap = (greeting: string) => `
-      <div style="font-family:system-ui,-apple-system,sans-serif;max-width:680px;margin:0 auto;background:#fafafa;padding:24px;color:#18181b">
-        <div style="background:white;border-radius:16px;overflow:hidden;border:1px solid #e4e4e7">
-          <div style="background:linear-gradient(135deg,${ctx.studioAccent},${ctx.studioAccent}cc);padding:24px;color:white">
-            <h1 style="margin:0;font-size:18px;font-weight:600">Contrato firmado y completo</h1>
-            <p style="margin:6px 0 0;font-size:13px;opacity:.85">${escapeHtml(ctx.studioName)}</p>
-          </div>
-          <div style="padding:24px">
-            ${greeting}
-            <hr style="border:none;border-top:1px solid #e4e4e7;margin:20px 0" />
-            <div style="font-size:14px;line-height:1.65;color:#27272a">${finalHtml}</div>
-            <hr style="border:none;border-top:1px solid #e4e4e7;margin:20px 0" />
-            <p style="margin:0;font-size:13px;color:#71717a;text-align:center">
-              Disponible también en <a href="${portalUrl}" style="color:${ctx.studioAccent};text-decoration:none;font-weight:600">${portalUrl.replace(/^https?:\/\//, "")}</a>
-            </p>
-          </div>
-        </div>
-      </div>`
+      <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">${escapeHtml(ctx.studioName)}</p>
+      <h1>Contrato firmado y completo</h1>
+      ${greeting}
+      <hr style="border:none;border-top:1px solid #ECECEF;margin:24px 0" />
+      <div style="font-size:14px;line-height:1.65;color:#27272a">${finalHtml}</div>
+      <hr style="border:none;border-top:1px solid #ECECEF;margin:24px 0" />
+      <p style="margin:0;font-size:13px;color:#6E6E73;text-align:center">
+        Disponible también en <a href="${portalUrl}">${portalUrl.replace(/^https?:\/\//, "")}</a>
+      </p>`
+
+    // Marco luxury para la copia directa al estudio (mismo branding que usa
+    // resolveTemplate internamente).
+    const studioBrand = await getEmailBranding(ctx.studio_id)
+    const frameStudio = (inner: string) =>
+      wrapLuxuryEmail(inner, {
+        studioName: ctx.studioName,
+        logoUrl: studioBrand.logoUrl,
+        accent: studioBrand.accent,
+        footerHtml: studioBrand.footerHtml,
+        contactLine: studioBrand.contactLine,
+        whatsappUrl: studioBrand.whatsappUrl,
+        social: studioBrand.social,
+      })
 
     const tpl = await resolveTemplate(
       ctx.studio_id,
@@ -457,8 +461,10 @@ export async function emailContractFinalCopy(contractId: string): Promise<void> 
         fromEmail: ctx.studioEmail,
         fromName: tpl.fromName ?? "PixelOS",
         subject: tpl.subject,
-        bodyHtml: wrap(
-          `<p style="margin:0;font-size:14px">Copia para tu registro. Cliente: <strong>${escapeHtml(ctx.clientName)}</strong>.</p>`,
+        bodyHtml: frameStudio(
+          wrap(
+            `<p style="margin:0;font-size:14px">Copia para tu registro. Cliente: <strong>${escapeHtml(ctx.clientName)}</strong>.</p>`,
+          ),
         ),
         relatedEntityType: "contract",
         relatedEntityId: ctx.id,

@@ -7,6 +7,8 @@ import "server-only"
 
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { enqueueEmail } from "@/server/services/email.service"
+import { getEmailBranding } from "@/server/services/email-template.service"
+import { wrapLuxuryEmail } from "@/lib/email/luxury-layout"
 import { normalizeEntitlements } from "@/lib/print/entitlements"
 
 function appUrl(): string {
@@ -50,7 +52,6 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const studio = studioRow as any
   const studioName = studio?.name ?? "Tu fotógrafo"
-  const accent = studio?.primary_color ?? "#b08a3e"
 
   // Entitlements para el resumen
   let summaryLis = ""
@@ -81,38 +82,29 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
   const token = (tokRow as { token?: string } | null)?.token
   if (token) galleryUrl = `${appUrl()}/g/${token}`
 
-  const html = `
-  <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;background:#faf7f2;padding:24px;color:#2a2017">
-    <div style="background:white;border-radius:18px;overflow:hidden;border:1px solid #ece3d4">
-      <div style="background:linear-gradient(135deg,${accent},${accent}cc);padding:28px 24px;color:white">
-        <h1 style="margin:0;font-size:21px;font-weight:600">Elige tus fotos para impresión 🖼️</h1>
-        <p style="margin:6px 0 0;opacity:.9;font-size:14px">${escapeHtml(studioName)}</p>
-      </div>
-      <div style="padding:28px 24px">
-        <p style="margin:0 0 12px">Hola <strong>${escapeHtml(client.name ?? "")}</strong>,</p>
-        <p style="margin:0 0 16px;line-height:1.6">
-          ¡Tus fotos editadas ya están listas! Ahora puedes elegir desde tu galería
-          cuáles quieres para <strong>portada de álbum, marcos e impresiones</strong>,
-          según lo incluido en tu plan.
-        </p>
-        ${summaryLis ? `<div style="margin:0 0 16px;background:#faf7f2;border-radius:10px;padding:14px 16px">
-          <p style="margin:0 0 6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#9a7b45">Tu plan incluye</p>
-          <ul style="margin:0;padding-left:18px;font-size:14px;color:#4a3c2a">${summaryLis}</ul>
-        </div>` : ""}
-        <div style="text-align:center;margin:22px 0">
-          <a href="${galleryUrl}" style="display:inline-block;background:${accent};color:white;text-decoration:none;padding:13px 26px;border-radius:999px;font-weight:600;font-size:14px">
-            Seleccionar mis impresiones →
-          </a>
-        </div>
-        <p style="margin:0;font-size:12.5px;color:#8a7a64;text-align:center">
-          Puedes ajustar tu selección hasta enviarla.
-        </p>
-      </div>
-      <div style="background:#faf7f2;padding:14px 24px;border-top:1px solid #ece3d4;text-align:center">
-        <p style="margin:0;font-size:11.5px;color:#b0a48e">Enviado por ${escapeHtml(studioName)}</p>
-      </div>
-    </div>
-  </div>`
+  // Contenido interno + marco luxury minimalista compartido (logo + footer).
+  const inner = `
+  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Impresiones</p>
+  <h1>Elige tus fotos para impresión 🖼️</h1>
+  <p>Hola <strong>${escapeHtml(client.name ?? "")}</strong>,</p>
+  <p>¡Tus fotos editadas ya están listas! Ahora puedes elegir desde tu galería cuáles quieres para <strong>portada de álbum, marcos e impresiones</strong>, según lo incluido en tu plan.</p>
+  ${summaryLis ? `<div style="margin:0 0 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px;padding:16px 18px">
+    <p style="margin:0 0 6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#A1A1A6">Tu plan incluye</p>
+    <ul style="margin:0;padding-left:18px;font-size:14px;color:#52525b">${summaryLis}</ul>
+  </div>` : ""}
+  <p style="text-align:center;margin:26px 0 6px"><a class="btn" href="${galleryUrl}">Seleccionar mis impresiones</a></p>
+  <p style="margin:8px 0 0;font-size:12.5px;color:#A1A1A6;text-align:center">Puedes ajustar tu selección hasta enviarla.</p>`
+
+  const branding = await getEmailBranding(g.studio_id)
+  const html = wrapLuxuryEmail(inner, {
+    studioName: studio?.name ?? branding.studioName,
+    logoUrl: branding.logoUrl,
+    accent: branding.accent,
+    footerHtml: branding.footerHtml,
+    contactLine: branding.contactLine,
+    whatsappUrl: branding.whatsappUrl,
+    social: branding.social,
+  })
 
   await enqueueEmail({
     studioId: g.studio_id,
