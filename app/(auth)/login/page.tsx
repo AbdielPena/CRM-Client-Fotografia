@@ -55,19 +55,15 @@ function LoginPageInner() {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
-      className="flex flex-col gap-8"
+      className="flex flex-col gap-6"
     >
       {/* Header */}
-      <header className="space-y-2">
-        <span className="inline-flex items-center gap-1.5 text-caption font-medium uppercase tracking-[0.14em] text-brand">
-          <span className="h-1 w-1 rounded-full bg-brand" aria-hidden />
-          Bienvenido de vuelta
-        </span>
-        <h1 className="font-display text-display-lg leading-[1.05] text-foreground">
-          Ingresa a tu <span className="text-gradient-aurora">estudio</span>
+      <header className="space-y-1.5">
+        <h1 className="text-[22px] font-semibold tracking-tight text-foreground">
+          Iniciar sesión
         </h1>
-        <p className="text-body text-muted-foreground">
-          Accede al CRM donde viven tus clientes, contratos y galerías.
+        <p className="text-[13px] text-muted-foreground">
+          Bienvenido de vuelta a PixelOS.
         </p>
       </header>
 

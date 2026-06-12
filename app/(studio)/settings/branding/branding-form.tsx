@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useFormState, useFormStatus } from "react-dom"
 import {
   AlertCircle,
@@ -13,6 +13,7 @@ import {
   Mail,
   Share2,
   Image as ImageIcon,
+  UploadCloud,
   Lock,
 } from "lucide-react"
 
@@ -23,6 +24,7 @@ import {
 } from "@/server/actions/studio-branding.actions"
 import type { StudioBranding } from "@/server/services/studio-branding.service"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils/cn"
 
 const initialState: BrandingActionState = {}
 
@@ -74,30 +76,21 @@ export function BrandingForm({
           Identidad visual
         </h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium">
-              Logo URL (claro)
-            </label>
-            <input
-              type="url"
-              name="logo_url"
-              defaultValue={branding.logo_url ?? ""}
-              placeholder="https://cdn.tudominio.com/logo.png"
-              className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium">
-              Logo URL (oscuro)
-            </label>
-            <input
-              type="url"
-              name="logo_dark_url"
-              defaultValue={branding.logo_dark_url ?? ""}
-              placeholder="https://cdn.tudominio.com/logo-dark.png"
-              className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
-            />
-          </div>
+          <LogoField
+            name="logo_url"
+            label="Logo (fondo claro)"
+            hint="PNG, JPG, WEBP o SVG · máx 2 MB. Este logo se usa en todo el ecosistema."
+            initialUrl={branding.logo_url}
+            variant="light"
+          />
+          <LogoField
+            name="logo_dark_url"
+            label="Logo (fondo oscuro)"
+            hint="Versión clara/blanca para fondos oscuros (opcional)."
+            initialUrl={branding.logo_dark_url}
+            variant="dark"
+            dark
+          />
           <div>
             <label className="mb-1.5 block text-xs font-medium">
               Favicon URL
@@ -604,5 +597,121 @@ function SubmitButton() {
         </>
       )}
     </Button>
+  )
+}
+
+/**
+ * Campo de subida de logo: sube el archivo a /api/studio/branding/logo (bucket
+ * público studio-branding) y guarda la URL pública en un input hidden que el
+ * form persiste (logo_url / logo_dark_url → espejado a studios.logo_url).
+ */
+function LogoField({
+  name,
+  label,
+  hint,
+  initialUrl,
+  variant,
+  dark,
+}: {
+  name: string
+  label: string
+  hint?: string
+  initialUrl: string | null
+  variant: "light" | "dark"
+  dark?: boolean
+}) {
+  const [url, setUrl] = useState(initialUrl ?? "")
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    setErr(null)
+    setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("variant", variant)
+      const res = await fetch("/api/studio/branding/logo", {
+        method: "POST",
+        body: fd,
+      })
+      const json = (await res.json()) as { url?: string; error?: string }
+      if (!res.ok || !json.url) throw new Error(json.error || "Error al subir")
+      setUrl(json.url)
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Error al subir")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-medium">{label}</label>
+      <input type="hidden" name={name} value={url} />
+      <div
+        className={cn(
+          "flex items-center gap-3 rounded-xl border border-input p-3",
+          dark ? "bg-neutral-900" : "bg-background",
+        )}
+      >
+        <div
+          className={cn(
+            "flex h-12 w-28 shrink-0 items-center justify-center overflow-hidden rounded-md border border-input/60",
+            dark ? "bg-neutral-900" : "bg-muted/30",
+          )}
+        >
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={url}
+              alt={label}
+              className="max-h-10 max-w-[100px] object-contain"
+            />
+          ) : (
+            <ImageIcon className="size-5 text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60"
+            >
+              {busy ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <UploadCloud className="size-3.5" />
+              )}
+              {url ? "Cambiar" : "Subir logo"}
+            </button>
+            {url && (
+              <button
+                type="button"
+                onClick={() => setUrl("")}
+                className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+              >
+                Quitar
+              </button>
+            )}
+          </div>
+          {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+          {err && <p className="text-[11px] text-red-600">{err}</p>}
+        </div>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        className="hidden"
+        onChange={onPick}
+      />
+    </div>
   )
 }

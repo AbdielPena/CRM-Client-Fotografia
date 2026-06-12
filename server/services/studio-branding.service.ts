@@ -146,6 +146,24 @@ export async function updateStudioBranding(
     throwServiceError("BRANDING_UPDATE_FAILED", error, { studioId })
   }
 
+  // Espejo del logo a `studios.logo_url` — campo CANÓNICO que leen TODOS los
+  // consumidores del ecosistema (portal del cliente, sidebar del CRM, hub y sus
+  // módulos comparten esta misma tabla `studios`). Así "subes el logo una vez"
+  // en Marca y se ve en todos lados. Best-effort: no rompe el guardado si falla.
+  if (Object.prototype.hasOwnProperty.call(patch, "logo_url")) {
+    await sb
+      .from("studios")
+      .update({ logo_url: (patch.logo_url as string | null) ?? null })
+      .eq("id", studioId)
+      .then((res: { error: { message: string } | null }) => {
+        if (res.error)
+          console.error(
+            "[branding] mirror logo_url→studios falló:",
+            res.error.message,
+          )
+      })
+  }
+
   await logActivity({
     studioId,
     actorId,
