@@ -16,6 +16,7 @@ import {
 } from "@/components/portal/portal-ui"
 
 export const dynamic = "force-dynamic"
+export const fetchCache = "force-no-store"
 
 export default async function PortalInvoicesPage() {
   const session = parsePortalCookieValue(cookies().get(PORTAL_COOKIE_NAME)?.value)

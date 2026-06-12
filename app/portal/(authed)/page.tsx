@@ -19,6 +19,9 @@ import { formatCurrency, formatDateShort } from "@/lib/utils/currency"
 import { cn } from "@/lib/utils/cn"
 
 export const dynamic = "force-dynamic"
+// force-dynamic NO basta: sin esto, los queries de Supabase quedan en el Data
+// Cache de Next y sirven el amount_paid/saldo viejo tras un pago.
+export const fetchCache = "force-no-store"
 
 export default async function PortalHomePage() {
   // El layout ya garantizó sesión válida — pero re-leemos para tener el id.
