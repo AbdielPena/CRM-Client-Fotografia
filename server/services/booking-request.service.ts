@@ -765,6 +765,87 @@ function buildBookingFlowUrl(signingToken: string): string {
   return `${appBaseUrl()}/b/${signingToken}`
 }
 
+/**
+ * Recuperación: para una solicitud YA aprobada pero que quedó sin convertir
+ * (p.ej. la conversión falló por falta de plantilla default), la convierte y
+ * REENVÍA el correo de aprobación CON el botón "Continuar mi reserva".
+ * Idempotente: si ya está convertida, solo reenvía el correo con el botón.
+ */
+export async function resendBookingApproval(params: {
+  studioId: string
+  requestId: string
+  actorId?: string
+}): Promise<{ ok: boolean; contractSignUrl: string | null; emailTo: string | null }> {
+  const svc = createSupabaseServiceClient()
+
+  // 1) Convertir si hace falta (crea cliente + proyecto + contrato con token).
+  const row = await bookingRequestsRepo.findById(params.requestId, { elevated: true })
+  if (!row) return { ok: false, contractSignUrl: null, emailTo: null }
+  let bundle: Awaited<ReturnType<typeof convertBookingToClientBundle>> = null
+  try {
+    bundle = await convertBookingToClientBundle({
+      studioId: params.studioId,
+      requestId: params.requestId,
+      actorId: params.actorId ?? '',
+      row,
+    })
+  } catch (err) {
+    console.error('[resendBookingApproval] conversión falló', err)
+  }
+
+  // 2) Resolver el contractSignUrl: del bundle recién creado, o del proyecto ya
+  //    existente si la solicitud ya estaba convertida.
+  let contractSignUrl: string | null = null
+  let projectId = bundle?.projectId ?? row.project_id ?? null
+  if (!projectId) {
+    const reloaded = await bookingRequestsRepo.findById(params.requestId, { elevated: true })
+    projectId = reloaded?.project_id ?? null
+  }
+  if (projectId) {
+    const { data: contractRow } = await svc
+      .from('contracts')
+      .select('signing_token')
+      .eq('project_id', projectId)
+      .not('signing_token', 'is', null)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const token = (contractRow as { signing_token: string | null } | null)?.signing_token
+    if (token) contractSignUrl = buildBookingFlowUrl(token)
+  }
+
+  // 3) Reenviar el correo de aprobación con el botón.
+  const ctx = await loadContextForEmail(params.studioId, params.requestId)
+  if (!ctx) return { ok: false, contractSignUrl, emailTo: null }
+
+  const { subject, html } = renderBookingApprovedForClient({
+    studioName: ctx.studio.name,
+    primaryColor: ctx.studio.primary_color ?? '#111827',
+    clientName: ctx.request.client_name,
+    packageName: ctx.packageName,
+    eventDate: ctx.request.event_date,
+    depositAmount: ctx.request.pricing_snapshot?.deposit_amount ?? null,
+    depositCurrency: ctx.request.pricing_snapshot?.currency ?? null,
+    reserveDueInDays: ctx.request.pricing_snapshot?.reserve_due_in_days ?? null,
+    replyToEmail: ctx.studio.email,
+    contractSignUrl,
+  })
+  await enqueueEmail({
+    studioId: params.studioId,
+    toEmail: ctx.request.client_email,
+    toName: ctx.request.client_name,
+    subject,
+    bodyHtml: html,
+    replyTo: ctx.studio.email ?? null,
+    templateSlug: 'booking_approved_for_client',
+    relatedEntityType: 'booking_request',
+    relatedEntityId: params.requestId,
+  })
+
+  return { ok: true, contractSignUrl, emailTo: ctx.request.client_email }
+}
+
 export async function approveBookingRequest(params: {
   studioId: string
   requestId: string
