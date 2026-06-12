@@ -9,6 +9,8 @@ import {
   updateContractTemplateAction,
   deleteContractTemplateAction,
 } from "@/server/actions/contract.actions"
+import { renderContractPreview } from "@/lib/contracts/preview"
+import { sanitizeHtml } from "@/lib/utils/sanitize-html"
 
 type Initial = {
   name: string
@@ -28,14 +30,18 @@ interface Props {
 // Placeholders sugeridos; el usuario puede usar los que quiera.
 const SUGGESTED_VARS = [
   { key: "cliente_nombre", label: "Nombre del cliente" },
+  { key: "cliente_direccion", label: "Dirección del cliente" },
   { key: "cliente_email", label: "Email del cliente" },
+  { key: "paquete_nombre", label: "Nombre del plan/paquete" },
+  { key: "precio_total", label: "Precio total" },
+  { key: "anticipo", label: "Anticipo (reserva)" },
+  { key: "saldo_reserva", label: "Saldo a pagar el día" },
   { key: "evento_fecha", label: "Fecha del evento" },
   { key: "evento_locacion", label: "Ubicación del evento" },
-  { key: "paquete_nombre", label: "Nombre del paquete" },
-  { key: "paquete_precio", label: "Precio del paquete" },
-  { key: "moneda", label: "Moneda" },
   { key: "estudio_nombre", label: "Nombre del estudio" },
   { key: "hoy", label: "Fecha de hoy" },
+  { key: "signature_client", label: "Firma del cliente" },
+  { key: "signature_studio", label: "Firma del estudio" },
 ]
 
 export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
@@ -54,6 +60,7 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
       : "",
   )
   const [bodyRef, setBodyRef] = useState<HTMLTextAreaElement | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   const insertVar = (key: string) => {
     const placeholder = `{{${key}}}`
@@ -198,11 +205,20 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
       </section>
 
       <section className="bg-card rounded-2xl border border-border p-5">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 gap-2">
           <h2 className="text-sm font-semibold text-foreground">Cuerpo del contrato</h2>
-          <span className="text-[11px] text-muted-foreground">
-            Soporta HTML básico y placeholders {"{{variable}}"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="hidden text-[11px] text-muted-foreground sm:inline">
+              HTML básico + placeholders {"{{variable}}"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted"
+            >
+              {showPreview ? "Ocultar vista previa" : "👁 Vista previa"}
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-1 mb-3">
@@ -229,6 +245,22 @@ export function ContractTemplateEditor({ mode, templateId, initial }: Props) {
           className="w-full px-3 py-3 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-900/10"
           placeholder={`<h1>Contrato de servicios fotográficos</h1>\n<p>Entre {{estudio_nombre}} y {{cliente_nombre}}, se acuerda lo siguiente...</p>`}
         />
+
+        {showPreview && (
+          <div className="client-luxe mt-4 rounded-xl border border-border bg-[#faf7f2] p-4">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Vista previa · con datos de ejemplo (así lo verá el cliente)
+            </p>
+            <div className="lx-card mx-auto max-w-2xl p-8">
+              <div
+                className="contract-body prose prose-sm max-w-none text-foreground/90 dark:prose-invert"
+                dangerouslySetInnerHTML={{
+                  __html: sanitizeHtml(renderContractPreview(bodyHtml)),
+                }}
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="flex items-center justify-between">
