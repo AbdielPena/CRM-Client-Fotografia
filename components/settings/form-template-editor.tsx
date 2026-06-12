@@ -45,6 +45,29 @@ const FIELD_TYPES: { value: FormFieldType; label: string }[] = [
 
 const TYPES_WITH_OPTIONS: FormFieldType[] = ["select", "radio"]
 
+/**
+ * Campos "especiales" que el sistema reconoce y que disparan automatizaciones.
+ * Al elegir uno, se rellena la clave/tipo/etiqueta correctos — así el usuario no
+ * tiene que recordar ni adivinar la clave exacta.
+ */
+const SPECIAL_FIELDS: {
+  value: string
+  menu: string
+  key: string
+  type: FormFieldType
+  label: string
+  required?: boolean
+}[] = [
+  {
+    value: "cumpleanos",
+    menu: "🎂 Cumpleaños de la quinceañera",
+    key: "cumpleanos",
+    type: "date",
+    label: "Cumpleaños de la quinceañera",
+    required: true,
+  },
+]
+
 function genKey(label: string, existing: string[]): string {
   const base =
     label
@@ -345,6 +368,48 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
 
                   {open && (
                     <div className="mt-3 ml-6 space-y-3 bg-muted rounded-lg p-4">
+                      <div className="rounded-md border border-brand/30 bg-brand/5 p-3">
+                        <label className="block text-xs font-medium text-foreground mb-1">
+                          ⭐ Campo especial reconocido
+                        </label>
+                        <select
+                          value={
+                            SPECIAL_FIELDS.find((s) => s.key === field.key)
+                              ?.value ?? ""
+                          }
+                          onChange={(e) => {
+                            const sp = SPECIAL_FIELDS.find(
+                              (s) => s.value === e.target.value,
+                            )
+                            if (sp) {
+                              updateField(idx, {
+                                key: sp.key,
+                                type: sp.type,
+                                label: field.label?.trim()
+                                  ? field.label
+                                  : sp.label,
+                                required: sp.required ?? field.required,
+                              })
+                            }
+                          }}
+                          className="w-full px-2 py-1.5 text-sm border border-border rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-brand/20"
+                        >
+                          <option value="">
+                            Campo normal (pregunta/comentario libre)
+                          </option>
+                          {SPECIAL_FIELDS.map((s) => (
+                            <option key={s.value} value={s.value}>
+                              {s.menu}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Elígelo y el sistema rellena la clave/tipo correctos y
+                          dispara su automatización (ej. el cumpleaños crea la
+                          tarea de entrega). Para preguntas libres déjalo en
+                          &quot;Campo normal&quot;.
+                        </p>
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-medium text-muted-foreground mb-1">
