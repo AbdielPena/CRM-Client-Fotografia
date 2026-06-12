@@ -158,7 +158,7 @@ export const TEMPLATE_CATALOG: Record<
     category: "contract",
     defaultSubject: "Contrato por firmar — {{contract_title}}",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>{{studio_name}} te envió el contrato {{contract_title}} para firmar online.</p><p><a href="{{signing_url}}">Revisar y firmar</a></p>`,
+      `<p>Hola {{client_name}},</p><p>{{studio_name}} te envió el contrato {{contract_title}} para firmar online.</p><p><a href="{{signing_url}}" class="btn">Revisar y firmar</a></p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "Juan" },
       { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
@@ -222,7 +222,7 @@ export const TEMPLATE_CATALOG: Record<
     category: "invoice",
     defaultSubject: "Nueva factura — {{invoice_number}}",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>Te enviamos la factura {{invoice_number}} por {{total_price}}. Vence el {{due_date}}.</p><p><a href="{{payment_url}}">Pagar ahora</a></p>`,
+      `<p>Hola {{client_name}},</p><p>Te enviamos la factura {{invoice_number}} por {{total_price}}. Vence el {{due_date}}.</p><p><a href="{{payment_url}}" class="btn">Pagar ahora</a></p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "Juan" },
       { key: "invoice_number", label: "Número de factura", example: "INV-001" },
@@ -265,7 +265,7 @@ export const TEMPLATE_CATALOG: Record<
     category: "gallery",
     defaultSubject: "Tu galería está lista — {{gallery_name}}",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>Tu galería {{gallery_name}} está lista. <a href="{{gallery_url}}">Verla acá</a>.</p>`,
+      `<p>Hola {{client_name}},</p><p>Tu galería {{gallery_name}} está lista. <a href="{{gallery_url}}" class="btn">Verla acá</a>.</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "Juan" },
       { key: "gallery_name", label: "Nombre de galería", example: "Boda Pérez" },
@@ -333,7 +333,7 @@ export const TEMPLATE_CATALOG: Record<
     category: "gallery",
     defaultSubject: "✨ Tus fotos están listas — {{gallery_name}}",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>¡Tus fotos editadas de <strong>{{gallery_name}}</strong> ya están disponibles! <a href="{{gallery_link}}">Verlas y descargarlas acá</a>.</p><p>Disponible hasta el {{expiration_date}}.</p><p>— {{studio_name}}</p>`,
+      `<p>Hola {{client_name}},</p><p>¡Tus fotos editadas de <strong>{{gallery_name}}</strong> ya están disponibles! <a href="{{gallery_link}}" class="btn">Verlas y descargarlas acá</a>.</p><p>Disponible hasta el {{expiration_date}}.</p><p>— {{studio_name}}</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "Juan" },
       { key: "gallery_name", label: "Galería", example: "Boda Pérez" },
@@ -349,7 +349,7 @@ export const TEMPLATE_CATALOG: Record<
     category: "gallery",
     defaultSubject: "Tu respaldo en Drive — {{gallery_name}}",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>Te dejamos el respaldo de <strong>{{gallery_name}}</strong> en Google Drive: <a href="{{drive_link}}">abrir carpeta</a>.</p><p>— {{studio_name}}</p>`,
+      `<p>Hola {{client_name}},</p><p>Te dejamos el respaldo de <strong>{{gallery_name}}</strong> en Google Drive: <a href="{{drive_link}}" class="btn">abrir carpeta</a>.</p><p>— {{studio_name}}</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "Juan" },
       { key: "gallery_name", label: "Galería", example: "Boda Pérez" },
@@ -364,7 +364,7 @@ export const TEMPLATE_CATALOG: Record<
     defaultSubject: "{{delivery_title}} — tu entrega está lista",
     defaultBodyHtml:
       `<p>Hola {{client_name}},</p>
-<p>¡Buenas noticias! Tu entrega <strong>{{delivery_title}}</strong> ya está disponible. Podés verla y descargarla acá: <a href="{{portal_url}}">{{portal_url}}</a></p>
+<p>¡Buenas noticias! Tu entrega <strong>{{delivery_title}}</strong> ya está disponible. Podés verla y descargarla acá: <a href="{{portal_url}}" class="btn">Ver mi entrega</a></p>
 <div style="margin:20px 0;padding:14px 16px;border-left:3px solid #b89968;background:#fbf6ed;border-radius:4px">
   <p style="margin:0 0 8px;font-weight:600;color:#1a1614">⏳ Importante — guardá tus fotos antes de 6 meses</p>
   <p style="margin:0;color:#3a322b;font-size:14px;line-height:1.5">
@@ -427,7 +427,7 @@ export const TEMPLATE_CATALOG: Record<
     category: "engagement",
     defaultSubject: "¿Cómo fue tu experiencia con {{studio_name}}?",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>¡Gracias por confiar en nosotros para {{project_name}}! Nos encantaría saber cómo fue tu experiencia.</p><p><a href="{{review_link}}">Cuéntanos aquí →</a></p><p>— {{studio_name}}</p>`,
+      `<p>Hola {{client_name}},</p><p>¡Gracias por confiar en nosotros para {{project_name}}! Nos encantaría saber cómo fue tu experiencia.</p><p><a href="{{review_link}}" class="btn">Cuéntanos aquí →</a></p><p>— {{studio_name}}</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "María" },
       { key: "project_name", label: "Proyecto", example: "Quinceañera" },
@@ -455,7 +455,7 @@ export const TEMPLATE_CATALOG: Record<
     category: "engagement",
     defaultSubject: "Nos encantaría conocer tu opinión, {{client_name}}",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>Nos encantaría conocer tu opinión. Tu reseña nos ayuda muchísimo.</p><p><a href="{{review_link}}">Dejar mi reseña →</a></p><p>— {{studio_name}}</p>`,
+      `<p>Hola {{client_name}},</p><p>Nos encantaría conocer tu opinión. Tu reseña nos ayuda muchísimo.</p><p><a href="{{review_link}}" class="btn">Dejar mi reseña →</a></p><p>— {{studio_name}}</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "María" },
       { key: "review_link", label: "Link de reseña", example: "https://g.page/..." },
@@ -591,10 +591,67 @@ export async function resolveTemplate(
   const tpl = await getStudioTemplate(studioId, slug)
   const subjectRaw = tpl?.subject ?? defaults.subject
   const bodyRaw = tpl?.body_html ?? defaults.bodyHtml
+  const innerHtml = renderTemplate(bodyRaw, vars)
+
+  // Marco luxury (header del estudio + tipografía serif + botones dorados).
+  // Si la plantilla del studio ya trae un documento HTML completo (<html…),
+  // se respeta tal cual; sino se envuelve.
+  let bodyHtml = innerHtml
+  if (!/<html[\s>]/i.test(innerHtml)) {
+    try {
+      const { wrapLuxuryEmail } = await import("@/lib/email/luxury-layout")
+      const branding = await getEmailBranding(studioId)
+      bodyHtml = wrapLuxuryEmail(innerHtml, {
+        studioName:
+          (vars["studio_name"] as string | undefined) || branding.studioName,
+        logoUrl: branding.logoUrl,
+        accent: branding.accent,
+        footerHtml: branding.footerHtml,
+        contactLine: branding.contactLine,
+      })
+    } catch (e) {
+      console.error("[email] wrapLuxuryEmail falló, se envía sin marco", e)
+    }
+  }
+
   return {
     subject: renderTemplate(subjectRaw, vars),
-    bodyHtml: renderTemplate(bodyRaw, vars),
+    bodyHtml,
     fromName: tpl?.from_name ?? null,
     replyTo: tpl?.reply_to ?? null,
+  }
+}
+
+/** Branding del estudio para el marco de email (logo, color, nombre, footer). */
+async function getEmailBranding(studioId: string): Promise<{
+  studioName: string
+  logoUrl: string | null
+  accent: string | null
+  footerHtml: string | null
+  contactLine: string | null
+}> {
+  const { untypedService } = await import("@/server/supabase/untyped")
+  const sb = untypedService()
+  const [{ data: studio }, { data: branding }] = await Promise.all([
+    sb.from("studios").select("name, email, phone").eq("id", studioId).maybeSingle(),
+    sb
+      .from("studio_branding")
+      .select("logo_url, primary_color, custom_footer_html")
+      .eq("studio_id", studioId)
+      .maybeSingle(),
+  ])
+  const s = studio as { name?: string; email?: string | null; phone?: string | null } | null
+  const b = branding as {
+    logo_url?: string | null
+    primary_color?: string | null
+    custom_footer_html?: string | null
+  } | null
+  const contactBits = [s?.email, s?.phone].filter(Boolean) as string[]
+  return {
+    studioName: s?.name ?? "",
+    logoUrl: b?.logo_url ?? null,
+    accent: b?.primary_color ?? null,
+    footerHtml: b?.custom_footer_html ?? null,
+    contactLine: contactBits.length ? contactBits.join(" · ") : null,
   }
 }

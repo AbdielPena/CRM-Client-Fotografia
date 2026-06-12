@@ -10,10 +10,17 @@ import {
   Check,
   Sparkles,
   Clock,
+  Gem,
+  Smartphone,
+  type LucideIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
+
+/** Paleta luxury fija — dorado champagne sobre grafito. Nunca azul. */
+const GOLD = "#b89968"
+const GOLD_SOFT = "#cbb083"
 
 type Asset = {
   id: string
@@ -51,17 +58,17 @@ type Track = "high_quality" | "social"
 
 const TRACK_META: Record<
   Track,
-  { emoji: string; title: string; blurb: string; resolution: "original" | "web" }
+  { Icon: LucideIcon; title: string; blurb: string; resolution: "original" | "web" }
 > = {
   high_quality: {
-    emoji: "💎",
+    Icon: Gem,
     title: "Máxima Calidad",
     blurb:
       "JPG en alta resolución, sin comprimir — ideales para imprimir, ampliar y archivar.",
     resolution: "original",
   },
   social: {
-    emoji: "📱",
+    Icon: Smartphone,
     title: "Redes Sociales",
     blurb:
       "Optimizadas para Instagram, Facebook y WhatsApp — suben rápido y se ven perfectas en pantalla.",
@@ -99,7 +106,10 @@ export function FinalDeliveryView({
   studio: Studio
   driveLink: string | null
 }) {
-  const accent = gallery.accentColor || studio.primaryColor || "#b89968"
+  // Entrega final = experiencia luxury fija (dorado). Solo respetamos un accent
+  // por-galería si el fotógrafo lo definió a propósito; el color del studio se
+  // ignora aquí para garantizar la estética premium (nada de azules/morados).
+  const accent = gallery.accentColor || GOLD
 
   const byTrack = useMemo(() => {
     const hq = assets.filter((a) => a.deliveryTrack === "high_quality")
@@ -189,10 +199,10 @@ export function FinalDeliveryView({
             <img src={studio.logoUrl} alt={studio.name} className="mb-8 h-10 w-auto" />
           )}
           <p
-            className="mb-3 text-[11px] font-semibold uppercase tracking-[0.25em]"
-            style={{ color: cover ? accent : accent }}
+            className="mb-3 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.25em]"
+            style={{ color: cover ? GOLD_SOFT : accent }}
           >
-            ✨ Tu entrega final está lista
+            <Sparkles className="h-3 w-3" /> Tu entrega final está lista
           </p>
           <h1 className="font-serif text-4xl font-medium leading-tight sm:text-5xl">
             {gallery.name}
@@ -266,9 +276,15 @@ export function FinalDeliveryView({
             <section key={track} className="mb-14">
               <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
                 <div>
-                  <h2 className="font-serif text-2xl font-medium">
-                    {meta.emoji} {meta.title}
-                    <span className="ml-2 align-middle text-sm font-normal text-[#6b6760]">
+                  <h2 className="flex items-center gap-2.5 font-serif text-2xl font-medium">
+                    <span
+                      className="flex h-9 w-9 items-center justify-center rounded-full"
+                      style={{ backgroundColor: `${accent}1f`, color: accent }}
+                    >
+                      <meta.Icon className="h-[18px] w-[18px]" />
+                    </span>
+                    {meta.title}
+                    <span className="align-middle text-sm font-normal text-[#6b6760]">
                       {list.length} foto{list.length === 1 ? "" : "s"}
                     </span>
                   </h2>

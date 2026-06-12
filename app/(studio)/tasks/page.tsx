@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   PauseCircle,
   XCircle,
+  User,
 } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -238,11 +239,13 @@ export default async function TasksPage({
                               {isOverdue && " (atrasada)"}
                             </span>
                           )}
-                          {t.entity_type && (
-                            <span>
-                              · Vinculada a {t.entity_type}
+                          {t.client_name ? (
+                            <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                              · <User className="inline size-2.5" /> {t.client_name}
                             </span>
-                          )}
+                          ) : t.entity_type ? (
+                            <span>· Vinculada a {t.entity_type}</span>
+                          ) : null}
                           {t.is_recurring && <span>· 🔁 Recurrente</span>}
                         </div>
                       </div>

@@ -48,6 +48,62 @@ export type TaskRow = {
   created_at: string
   updated_at: string
   deleted_at: string | null
+  /** Nombre del cliente vinculado (resuelto vía entity project/client). */
+  client_name?: string | null
+}
+
+/**
+ * Enriquece tareas con el nombre del cliente vinculado:
+ *  - entity_type='client' → clients.name directo
+ *  - entity_type='project' → projects.client_id → clients.name
+ */
+async function attachClientNames(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sb: any,
+  studioId: string,
+  rows: TaskRow[],
+): Promise<TaskRow[]> {
+  const projectIds = [
+    ...new Set(rows.filter((t) => t.entity_type === "project" && t.entity_id).map((t) => t.entity_id!)),
+  ]
+  const directClientIds = [
+    ...new Set(rows.filter((t) => t.entity_type === "client" && t.entity_id).map((t) => t.entity_id!)),
+  ]
+
+  // project → client_id
+  const projectClient: Record<string, string> = {}
+  if (projectIds.length) {
+    const { data } = await sb
+      .from("projects")
+      .select("id, client_id")
+      .eq("studio_id", studioId)
+      .in("id", projectIds)
+    for (const p of (data ?? []) as Array<{ id: string; client_id: string | null }>) {
+      if (p.client_id) projectClient[p.id] = p.client_id
+    }
+  }
+
+  const allClientIds = [
+    ...new Set([...directClientIds, ...Object.values(projectClient)]),
+  ]
+  const clientName: Record<string, string> = {}
+  if (allClientIds.length) {
+    const { data } = await sb
+      .from("clients")
+      .select("id, name")
+      .eq("studio_id", studioId)
+      .in("id", allClientIds)
+    for (const c of (data ?? []) as Array<{ id: string; name: string }>) {
+      clientName[c.id] = c.name
+    }
+  }
+
+  return rows.map((t) => {
+    let cid: string | null = null
+    if (t.entity_type === "client") cid = t.entity_id
+    else if (t.entity_type === "project" && t.entity_id) cid = projectClient[t.entity_id] ?? null
+    return { ...t, client_name: cid ? (clientName[cid] ?? null) : null }
+  })
 }
 
 export async function getTasks(
@@ -96,8 +152,10 @@ export async function getTasks(
   const { data, count, error } = await query
   if (error) throwServiceError("TASKS_LIST_FAILED", error, { studioId })
 
+  const items = await attachClientNames(sb, studioId, (data ?? []) as TaskRow[])
+
   return {
-    items: (data ?? []) as TaskRow[],
+    items,
     total: count ?? 0,
     page,
     pageSize,
