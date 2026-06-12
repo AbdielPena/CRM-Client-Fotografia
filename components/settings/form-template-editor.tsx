@@ -40,6 +40,7 @@ const FIELD_TYPES: { value: FormFieldType; label: string }[] = [
   { value: "select", label: "Lista desplegable" },
   { value: "radio", label: "Opción única (radio)" },
   { value: "checkbox", label: "Casilla de verificación" },
+  { value: "explanation", label: "Explicación / nota (solo texto)" },
   { value: "file", label: "Archivo (próximamente)" },
 ]
 
@@ -97,6 +98,7 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
   const [expanded, setExpanded] = useState<string | null>(
     initial?.schema?.fields?.[0]?.key ?? null,
   )
+  const [showPreview, setShowPreview] = useState(false)
 
   const keys = useMemo(() => fields.map((f) => f.key), [fields])
 
@@ -250,13 +252,13 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
         </div>
         <div>
           <label className="block text-sm font-medium text-foreground mb-1">
-            Descripción interna
+            Descripción / intro (la ve el cliente al inicio)
           </label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            placeholder="Para qué tipo de sesión es este formulario"
+            rows={3}
+            placeholder="Ej: Nos encantaría conocerte un poco más antes de tu sesión…"
             className="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
           />
         </div>
@@ -284,14 +286,31 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
       <section className="bg-card rounded-xl border border-border">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Campos</h2>
-          <button
-            type="button"
-            onClick={addField}
-            className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-brand text-brand-foreground rounded-lg hover:bg-brand/90"
-          >
-            <Plus className="h-3 w-3" /> Agregar campo
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 border border-border rounded-lg hover:bg-muted"
+            >
+              {showPreview ? "Ocultar vista previa" : "👁 Vista previa"}
+            </button>
+            <button
+              type="button"
+              onClick={addField}
+              className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-brand text-brand-foreground rounded-lg hover:bg-brand/90"
+            >
+              <Plus className="h-3 w-3" /> Agregar campo
+            </button>
+          </div>
         </div>
+
+        {showPreview && (
+          <FormPreviewPanel
+            name={name}
+            description={description}
+            fields={fields}
+          />
+        )}
 
         {fields.length === 0 ? (
           <p className="px-5 py-8 text-sm text-muted-foreground text-center">
@@ -411,17 +430,30 @@ export function FormTemplateEditor({ mode, templateId, initial }: Props) {
                         </p>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
+                        <div className={field.type === "explanation" ? "md:col-span-2" : undefined}>
                           <label className="block text-xs font-medium text-muted-foreground mb-1">
-                            Etiqueta
+                            {field.type === "explanation"
+                              ? "Texto de la explicación / nota"
+                              : "Etiqueta"}
                           </label>
-                          <input
-                            value={field.label}
-                            onChange={(e) =>
-                              updateField(idx, { label: e.target.value })
-                            }
-                            className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20"
-                          />
+                          {field.type === "explanation" ? (
+                            <textarea
+                              value={field.label}
+                              rows={4}
+                              onChange={(e) =>
+                                updateField(idx, { label: e.target.value })
+                              }
+                              className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20"
+                            />
+                          ) : (
+                            <input
+                              value={field.label}
+                              onChange={(e) =>
+                                updateField(idx, { label: e.target.value })
+                              }
+                              className="w-full px-2 py-1.5 text-sm border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-brand/20"
+                            />
+                          )}
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-muted-foreground mb-1">
@@ -725,6 +757,97 @@ function VisibleIfEditor({
             placeholder="igual a…"
             className="px-2 py-1.5 text-sm border border-border rounded-md font-mono"
           />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Vista previa en vivo — renderiza el formulario como lo verá el cliente
+ * (estilo client-luxe), de solo lectura. Se actualiza al editar los campos.
+ */
+function FormPreviewPanel({
+  name,
+  description,
+  fields,
+}: {
+  name: string
+  description: string
+  fields: FormField[]
+}) {
+  return (
+    <div className="client-luxe border-b border-border bg-[#faf7f2] px-4 py-6">
+      <p className="mx-auto mb-3 max-w-2xl text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Vista previa · así lo verá tu cliente
+      </p>
+      <div className="mx-auto max-w-2xl space-y-5">
+        <div className="lx-card p-6">
+          <h1 className="font-serif text-2xl font-semibold text-foreground">
+            {name || "Título del formulario"}
+          </h1>
+          {description.trim() && (
+            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+              {description}
+            </p>
+          )}
+        </div>
+        <div className="lx-card space-y-5 p-6">
+          {fields.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin campos todavía.</p>
+          ) : (
+            fields.map((f) => <PreviewField key={f.key} field={f} />)
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PreviewField({ field }: { field: FormField }) {
+  if (field.type === "explanation") {
+    return (
+      <div className="rounded-xl bg-brand-soft/40 px-4 py-3">
+        <p className="whitespace-pre-line text-[14px] leading-relaxed text-foreground/85">
+          {field.label}
+        </p>
+      </div>
+    )
+  }
+  const box =
+    "w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-muted-foreground"
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-foreground">
+        {field.label}
+        {field.required && <span className="text-red-500"> *</span>}
+      </label>
+      {field.help && (
+        <p className="mb-2 text-xs text-muted-foreground">{field.help}</p>
+      )}
+      {field.type === "textarea" ? (
+        <div className={box + " min-h-[72px]"}>{field.placeholder || ""}</div>
+      ) : field.type === "radio" ? (
+        <div className="space-y-2">
+          {(field.options ?? []).map((o) => (
+            <label
+              key={o.value}
+              className="flex items-center gap-2 text-sm text-foreground"
+            >
+              <input type="radio" disabled className="accent-gold-600" /> {o.label}
+            </label>
+          ))}
+        </div>
+      ) : field.type === "select" ? (
+        <div className={box}>{field.placeholder || "Selecciona…"}</div>
+      ) : field.type === "checkbox" ? (
+        <label className="flex items-center gap-2 text-sm text-foreground">
+          <input type="checkbox" disabled className="h-4 w-4 accent-gold-600" />
+          {field.placeholder ?? "Acepto"}
+        </label>
+      ) : (
+        <div className={box}>
+          {field.placeholder || (field.type === "date" ? "dd / mm / aaaa" : "")}
         </div>
       )}
     </div>

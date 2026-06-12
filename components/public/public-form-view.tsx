@@ -201,6 +201,17 @@ function FormFieldRenderer({
   const common =
     'sf-input-focus w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground focus:outline-none'
 
+  // Bloque de explicación: solo texto descriptivo, sin input.
+  if (field.type === 'explanation') {
+    return (
+      <div className="rounded-xl bg-brand-soft/40 px-4 py-3">
+        <p className="whitespace-pre-line text-[14px] leading-relaxed text-foreground/85">
+          {field.label}
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-foreground">

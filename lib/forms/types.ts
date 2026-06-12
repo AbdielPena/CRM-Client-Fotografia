@@ -22,6 +22,7 @@ export type FormFieldType =
   | 'radio'
   | 'checkbox'
   | 'file'
+  | 'explanation' // bloque de texto descriptivo (no es un input)
 
 export interface FormFieldOption {
   value: string
@@ -68,6 +69,8 @@ export function validateFormData(
   const errors: Record<string, string> = {}
 
   for (const field of schema.fields) {
+    // 'explanation' es solo texto descriptivo, no captura nada → no validar.
+    if (field.type === 'explanation') continue
     // Si es condicional y no debe mostrarse, no valides.
     if (field.visibleIf) {
       const sourceValue = String(data[field.visibleIf.key] ?? '')
