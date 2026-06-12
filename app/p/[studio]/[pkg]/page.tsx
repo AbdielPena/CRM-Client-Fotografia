@@ -145,23 +145,26 @@ export default async function PublicPackagePage({
               <img
                 src={studio.logo_url}
                 alt={studio.name}
-                className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
+                className="h-7 w-auto max-w-[150px] object-contain"
               />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 font-serif text-base font-semibold text-white">
-                {studio.name.charAt(0).toUpperCase()}
-              </div>
+              <span
+                className="brand-logo text-foreground/90"
+                role="img"
+                aria-label={studio.name}
+              />
             )}
-            <div className="leading-tight">
-              <p className="font-serif text-base font-semibold text-foreground">
-                {studio.name}
-              </p>
-              {(studio.city || studio.country) && (
-                <p className="text-[11px] tracking-wide text-muted-foreground">
+            {(studio.city || studio.country) && (
+              <>
+                <span
+                  className="hidden h-6 w-px bg-border sm:block"
+                  aria-hidden="true"
+                />
+                <p className="hidden text-[11px] tracking-wide text-muted-foreground sm:block">
                   {[studio.city, studio.country].filter(Boolean).join(", ")}
                 </p>
-              )}
-            </div>
+              </>
+            )}
           </div>
           <Link
             href={bookingHref}
