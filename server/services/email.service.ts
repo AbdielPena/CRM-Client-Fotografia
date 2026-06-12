@@ -246,6 +246,45 @@ ${brandClose}
   return { subject, html }
 }
 
+/**
+ * Correo de bienvenida al CLIENTE apenas registra una solicitud (antes solo se
+ * notificaba al estudio). Confirma recepción y que está en espera de aprobación.
+ */
+export function renderBookingReceivedForClient(params: {
+  studioName: string
+  primaryColor?: string
+  clientName: string
+  packageName: string
+  eventDate: string
+  replyToEmail?: string | null
+}) {
+  const {
+    studioName,
+    primaryColor = '#111827',
+    clientName,
+    packageName,
+    eventDate,
+    replyToEmail,
+  } = params
+
+  const subject = `Recibimos tu solicitud — ${studioName}`
+  const replyLine = replyToEmail
+    ? `<p style="margin: 0 0 12px; color: #6b7280; font-size: 13px;">¿Dudas? Responde a este email o escríbenos a <a href="mailto:${escapeHtml(replyToEmail)}" style="color: ${escapeHtml(primaryColor)};">${escapeHtml(replyToEmail)}</a>.</p>`
+    : ''
+
+  const html = `
+${brand(studioName, primaryColor)}
+  <h1 style="margin: 0 0 8px; font-size: 22px;">¡Gracias por escribirnos, ${escapeHtml(clientName)}!</h1>
+  <p style="margin: 0 0 16px; color: #4b5563;">Recibimos tu solicitud para el paquete <strong>${escapeHtml(packageName)}</strong> el <strong>${escapeHtml(eventDate)}</strong>. Qué alegría que quieras capturar este momento con nosotros.</p>
+  <p style="margin: 0 0 16px; color: #4b5563;">Ya la estamos revisando con cariño. En breve te confirmaremos la disponibilidad y te enviaremos los siguientes pasos para asegurar tu fecha.</p>
+  <p style="margin: 0 0 16px; color: #4b5563;">No tienes que hacer nada por ahora — nosotros te escribimos.</p>
+  ${replyLine}
+  <p style="margin: 24px 0 0; color: #4b5563;">Con cariño,<br/>El equipo de ${escapeHtml(studioName)}</p>
+${brandClose}
+`
+  return { subject, html }
+}
+
 export function renderFormInvitationForClient(params: {
   studioName: string
   primaryColor?: string

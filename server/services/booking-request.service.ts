@@ -11,6 +11,7 @@ import {
   enqueueEmail,
   renderBookingApprovedForClient,
   renderBookingReceivedForStudio,
+  renderBookingReceivedForClient,
   renderBookingRejectedForClient,
 } from '@/server/services/email.service'
 import { logActivity } from '@/server/services/activity.service'
@@ -265,6 +266,34 @@ export async function createPublicBookingRequest(
       })
     } catch (err) {
       console.error('[createPublicBookingRequest] enqueue studio email failed', err)
+    }
+  }
+
+  // Bienvenida al CLIENTE — confirma recepción + "en espera de aprobación".
+  // (Antes el cliente no recibía nada al registrar la solicitud.)
+  if (email) {
+    try {
+      const { subject, html } = renderBookingReceivedForClient({
+        studioName: studio.name,
+        primaryColor: studio.primary_color ?? '#111827',
+        clientName: input.clientName.trim(),
+        packageName: pkg.name,
+        eventDate: input.eventDate,
+        replyToEmail: studio.email,
+      })
+      await enqueueEmail({
+        studioId: studio.id,
+        toEmail: email,
+        toName: input.clientName.trim(),
+        subject,
+        bodyHtml: html,
+        replyTo: studio.email ?? null,
+        templateSlug: 'booking_received_for_client',
+        relatedEntityType: 'booking_request',
+        relatedEntityId: created.id,
+      })
+    } catch (err) {
+      console.error('[createPublicBookingRequest] enqueue client welcome email failed', err)
     }
   }
 
