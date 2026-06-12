@@ -23,7 +23,7 @@ export default async function PortalPaymentsPage() {
   const supabase = createSupabaseServiceClient()
   const { data: paymentsRaw } = await supabase
     .from("payments")
-    .select("id, amount, currency, status, payment_date, method, created_at")
+    .select("id, amount, currency, status, received_at, method, created_at")
     .eq("client_id", session.clientId)
     .order("created_at", { ascending: false })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,8 +82,8 @@ export default async function PortalPaymentsPage() {
                   </p>
                   <p className="text-[12px] text-muted-foreground">
                     {titleCase(p.method ?? "")} ·{" "}
-                    {p.payment_date
-                      ? formatDateShort(new Date(p.payment_date))
+                    {p.received_at
+                      ? formatDateShort(new Date(p.received_at))
                       : formatDateShort(new Date(p.created_at))}
                   </p>
                 </div>

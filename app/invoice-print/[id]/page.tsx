@@ -121,7 +121,7 @@ export default async function InvoicePrintPage({
   // Pagos asociados
   const { data: paymentsRaw } = await supabase
     .from("payments")
-    .select("id, amount, currency, payment_date, method, status")
+    .select("id, amount, currency, received_at, method, status")
     .eq("invoice_id", params.id)
     .order("created_at", { ascending: true })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -420,7 +420,7 @@ export default async function InvoicePrintPage({
               <tbody>
                 {payments.map((p) => (
                   <tr key={p.id}>
-                    <td>{fmtDate(p.payment_date)}</td>
+                    <td>{fmtDate(p.received_at)}</td>
                     <td style={{ textTransform: "uppercase" }}>{p.method ?? "—"}</td>
                     <td className="num">{fmt(p.amount, p.currency ?? inv.currency)}</td>
                   </tr>

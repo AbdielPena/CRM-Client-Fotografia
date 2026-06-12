@@ -25,7 +25,7 @@ export default async function PortalInvoicesPage() {
   const { data: invoicesRaw } = await supabase
     .from("invoices")
     .select(
-      "id, invoice_number, status, total_amount, currency, due_date, created_at, public_token",
+      "id, invoice_number, status, total, currency, due_date, created_at, public_token",
     )
     .eq("client_id", session.clientId)
     .is("deleted_at", null)
@@ -35,7 +35,7 @@ export default async function PortalInvoicesPage() {
 
   const totalDue = invoices
     .filter((i) => i.status !== "paid" && i.status !== "void")
-    .reduce((s, i) => s + Number(i.total_amount ?? 0), 0)
+    .reduce((s, i) => s + Number(i.total ?? 0), 0)
   const currency = invoices[0]?.currency ?? "USD"
 
   return (
@@ -94,7 +94,7 @@ export default async function PortalInvoicesPage() {
 
                 <div className="mt-4 flex items-end justify-between gap-3 border-t border-border pt-4">
                   <span className="font-serif-soft text-2xl font-semibold tabular-nums text-foreground">
-                    {formatCurrency(Number(inv.total_amount ?? 0), inv.currency ?? "USD")}
+                    {formatCurrency(Number(inv.total ?? 0), inv.currency ?? "USD")}
                   </span>
                   <div className="flex items-center gap-2">
                     <Link

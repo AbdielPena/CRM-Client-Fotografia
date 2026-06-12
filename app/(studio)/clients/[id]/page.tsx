@@ -89,14 +89,14 @@ export default async function ClientDetailPage({
       .order("created_at", { ascending: false }),
     supabase
       .from("invoices")
-      .select("id, invoice_number, status, total_amount, currency, due_date, created_at")
+      .select("id, invoice_number, status, total, currency, due_date, created_at")
       .eq("studio_id", session.studioId)
       .eq("client_id", params.id)
       .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     supabase
       .from("payments")
-      .select("id, amount, currency, status, payment_date, method, invoice_id, created_at")
+      .select("id, amount, currency, status, received_at, method, invoice_id, created_at")
       .eq("studio_id", session.studioId)
       .eq("client_id", params.id)
       .order("created_at", { ascending: false })
@@ -160,7 +160,7 @@ export default async function ClientDetailPage({
 
   // Métricas para resumen
   const totalInvoiced = invoices.reduce(
-    (sum, inv) => sum + Number(inv.total_amount ?? 0),
+    (sum, inv) => sum + Number(inv.total ?? 0),
     0,
   )
   const totalPaid = payments
@@ -355,7 +355,7 @@ export default async function ClientDetailPage({
                         </p>
                       </div>
                       <span className="text-sm font-semibold tabular-nums text-foreground">
-                        {formatCurrency(Number(inv.total_amount ?? 0), inv.currency ?? "USD")}
+                        {formatCurrency(Number(inv.total ?? 0), inv.currency ?? "USD")}
                       </span>
                       <StatusBadge status={String(inv.status)} />
                     </Link>
@@ -392,8 +392,8 @@ export default async function ClientDetailPage({
                           ) : null}
                         </p>
                         <p className="text-[11.5px] text-muted-foreground">
-                          {p.payment_date
-                            ? formatDateShort(new Date(p.payment_date))
+                          {p.received_at
+                            ? formatDateShort(new Date(p.received_at))
                             : formatDateShort(new Date(p.created_at))}
                         </p>
                       </div>
