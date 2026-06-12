@@ -115,7 +115,10 @@ export async function getStudioByCustomDomain(
 export async function updateStudioBranding(
   studioId: string,
   actorId: string,
-  data: Partial<Omit<StudioBranding, "studio_id" | "created_at" | "updated_at">>,
+  // client_banner_url es columna nueva (puede no estar en los tipos generados aún)
+  data: Partial<Omit<StudioBranding, "studio_id" | "created_at" | "updated_at">> & {
+    client_banner_url?: string | null
+  },
 ): Promise<StudioBranding> {
   const sb = untypedService()
 

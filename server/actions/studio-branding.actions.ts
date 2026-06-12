@@ -71,6 +71,7 @@ export async function updateBrandingAction(
       logo_url: (formData.get("logo_url") as string) || null,
       logo_dark_url: (formData.get("logo_dark_url") as string) || null,
       favicon_url: (formData.get("favicon_url") as string) || null,
+      client_banner_url: (formData.get("client_banner_url") as string) || null,
       primary_color:
         (formData.get("primary_color") as string) || "#7C3AED",
       secondary_color: (formData.get("secondary_color") as string) || null,

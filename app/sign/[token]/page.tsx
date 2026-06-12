@@ -79,6 +79,17 @@ export default async function ContractSigningPage({
     .eq("id", contract.studio_id as string)
     .maybeSingle()
 
+  // Banner configurable del estudio (columna nueva → cliente untyped)
+  const { untypedService } = await import("@/server/supabase/untyped")
+  const { data: brandingRow } = await untypedService()
+    .from("studio_branding")
+    .select("client_banner_url")
+    .eq("studio_id", contract.studio_id as string)
+    .maybeSingle()
+  const studioBannerUrl =
+    (brandingRow as { client_banner_url?: string | null } | null)
+      ?.client_banner_url ?? undefined
+
   const status = contract.status as string
   const signedAt = contract.signed_at as string | null
   const expiresAt = contract.expires_at as string | null
@@ -138,6 +149,7 @@ export default async function ContractSigningPage({
         eventDate: project?.event_date ?? undefined,
         studioName: studio?.name ?? "Studio",
         studioLogoUrl: studio?.logo_url ?? undefined,
+        studioBannerUrl,
       }}
     />
   )

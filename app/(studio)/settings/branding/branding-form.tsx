@@ -103,6 +103,20 @@ export function BrandingForm({
               className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
+          <div className="sm:col-span-2">
+            <LogoField
+              name="client_banner_url"
+              label="Banner del cliente (contratos y formularios)"
+              hint="Foto horizontal (≈1200×400) que aparece arriba de los contratos y formularios del cliente. JPG, PNG o WEBP · máx 2 MB. Sin banner, se usa un degradado de marca con tu logo."
+              initialUrl={
+                (branding as { client_banner_url?: string | null })
+                  .client_banner_url ?? null
+              }
+              variant="banner"
+              cta="Subir banner"
+              wide
+            />
+          </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium">
               Font family
@@ -612,13 +626,17 @@ function LogoField({
   initialUrl,
   variant,
   dark,
+  cta = "Subir logo",
+  wide,
 }: {
   name: string
   label: string
   hint?: string
   initialUrl: string | null
-  variant: "light" | "dark"
+  variant: "light" | "dark" | "favicon" | "banner"
   dark?: boolean
+  cta?: string
+  wide?: boolean
 }) {
   const [url, setUrl] = useState(initialUrl ?? "")
   const [busy, setBusy] = useState(false)
@@ -661,7 +679,8 @@ function LogoField({
       >
         <div
           className={cn(
-            "flex h-12 w-28 shrink-0 items-center justify-center overflow-hidden rounded-md border border-input/60",
+            "flex shrink-0 items-center justify-center overflow-hidden rounded-md border border-input/60",
+            wide ? "h-16 w-44" : "h-12 w-28",
             dark ? "bg-neutral-900" : "bg-muted/30",
           )}
         >
@@ -670,7 +689,10 @@ function LogoField({
             <img
               src={url}
               alt={label}
-              className="max-h-10 max-w-[100px] object-contain"
+              className={cn(
+                "object-cover",
+                wide ? "h-full w-full" : "max-h-10 max-w-[100px] object-contain",
+              )}
             />
           ) : (
             <ImageIcon className="size-5 text-muted-foreground" />
@@ -689,7 +711,7 @@ function LogoField({
               ) : (
                 <UploadCloud className="size-3.5" />
               )}
-              {url ? "Cambiar" : "Subir logo"}
+              {url ? "Cambiar" : cta}
             </button>
             {url && (
               <button
