@@ -11,6 +11,8 @@ import { AppTopbar } from "@/components/layout/app-topbar"
 import { AssistantChat } from "@/components/ai/assistant-chat"
 import { KnowledgeManager } from "@/components/ai/knowledge-manager"
 import { LearningPanel } from "@/components/ai/learning-panel"
+import { WhatsAppBotConnection } from "@/components/ai/whatsapp-bot-connection"
+import { getBotConnection } from "@/server/services/ai/whatsapp-bot.service"
 
 export const metadata: Metadata = { title: "AI Assistant Center" }
 export const dynamic = "force-dynamic"
@@ -38,6 +40,10 @@ export default async function AiAssistantPage() {
       .order("created_at", { ascending: false }),
     countUnreadNotifications(session.studioId),
   ])
+
+  const botConn = await getBotConnection(session.studioId)
+  const appBase = (process.env["NEXT_PUBLIC_APP_URL"] ?? "").replace(/\/$/, "")
+  const webhookUrl = `${appBase}/api/webhooks/whatsapp`
 
   const studioName = (studioRes.data as { name?: string } | null)?.name ?? "tu estudio"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,6 +89,20 @@ export default async function AiAssistantPage() {
       />
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
+        {/* Conexión del bot a WhatsApp */}
+        <div className="max-w-2xl">
+          <WhatsAppBotConnection
+            webhookUrl={webhookUrl}
+            connection={{
+              connected: !!botConn,
+              status: botConn?.status ?? "disconnected",
+              phoneNumberId: botConn?.phoneNumberId ?? null,
+              businessAccountId: botConn?.businessAccountId ?? null,
+              verifyToken: botConn?.verifyToken ?? null,
+            }}
+          />
+        </div>
+
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Chat de prueba */}
           <div className="lg:col-span-2">
@@ -166,6 +186,26 @@ export default async function AiAssistantPage() {
                   pregunta abajo para que la enseñes. <em>Nunca</em> aprende precios
                   personalizados ni descuentos (eso siempre va a un humano).
                 </span>
+              </label>
+              <label className="flex items-start gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  name="handoff_notify_whatsapp"
+                  defaultChecked={s ? !!s.handoff_notify_whatsapp : false}
+                  value="true"
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>Avisarme por <strong>WhatsApp</strong> (a mi número principal) cuando un cliente necesite atención humana.</span>
+              </label>
+              <label className="flex items-start gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  name="mirror_emails"
+                  defaultChecked={s ? !!s.mirror_emails : false}
+                  value="true"
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>Enviar también por <strong>WhatsApp</strong> los avisos que van por email al cliente (requiere plantillas aprobadas de Meta).</span>
               </label>
               <button
                 type="submit"

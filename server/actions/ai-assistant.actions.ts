@@ -33,6 +33,8 @@ export async function saveAssistantSettingsAction(formData: FormData): Promise<v
     handoff_tag:
       ((formData.get("handoff_tag") as string) || "Transferido a un agente").trim(),
     auto_learn: formData.get("auto_learn") === "true",
+    handoff_notify_whatsapp: formData.get("handoff_notify_whatsapp") === "true",
+    mirror_emails: formData.get("mirror_emails") === "true",
     updated_at: new Date().toISOString(),
   }
   const { error } = await db()
@@ -40,6 +42,76 @@ export async function saveAssistantSettingsAction(formData: FormData): Promise<v
     .upsert(row, { onConflict: "studio_id" })
   if (error) console.error("[saveAssistantSettings]", error.message)
   revalidatePath("/ai-assistant")
+}
+
+/**
+ * Guarda/actualiza la conexión del NÚMERO DEL BOT en WhatsApp
+ * (chatflow_connections). Genera un verify_token si no se mandó uno.
+ */
+export async function saveWhatsAppBotConnectionAction(formData: FormData) {
+  const session = await requireRole("admin")
+  const phoneNumberId = ((formData.get("phone_number_id") as string) || "").trim()
+  const accessToken = ((formData.get("access_token") as string) || "").trim()
+  const businessAccountId = ((formData.get("business_account_id") as string) || "").trim()
+  if (!phoneNumberId || !accessToken) {
+    return { error: "Faltan el Phone Number ID o el Access Token" }
+  }
+
+  const sb = db()
+  // Conservar el verify_token existente o generar uno nuevo.
+  const { data: existing } = await sb
+    .from("chatflow_connections")
+    .select("id, config")
+    .eq("studio_id", session.studioId)
+    .eq("channel", "whatsapp")
+    .maybeSingle()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const prevCfg = (existing as any)?.config ?? {}
+  const verifyToken: string =
+    ((formData.get("verify_token") as string) || "").trim() ||
+    (prevCfg.verify_token as string | undefined) ||
+    `pixelos_${randomToken()}`
+
+  const config = {
+    phone_number_id: phoneNumberId,
+    access_token: accessToken,
+    business_account_id: businessAccountId || null,
+    verify_token: verifyToken,
+  }
+
+  const { error } = await sb.from("chatflow_connections").upsert(
+    {
+      studio_id: session.studioId,
+      channel: "whatsapp",
+      status: "connected",
+      config,
+      connected_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "studio_id,channel" },
+  )
+  if (error) return { error: error.message }
+  revalidatePath("/ai-assistant")
+  return { success: true, verifyToken }
+}
+
+/** Activa/desactiva el canal WhatsApp del bot. */
+export async function toggleWhatsAppBotAction(enable: boolean) {
+  const session = await requireRole("admin")
+  const { error } = await db()
+    .from("chatflow_connections")
+    .update({ status: enable ? "connected" : "disabled", updated_at: new Date().toISOString() })
+    .eq("studio_id", session.studioId)
+    .eq("channel", "whatsapp")
+  if (error) return { error: error.message }
+  revalidatePath("/ai-assistant")
+  return { success: true }
+}
+
+function randomToken(): string {
+  // 16 bytes hex sin depender de crypto del navegador.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return require("crypto").randomBytes(16).toString("hex")
 }
 
 export async function addKnowledgeAction(formData: FormData) {
