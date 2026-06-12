@@ -590,25 +590,76 @@ async function convertBookingToClientBundle(params: {
     (snapshot.event_type ?? '').trim() ||
     'Sesión'
 
-  const result = await createClientWithBooking(
-    params.studioId,
-    params.actorId,
-    {
-      name: row.client_name,
-      email: row.client_email || undefined,
-      phone: row.client_phone || undefined,
-      source: 'public_link',
-      notes: row.additional_notes || undefined,
-      packageId: row.package_id,
-      eventType,
-      eventDate: row.event_date,
-      location: row.event_location || undefined,
-      reserveDueInDays: pricing.reserve_due_in_days ?? undefined,
-      // Flujo nuevo: NO crear facturas al aprobar. La factura única se genera
-      // cuando el cliente firma el contrato (ver onContractSigned / Fase C).
-      skipInvoices: true,
-    },
-  )
+  // Auto-sanar: la RPC create_client_with_booking exige una plantilla de
+  // contrato marcada como DEFAULT. Si el estudio tiene plantillas pero ninguna
+  // default (ajuste olvidado), promovemos la más reciente — así la conversión no
+  // se rompe con NO_CONTRACT_TEMPLATE (dejaba la solicitud aprobada sin proyecto,
+  // contrato ni botón en el email).
+  try {
+    const { count: defaultCount } = await lockSvc
+      .from('contract_templates')
+      .select('id', { count: 'exact', head: true })
+      .eq('studio_id', params.studioId)
+      .eq('is_default', true)
+      .is('deleted_at', null)
+    if (!defaultCount) {
+      const { data: anyTpl } = await lockSvc
+        .from('contract_templates')
+        .select('id')
+        .eq('studio_id', params.studioId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (anyTpl && (anyTpl as { id: string }).id) {
+        await lockSvc
+          .from('contract_templates')
+          .update({ is_default: true })
+          .eq('id', (anyTpl as { id: string }).id)
+        console.warn(
+          '[convertBookingToClientBundle] sin plantilla default; promoví',
+          (anyTpl as { id: string }).id,
+        )
+      }
+    }
+  } catch (tplErr) {
+    console.error('[convertBookingToClientBundle] ensure default template', tplErr)
+  }
+
+  let result: Awaited<ReturnType<typeof createClientWithBooking>>
+  try {
+    result = await createClientWithBooking(
+      params.studioId,
+      params.actorId,
+      {
+        name: row.client_name,
+        email: row.client_email || undefined,
+        phone: row.client_phone || undefined,
+        source: 'public_link',
+        notes: row.additional_notes || undefined,
+        packageId: row.package_id,
+        eventType,
+        eventDate: row.event_date,
+        location: row.event_location || undefined,
+        reserveDueInDays: pricing.reserve_due_in_days ?? undefined,
+        // Flujo nuevo: NO crear facturas al aprobar. La factura única se genera
+        // cuando el cliente firma el contrato (ver onContractSigned / Fase C).
+        skipInvoices: true,
+      },
+    )
+  } catch (convErr) {
+    // Si la conversión falla, LIBERAMOS el lock para que sea reintentable
+    // (antes quedaba atascada esperando un "reset manual o cron").
+    await lockSvc
+      .from('booking_requests')
+      .update({ conversion_started_at: null })
+      .eq('id', params.requestId)
+    console.error(
+      '[convertBookingToClientBundle] conversión falló, lock liberado:',
+      convErr,
+    )
+    throw convErr
+  }
 
   // Backlink: guardar ids en la booking_request + apuntar contrato y
   // facturas a la solicitud original para trazabilidad full-circle.
