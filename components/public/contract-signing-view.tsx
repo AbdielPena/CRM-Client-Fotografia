@@ -24,6 +24,9 @@ interface ContractSigningViewProps {
     eventDate?: string
     studioName: string
     studioLogoUrl?: string
+    /** Banner de cabecera configurable por estudio. Si no hay, se usa un
+     *  degradado de marca con el logo. */
+    studioBannerUrl?: string
   }
 }
 
@@ -122,30 +125,45 @@ export function ContractSigningView({
 
   return (
     <div className="min-h-screen">
-      <header className="lx-glass sticky top-0 z-20">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            {contract.studioLogoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
+      {/* Banner hero — foto configurable del estudio o degradado de marca con logo */}
+      <div className="relative h-48 w-full overflow-hidden sm:h-60">
+        {contract.studioBannerUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={contract.studioBannerUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-black/30" />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink-soft to-gold-800">
+            <div className="bg-luxe-radial pointer-events-none absolute inset-0 opacity-50" />
+          </div>
+        )}
+        <div className="relative flex h-full flex-col items-center justify-center gap-2.5 px-4 pb-6 text-center">
+          {contract.studioLogoUrl ? (
+            <span className="inline-flex items-center justify-center rounded-2xl bg-black/35 px-5 py-3 backdrop-blur-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={contract.studioLogoUrl}
                 alt={contract.studioName}
-                className="h-9 w-9 rounded-full object-cover ring-1 ring-border"
+                className="h-9 w-auto max-w-[200px] object-contain"
               />
-            ) : (
-              <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 font-serif text-sm font-semibold text-white">
-                {contract.studioName.charAt(0)}
-              </div>
-            )}
-            <span className="font-serif text-base font-semibold text-foreground">
+            </span>
+          ) : (
+            <span className="font-serif text-2xl font-semibold text-white drop-shadow">
               {contract.studioName}
             </span>
-          </div>
-          <span className="lx-overline">Firma digital segura</span>
+          )}
+          <span className="lx-overline text-white/75">
+            Contrato · Firma digital segura
+          </span>
         </div>
-      </header>
+      </div>
 
-      <div className="mx-auto max-w-3xl space-y-5 px-4 py-8">
+      <div className="mx-auto -mt-12 max-w-3xl space-y-5 px-4 pb-8">
         {/* Header info */}
         <div className="lx-card animate-fade-in-up p-6">
           <div className="mb-3 flex items-start gap-3">
