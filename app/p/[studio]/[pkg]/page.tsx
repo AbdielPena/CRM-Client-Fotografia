@@ -417,3 +417,6 @@ function DetailRow({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 // Siempre SSR (requiere datos frescos)
 export const dynamic = "force-dynamic"
+// force-dynamic NO basta: sin esto el query de packages_public queda en el Data
+// Cache de Next y sirve la info del paquete vieja tras editarla.
+export const fetchCache = "force-no-store"

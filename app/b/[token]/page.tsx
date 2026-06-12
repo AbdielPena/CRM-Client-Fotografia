@@ -6,6 +6,7 @@ import { BookingWizard } from "@/components/public/booking-wizard"
 
 export const metadata: Metadata = { title: "Confirma tu sesión" }
 export const dynamic = "force-dynamic"
+export const fetchCache = "force-no-store"
 
 type StepKey = "plan" | "form" | "contract" | "pay" | "done"
 

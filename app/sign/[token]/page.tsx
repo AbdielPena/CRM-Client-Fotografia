@@ -12,6 +12,7 @@ import { ContractSigningView } from "@/components/public/contract-signing-view"
 
 export const metadata: Metadata = { title: "Firma de contrato" }
 export const dynamic = "force-dynamic"
+export const fetchCache = "force-no-store"
 
 type ContractRow = {
   id: string

@@ -8,6 +8,7 @@ import { createBookingRequestSchema } from "@/lib/validations/booking-request.sc
 import { createPublicBookingRequest } from "@/server/services/booking-request.service"
 
 export const dynamic = "force-dynamic"
+export const fetchCache = "force-no-store"
 
 interface PageParams {
   studio: string
