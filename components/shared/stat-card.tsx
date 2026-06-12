@@ -35,15 +35,27 @@ interface StatCardProps {
   tooltip?: string
 }
 
+/** Tintes pastel por categoría (estilo minimalista SnowUI). */
+const TONE_BG: Record<StatTone, string> = {
+  blue: "bg-[#E6EEFB] dark:bg-[#1b2336]",
+  indigo: "bg-[#E9EAFB] dark:bg-[#20223a]",
+  fuchsia: "bg-[#FBEAF4] dark:bg-[#331f2c]",
+  violet: "bg-[#EFEAF8] dark:bg-[#262036]",
+  emerald: "bg-[#E8F5EE] dark:bg-[#16271f]",
+  amber: "bg-[#F4F0E6] dark:bg-[#2b271c]",
+  rose: "bg-[#FBEAF1] dark:bg-[#311e27]",
+}
+
 /**
- * StatCard — variante "Lumen": layout compacto horizontal, off-white,
- * sin íconos, sin sombras. Trend pill muy pequeño al lado del valor.
+ * StatCard — minimalista: tarjeta compacta. Con `tone` toma un fondo pastel
+ * (estilo SnowUI); sin tone queda blanca con borde fino.
  */
 export function StatCard({
   title,
   value,
   subtitle,
   trend,
+  tone,
   delay = 0,
   className,
   href,
@@ -108,8 +120,10 @@ export function StatCard({
           href={href}
           title={tooltip}
           className={cn(
-            "group relative block rounded-xl border border-border bg-card px-5 py-4",
-            "transition-all duration-fast hover:border-brand/40 hover:shadow-sm hover:-translate-y-0.5",
+            "group relative block rounded-2xl px-5 py-4 transition-all duration-fast hover:-translate-y-0.5",
+            tone
+              ? cn(TONE_BG[tone], "border border-transparent hover:shadow-sm")
+              : "border border-border bg-card hover:border-border-strong hover:shadow-sm",
             className,
           )}
         >
@@ -124,8 +138,10 @@ export function StatCard({
       {...motionProps}
       title={tooltip}
       className={cn(
-        "group relative rounded-xl border border-border bg-card px-5 py-4",
-        "transition-colors duration-fast hover:border-border-strong",
+        "group relative rounded-2xl px-5 py-4 transition-colors duration-fast",
+        tone
+          ? cn(TONE_BG[tone], "border border-transparent")
+          : "border border-border bg-card hover:border-border-strong",
         className,
       )}
     >

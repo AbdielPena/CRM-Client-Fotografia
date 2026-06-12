@@ -253,6 +253,7 @@ export default async function DashboardPage() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
               title="Ingresos del mes"
+              tone="blue"
               value={formatCurrency(data.stats.revenue, "DOP")}
               trend={
                 revenueTrend !== 0
@@ -270,6 +271,7 @@ export default async function DashboardPage() {
             />
             <StatCard
               title="Solicitudes nuevas"
+              tone="amber"
               value={data.stats.pendingBookings}
               subtitle={
                 data.stats.pendingBookings > 0
@@ -282,6 +284,7 @@ export default async function DashboardPage() {
             />
             <StatCard
               title="Clientes"
+              tone="violet"
               value={data.stats.clients}
               subtitle="Base activa"
               href="/clients"
@@ -290,6 +293,7 @@ export default async function DashboardPage() {
             />
             <StatCard
               title="Proyectos activos"
+              tone="emerald"
               value={data.stats.activeProjects}
               subtitle="Reservados + en proceso"
               href="/projects?status=in_progress"

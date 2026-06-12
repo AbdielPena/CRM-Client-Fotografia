@@ -43,7 +43,7 @@ export default async function PortalAuthedLayout({
   return (
     <div className="client-luxe portal-flat min-h-screen bg-background">
       <header className="sticky top-0 z-30 lx-glass">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 pt-3.5 pb-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-3.5">
             {c.studios?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -60,7 +60,7 @@ export default async function PortalAuthedLayout({
               />
             )}
             <span
-              className="hidden h-7 w-px bg-gold-600/25 sm:block"
+              className="hidden h-7 w-px bg-border sm:block"
               aria-hidden="true"
             />
             <p className="hidden truncate text-[12px] text-muted-foreground sm:block">
@@ -73,12 +73,22 @@ export default async function PortalAuthedLayout({
           <PortalLogoutButton />
         </div>
 
-        <PortalNav />
+        {/* Nav horizontal solo en móvil; en desktop va en el rail derecho */}
+        <div className="mx-auto max-w-6xl px-3 pb-2 sm:px-5 lg:hidden">
+          <PortalNav orientation="horizontal" />
+        </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        {children}
-      </main>
+      <div className="mx-auto flex max-w-6xl gap-8 px-4 sm:px-6">
+        <main className="min-w-0 flex-1 py-8 sm:py-10">{children}</main>
+
+        {/* Navbar al lado derecho (desktop) */}
+        <aside className="hidden shrink-0 py-8 lg:block lg:w-[208px] sm:py-10">
+          <div className="sticky top-24">
+            <PortalNav orientation="vertical" />
+          </div>
+        </aside>
+      </div>
 
       <footer className="mx-auto max-w-6xl px-4 pb-10 pt-4 text-center text-[11px] tracking-wide text-muted-foreground/70">
         Portal privado de {studioName} · Solo tú puedes ver esta información.
