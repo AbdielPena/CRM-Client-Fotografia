@@ -163,6 +163,8 @@ const config: Config = {
           "Georgia",
           "serif",
         ],
+        // Sans geométrica "flat" (portal del cliente)
+        flat: ["var(--font-flat)", "Outfit", "Inter", "system-ui", "sans-serif"],
       },
       fontSize: {
         "display-xl": ["3rem", { lineHeight: "1.1", letterSpacing: "-0.025em", fontWeight: "700" }],

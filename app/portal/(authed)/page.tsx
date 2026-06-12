@@ -170,8 +170,8 @@ export default async function PortalHomePage() {
     <div className="space-y-8">
       <header className="animate-fade-in-up">
         <p className="lx-overline mb-2">Tu espacio</p>
-        <h1 className="font-serif text-3xl font-semibold text-foreground sm:text-4xl">
-          Bienvenida a tu portal
+        <h1 className="font-serif text-3xl font-medium tracking-tight text-foreground sm:text-[40px]">
+          Bienvenida a tu <span className="text-gold-600">portal</span>
         </h1>
         <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
           Aquí tienes todo lo relacionado con tu experiencia: galerías, entregas,
@@ -185,7 +185,7 @@ export default async function PortalHomePage() {
             key={c.href}
             href={c.href}
             className={cn(
-              "lx-card lx-card-hover group animate-fade-in-up p-6",
+              "lx-card lx-card-hover group animate-fade-in-up p-5",
               c.border,
             )}
             style={{ animationDelay: `${Math.min(i * 60, 360)}ms` }}
@@ -193,20 +193,20 @@ export default async function PortalHomePage() {
             <div className="flex items-center justify-between">
               <span
                 className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-full",
+                  "flex h-10 w-10 items-center justify-center rounded-xl",
                   c.tint,
                 )}
               >
-                <c.icon className="h-5 w-5" />
+                <c.icon className="h-[18px] w-[18px]" />
               </span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
+              <ArrowRight className="h-4 w-4 text-muted-foreground transition-all duration-300 group-hover:translate-x-1 group-hover:text-gold-600" />
             </div>
-            <p className="lx-overline mt-5">{c.label}</p>
-            <p className="mt-1 font-serif-soft text-3xl font-semibold tabular-nums text-foreground">
+            <p className="lx-overline mt-4">{c.label}</p>
+            <p className="mt-1.5 font-serif-soft text-[26px] font-medium leading-none tabular-nums text-foreground">
               {c.value}
             </p>
             {c.sub && (
-              <p className="mt-1 text-[13px] text-muted-foreground">{c.sub}</p>
+              <p className="mt-2 text-[13px] text-muted-foreground">{c.sub}</p>
             )}
           </Link>
         ))}

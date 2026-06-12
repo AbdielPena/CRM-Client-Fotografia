@@ -41,30 +41,34 @@ export default async function PortalAuthedLayout({
   const studioName = c.studios?.name ?? "Tu portal"
 
   return (
-    <div className="client-luxe min-h-screen bg-background">
+    <div className="client-luxe portal-flat min-h-screen bg-background">
       <header className="sticky top-0 z-30 lx-glass">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 pt-3.5 pb-3 sm:px-6">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3.5">
             {c.studios?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={c.studios.logo_url}
                 alt={studioName}
-                className="h-10 w-10 rounded-full object-cover ring-1 ring-border"
+                className="h-7 w-auto max-w-[170px] object-contain"
               />
             ) : (
-              <div className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 font-serif text-base font-semibold text-white">
-                {studioName.slice(0, 1).toUpperCase()}
-              </div>
+              <span
+                className="brand-logo text-foreground/90"
+                role="img"
+                aria-label={studioName}
+              />
             )}
-            <div className="min-w-0">
-              <p className="truncate font-serif text-[15px] font-semibold text-foreground">
-                {studioName}
-              </p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                Hola, {c.name.split(" ")[0]}
-              </p>
-            </div>
+            <span
+              className="hidden h-7 w-px bg-gold-600/25 sm:block"
+              aria-hidden="true"
+            />
+            <p className="hidden truncate text-[12px] text-muted-foreground sm:block">
+              Hola,{" "}
+              <span className="font-medium text-foreground/80">
+                {c.name.split(" ")[0]}
+              </span>
+            </p>
           </div>
           <PortalLogoutButton />
         </div>

@@ -5,6 +5,7 @@ import {
   JetBrains_Mono,
   Playfair_Display,
   Cormorant_Garamond,
+  Outfit,
 } from "next/font/google"
 import { Toaster } from "sonner"
 
@@ -47,6 +48,14 @@ const cormorant = Cormorant_Garamond({
   weight: ["400", "500", "600"],
 })
 
+// Sans geométrica "flat" para el portal del cliente (reemplaza el serif).
+const outfit = Outfit({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-flat",
+  weight: ["300", "400", "500", "600"],
+})
+
 export const metadata: Metadata = {
   title: {
     default: "PixelOS",
@@ -85,7 +94,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="es"
       suppressHydrationWarning
-      className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${playfair.variable} ${cormorant.variable}`}
+      className={`${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} ${playfair.variable} ${cormorant.variable} ${outfit.variable}`}
     >
       <head>
         <ThemeScript />
