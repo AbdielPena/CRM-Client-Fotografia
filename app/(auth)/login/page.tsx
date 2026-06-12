@@ -155,12 +155,12 @@ function LoginPageInner() {
       {/* Footer: register link */}
       <p className="text-center text-body-sm text-muted-foreground">
         ¿Aún no tienes cuenta?{" "}
-        <Link
-          href="/register"
+        <a
+          href="https://hub.abbypixel.com/login?mode=signup"
           className="font-semibold text-brand hover:text-brand/80 transition-colors underline-offset-4 hover:underline"
         >
           Crea tu estudio gratis
-        </Link>
+        </a>
       </p>
     </motion.div>
   )
