@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { StudioFlowOrbit } from "@/components/auth/studioflow-orbit"
+import { PixelOSOrbit } from "@/components/auth/studioflow-orbit"
 import { ThemeDock } from "@/components/shared/theme-dock"
 
 /**
@@ -26,13 +26,13 @@ export default function AuthLayout({
           className="relative hidden overflow-hidden border-r border-border lg:flex lg:flex-col"
         >
           <div className="absolute inset-0">
-            <StudioFlowOrbit />
+            <PixelOSOrbit />
           </div>
 
           {/* Bottom copy block */}
           <div className="relative z-10 mt-auto flex flex-col gap-2 p-10 text-left">
             <p className="text-caption font-medium uppercase tracking-[0.18em] text-brand">
-              StudioFlow
+              PixelOS
             </p>
             <h2 className="max-w-md font-display text-display-lg leading-[1.05] text-foreground">
               El CRM que piensa como un fotógrafo.
@@ -51,13 +51,13 @@ export default function AuthLayout({
             <Link
               href="/"
               className="inline-flex items-center gap-2.5"
-              aria-label="StudioFlow"
+              aria-label="PixelOS"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-aurora shadow-glow">
                 <span className="font-display text-h3 text-white leading-none">S</span>
               </div>
               <span className="text-h4 font-semibold text-foreground tracking-tight">
-                StudioFlow
+                PixelOS
               </span>
             </Link>
           </header>
@@ -69,7 +69,7 @@ export default function AuthLayout({
           {/* Footer */}
           <footer className="border-t border-border/60 px-6 py-4">
             <p className="text-center text-caption text-muted-foreground">
-              © {new Date().getFullYear()} StudioFlow · Hecho en RD para
+              © {new Date().getFullYear()} PixelOS · Hecho en RD para
               fotógrafos profesionales
             </p>
           </footer>

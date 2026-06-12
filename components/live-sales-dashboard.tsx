@@ -1,4 +1,4 @@
-// Demo file — no longer used in StudioFlow. Kept as stub to avoid breaking
+// Demo file — no longer used in PixelOS. Kept as stub to avoid breaking
 // any stale imports while the legacy hook `@/demos/hooks/useRealtimeSalesData`
 // is unavailable. Safe to delete.
 

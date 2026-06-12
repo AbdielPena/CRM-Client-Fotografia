@@ -88,7 +88,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
 
   const fromEmail =
     input.fromEmail ?? process.env.SMTP_FROM_EMAIL ?? process.env.SMTP_USER ?? ''
-  const fromName = input.fromName ?? process.env.SMTP_FROM_NAME ?? 'StudioFlow'
+  const fromName = input.fromName ?? process.env.SMTP_FROM_NAME ?? 'PixelOS'
 
   // Sanitización de headers SMTP — bloquea CRLF injection (Bcc/Cc smuggling).
   // Cualquier valor que llegue desde la DB o input del usuario debe pasar por

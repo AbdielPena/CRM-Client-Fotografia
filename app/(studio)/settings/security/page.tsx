@@ -32,7 +32,7 @@ export default async function SecurityPage() {
         <TotpManager
           status={status}
           userEmail={session.email}
-          studioName={session.studioName ?? "StudioFlow"}
+          studioName={session.studioName ?? "PixelOS"}
         />
 
         <section className="sf-card p-5">

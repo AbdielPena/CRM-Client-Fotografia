@@ -1,5 +1,5 @@
 /**
- * Catálogo de plantillas de WhatsApp **Cloud API** de StudioFlow.
+ * Catálogo de plantillas de WhatsApp **Cloud API** de PixelOS.
  *
  * A diferencia de `./templates.ts` (enlaces wa.me, Fase 1), estas son las
  * plantillas que se crean y aprueban en Meta vía la Graph API (Message

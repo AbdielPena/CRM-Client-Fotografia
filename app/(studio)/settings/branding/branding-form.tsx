@@ -405,10 +405,10 @@ export function BrandingForm({
           />
           <div>
             <p className="text-sm font-medium">
-              Ocultar "Powered by StudioFlow"
+              Ocultar "Powered by PixelOS"
             </p>
             <p className="text-[10px] text-muted-foreground">
-              Quita la marca StudioFlow del cliente portal, galerías
+              Quita la marca PixelOS del cliente portal, galerías
               públicas, footer de invoices.
             </p>
           </div>

@@ -21,7 +21,7 @@ export default async function PlatformOverviewPage() {
       <AppTopbar
         eyebrow="Super admin"
         title="Platform"
-        description="Visión global de todos los studios en StudioFlow — la salud del ecosistema en un vistazo."
+        description="Visión global de todos los studios en PixelOS — la salud del ecosistema en un vistazo."
         display
       />
 

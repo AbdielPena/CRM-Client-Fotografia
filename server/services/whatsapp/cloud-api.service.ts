@@ -292,7 +292,7 @@ async function createWhatsAppTemplate(
 }
 
 /**
- * Sincroniza el catálogo de StudioFlow con Meta: crea las plantillas que aún
+ * Sincroniza el catálogo de PixelOS con Meta: crea las plantillas que aún
  * no existen en la WABA (las existentes se omiten, conservando su estado).
  */
 export async function syncWhatsAppTemplates(

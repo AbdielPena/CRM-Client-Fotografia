@@ -1,5 +1,5 @@
 /**
- * Tipos de formularios dinámicos para StudioFlow.
+ * Tipos de formularios dinámicos para PixelOS.
  *
  * Los formularios se definen como listas de "fields" (campos) en JSON.
  * Cada field tiene un type, key (identificador único dentro del form),

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 
 import { AcceptButton } from "./accept-button"
 
-export const metadata: Metadata = { title: "Invitación · StudioFlow" }
+export const metadata: Metadata = { title: "Invitación · PixelOS" }
 
 export default async function InvitationAcceptPage({
   params,
@@ -128,7 +128,7 @@ export default async function InvitationAcceptPage({
       </div>
 
       <p className="mt-4 text-center text-[10px] text-muted-foreground">
-        Powered by StudioFlow
+        Powered by PixelOS
       </p>
     </main>
   )

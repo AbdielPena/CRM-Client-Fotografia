@@ -300,10 +300,10 @@ async function deliverWebhook(
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "X-StudioFlow-Event": ctx.eventType,
-    "X-StudioFlow-Delivery-Id": envelope.id,
-    "X-StudioFlow-Signature": `sha256=${signature}`,
-    "User-Agent": "StudioFlow-Webhook/1.0",
+    "X-PixelOS-Event": ctx.eventType,
+    "X-PixelOS-Delivery-Id": envelope.id,
+    "X-PixelOS-Signature": `sha256=${signature}`,
+    "User-Agent": "PixelOS-Webhook/1.0",
   }
   if (webhook.custom_headers) {
     Object.assign(headers, webhook.custom_headers)

@@ -23,7 +23,7 @@ function SubmitButton() {
       loading={pending}
       rightIcon={!pending ? <ArrowRight className="h-4 w-4" /> : undefined}
     >
-      {pending ? "Ingresando…" : "Ingresar a StudioFlow"}
+      {pending ? "Ingresando…" : "Ingresar a PixelOS"}
     </Button>
   )
 }

@@ -127,14 +127,14 @@ function stripHtml(html: string): string {
 const brand = (studioName: string, color: string = '#111827') => `
   <div style="font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; color: #111827;">
     <div style="border-left: 4px solid ${color}; padding-left: 16px; margin-bottom: 32px;">
-      <p style="margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;">StudioFlow</p>
+      <p style="margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #6b7280;">PixelOS</p>
       <p style="margin: 2px 0 0; font-size: 16px; font-weight: 600;">${escapeHtml(studioName)}</p>
     </div>
 `
 
 const brandClose = `
     <hr style="margin: 32px 0; border: none; border-top: 1px solid #e5e7eb;" />
-    <p style="margin: 0; font-size: 11px; color: #9ca3af;">Este correo fue enviado automáticamente por StudioFlow.</p>
+    <p style="margin: 0; font-size: 11px; color: #9ca3af;">Este correo fue enviado automáticamente por PixelOS.</p>
   </div>
 `
 

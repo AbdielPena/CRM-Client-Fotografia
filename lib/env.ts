@@ -71,12 +71,12 @@ export function validateEnv(): void {
   }
 
   if (warnings.length > 0) {
-    console.warn(`\n[StudioFlow] Variables opcionales no configuradas:\n${warnings.join("\n")}\n`)
+    console.warn(`\n[PixelOS] Variables opcionales no configuradas:\n${warnings.join("\n")}\n`)
   }
 
   if (missing.length > 0) {
     const msg =
-      `\n\n[StudioFlow] ❌ Variables de entorno requeridas no configuradas:\n\n${missing.join("\n")}\n\n` +
+      `\n\n[PixelOS] ❌ Variables de entorno requeridas no configuradas:\n\n${missing.join("\n")}\n\n` +
       `Copia .env.local.example a .env.local y completa los valores.\n`
 
     // En producción: lanzar error fatal
@@ -93,7 +93,7 @@ export function validateEnv(): void {
 export function env(key: string, fallback?: string): string {
   const val = process.env[key] ?? fallback
   if (val === undefined) {
-    throw new Error(`[StudioFlow] Variable de entorno "${key}" no está definida`)
+    throw new Error(`[PixelOS] Variable de entorno "${key}" no está definida`)
   }
   return val
 }

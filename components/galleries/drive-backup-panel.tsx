@@ -145,7 +145,7 @@ export function DriveBackupPanel({
 
       <p className="mb-3 text-[12px] text-muted-foreground">
         Sube las fotos de esta galería a tu Google Drive ({driveEmail}) en carpetas{" "}
-        <code>{"/StudioFlow Entregas/{cliente}/{proyecto}/"}</code>, y comparte el link con el
+        <code>{"/PixelOS Entregas/{cliente}/{proyecto}/"}</code>, y comparte el link con el
         cliente. <strong>Máxima calidad</strong> = originales sin compresión; <strong>Redes</strong>{" "}
         = versión web optimizada.
       </p>

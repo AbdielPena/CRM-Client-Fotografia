@@ -93,7 +93,7 @@ export async function initiate2FA(
   const otpauthUri = totpOtpauthUri({
     secret,
     accountName: email,
-    issuer: studioName ?? "StudioFlow",
+    issuer: studioName ?? "PixelOS",
   })
 
   // Upsert

@@ -288,7 +288,7 @@ function WhatsAppTemplatesPanel({ hasWaba }: { hasWaba: boolean }) {
         <div>
           <h3 className="text-sm font-semibold text-foreground">Plantillas de mensaje</h3>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
-            {WHATSAPP_TEMPLATE_CATALOG.length} plantillas listas · {approved} aprobadas. StudioFlow
+            {WHATSAPP_TEMPLATE_CATALOG.length} plantillas listas · {approved} aprobadas. PixelOS
             las crea en Meta por ti (no hay que meterlas a mano).
           </p>
         </div>

@@ -608,6 +608,7 @@ export async function resolveTemplate(
         accent: branding.accent,
         footerHtml: branding.footerHtml,
         contactLine: branding.contactLine,
+        social: branding.social,
       })
     } catch (e) {
       console.error("[email] wrapLuxuryEmail falló, se envía sin marco", e)
@@ -629,6 +630,11 @@ async function getEmailBranding(studioId: string): Promise<{
   accent: string | null
   footerHtml: string | null
   contactLine: string | null
+  social: {
+    instagramUrl: string | null
+    facebookUrl: string | null
+    websiteUrl: string | null
+  }
 }> {
   const { untypedService } = await import("@/server/supabase/untyped")
   const sb = untypedService()
@@ -636,7 +642,9 @@ async function getEmailBranding(studioId: string): Promise<{
     sb.from("studios").select("name, email, phone").eq("id", studioId).maybeSingle(),
     sb
       .from("studio_branding")
-      .select("logo_url, primary_color, custom_footer_html")
+      .select(
+        "logo_url, primary_color, custom_footer_html, instagram_url, facebook_url, website_url",
+      )
       .eq("studio_id", studioId)
       .maybeSingle(),
   ])
@@ -645,6 +653,9 @@ async function getEmailBranding(studioId: string): Promise<{
     logo_url?: string | null
     primary_color?: string | null
     custom_footer_html?: string | null
+    instagram_url?: string | null
+    facebook_url?: string | null
+    website_url?: string | null
   } | null
   const contactBits = [s?.email, s?.phone].filter(Boolean) as string[]
   return {
@@ -653,5 +664,10 @@ async function getEmailBranding(studioId: string): Promise<{
     accent: b?.primary_color ?? null,
     footerHtml: b?.custom_footer_html ?? null,
     contactLine: contactBits.length ? contactBits.join(" · ") : null,
+    social: {
+      instagramUrl: b?.instagram_url ?? null,
+      facebookUrl: b?.facebook_url ?? null,
+      websiteUrl: b?.website_url ?? null,
+    },
   }
 }

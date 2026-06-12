@@ -5,7 +5,7 @@ import { createId } from "@paralleldrive/cuid2"
 export const resend = new Resend(process.env.RESEND_API_KEY || "re_placeholder")
 
 export const EMAIL_FROM =
-  `${process.env.EMAIL_FROM_NAME ?? "StudioFlow"} <${process.env.EMAIL_FROM ?? "noreply@studioflow.app"}>`
+  `${process.env.EMAIL_FROM_NAME ?? "PixelOS"} <${process.env.EMAIL_FROM ?? "noreply@studioflow.app"}>`
 
 // ─── Queue helper ─────────────────────────────────────────────────────────────
 

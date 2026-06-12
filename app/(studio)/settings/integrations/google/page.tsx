@@ -53,7 +53,7 @@ export default async function GoogleCalendarIntegrationPage({
       <AppTopbar
         eyebrow="Configuración"
         title="Google Calendar"
-        description="Sincroniza tus eventos de StudioFlow con tu calendario de Google."
+        description="Sincroniza tus eventos de PixelOS con tu calendario de Google."
         unreadNotifications={unread}
       />
 
@@ -89,7 +89,7 @@ export default async function GoogleCalendarIntegrationPage({
               Conecta tu Google Calendar
             </h2>
             <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-              Cada sesión aprobada en StudioFlow se crea automáticamente como evento
+              Cada sesión aprobada en PixelOS se crea automáticamente como evento
               en el calendario que elijas. También podrás recibir cambios de vuelta.
             </p>
             <form action={connectGoogleCalendarAction}>
@@ -142,7 +142,7 @@ export default async function GoogleCalendarIntegrationPage({
                 Calendario activo
               </h2>
               <p className="text-xs text-muted-foreground mb-4">
-                StudioFlow creará eventos aquí cuando apruebes un booking o confirmes
+                PixelOS creará eventos aquí cuando apruebes un booking o confirmes
                 una sesión.
               </p>
 
@@ -317,7 +317,7 @@ async function SyncStatusCard({ studioId }: { studioId: string }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <SyncStat label="Total" value={total} className="bg-muted/40" />
         <SyncStat
-          label="StudioFlow"
+          label="PixelOS"
           value={fromStudioflow}
           className="bg-violet-50 dark:bg-violet-900/15"
         />

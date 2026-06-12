@@ -176,7 +176,7 @@ export default async function BookingSuccessPage({
         </div>
 
         <p className="mt-6 text-center text-[11px] tracking-wide text-muted-foreground/60">
-          Una experiencia de {studio?.name ?? "StudioFlow"}
+          Una experiencia de {studio?.name ?? "PixelOS"}
         </p>
       </div>
     </div>

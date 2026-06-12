@@ -1,9 +1,9 @@
 "use client"
 
 /**
- * StudioFlowOrbit — panel visual del login/register/forgot.
+ * PixelOSOrbit — panel visual del login/register/forgot.
  * Reemplaza los iconos tech del TechOrbitDisplay demo con iconos relevantes a
- * StudioFlow (cámara, calendario, contrato, factura, galería, etc.).
+ * PixelOS (cámara, calendario, contrato, factura, galería, etc.).
  * Se construye sobre `Ripple` y `TechOrbitDisplay` del módulo
  * modern-animated-sign-in que ya está en el repo.
  */
@@ -141,7 +141,7 @@ const STUDIOFLOW_ICONS: OrbitIcon[] = [
   },
 ]
 
-export function StudioFlowOrbit() {
+export function PixelOSOrbit() {
   return (
     <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
       {/* Aurora radial background */}

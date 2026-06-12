@@ -13,7 +13,7 @@ const ORIGIN_BADGE: Record<
   { label: string; className: string }
 > = {
   studioflow: {
-    label: "StudioFlow",
+    label: "PixelOS",
     className: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
   },
   synced: {

@@ -142,7 +142,7 @@ export default async function CalendarPage({
       <AppTopbar
         eyebrow="Estudio"
         title="Calendario"
-        description="Eventos de StudioFlow y de tu Google Calendar en un solo lugar"
+        description="Eventos de PixelOS y de tu Google Calendar en un solo lugar"
         unreadNotifications={unread}
         actions={
           <Link

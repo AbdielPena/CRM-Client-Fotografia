@@ -912,7 +912,7 @@ export function PublicGalleryView({
         )}
         {!studio.hideBranding && (
           <p className="text-[11px] text-zinc-400 dark:text-zinc-600">
-            Hecho con <span className="font-medium">StudioFlow</span>
+            Hecho con <span className="font-medium">PixelOS</span>
           </p>
         )}
       </footer>

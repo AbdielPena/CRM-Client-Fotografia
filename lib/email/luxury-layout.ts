@@ -24,6 +24,34 @@ export interface LuxuryEmailOptions {
   footerHtml?: string | null
   /** Pie con dirección/contacto. */
   contactLine?: string | null
+  /** Redes sociales — se muestran como íconos en el footer. */
+  social?: {
+    instagramUrl?: string | null
+    facebookUrl?: string | null
+    websiteUrl?: string | null
+  } | null
+}
+
+/** Base pública donde viven los íconos PNG de redes (Gmail no renderiza SVG). */
+const ICON_BASE = "https://abbypixel.com/assets/email"
+
+function socialRow(social: LuxuryEmailOptions["social"]): string {
+  if (!social) return ""
+  const items: Array<{ url: string; icon: string; alt: string }> = []
+  if (social.instagramUrl)
+    items.push({ url: social.instagramUrl, icon: "instagram.png", alt: "Instagram" })
+  if (social.facebookUrl)
+    items.push({ url: social.facebookUrl, icon: "facebook.png", alt: "Facebook" })
+  if (social.websiteUrl)
+    items.push({ url: social.websiteUrl, icon: "web.png", alt: "Sitio web" })
+  if (items.length === 0) return ""
+  const cells = items
+    .map(
+      (it) =>
+        `<a href="${escapeAttr(it.url)}" style="display:inline-block;margin:0 7px;text-decoration:none;"><img src="${ICON_BASE}/${it.icon}" alt="${it.alt}" width="22" height="22" style="width:22px;height:22px;border:0;display:inline-block;opacity:.85;" /></a>`,
+    )
+    .join("")
+  return `<div style="margin:0 0 12px;">${cells}</div>`
 }
 
 export function wrapLuxuryEmail(inner: string, opts: LuxuryEmailOptions): string {
@@ -81,6 +109,7 @@ export function wrapLuxuryEmail(inner: string, opts: LuxuryEmailOptions): string
 ${inner}
     </div>
     <div class="lx-foot">
+      ${socialRow(opts.social)}
       ${footer}
       <p style="margin:8px 0 0;opacity:.8;">Este mensaje es solo para ti.${year === "—" ? "" : ` © ${year}`}</p>
     </div>

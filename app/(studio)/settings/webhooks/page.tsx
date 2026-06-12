@@ -38,7 +38,7 @@ export default async function WebhooksSettingsPage() {
           </h3>
           <p className="text-xs text-muted-foreground">
             Cada request incluye el header{" "}
-            <code className="rounded bg-muted px-1">X-StudioFlow-Signature</code>{" "}
+            <code className="rounded bg-muted px-1">X-PixelOS-Signature</code>{" "}
             con valor <code className="rounded bg-muted px-1">sha256=&lt;hex&gt;</code>.
           </p>
           <pre className="mt-2 overflow-x-auto rounded bg-muted px-3 py-2 text-[10px]">

@@ -293,7 +293,7 @@ export default async function PublicInvoicePage({
         )}
 
         <div className="mt-10 text-center text-[11px] tracking-wide text-muted-foreground/60">
-          Enviado por {studio?.name ?? "StudioFlow"}
+          Enviado por {studio?.name ?? "PixelOS"}
         </div>
       </div>
     </div>

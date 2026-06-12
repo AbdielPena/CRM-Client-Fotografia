@@ -423,7 +423,7 @@ export default async function BookingFormPage({
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-4">
-            Powered by StudioFlow
+            Powered by PixelOS
           </p>
         </aside>
       </main>

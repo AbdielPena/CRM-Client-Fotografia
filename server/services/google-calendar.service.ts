@@ -455,7 +455,7 @@ function buildEventBody(p: ProjectEventPayload) {
       start: { date: p.date },
       end: { date: end },
       attendees: p.attendeeEmails?.map((email) => ({ email })),
-      source: { title: 'StudioFlow', url: process.env.NEXT_PUBLIC_APP_URL ?? '' },
+      source: { title: 'PixelOS', url: process.env.NEXT_PUBLIC_APP_URL ?? '' },
     }
   }
 
@@ -471,7 +471,7 @@ function buildEventBody(p: ProjectEventPayload) {
     start: { dateTime: startDateTime, timeZone: tz },
     end: { dateTime: endDateTime, timeZone: tz },
     attendees: p.attendeeEmails?.map((email) => ({ email })),
-    source: { title: 'StudioFlow', url: process.env.NEXT_PUBLIC_APP_URL ?? '' },
+    source: { title: 'PixelOS', url: process.env.NEXT_PUBLIC_APP_URL ?? '' },
   }
 }
 
@@ -903,7 +903,7 @@ export async function renewExpiringCalendarWatches(opts: { studioId?: string } =
 }
 
 // ---------------------------------------------------------------------------
-// Incoming webhook (Google → StudioFlow)
+// Incoming webhook (Google → PixelOS)
 // ---------------------------------------------------------------------------
 
 /**
@@ -983,7 +983,7 @@ export async function pullIncrementalChanges(
  * - Incremental: usa syncToken (vía pullIncrementalChanges).
  * Detecta si el evento ya existe (por google_event_id) → upsert sin duplicar.
  * Marca origen automáticamente:
- *   - Si tiene source.title="StudioFlow" → "synced"
+ *   - Si tiene source.title="PixelOS" → "synced"
  *   - Si no → "external" (personal del usuario)
  */
 export async function importGoogleEvents(
@@ -1061,8 +1061,10 @@ export async function importGoogleEvents(
       continue
     }
 
-    // Determinar origen
-    const isFromStudioflow = evt.source?.title === 'StudioFlow'
+    // Determinar origen. Incluimos 'StudioFlow' (nombre anterior) para que los
+    // eventos creados antes del rebrand sigan reconociéndose como propios.
+    const isFromStudioflow =
+      evt.source?.title === 'PixelOS' || evt.source?.title === 'StudioFlow'
 
     // Buscar existente
     const { data: existing } = await supabase
@@ -1076,7 +1078,7 @@ export async function importGoogleEvents(
 
     let origin: 'studioflow' | 'google_calendar' | 'synced' | 'external'
     if (isFromStudioflow) {
-      // Vino de StudioFlow originalmente
+      // Vino de PixelOS originalmente
       origin = existingRow?.origin === 'studioflow' ? 'studioflow' : 'synced'
     } else if (existingRow?.project_id) {
       // Tiene un proyecto vinculado → conserva su origen

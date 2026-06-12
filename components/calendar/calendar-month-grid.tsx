@@ -12,7 +12,7 @@ interface Props {
 
 /**
  * Grid mensual del calendario. Cada celda muestra hasta 2 eventos con
- * color según origen (StudioFlow morado, Google verde, sincronizado azul,
+ * color según origen (PixelOS morado, Google verde, sincronizado azul,
  * personal/externo gris). Click en evento navega al cliente/proyecto
  * vinculado, o al link de Google Calendar si no hay relación interna.
  */

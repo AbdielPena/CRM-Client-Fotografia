@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       console.error('[google webhook] importGoogleEvents failed', err)
     })
 
-    // 2) Sincronización con `projects` (eventos creados desde StudioFlow)
+    // 2) Sincronización con `projects` (eventos creados desde PixelOS)
     const { events } = await pullIncrementalChanges(watch.studio_id)
 
     for (const ev of events) {

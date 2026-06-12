@@ -49,15 +49,15 @@ const cormorant = Cormorant_Garamond({
 
 export const metadata: Metadata = {
   title: {
-    default: "StudioFlow",
-    template: "%s | StudioFlow",
+    default: "PixelOS",
+    template: "%s | PixelOS",
   },
   description: "CRM y Client Gallery para fotógrafos profesionales",
   manifest: "/manifest.webmanifest",
-  applicationName: "StudioFlow",
+  applicationName: "PixelOS",
   appleWebApp: {
     capable: true,
-    title: "StudioFlow",
+    title: "PixelOS",
     statusBarStyle: "black-translucent",
   },
   icons: {

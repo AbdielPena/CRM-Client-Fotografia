@@ -60,7 +60,7 @@ export async function updateBrandingAction(
       return {
         ok: false,
         message:
-          "Ocultar la marca StudioFlow requiere plan Pro o superior. Upgrade en /settings/billing.",
+          "Ocultar la marca PixelOS requiere plan Pro o superior. Upgrade en /settings/billing.",
         values,
       }
     }

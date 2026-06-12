@@ -11,7 +11,7 @@ import { getDriveConnectionStatus } from "@/server/services/google-drive-oauth.s
  * Orquestador: respalda/entrega una galería de ENTREGA FINAL a Google Drive en
  * dos pistas (espejo de print-zip.service pero subiendo a Drive en vez de ZIP):
  *
- *   /StudioFlow Entregas/{categoría}/{cliente}/{proyecto}/
+ *   /PixelOS Entregas/{categoría}/{cliente}/{proyecto}/
  *       Máxima calidad (originales)/   ← gallery_assets.original_key (sin compresión)
  *       Redes (optimizada)/            ← gallery_assets.web_key (rendition web)
  *
@@ -24,7 +24,7 @@ import { getDriveConnectionStatus } from "@/server/services/google-drive-oauth.s
 
 const ORIGINALS_BUCKET = "gallery-originals"
 const RENDITIONS_BUCKET = "gallery-renditions"
-const ROOT_FOLDER = "StudioFlow Entregas"
+const ROOT_FOLDER = "PixelOS Entregas"
 
 export type DriveTrack = "social" | "high_quality" | "both"
 
@@ -188,7 +188,7 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       }))
       .filter((a) => a.track !== null && tracks.includes(a.track))
 
-    // Carpetas: /StudioFlow Entregas/{categoría}/{cliente}/{proyecto}/
+    // Carpetas: /PixelOS Entregas/{categoría}/{cliente}/{proyecto}/
     const projectFolderId = await drive.ensureFolderPath(studioId, [
       ROOT_FOLDER,
       sanitize(categoryFolder),

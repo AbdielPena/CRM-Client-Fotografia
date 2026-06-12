@@ -124,7 +124,7 @@ export default async function PublicGalleryPage({ params }: PageProps) {
         }}
         assets={deliveryAssets}
         studio={{
-          name: studioInfo?.studios?.name ?? "StudioFlow",
+          name: studioInfo?.studios?.name ?? "PixelOS",
           logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
           primaryColor: branding?.primary_color ?? null,
           hideBranding: branding?.hide_studioflow_branding ?? false,
@@ -149,7 +149,7 @@ export default async function PublicGalleryPage({ params }: PageProps) {
       }}
       assets={view.assets}
       studio={{
-        name: studioInfo?.studios?.name ?? "StudioFlow",
+        name: studioInfo?.studios?.name ?? "PixelOS",
         logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
         primaryColor: branding?.primary_color ?? null,
         hideBranding: branding?.hide_studioflow_branding ?? false,

@@ -1,6 +1,6 @@
 /**
  * Catálogo del módulo /status — config estática derivada de la estructura real
- * de StudioFlow. Define los MÓDULOS a monitorear, los WORKFLOWS críticos con su
+ * de PixelOS. Define los MÓDULOS a monitorear, los WORKFLOWS críticos con su
  * checklist de validación, y la lista de SONDAS de la auditoría automática.
  *
  * El estado mutable (checkboxes, notas, errores, pruebas) vive en DB

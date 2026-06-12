@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/utils/currency"
 
 export const metadata: Metadata = {
-  title: "Precios · StudioFlow",
+  title: "Precios · PixelOS",
   description:
     "Planes para fotógrafos profesionales y estudios. Empieza gratis, escala según crezcas.",
 }
@@ -20,7 +20,7 @@ const FEATURE_LABELS: Record<string, string> = {
   custom_domain: "Dominio personalizado",
   api_access: "Acceso a API",
   white_label: "White-label",
-  remove_branding: "Sin marca StudioFlow",
+  remove_branding: "Sin marca PixelOS",
   support_tier: "Soporte",
   automations_max_rules: "Automatizaciones",
   mail_max_accounts: "Cuentas de correo",
