@@ -361,16 +361,20 @@ export function AppSidebar({
             )}
             title={studioName}
           >
-            <span
-              aria-hidden
-              className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-brand/70 text-sm font-bold text-brand-foreground shadow-sm"
-            >
-              {initial}
-            </span>
-            {!collapsed && (
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none text-foreground">
-                {studioName}
+            {collapsed ? (
+              <span
+                aria-hidden
+                className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-brand/70 text-sm font-bold text-brand-foreground shadow-sm"
+              >
+                {initial}
               </span>
+            ) : (
+              <span
+                className="brand-logo text-foreground"
+                style={{ height: "26px", width: "121px" }}
+                role="img"
+                aria-label={studioName}
+              />
             )}
           </Link>
         </header>
