@@ -18,7 +18,7 @@ const DEFAULT_TO = "soyabdielpena@gmail.com"
 
 const OPTS = {
   studioName: "AbbyPixel",
-  logoUrl: null, // logo blanco no se vería en header blanco → mostramos el nombre
+  logoUrl: "https://my.abbypixel.com/brand/abbypixel-logo.png", // se muestra en un chip oscuro
   accent: null as string | null,
   whatsappUrl: "https://wa.me/18090000000",
   social: {
@@ -28,78 +28,85 @@ const OPTS = {
   },
 }
 
+const PORTAL = "https://my.abbypixel.com/portal"
+const FEEDBACK = "https://my.abbypixel.com/fb/25424ac58fbd426e99f507899489a4bd"
+
 const SAMPLES: { key: string; subject: string; inner: string }[] = [
   {
     key: "portal-access",
-    subject: "[Prueba] Tu acceso al portal — PixelOS",
-    inner: `<h1>Bienvenida a tu portal, Betzabeth</h1>
-<p>Creamos tu espacio privado donde verás tus galerías, contratos, facturas y entregas.</p>
-<p>Tu código de acceso: <strong>A1B2C3</strong></p>
-<p>${emailButton("Entrar a mi portal", "https://my.abbypixel.com/portal")}</p>`,
+    subject: "[Prueba] Bienvenida a tu portal — AbbyPixel",
+    inner: `<h1>Tu espacio está listo, Betzabeth ✨</h1>
+<p>Qué alegría tenerte. Creamos un rincón privado solo para ti, donde vivirás cada paso de tu experiencia: tus galerías, tus fotos finales, contratos y pagos — todo en un mismo lugar, cuando quieras.</p>
+<p>Tu código de acceso es <strong>A1B2C3</strong>. Guárdalo a la mano.</p>
+<p>${emailButton("Entrar a mi portal", PORTAL)}</p>`,
   },
   {
     key: "payment-received",
-    subject: "[Prueba] Pago recibido — PixelOS",
-    inner: `<h1>Gracias, registramos tu pago</h1>
-<p>Confirmamos el pago de tu factura <strong>INV-2026-00007</strong>.</p>
-<p><strong>Método:</strong> Efectivo · <strong>Fecha:</strong> 12 jun 2026<br/><strong>Total pagado:</strong> DOP 6,000.00</p>
-<p>${emailButton("Ver en mi portal", "https://my.abbypixel.com/portal/payments")}</p>`,
+    subject: "[Prueba] Recibimos tu pago — gracias, Betzabeth",
+    inner: `<h1>¡Gracias! Tu pago quedó registrado</h1>
+<p>Confirmamos con cariño el pago de tu factura <strong>INV-2026-00007</strong>. Un paso más cerca de capturar tus momentos.</p>
+<p><strong>Método:</strong> Efectivo &nbsp;·&nbsp; <strong>Fecha:</strong> 12 jun 2026<br/><strong>Total pagado:</strong> DOP 6,000.00</p>
+<p>${emailButton("Ver el recibo en mi portal", PORTAL + "/payments")}</p>`,
   },
   {
     key: "invoice-sent",
-    subject: "[Prueba] Tu factura está lista — PixelOS",
-    inner: `<h1>Factura INV-2026-00008</h1>
-<p>Te compartimos tu factura por <strong>DOP 12,500.00</strong>, con vencimiento el 20 de junio.</p>
-<p>${emailButton("Ver y pagar factura", "https://my.abbypixel.com/portal/invoices")}</p>`,
+    subject: "[Prueba] Tu factura está lista — AbbyPixel",
+    inner: `<h1>Tu factura INV-2026-00008</h1>
+<p>Te compartimos tu factura por <strong>DOP 12,500.00</strong>, con vencimiento el <strong>20 de junio</strong>. Puedes verla y pagarla en segundos desde tu portal.</p>
+<p>Cualquier duda, aquí estamos para ayudarte con gusto.</p>
+<p>${emailButton("Ver y pagar factura", PORTAL + "/invoices")}</p>`,
   },
   {
     key: "gallery-share",
-    subject: "[Prueba] Tus fotos están listas — PixelOS",
-    inner: `<h1>¡Tu galería ya está disponible!</h1>
-<p>Selecciona tus favoritas y descárgalas cuando quieras. El enlace es privado y solo para ti.</p>
-<p>${emailButton("Ver mi galería", "https://my.abbypixel.com/g/demo")}</p>`,
+    subject: "[Prueba] ¡Tus fotos ya están aquí! — AbbyPixel",
+    inner: `<h1>El momento llegó: tu galería está lista 📸</h1>
+<p>Pusimos todo nuestro corazón en cada toma. Tómate tu tiempo, revívelas y elige tus favoritas — el enlace es privado y solo para ti.</p>
+<p>${emailButton("Ver mi galería", PORTAL + "/galleries")}</p>`,
   },
   {
     key: "final-delivery",
-    subject: "[Prueba] Tu entrega final está lista — PixelOS",
-    inner: `<h1>Tu entrega final está lista</h1>
-<p>Terminamos la edición de tus fotos. Aquí tienes la entrega en máxima calidad, lista para descargar.</p>
-<p>${emailButton("Descargar entrega final", "https://my.abbypixel.com/g/demo")}</p>`,
+    subject: "[Prueba] Tu entrega final está lista — AbbyPixel",
+    inner: `<h1>Tus recuerdos, listos para siempre</h1>
+<p>Terminamos la edición con todo el detalle que mereces. Aquí tienes tu entrega final en máxima calidad, lista para descargar, imprimir y compartir con quien quieras.</p>
+<p>Gracias por confiarnos esta historia. Ojalá la disfrutes tanto como nosotros disfrutamos crearla.</p>
+<p>${emailButton("Descargar mi entrega final", PORTAL + "/deliveries")}</p>`,
   },
   {
     key: "gallery-reminder",
-    subject: "[Prueba] No olvides ver tu galería — PixelOS",
-    inner: `<h1>Aún no has visto tu galería</h1>
-<p>Te dejamos el enlace de nuevo por si se te traspapeló. Tus fotos te están esperando.</p>
-<p>${emailButton("Abrir galería", "https://my.abbypixel.com/g/demo")}</p>`,
+    subject: "[Prueba] Tus fotos te esperan — AbbyPixel",
+    inner: `<h1>Tu galería sigue aquí, esperándote</h1>
+<p>Notamos que aún no la has abierto y no queremos que te pierdas ni un instante. Te dejamos el enlace de nuevo, a un clic de distancia.</p>
+<p>${emailButton("Abrir mi galería", PORTAL + "/galleries")}</p>`,
   },
   {
     key: "contract-sent",
-    subject: "[Prueba] Contrato para firmar — PixelOS",
-    inner: `<h1>Tu contrato está listo para firmar</h1>
-<p>Revisa los términos de tu sesión y fírmalo digitalmente en un par de clics.</p>
-<p>${emailButton("Revisar y firmar", "https://my.abbypixel.com/sign/demo")}</p>`,
+    subject: "[Prueba] Tu contrato está listo para firmar — AbbyPixel",
+    inner: `<h1>Demos el primer paso juntos</h1>
+<p>Preparamos tu contrato con todos los detalles de tu sesión. Revísalo con calma y fírmalo digitalmente en un par de clics — sin imprimir nada.</p>
+<p>${emailButton("Revisar y firmar", PORTAL + "/contracts")}</p>`,
   },
   {
     key: "review-request",
-    subject: "[Prueba] ¿Cómo fue tu experiencia? — PixelOS",
-    inner: `<h1>¿Nos dejas tu opinión?</h1>
-<p>Tu experiencia nos ayuda muchísimo. Cuéntanos cómo te fue — solo toma un minuto. ★★★★★</p>
-<p>${emailButton("Dejar mi reseña", "https://my.abbypixel.com/r/demo")}</p>`,
+    subject: "[Prueba] ¿Cómo viviste tu experiencia? — AbbyPixel",
+    inner: `<h1>Tu opinión significa el mundo para nosotros ★★★★★</h1>
+<p>Fue un honor acompañarte. Nos encantaría saber cómo viviste tu experiencia con AbbyPixel — tu reseña nos ayuda a crecer y a seguir cuidando cada detalle para clientes como tú.</p>
+<p>Solo te tomará un minuto.</p>
+<p>${emailButton("Dejar mi reseña", FEEDBACK)}</p>`,
   },
   {
     key: "reset-password",
     subject: "[Prueba] Restablece tu contraseña — PixelOS",
     inner: `<h1>Restablece tu contraseña</h1>
-<p>Recibimos una solicitud para restablecer tu contraseña. El enlace expira en 1 hora.</p>
-<p>${emailButton("Crear nueva contraseña", "https://hub.abbypixel.com/reset-password")}</p>`,
+<p>Recibimos una solicitud para restablecer tu contraseña. Crea una nueva con el botón de abajo — el enlace expira en 1 hora.</p>
+<p>Si no fuiste tú, ignora este correo; tu contraseña no cambiará.</p>
+<p>${emailButton("Crear nueva contraseña", "https://hub.abbypixel.com/forgot-password")}</p>`,
   },
   {
     key: "team-invite",
-    subject: "[Prueba] Te invitaron al estudio — PixelOS",
-    inner: `<h1>Te invitaron a unirte a AbbyPixel</h1>
-<p>Únete al equipo para colaborar en clientes, proyectos y entregas.</p>
-<p>${emailButton("Aceptar invitación", "https://my.abbypixel.com/invite/demo")}</p>`,
+    subject: "[Prueba] Te invitaron a AbbyPixel — PixelOS",
+    inner: `<h1>Te damos la bienvenida al equipo</h1>
+<p>Te invitaron a colaborar en AbbyPixel. Únete para gestionar clientes, proyectos y entregas, todo desde un mismo lugar.</p>
+<p>${emailButton("Aceptar invitación", "https://hub.abbypixel.com/login")}</p>`,
   },
 ]
 
