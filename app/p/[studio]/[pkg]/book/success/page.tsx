@@ -1,12 +1,49 @@
 import Link from "next/link"
 import { Check, Clock, Mail, Sparkles } from "lucide-react"
 import { createSupabasePublicClient } from "@/server/supabase/server"
+import { createSupabaseServiceClient } from "@/server/supabase/service"
 
 export const dynamic = "force-dynamic"
+export const fetchCache = "force-no-store"
 
 interface PageParams {
   studio: string
   pkg: string
+}
+
+/** Estado real de la solicitud (capability: el rid es un UUID que el cliente ya tiene). */
+async function fetchBookingStatus(rid: string | undefined): Promise<string | null> {
+  if (!rid) return null
+  try {
+    const svc = createSupabaseServiceClient()
+    const { data } = await svc
+      .from("booking_requests")
+      .select("status")
+      .eq("id", rid)
+      .maybeSingle()
+    return ((data as { status?: string } | null)?.status as string | null) ?? null
+  } catch {
+    return null
+  }
+}
+
+type Phase = "review" | "approved" | "awaiting_payment" | "confirmed" | "rejected"
+
+function phaseFromStatus(status: string | null): Phase {
+  switch (status) {
+    case "approved":
+      return "approved"
+    case "awaiting_payment":
+      return "awaiting_payment"
+    case "confirmed":
+    case "scheduled":
+      return "confirmed"
+    case "rejected":
+    case "cancelled":
+      return "rejected"
+    default:
+      return "review"
+  }
 }
 
 async function fetchStudio(studioSlug: string) {
@@ -29,11 +66,65 @@ async function fetchStudio(studioSlug: string) {
     | null
 }
 
-const STEPS = [
-  { label: "Solicitud enviada", state: "done" as const },
-  { label: "En revisión", state: "current" as const },
-  { label: "Confirmación", state: "todo" as const },
-]
+type StepState = "done" | "current" | "todo"
+
+function buildSteps(phase: Phase): { label: string; state: StepState }[] {
+  // [Solicitud enviada, En revisión / Aprobada, Confirmación]
+  const s2: StepState =
+    phase === "review" ? "current" : "done"
+  const s3: StepState =
+    phase === "confirmed"
+      ? "done"
+      : phase === "approved" || phase === "awaiting_payment"
+        ? "current"
+        : "todo"
+  const middle =
+    phase === "review" ? "En revisión" : "Aprobada"
+  return [
+    { label: "Solicitud enviada", state: "done" },
+    { label: middle, state: s2 },
+    { label: "Confirmación", state: s3 },
+  ]
+}
+
+function phaseContent(phase: Phase, isDuplicate: boolean, studioName: string) {
+  switch (phase) {
+    case "approved":
+      return {
+        overline: "¡Buenas noticias!",
+        title: "Tu solicitud fue aprobada",
+        text: "Revisa tu correo: te enviamos los pasos para continuar tu reserva (revisar el plan, firmar el contrato y realizar el pago para asegurar tu fecha).",
+      }
+    case "awaiting_payment":
+      return {
+        overline: "¡Casi lista!",
+        title: "Firma recibida — falta el pago",
+        text: "Tu contrato quedó firmado. Realiza el pago de tu factura para confirmar oficialmente tu fecha. El enlace está en tu correo.",
+      }
+    case "confirmed":
+      return {
+        overline: "¡Reserva confirmada!",
+        title: "Tu fecha está asegurada",
+        text: `Todo listo con ${studioName}. Nos vemos pronto para crear algo inolvidable.`,
+      }
+    case "rejected":
+      return {
+        overline: "Sobre tu solicitud",
+        title: "No pudimos procesar esta solicitud",
+        text: "Si crees que es un error o quieres explorar otras opciones, escríbenos directamente y con gusto te ayudamos.",
+      }
+    default:
+      return {
+        overline: isDuplicate ? "Ya te teníamos" : "Recibido con cariño",
+        title: isDuplicate
+          ? "Tu solicitud ya estaba registrada"
+          : "¡Tu solicitud fue recibida!",
+        text: isDuplicate
+          ? "Detectamos que ya nos habías enviado esta misma solicitud. No te preocupes: la estamos revisando con atención."
+          : `Gracias por elegir ${studioName}. Revisaremos cada detalle y te contactaremos muy pronto para reservar tu fecha.`,
+      }
+  }
+}
 
 export default async function BookingSuccessPage({
   params,
@@ -47,6 +138,12 @@ export default async function BookingSuccessPage({
   const shortId = searchParams?.rid
     ? searchParams.rid.slice(0, 8).toUpperCase()
     : null
+
+  // Estado REAL de la solicitud → la pantalla refleja si fue aprobada/confirmada.
+  const status = await fetchBookingStatus(searchParams?.rid)
+  const phase = phaseFromStatus(status)
+  const content = phaseContent(phase, isDuplicate, studio?.name ?? "nuestro estudio")
+  const steps = buildSteps(phase)
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-cream-50 to-background px-5 py-12">
@@ -70,18 +167,12 @@ export default async function BookingSuccessPage({
             </div>
           </div>
 
-          <p className="lx-overline mb-3">
-            {isDuplicate ? "Ya te teníamos" : "Recibido con cariño"}
-          </p>
+          <p className="lx-overline mb-3">{content.overline}</p>
           <h1 className="font-serif text-3xl font-semibold leading-tight text-foreground sm:text-4xl">
-            {isDuplicate
-              ? "Tu solicitud ya estaba registrada"
-              : "¡Tu solicitud fue recibida!"}
+            {content.title}
           </h1>
           <p className="mx-auto mt-3 max-w-sm text-[15px] leading-relaxed text-muted-foreground">
-            {isDuplicate
-              ? "Detectamos que ya nos habías enviado esta misma solicitud. No te preocupes: la estamos revisando con atención."
-              : `Gracias por elegir ${studio?.name ?? "nuestro estudio"}. Revisaremos cada detalle y te contactaremos muy pronto para reservar tu fecha.`}
+            {content.text}
           </p>
 
           {shortId && (
@@ -97,7 +188,7 @@ export default async function BookingSuccessPage({
 
           {/* Progreso */}
           <div className="mx-auto mt-8 flex max-w-sm items-center justify-between">
-            {STEPS.map((s, i) => (
+            {steps.map((s, i) => (
               <div key={s.label} className="flex flex-1 flex-col items-center">
                 <div className="flex w-full items-center">
                   <div
@@ -115,7 +206,7 @@ export default async function BookingSuccessPage({
                     {s.state === "done" ? <Check className="h-4 w-4" /> : i + 1}
                   </span>
                   <div
-                    className={`h-0.5 flex-1 ${i === STEPS.length - 1 ? "opacity-0" : s.state === "done" ? "bg-gold-400" : "bg-border"}`}
+                    className={`h-0.5 flex-1 ${i === steps.length - 1 ? "opacity-0" : s.state === "done" ? "bg-gold-400" : "bg-border"}`}
                   />
                 </div>
                 <span className="mt-2 text-[10.5px] font-medium leading-tight text-muted-foreground">
