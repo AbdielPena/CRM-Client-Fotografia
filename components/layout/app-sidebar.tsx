@@ -59,11 +59,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-  SIDEBAR_WIDTH_COLLAPSED,
-  SIDEBAR_WIDTH_EXPANDED,
-  useSidebar,
-} from "./sidebar-context"
+import { useSidebar } from "./sidebar-context"
 
 // ---------------------------------------------------------------------------
 // Nav schema — dos secciones planas (PRINCIPAL + ACCOUNT) estilo Lumen
@@ -240,13 +236,6 @@ function saveCollapsedGroups(s: Set<string>): void {
   }
 }
 
-const SIDEBAR_TRANSITION = {
-  type: "spring" as const,
-  stiffness: 380,
-  damping: 36,
-  mass: 0.6,
-}
-
 const labelVariants = {
   expanded: { opacity: 1, width: "auto", marginLeft: 12 },
   collapsed: { opacity: 0, width: 0, marginLeft: 0 },
@@ -353,17 +342,16 @@ export function AppSidebar({
         />
       )}
 
-      <motion.aside
-        initial={false}
-        animate={{
-          width: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED,
-        }}
-        transition={SIDEBAR_TRANSITION}
+      <aside
         data-collapsed={collapsed}
         className={cn(
           "z-50 flex h-full flex-shrink-0 flex-col overflow-hidden",
+          // Ancho por CSS, NO por framer: el transform inline de motion pisaba
+          // las clases translate y el drawer no se ocultaba en móvil.
+          "w-64",
+          collapsed ? "lg:w-[72px]" : "lg:w-64",
           // Móvil: drawer off-canvas fijo que entra desde la izquierda.
-          "fixed inset-y-0 left-0 transition-transform duration-300 ease-in-out",
+          "fixed inset-y-0 left-0 transition-[width,transform] duration-300 ease-in-out",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           // Desktop: parte del flujo, siempre visible.
           "lg:relative lg:z-20 lg:translate-x-0",
@@ -718,7 +706,7 @@ export function AppSidebar({
             )}
           </div>
         </footer>
-      </motion.aside>
+      </aside>
     </TooltipProvider>
   )
 }
