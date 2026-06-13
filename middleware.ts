@@ -68,6 +68,9 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.svg$|.*\\.webp$|.*\\.ico$).*)',
+    // Excluimos archivos públicos que DEBEN servirse sin auth: el service worker
+    // (sw.js) y el manifest necesitan llegar como JS/JSON o el navegador no puede
+    // registrarlos ni actualizarlos (antes el middleware los redirigía a /login).
+    '/((?!_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|offline.html|robots.txt|sitemap.xml|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.svg$|.*\\.webp$|.*\\.ico$).*)',
   ],
 }
