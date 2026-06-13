@@ -5,7 +5,7 @@
 //   - Cache-first para estáticos: _next/static, /icons, fonts
 //   - Stale-while-revalidate para imágenes públicas de galerías
 //   - Si la red falla en navegación → fallback /offline.html
-const VERSION = "v1"
+const VERSION = "v2"
 const STATIC_CACHE = `studioflow-static-${VERSION}`
 const RUNTIME_CACHE = `studioflow-runtime-${VERSION}`
 const OFFLINE_URL = "/offline.html"

@@ -18,6 +18,24 @@ export function PWARegister() {
     const onLoad = () => {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
+        .then((reg) => {
+          // Auto-actualización: cuando se publica un SW nuevo (bump de VERSION),
+          // recargamos UNA vez en cuanto la versión nueva queda "installed" y ya
+          // había un SW controlando (= update real, no la primera instalación).
+          // Así el usuario recibe el código nuevo sin tener que limpiar caché.
+          reg.addEventListener("updatefound", () => {
+            const installing = reg.installing
+            if (!installing) return
+            installing.addEventListener("statechange", () => {
+              if (
+                installing.state === "installed" &&
+                navigator.serviceWorker.controller
+              ) {
+                window.location.reload()
+              }
+            })
+          })
+        })
         .catch((err) => console.warn("[pwa] SW registration failed", err))
     }
 
