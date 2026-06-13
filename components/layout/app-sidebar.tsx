@@ -351,7 +351,10 @@ export function AppSidebar({
           "w-64",
           collapsed ? "lg:w-[72px]" : "lg:w-64",
           // Móvil: drawer off-canvas fijo que entra desde la izquierda.
-          "fixed inset-y-0 left-0 transition-[width,transform] duration-300 ease-in-out",
+          // NO transicionar `transform`: Tailwind translate usa var(--tw-translate-x)
+          // y Chromium no interpola transforms basados en variables (el panel se
+          // quedaba pegado oculto). Solo animamos width.
+          "fixed inset-y-0 left-0 transition-[width] duration-300 ease-in-out",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
           // Desktop: parte del flujo, siempre visible.
           "lg:relative lg:z-20 lg:translate-x-0",
