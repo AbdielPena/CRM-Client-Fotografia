@@ -50,6 +50,7 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
+import { useIsMobile } from "@/lib/hooks/use-is-mobile"
 import { ThemeDock } from "@/components/shared/theme-dock"
 import {
   Tooltip,
@@ -268,7 +269,18 @@ export function AppSidebar({
   badges = {},
 }: AppSidebarProps) {
   const pathname = usePathname()
-  const { collapsed, toggle } = useSidebar()
+  const { collapsed: collapsedDesktop, toggle, mobileOpen, setMobileOpen } = useSidebar()
+  const isMobile = useIsMobile()
+
+  // En móvil el drawer siempre se muestra expandido (labels visibles); el colapso
+  // a solo-iconos es una preferencia exclusiva de desktop. Derivamos `collapsed`
+  // de una sola fuente para no tocar el resto del render.
+  const collapsed = isMobile ? false : collapsedDesktop
+
+  // Cerrar el drawer al navegar a otra ruta.
+  React.useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname, setMobileOpen])
 
   const isActive = React.useCallback(
     (href: string) => {
@@ -330,6 +342,16 @@ export function AppSidebar({
 
   return (
     <TooltipProvider delayDuration={120} skipDelayDuration={80}>
+      {/* Overlay — solo móvil cuando el drawer está abierto. */}
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Cerrar menú"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+        />
+      )}
+
       <motion.aside
         initial={false}
         animate={{
@@ -338,7 +360,12 @@ export function AppSidebar({
         transition={SIDEBAR_TRANSITION}
         data-collapsed={collapsed}
         className={cn(
-          "relative z-20 flex h-full flex-shrink-0 flex-col overflow-hidden",
+          "z-50 flex h-full flex-shrink-0 flex-col overflow-hidden",
+          // Móvil: drawer off-canvas fijo que entra desde la izquierda.
+          "fixed inset-y-0 left-0 transition-transform duration-300 ease-in-out",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          // Desktop: parte del flujo, siempre visible.
+          "lg:relative lg:z-20 lg:translate-x-0",
           "bg-[hsl(var(--sidebar))] border-r border-[hsl(var(--sidebar-border))]",
           "text-[hsl(var(--sidebar-foreground))]",
         )}

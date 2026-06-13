@@ -10,6 +10,10 @@ interface SidebarContextValue {
   collapsed: boolean
   toggle: () => void
   setCollapsed: (v: boolean) => void
+  /** Estado del drawer móvil (off-canvas). En desktop es irrelevante. */
+  mobileOpen: boolean
+  setMobileOpen: (v: boolean) => void
+  toggleMobile: () => void
 }
 
 const SidebarContext = React.createContext<SidebarContextValue | null>(null)
@@ -24,6 +28,7 @@ export function SidebarProvider({
   children,
 }: SidebarProviderProps) {
   const [collapsed, setCollapsedState] = React.useState(initialCollapsed)
+  const [mobileOpen, setMobileOpen] = React.useState(false)
 
   const setCollapsed = React.useCallback((v: boolean) => {
     setCollapsedState(v)
@@ -33,6 +38,10 @@ export function SidebarProvider({
   const toggle = React.useCallback(() => {
     setCollapsed(!collapsed)
   }, [collapsed, setCollapsed])
+
+  const toggleMobile = React.useCallback(() => {
+    setMobileOpen((v) => !v)
+  }, [])
 
   // Atajo de teclado: Cmd/Ctrl + B
   React.useEffect(() => {
@@ -47,8 +56,8 @@ export function SidebarProvider({
   }, [toggle])
 
   const value = React.useMemo(
-    () => ({ collapsed, toggle, setCollapsed }),
-    [collapsed, toggle, setCollapsed],
+    () => ({ collapsed, toggle, setCollapsed, mobileOpen, setMobileOpen, toggleMobile }),
+    [collapsed, toggle, setCollapsed, mobileOpen, toggleMobile],
   )
 
   return (
@@ -62,4 +71,13 @@ export function useSidebar() {
     throw new Error("useSidebar debe usarse dentro de SidebarProvider")
   }
   return ctx
+}
+
+/**
+ * Variante que NO lanza si está fuera del provider — devuelve null.
+ * Útil en componentes compartidos (ej. AppTopbar) que también se montan
+ * en árboles sin SidebarProvider (grupo `(platform)`).
+ */
+export function useSidebarOptional() {
+  return React.useContext(SidebarContext)
 }

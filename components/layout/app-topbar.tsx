@@ -13,9 +13,11 @@ import {
   Receipt,
   FileText,
   Package,
+  Menu,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
+import { useSidebarOptional } from "@/components/layout/sidebar-context"
 
 interface AppTopbarProps {
   title?: string
@@ -54,6 +56,7 @@ export function AppTopbar({
   className,
 }: AppTopbarProps) {
   const router = useRouter()
+  const sidebar = useSidebarOptional()
   const [quickOpen, setQuickOpen] = React.useState(false)
   const quickRef = React.useRef<HTMLDivElement | null>(null)
   const searchRef = React.useRef<HTMLInputElement | null>(null)
@@ -85,7 +88,22 @@ export function AppTopbar({
   return (
     <div className={cn("flex flex-col", className)}>
       {/* ========== Sticky control bar — Lumen, alto h-12, sutil ========== */}
-      <div className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border bg-background/85 px-6 backdrop-blur-md lg:px-8">
+      <div className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
+        {/* Botón hamburguesa — solo móvil, abre el drawer del sidebar. */}
+        {sidebar && (
+          <button
+            type="button"
+            onClick={sidebar.toggleMobile}
+            aria-label="Abrir menú"
+            className={cn(
+              "inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground lg:hidden",
+              "transition-colors duration-fast hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <Menu className="h-4 w-4" />
+          </button>
+        )}
+
         {/* Search — Enter navega a /search?q=… */}
         <form onSubmit={onSearchSubmit} role="search" className="relative max-w-sm flex-1">
           <Search
