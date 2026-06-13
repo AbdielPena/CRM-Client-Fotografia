@@ -32,7 +32,6 @@ import { Button } from "@/components/ui/button"
 import { StatCard } from "@/components/shared/stat-card"
 import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import { RevenueLineChart } from "@/components/dashboard/revenue-line-chart"
-import { GoalsProgress } from "@/components/dashboard/goals-progress"
 import { RecentActivityRich } from "@/components/dashboard/recent-activity-rich"
 import { TopPackagesList } from "@/components/dashboard/top-packages-list"
 import { UpcomingSessions } from "@/components/dashboard/upcoming-sessions"
@@ -177,23 +176,6 @@ export default async function DashboardPage() {
         ? 100
         : 0
 
-  // Goals derivados de datos reales
-  const cobranzaPct =
-    data.stats.revenue + data.stats.pending > 0
-      ? (data.stats.revenue / (data.stats.revenue + data.stats.pending)) * 100
-      : 0
-
-  const ocupacionPct = Math.min(
-    100,
-    (data.upcomingProjects.length / 8) * 100,
-  )
-
-  // Capacidad activa: % de proyectos activos sobre clientes (rough proxy)
-  const capacidadPct =
-    data.stats.clients > 0
-      ? Math.min(100, (data.stats.activeProjects / data.stats.clients) * 100)
-      : 0
-
   // Activity feed: lectura real del activity_log con metadata + href + flag huérfano
 
   return (
@@ -302,42 +284,10 @@ export default async function DashboardPage() {
             />
           </div>
 
-          {/* ─── Main row: Revenue chart + Goals ────────────────────── */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <DashboardCard title="Tendencia de ingresos" delay={0.2}>
-                <RevenueLineChart buckets={monthlyRevenue} currency="DOP" />
-              </DashboardCard>
-            </div>
-
-            <DashboardCard title="Metas del mes" delay={0.25}>
-              <GoalsProgress
-                goals={[
-                  {
-                    label: "Cobranza",
-                    value: cobranzaPct,
-                    tone: "blue",
-                    hint:
-                      data.stats.pending > 0
-                        ? `${formatCurrency(data.stats.pending, "DOP")} pendiente`
-                        : "Al día",
-                  },
-                  {
-                    label: "Ocupación calendario",
-                    value: ocupacionPct,
-                    tone: "violet",
-                    hint: `${data.upcomingProjects.length} sesiones próximas`,
-                  },
-                  {
-                    label: "Capacidad activa",
-                    value: capacidadPct,
-                    tone: "emerald",
-                    hint: `${data.stats.activeProjects} de ${data.stats.clients} clientes`,
-                  },
-                ]}
-              />
-            </DashboardCard>
-          </div>
+          {/* ─── Tendencia de ingresos (ancho completo) ────────────── */}
+          <DashboardCard title="Tendencia de ingresos" delay={0.2}>
+            <RevenueLineChart buckets={monthlyRevenue} currency="DOP" />
+          </DashboardCard>
 
           {/* ─── Recent Activity + Upcoming sessions ────────────────── */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
