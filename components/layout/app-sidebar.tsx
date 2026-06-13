@@ -51,6 +51,7 @@ import {
 
 import { cn } from "@/lib/utils/cn"
 import { useIsMobile } from "@/lib/hooks/use-is-mobile"
+import { AppSwitcher } from "./app-switcher"
 import { ThemeDock } from "@/components/shared/theme-dock"
 import {
   Tooltip,
@@ -414,6 +415,11 @@ export function AppSidebar({
             collapsed ? "px-2 space-y-1" : "px-3 space-y-5",
           )}
         >
+          {/* Switcher del ecosistema: volver al Hub / cambiar de app (Studio Suite). */}
+          <div className={cn(collapsed ? "px-0" : "px-0", "pb-1")}>
+            <AppSwitcher currentSystem="crm" collapsed={collapsed} />
+          </div>
+
           {NAV_GROUPS.map((group, gIdx) => {
             const isGroupCollapsed = hydrated && collapsedGroups.has(group.label)
             const hasActiveChild = group.items.some((i) => isActive(i.href))
