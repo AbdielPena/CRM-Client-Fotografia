@@ -1,10 +1,17 @@
 import 'server-only'
 
-import { createSupabaseServerClient } from '@/server/supabase/server'
+import {
+  createSupabaseServerClient,
+  createSupabasePublicClient,
+} from '@/server/supabase/server'
+import { createSupabaseServiceClient } from '@/server/supabase/service'
 import { clientsRepo } from '@/server/repositories'
 import type { CreateLeadInput, UpdateLeadInput } from '@/lib/validations/lead.schema'
 import { throwServiceError } from '@/lib/utils/api-error'
 import { logActivity } from './activity.service'
+import { notify } from './notification.service'
+import { enqueueEmail, renderLeadReceivedForStudio } from './email.service'
+import { getEmailBranding } from './email-template.service'
 
 export type LeadRow = Awaited<ReturnType<typeof getLeadById>>
 
@@ -324,4 +331,150 @@ export async function convertLeadToClient(
   })
 
   return client
+}
+
+// ----------------------------------------------------------------------------
+// Lead público (formulario de contacto del sitio web — abbypixel.com)
+// ----------------------------------------------------------------------------
+
+/** URL base del dashboard para los links en el email al estudio. */
+function appBaseUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    'https://my.abbypixel.com'
+  )
+}
+
+/** Resuelve el studio por slug usando la vista pública (anon, respeta RLS). */
+async function resolveStudioBySlug(slug: string) {
+  const supabase = createSupabasePublicClient()
+  const { data } = await supabase
+    .from('studios_public')
+    .select('id, name, slug, email, primary_color')
+    .eq('slug', slug)
+    .maybeSingle()
+  return (data as {
+    id: string
+    name: string
+    slug: string
+    email: string | null
+    primary_color: string | null
+  } | null)
+}
+
+export type PublicLeadInput = {
+  studioSlug: string
+  name: string
+  email?: string | null
+  phone?: string | null
+  /** Categoría / tipo de evento que eligió el cliente. */
+  category?: string | null
+  /** Fecha tentativa en texto libre ("Junio 2026"). No es una fecha estricta. */
+  tentativeDate?: string | null
+  message?: string | null
+}
+
+export type PublicLeadResult =
+  | { status: 'ok'; leadId: string }
+  | { status: 'not_found' }
+
+/**
+ * Crea un lead desde el formulario público de contacto del sitio web.
+ * - Inserta con service-role (no hay sesión en el contexto público).
+ * - source='website', status='new' → entra al pipeline de /leads del CRM.
+ * - Avisa al estudio: notificación in-app + email (ambos best-effort).
+ * No envía WhatsApp proactivo (dependería de plantillas Meta aprobadas); el
+ * cliente continúa por WhatsApp desde la propia web (botón wa.me).
+ */
+export async function createPublicLead(
+  input: PublicLeadInput,
+  _meta: { ip?: string; userAgent?: string },
+): Promise<PublicLeadResult> {
+  const studio = await resolveStudioBySlug(input.studioSlug)
+  if (!studio) return { status: 'not_found' }
+
+  // La fecha tentativa es texto libre → va a notas, no a la columna DATE.
+  const notesParts: string[] = []
+  if (input.message?.trim()) notesParts.push(input.message.trim())
+  if (input.tentativeDate?.trim()) {
+    notesParts.push(`Fecha tentativa: ${input.tentativeDate.trim()}`)
+  }
+  const notes = notesParts.join('\n\n') || null
+
+  const service = createSupabaseServiceClient()
+  const { data: lead, error } = await service
+    .from('leads')
+    .insert({
+      studio_id: studio.id,
+      name: input.name.trim(),
+      email: input.email?.trim().toLowerCase() || null,
+      phone: input.phone?.trim() || null,
+      source: 'website',
+      status: 'new',
+      event_type: input.category?.trim() || null,
+      referral: 'Formulario de contacto (abbypixel.com)',
+      notes,
+    })
+    .select('id, name')
+    .single()
+
+  if (error) throwServiceError('LEAD_OP_FAILED', error)
+
+  // Auditoría (actor = cliente anónimo, sin actorId)
+  await logActivity({
+    studioId: studio.id,
+    action: 'lead.created',
+    entityType: 'lead',
+    entityId: lead.id,
+    actorType: 'client',
+    actorName: input.name.trim(),
+    description: 'Lead recibido desde el formulario de contacto del sitio web',
+    metadata: { source: 'website', category: input.category ?? null },
+  })
+
+  // Notificación in-app al estudio (best-effort, nunca lanza)
+  await notify({
+    studioId: studio.id,
+    type: 'system',
+    title: `🌱 Nuevo contacto del sitio web — ${lead.name}`,
+    body: input.category ? `Le interesa: ${input.category}` : null,
+    actionUrl: `/leads/${lead.id}`,
+    relatedEntityType: 'lead',
+    relatedEntityId: lead.id,
+    metadata: { source: 'website' },
+  })
+
+  // Email al estudio (best-effort — no debe tumbar el flujo público)
+  try {
+    if (studio.email) {
+      const branding = await getEmailBranding(studio.id)
+      const { subject, html } = renderLeadReceivedForStudio({
+        studioName: studio.name,
+        primaryColor: studio.primary_color ?? undefined,
+        branding,
+        clientName: lead.name,
+        clientEmail: input.email ?? null,
+        clientPhone: input.phone ?? null,
+        category: input.category ?? null,
+        tentativeDate: input.tentativeDate ?? null,
+        message: input.message ?? null,
+        adminLink: `${appBaseUrl()}/leads/${lead.id}`,
+      })
+      await enqueueEmail({
+        studioId: studio.id,
+        toEmail: studio.email,
+        toName: studio.name,
+        subject,
+        bodyHtml: html,
+        relatedEntityType: 'lead',
+        relatedEntityId: lead.id,
+        templateSlug: 'lead_received_studio',
+      })
+    }
+  } catch (e) {
+    console.error('[createPublicLead] email al estudio falló', e)
+  }
+
+  return { status: 'ok', leadId: lead.id }
 }

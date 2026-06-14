@@ -208,6 +208,57 @@ export function renderBookingReceivedForStudio(params: {
   return { subject, html }
 }
 
+/**
+ * Email al estudio cuando llega un lead desde el formulario de contacto del
+ * sitio web (abbypixel.com). Mismo marco luxury que el resto de correos.
+ */
+export function renderLeadReceivedForStudio(params: {
+  studioName: string
+  primaryColor?: string
+  branding?: EmailBranding | null
+  clientName: string
+  clientEmail?: string | null
+  clientPhone?: string | null
+  category?: string | null
+  tentativeDate?: string | null
+  message?: string | null
+  adminLink: string
+}) {
+  const {
+    studioName,
+    primaryColor = '#111827',
+    clientName,
+    clientEmail,
+    clientPhone,
+    category,
+    tentativeDate,
+    message,
+    adminLink,
+  } = params
+
+  const subject = `🌱 Nuevo contacto del sitio web — ${clientName}`
+  const row = (label: string, value: string) =>
+    `<tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 150px; vertical-align: top;">${label}</td><td style="padding: 8px 0; font-weight: 500;">${value}</td></tr>`
+  const html = frame(`
+  <h1 style="margin: 0 0 8px; font-size: 22px;">Nuevo contacto desde el sitio</h1>
+  <p style="margin: 0 0 24px; color: #4b5563;">Alguien completó el formulario de contacto de abbypixel.com. Ya quedó registrado como lead en tu CRM:</p>
+
+  <table style="width: 100%; border-collapse: collapse;">
+    ${row('Nombre', escapeHtml(clientName))}
+    ${clientEmail ? row('Email', escapeHtml(clientEmail)) : ''}
+    ${clientPhone ? row('WhatsApp / Tel.', escapeHtml(clientPhone)) : ''}
+    ${category ? row('Le interesa', escapeHtml(category)) : ''}
+    ${tentativeDate ? row('Fecha tentativa', escapeHtml(tentativeDate)) : ''}
+    ${message ? row('Mensaje', escapeHtml(message).replace(/\n/g, '<br/>')) : ''}
+  </table>
+
+  <div style="margin-top: 28px;">
+    <a href="${escapeHtml(adminLink)}" style="display: inline-block; padding: 10px 20px; background: ${escapeHtml(primaryColor)}; color: #fff; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Ver lead en el CRM</a>
+  </div>
+`, { studioName, accent: primaryColor, branding: params.branding })
+  return { subject, html }
+}
+
 export function renderBookingApprovedForClient(params: {
   studioName: string
   primaryColor?: string
