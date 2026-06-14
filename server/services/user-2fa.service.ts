@@ -1,6 +1,6 @@
 import "server-only"
 
-import { untypedServer, untypedService } from "@/server/supabase/untyped"
+import { untypedService } from "@/server/supabase/untyped"
 import { throwServiceError } from "@/lib/utils/api-error"
 import {
   generateRecoveryCodes,
@@ -35,7 +35,11 @@ export type User2FAStatus = {
 }
 
 export async function get2FAStatus(userId: string): Promise<User2FAStatus | null> {
-  const sb = untypedServer()
+  // service-role: la vista user_2fa_status ahora es SECURITY INVOKER, así que
+  // leerla con el rol del usuario dependería de su sesión (frágil en el flujo
+  // de login 2FA). El resto del servicio ya usa untypedService() sobre user_2fa;
+  // el caller (settings/security) siempre pasa su propio userId.
+  const sb = untypedService()
   const { data, error } = await sb
     .from("user_2fa_status")
     .select("*")
