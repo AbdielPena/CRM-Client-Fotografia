@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   LayoutDashboard,
   Users,
+  UserPlus,
   FolderOpen,
   CalendarDays,
   ImageIcon,
@@ -97,6 +98,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Clientes",
     items: [
       { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
+      { type: "link", href: "/leads", label: "Leads", icon: UserPlus },
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
       { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
       { type: "link", href: "/projects", label: "Proyectos", icon: FolderOpen },
