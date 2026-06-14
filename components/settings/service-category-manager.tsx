@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Pencil, Trash2, X } from "lucide-react"
+import { Plus, Pencil, Trash2, X, Link2, Copy, Check, Package } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -16,11 +16,13 @@ import { IconSelector, CategoryIcon } from "@/components/shared/icon-selector"
 export interface ServiceCategoryView {
   id: string
   name: string
+  slug: string | null
   color: string
   icon: string
   description: string | null
   isActive: boolean
   sortOrder: number
+  packageCount: number
 }
 
 type FormMode = "create" | "edit" | null
@@ -30,6 +32,34 @@ export function ServiceCategoryManager({ categories }: { categories: ServiceCate
   const [formMode, setFormMode] = useState<FormMode>(null)
   const [editing, setEditing] = useState<ServiceCategoryView | null>(null)
   const [pending, start] = useTransition()
+  const [origin, setOrigin] = useState("")
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    setOrigin(window.location.origin)
+  }, [])
+
+  const copyLink = async (cat: ServiceCategoryView) => {
+    const url = `${origin}/booking/${cat.slug}`
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      // Fallback para WebView/contextos sin clipboard API
+      const ta = document.createElement("textarea")
+      ta.value = url
+      document.body.appendChild(ta)
+      ta.select()
+      try {
+        document.execCommand("copy")
+      } catch {
+        /* noop */
+      }
+      document.body.removeChild(ta)
+    }
+    setCopiedId(cat.id)
+    toast.success("Link copiado")
+    setTimeout(() => setCopiedId((c) => (c === cat.id ? null : c)), 1800)
+  }
 
   const onCreate = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -118,6 +148,44 @@ export function ServiceCategoryManager({ categories }: { categories: ServiceCate
                   <Trash2 className="h-4 w-4" />
                 </button>
               </ConfirmDialog>
+            </div>
+
+            {/* Planes + link público de la categoría */}
+            <div className="mt-3 border-t border-border/60 pt-3">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Package className="h-3.5 w-3.5" />
+                {c.packageCount} {c.packageCount === 1 ? "plan activo" : "planes activos"}
+              </div>
+              {c.slug && (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <Link2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 text-[11px] text-foreground/80">
+                    /booking/{c.slug}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => copyLink(c)}
+                    disabled={!c.isActive}
+                    title={
+                      c.isActive
+                        ? "Copiar link público"
+                        : "Categoría inactiva: el link no está disponible"
+                    }
+                    className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {copiedId === c.id ? (
+                      <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
+              )}
+              {!c.isActive && (
+                <p className="mt-1.5 text-[10.5px] text-amber-600">
+                  Inactiva — el link público no está disponible.
+                </p>
+              )}
             </div>
           </div>
         ))}

@@ -15,6 +15,7 @@ import type {
 export interface ServiceCategory {
   id: string
   name: string
+  slug: string | null
   color: string
   icon: string
   description: string | null
@@ -27,11 +28,47 @@ function sanitizeFolder(s: string): string {
   return (s || "").replace(/[/\\:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 120) || "Otros"
 }
 
+/** Convierte un nombre en un slug URL-safe (sin acentos, minúsculas, guiones). */
+function slugify(s: string): string {
+  return (
+    (s || "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "categoria"
+  )
+}
+
+/** Devuelve un slug único para el studio (añade -2, -3… si ya existe). */
+async function ensureUniqueSlug(
+  studioId: string,
+  base: string,
+  excludeId?: string,
+): Promise<string> {
+  const sb = untypedService()
+  let candidate = slugify(base)
+  for (let i = 1; i < 50; i++) {
+    let q = sb
+      .from("service_categories")
+      .select("id")
+      .eq("studio_id", studioId)
+      .eq("slug", candidate)
+      .is("deleted_at", null)
+    if (excludeId) q = q.neq("id", excludeId)
+    const { data } = await q.maybeSingle()
+    if (!data) return candidate
+    candidate = `${slugify(base)}-${i + 1}`
+  }
+  return `${slugify(base)}-${Date.now()}`
+}
+
 export async function getServiceCategories(studioId: string): Promise<ServiceCategory[]> {
   const sb = untypedService()
   const { data } = await sb
     .from("service_categories")
-    .select("id, name, color, icon, description, drive_folder_name, is_active, sort_order")
+    .select("id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order")
     .eq("studio_id", studioId)
     .is("deleted_at", null)
     .order("sort_order", { ascending: true })
@@ -40,6 +77,7 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
   return ((data ?? []) as any[]).map((r) => ({
     id: r.id,
     name: r.name,
+    slug: r.slug ?? null,
     color: r.color,
     icon: r.icon,
     description: r.description ?? null,
@@ -47,6 +85,26 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
     isActive: r.is_active,
     sortOrder: r.sort_order,
   }))
+}
+
+/** Conteo de planes activos por categoría (categoryId → nº). Para el admin. */
+export async function countActivePackagesByCategory(
+  studioId: string,
+): Promise<Record<string, number>> {
+  const sb = untypedService()
+  const { data } = await sb
+    .from("packages")
+    .select("service_category_id")
+    .eq("studio_id", studioId)
+    .eq("is_active", true)
+    .is("deleted_at", null)
+  const counts: Record<string, number> = {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of (data ?? []) as any[]) {
+    const cid = r.service_category_id as string | null
+    if (cid) counts[cid] = (counts[cid] ?? 0) + 1
+  }
+  return counts
 }
 
 export async function createServiceCategory(
@@ -63,12 +121,14 @@ export async function createServiceCategory(
     .limit(1)
     .maybeSingle()
   const nextOrder = ((maxRow as { sort_order?: number } | null)?.sort_order ?? -1) + 1
+  const slug = await ensureUniqueSlug(studioId, input.name)
 
   const { data, error } = await sb
     .from("service_categories")
     .insert({
       studio_id: studioId,
       name: input.name.trim(),
+      slug,
       color: input.color,
       icon: input.icon || "tag",
       description: input.description || null,
@@ -96,6 +156,8 @@ export async function updateServiceCategory(
   if (input.name !== undefined) {
     patch.name = input.name.trim()
     patch.drive_folder_name = sanitizeFolder(input.name)
+    // Regenerar slug del link público al renombrar (único por studio).
+    patch.slug = await ensureUniqueSlug(studioId, input.name, id)
   }
   if (input.color !== undefined) patch.color = input.color
   if (input.icon !== undefined) patch.icon = input.icon || "tag"

@@ -16,6 +16,7 @@ const PUBLIC_PREFIXES = [
   '/contract-print', // página print del contrato (auth interna por path)
   '/invoice-print', // página print de factura (auth interna por path)
   '/p/', // links públicos de booking
+  '/booking/', // links públicos POR CATEGORÍA (con slash: NO matchea /bookings admin)
   '/b/', // hub de confirmación del cliente (revisar plan → formulario → firma → pago)
   '/r/', // registro público de cliente (sin paquete)
   '/sign/', // firma pública de contrato (también abre la factura 50%)
