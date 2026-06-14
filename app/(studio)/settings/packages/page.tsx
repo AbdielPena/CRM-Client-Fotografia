@@ -64,6 +64,7 @@ export default async function PackagesSettingsPage() {
             default_contract_template_id: string | null
             default_form_template_id: string | null
             service_category_id?: string | null
+            cover_image_url?: string | null
             print_entitlements?: unknown
           }>).map((p) => ({
             id: p.id,
@@ -80,6 +81,7 @@ export default async function PackagesSettingsPage() {
             contractTemplateId: p.default_contract_template_id ?? undefined,
             formTemplateId: p.default_form_template_id ?? undefined,
             serviceCategoryId: p.service_category_id ?? undefined,
+            coverImageUrl: p.cover_image_url ?? undefined,
             printEntitlements: normalizeEntitlements(p.print_entitlements),
           }))}
         />

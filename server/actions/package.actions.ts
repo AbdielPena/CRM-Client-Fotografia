@@ -38,6 +38,7 @@ export async function createPackageAction(formData: FormData) {
     contractTemplateId: formData.get("contractTemplateId"),
     formTemplateId: formData.get("formTemplateId"),
     serviceCategoryId: formData.get("serviceCategoryId"),
+    coverImageUrl: formData.get("coverImageUrl"),
   }
 
   const parsed = createPackageSchema.safeParse(raw)
@@ -69,6 +70,7 @@ export async function updatePackageAction(packageId: string, formData: FormData)
     contractTemplateId: formData.get("contractTemplateId"),
     formTemplateId: formData.get("formTemplateId"),
     serviceCategoryId: formData.get("serviceCategoryId"),
+    coverImageUrl: formData.get("coverImageUrl"),
   }
 
   const parsed = updatePackageSchema.safeParse(raw)

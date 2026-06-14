@@ -34,6 +34,10 @@ export const createPackageSchema = z.object({
   // Categoría de servicio (Quinceañeras, Bodas, etc.). Agrupa planes y define
   // la carpeta raíz en Google Drive. "" / null → sin categoría.
   serviceCategoryId: optionalUuid,
+  // Imagen de portada del plan (URL pública del bucket). "" / null → sin portada.
+  coverImageUrl: z
+    .union([z.string().url("URL inválida"), z.literal(""), z.null()])
+    .optional(),
 })
 
 export const updatePackageSchema = createPackageSchema.partial()

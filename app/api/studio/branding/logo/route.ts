@@ -60,7 +60,9 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     )
   }
-  const safeVariant = ["light", "dark", "favicon", "banner"].includes(variant)
+  const safeVariant = ["light", "dark", "favicon", "banner", "package-cover"].includes(
+    variant,
+  )
     ? variant
     : "light"
 

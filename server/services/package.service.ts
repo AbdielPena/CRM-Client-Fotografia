@@ -108,6 +108,8 @@ export async function createPackage(
   ;(insert as Record<string, unknown>).delivery_days = data.deliveryDays ?? null
   // service_category_id: columna nueva (no en tipos) — "" / null → sin categoría
   ;(insert as Record<string, unknown>).service_category_id = data.serviceCategoryId || null
+  // cover_image_url: portada del plan (URL del bucket). "" / null → sin portada.
+  ;(insert as Record<string, unknown>).cover_image_url = data.coverImageUrl || null
   if (printEntitlements !== undefined) {
     ;(insert as Record<string, unknown>).print_entitlements = printEntitlements
   }
@@ -144,6 +146,8 @@ export async function updatePackage(
     patch.default_form_template_id = data.formTemplateId || null
   if (data.serviceCategoryId !== undefined)
     patch.service_category_id = data.serviceCategoryId || null
+  if (data.coverImageUrl !== undefined)
+    patch.cover_image_url = data.coverImageUrl || null
 
   // Slug: si el user lo escribe explícito → usamos su valor (sanitizado).
   // Si cambia el nombre sin slug explícito → regeneramos para mantener SEO-friendly.

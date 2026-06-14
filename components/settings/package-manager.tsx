@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState, useTransition } from "react"
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import {
@@ -23,6 +23,7 @@ import {
   ExternalLink,
   AlertTriangle,
   Loader2,
+  UploadCloud,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -46,6 +47,7 @@ interface Package {
   contractTemplateId?: string
   formTemplateId?: string
   serviceCategoryId?: string
+  coverImageUrl?: string
   printEntitlements?: PrintEntitlements
 }
 
@@ -780,6 +782,16 @@ function PackageForm({
           />
         </div>
 
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Imagen de portada
+          </label>
+          <CoverImageField name="coverImageUrl" initialUrl={defaultValues?.coverImageUrl ?? null} />
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Se muestra en el link público del plan y en la vista por categoría. PNG/JPG/WEBP, máx. 2 MB.
+          </p>
+        </div>
+
         {/* Vinculación a contrato + formulario — se aplican por defecto cuando
             un cliente reserva este paquete */}
         <div className="sm:col-span-2 mt-1 border-t border-border/60 pt-4">
@@ -859,6 +871,92 @@ function PackageForm({
           </button>
         </div>
       </form>
+    </div>
+  )
+}
+
+/**
+ * Subida de la imagen de portada del plan: sube el archivo a
+ * /api/studio/branding/logo (bucket público studio-branding, variant
+ * "package-cover") y guarda la URL en un input hidden que el form persiste en
+ * packages.cover_image_url. Misma mecánica que el uploader del logo.
+ */
+function CoverImageField({
+  name,
+  initialUrl,
+}: {
+  name: string
+  initialUrl: string | null
+}) {
+  const [url, setUrl] = useState(initialUrl ?? "")
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    setErr(null)
+    setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("variant", "package-cover")
+      const res = await fetch("/api/studio/branding/logo", { method: "POST", body: fd })
+      const json = (await res.json()) as { url?: string; error?: string }
+      if (!res.ok || !json.url) throw new Error(json.error || "Error al subir")
+      setUrl(json.url)
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Error al subir")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <input type="hidden" name={name} value={url} />
+      <div className="flex items-center gap-3 rounded-xl border border-border p-3">
+        <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30">
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt="Portada" className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon className="size-5 text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <UploadCloud className="size-3.5" />}
+              {url ? "Cambiar imagen" : "Subir portada"}
+            </button>
+            {url && (
+              <button
+                type="button"
+                onClick={() => setUrl("")}
+                className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+              >
+                Quitar
+              </button>
+            )}
+          </div>
+          {err && <p className="text-[11px] text-red-600">{err}</p>}
+        </div>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={onPick}
+      />
     </div>
   )
 }
