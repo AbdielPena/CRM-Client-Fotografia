@@ -31,6 +31,7 @@ const PUBLIC_PREFIXES = [
   '/api/webhooks',
   '/api/health',
   '/api/public',
+  '/embed', // script embebible de formularios (público, estático)
   '/api/internal', // API por ID para web local co-alojada (auth por X-Internal-Key)
   '/api/deploy', // hooks de deploy desde GitHub Actions (auth por Bearer interno)
   '/api/cron', // cron jobs (auth por Bearer token interno en cada endpoint)

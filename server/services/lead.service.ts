@@ -421,31 +421,64 @@ export async function createPublicLead(
 
   if (error) throwServiceError('LEAD_OP_FAILED', error)
 
-  // Auditoría (actor = cliente anónimo, sin actorId)
+  await notifyStudioOfNewLead({
+    studio,
+    lead,
+    source: 'website',
+    clientEmail: input.email ?? null,
+    clientPhone: input.phone ?? null,
+    category: input.category ?? null,
+    tentativeDate: input.tentativeDate ?? null,
+    message: input.message ?? null,
+  })
+
+  return { status: 'ok', leadId: lead.id }
+}
+
+/**
+ * Aviso al estudio cuando entra un lead público (formulario de contacto o un
+ * inquiry form): auditoría + notificación in-app + email con el marco luxury.
+ * Todo best-effort: nunca tumba el flujo público.
+ */
+export async function notifyStudioOfNewLead(opts: {
+  studio: { id: string; name: string; email: string | null; primary_color?: string | null }
+  lead: { id: string; name: string }
+  source: string
+  clientEmail?: string | null
+  clientPhone?: string | null
+  category?: string | null
+  tentativeDate?: string | null
+  message?: string | null
+  formName?: string | null
+}): Promise<void> {
+  const { studio, lead } = opts
+
   await logActivity({
     studioId: studio.id,
     action: 'lead.created',
     entityType: 'lead',
     entityId: lead.id,
     actorType: 'client',
-    actorName: input.name.trim(),
-    description: 'Lead recibido desde el formulario de contacto del sitio web',
-    metadata: { source: 'website', category: input.category ?? null },
+    actorName: lead.name,
+    description: opts.formName
+      ? `Lead recibido desde el formulario "${opts.formName}"`
+      : 'Lead recibido desde el formulario de contacto del sitio web',
+    metadata: { source: opts.source, category: opts.category ?? null },
   })
 
-  // Notificación in-app al estudio (best-effort, nunca lanza)
   await notify({
     studioId: studio.id,
     type: 'system',
     title: `🌱 Nuevo contacto del sitio web — ${lead.name}`,
-    body: input.category ? `Le interesa: ${input.category}` : null,
+    body: opts.category
+      ? `Le interesa: ${opts.category}`
+      : opts.formName ?? null,
     actionUrl: `/leads/${lead.id}`,
     relatedEntityType: 'lead',
     relatedEntityId: lead.id,
-    metadata: { source: 'website' },
+    metadata: { source: opts.source },
   })
 
-  // Email al estudio (best-effort — no debe tumbar el flujo público)
   try {
     if (studio.email) {
       const branding = await getEmailBranding(studio.id)
@@ -454,11 +487,11 @@ export async function createPublicLead(
         primaryColor: studio.primary_color ?? undefined,
         branding,
         clientName: lead.name,
-        clientEmail: input.email ?? null,
-        clientPhone: input.phone ?? null,
-        category: input.category ?? null,
-        tentativeDate: input.tentativeDate ?? null,
-        message: input.message ?? null,
+        clientEmail: opts.clientEmail ?? null,
+        clientPhone: opts.clientPhone ?? null,
+        category: opts.category ?? null,
+        tentativeDate: opts.tentativeDate ?? null,
+        message: opts.message ?? null,
         adminLink: `${appBaseUrl()}/leads/${lead.id}`,
       })
       await enqueueEmail({
@@ -473,8 +506,6 @@ export async function createPublicLead(
       })
     }
   } catch (e) {
-    console.error('[createPublicLead] email al estudio falló', e)
+    console.error('[notifyStudioOfNewLead] email al estudio falló', e)
   }
-
-  return { status: 'ok', leadId: lead.id }
 }

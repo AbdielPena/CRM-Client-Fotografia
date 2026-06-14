@@ -83,9 +83,14 @@ export default async function LeadsPage({
         description={`${listData.total} lead${listData.total === 1 ? "" : "s"} en total — gestiona tu embudo de conversión.`}
         unreadNotifications={unread}
         actions={
-          <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
-            <Link href="/leads/new">Nuevo lead</Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/leads/forms">Formularios</Link>
+            </Button>
+            <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
+              <Link href="/leads/new">Nuevo lead</Link>
+            </Button>
+          </div>
         }
       />
 
