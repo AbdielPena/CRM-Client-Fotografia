@@ -64,6 +64,366 @@ function s(v: unknown): string {
   return typeof v === "string" ? v : ""
 }
 
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  ROYAL ATELIER — Luxury Book Experience (pxbook-)             ║
+// ║  Bloque <style> estático: solo depende de las CSS vars inline ║
+// ╚══════════════════════════════════════════════════════════════╝
+const PXBOOK_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Pinyon+Script&family=EB+Garamond:ital@0;1&display=swap');
+
+/* ── Tokens base + fuentes ─────────────────────────────────────── */
+.abby-book{
+  --gold-deep:#7a5a22; --gold:#b89968; --gold-bright:#e7c884;
+  --gold-foil:#fff3d4; --gold-spec:#fffaf0; --gold-line:#cbab74;
+  --velvet-0:#100b08; --velvet-1:#1c130c; --velvet-2:#2a1c10; --royal-wine:#2a0f12;
+  --page:#fbf6ed; --page-edge:#e8dcc4; --page-edge2:#d8c79f; --ink:#1a1614;
+  --glow-warm:rgba(231,200,132,.22); --glow-core:rgba(255,243,212,.30);
+  --shadow-amb:rgba(0,0,0,.55); --accent-soft:#e9c9c2;
+
+  --gold-foil-grad:linear-gradient(180deg,var(--gold-foil),var(--gold-bright) 42%,var(--gold) 78%);
+  --gold-foil-band:linear-gradient(110deg,
+     var(--gold-deep) 0%, var(--gold) 28%, var(--gold-foil) 46%,
+     var(--gold-spec) 52%, var(--gold-foil) 58%, var(--gold) 74%, var(--gold-deep) 100%);
+
+  --font-display:'Cormorant Garamond','EB Garamond',Georgia,serif;
+  --font-script:'Pinyon Script',cursive;
+  --font-serif:'EB Garamond',Georgia,serif;
+}
+.abby-book[data-tpl="luxury_xv"]{
+  --gold:#b89968; --gold-bright:#e7c884; --gold-foil:#fff3d4; --gold-deep:#7a5a22;
+  --velvet-0:#100b08; --velvet-1:#1c130c; --velvet-2:#2a1c10;
+  --page:#fbf6ed; --page-edge:#e8dcc4; --page-edge2:#d8c79f; --ink:#1a1614;
+  --accent-soft:#e9c9c2;
+}
+.abby-book[data-tpl="luxury_wedding"]{
+  --gold:#a98f6f; --gold-bright:#d9bd8e; --gold-foil:#f6ead0; --gold-deep:#6e5530;
+  --velvet-0:#0e0c0a; --velvet-1:#1c1a17; --velvet-2:#2a2017; --royal-wine:#2a0f12;
+  --page:#f6f1ea; --page-edge:#e6dccb; --page-edge2:#cdbfa6; --ink:#2a251f;
+  --accent-soft:#c9b9a0;
+}
+
+/* ── Escenario / fondo de palacio ──────────────────────────────── */
+.abby-book.pxbook-stagebg{
+  background:
+    radial-gradient(120% 90% at 50% -10%, var(--glow-warm) 0%, transparent 55%),
+    radial-gradient(140% 120% at 50% 8%, var(--velvet-2) 0%, var(--velvet-1) 38%, var(--velvet-0) 100%) !important;
+}
+.abby-book[data-tpl="luxury_wedding"].pxbook-stagebg{
+  background:
+    radial-gradient(120% 90% at 50% -10%, var(--glow-warm) 0%, transparent 55%),
+    radial-gradient(140% 120% at 50% 8%, var(--velvet-2) 0%,
+       color-mix(in srgb, var(--velvet-1) 88%, var(--royal-wine)) 40%, var(--velvet-0) 100%) !important;
+}
+
+/* Halo de candelabro detrás del libro (capa fija) */
+.pxbook-aura{
+  position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:radial-gradient(46% 40% at 50% 40%, var(--glow-core) 0%, var(--glow-warm) 34%, transparent 70%);
+  animation:pxAura 7s ease-in-out infinite; will-change:opacity,transform;
+}
+.abby-book[data-open="1"] .pxbook-aura{ opacity:.4; transition:opacity .6s ease; }
+
+/* Campo de sparkles (fairy-dust) — hermanos del libro */
+.pxbook-sparkles{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
+.pxbook-dust{
+  position:absolute; top:50%; left:50%; width:2px; height:2px; border-radius:50%; background:transparent;
+  box-shadow:
+    -180px -120px 0 0 var(--gold-foil),  120px -160px 0 0 var(--gold-bright),
+     200px   40px 0 0 var(--gold-foil), -220px   60px 0 0 var(--gold-bright),
+     -60px -200px 0 0 var(--gold-foil),   60px  180px 0 0 var(--gold-bright),
+     240px  -60px 0 0 var(--gold-foil), -260px  -40px 0 0 var(--gold-bright),
+       0px -240px 0 0 var(--gold-foil),  140px  120px 0 0 var(--gold-bright);
+  animation:pxDriftA 9s ease-in-out infinite, pxTwinkle 2.6s ease-in-out infinite;
+  will-change:transform,opacity;
+}
+.pxbook-dust.b{ animation:pxDriftB 11s ease-in-out infinite, pxTwinkle 3.4s ease-in-out infinite .8s; opacity:.7; }
+.pxbook-dust.c{ width:1px; height:1px;
+  animation:pxDriftA 13s ease-in-out infinite reverse, pxTwinkle 2.1s ease-in-out infinite .4s; opacity:.5; }
+
+/* Estrellas de 4 puntas (de Enchanted, reubicadas al escenario) */
+.pxbook-star{
+  position:absolute; width:14px; height:14px; pointer-events:none; z-index:1;
+  filter:drop-shadow(0 0 4px rgba(231,200,132,.9)); animation:pxStar 5s ease-in-out infinite;
+}
+.pxbook-star::before,.pxbook-star::after{ content:''; position:absolute; inset:0; }
+.pxbook-star::before{ width:1.5px; left:50%; transform:translateX(-50%);
+  background:linear-gradient(180deg,transparent,var(--gold-spec),transparent); }
+.pxbook-star::after{ height:1.5px; top:50%; transform:translateY(-50%);
+  background:linear-gradient(90deg,transparent,var(--gold-spec),transparent); }
+.pxbook-star.s1{ top:18%; left:16%; animation-delay:0s }
+.pxbook-star.s2{ top:24%; right:15%; animation-delay:1.3s; transform:scale(.7) }
+.pxbook-star.s3{ bottom:24%; left:22%; animation-delay:2.1s }
+.pxbook-star.s4{ bottom:30%; right:20%; animation-delay:3s; transform:scale(.6) }
+
+/* ── Stage que envuelve el HTMLFlipBook ────────────────────────── */
+.pxbook-stage{
+  position:relative; perspective:2200px; z-index:2;
+  transform-origin:50% 60%;
+  animation:pxPresent 1100ms cubic-bezier(.2,.8,.2,1) both;
+}
+/* canto derecho dorado (book block) */
+.pxbook-stage::after{
+  content:""; position:absolute; top:3%; bottom:3%; right:-6px; width:8px;
+  border-radius:0 3px 3px 0; z-index:-1;
+  background:repeating-linear-gradient(180deg, var(--page-edge) 0 2px, var(--page-edge2) 2px 3px);
+  box-shadow:2px 0 6px rgba(0,0,0,.4);
+}
+/* lomo / canto izquierdo */
+.pxbook-stage::before{
+  content:""; position:absolute; top:2%; bottom:2%; left:-7px; width:14px;
+  border-radius:4px 0 0 4px; z-index:-1;
+  background:linear-gradient(90deg,#0a0705,var(--gold-deep) 60%,#1a120a);
+  box-shadow:inset -2px 0 4px rgba(0,0,0,.6), -2px 0 10px rgba(0,0,0,.5);
+}
+/* sombra ambiental bajo el libro */
+.pxbook-floor{
+  position:absolute; left:50%; bottom:-26px; width:78%; height:34px;
+  transform:translateX(-50%); z-index:-2; border-radius:50%;
+  background:radial-gradient(closest-side, var(--shadow-amb), transparent 75%);
+  filter:blur(6px); animation:pxFloor 6s ease-in-out infinite;
+}
+/* lomo central de doble página (de Atelier) — solo spread desktop */
+.pxbook-spine-center{
+  position:absolute; top:0; bottom:0; left:50%; width:34px; transform:translateX(-50%);
+  pointer-events:none; z-index:3;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.18) 42%,rgba(0,0,0,.26) 50%,rgba(0,0,0,.18) 58%,transparent);
+}
+
+/* ── PORTADA ───────────────────────────────────────────────────── */
+.pxbook-cover{ position:relative; overflow:hidden; }
+.pxbook-cover .pxbook-scrim{
+  position:absolute; inset:0; pointer-events:none;
+  background:
+    radial-gradient(120% 80% at 50% 20%, transparent 0%, rgba(0,0,0,.30) 60%, rgba(0,0,0,.66) 100%),
+    linear-gradient(180deg, rgba(16,11,8,.30), rgba(16,11,8,.62));
+}
+/* marco de filigrana doble */
+.pxbook-cover::before{
+  content:""; position:absolute; inset:14px; pointer-events:none; z-index:3;
+  border:1px solid rgba(203,171,116,.55); border-radius:2px;
+  box-shadow:inset 0 0 0 1px rgba(255,243,212,.10), inset 0 0 26px rgba(122,90,34,.30);
+}
+.pxbook-cover .pxbook-frame{
+  position:absolute; inset:22px; z-index:3; pointer-events:none;
+  border:1px solid rgba(231,200,132,.30);
+  animation:pxFrameGlow 4.5s ease-in-out infinite;
+}
+/* gold-foil shimmer en barrido */
+.pxbook-cover .pxbook-foil{
+  position:absolute; inset:-40% -10%; z-index:2; pointer-events:none; mix-blend-mode:screen;
+  background:linear-gradient(105deg,
+    transparent 38%, rgba(255,243,212,0) 44%, rgba(255,243,212,.55) 50%,
+    rgba(231,200,132,.20) 54%, transparent 60%);
+  opacity:0; transform:translate3d(-30%,0,0);
+  animation:pxFoilIntro 1400ms ease-out 700ms 1, pxFoil 6.5s ease-in-out 2.2s infinite;
+}
+/* grosor de tapa dura (relieve del lomo) */
+.pxbook-cover, .pxbook-back{
+  box-shadow:
+    inset 0 0 0 1px rgba(255,243,212,.06),
+    inset 8px 0 16px -8px rgba(0,0,0,.55),
+    0 1px 0 rgba(255,243,212,.10);
+  background-clip:padding-box;
+}
+/* hairline / crest bajo el logo */
+.pxbook-crest{ width:54px; height:1px; margin:14px auto 0; position:relative;
+  background:linear-gradient(90deg,transparent,var(--gold-line),transparent); }
+.pxbook-crest::after{ content:"✦"; position:absolute; left:50%; top:50%;
+  transform:translate(-50%,-55%); color:var(--gold-bright); font-size:11px; }
+
+/* Tipografía portada */
+.pxbook-eyebrow{ font-family:system-ui,sans-serif; font-size:11px; letter-spacing:.42em;
+  text-transform:uppercase; }
+.pxbook-script{ font-family:var(--font-script); font-size:clamp(20px,4vw,30px); color:var(--gold-bright);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+.pxbook-title{
+  font-family:var(--font-display); font-style:italic; font-weight:500;
+  font-size:clamp(30px,6.4vw,50px); line-height:1.02; letter-spacing:.005em;
+  background:var(--gold-foil-grad); -webkit-background-clip:text; background-clip:text; color:transparent;
+  text-shadow:0 1px 0 rgba(0,0,0,.35);
+  animation:pxTitleGlow 5s ease-in-out infinite;
+}
+.pxbook-date{ font-family:var(--font-serif); letter-spacing:.22em; text-transform:uppercase; font-size:13px; }
+.pxbook-accentline{ width:44px; height:1px; margin:20px auto 0; opacity:.9;
+  background:var(--gold-foil-band); background-size:200% 100%; }
+
+/* ── PÁGINAS DE FOTO ───────────────────────────────────────────── */
+.pxbook-page{
+  position:relative;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.10) 0%, transparent 7%, transparent 93%, rgba(0,0,0,.08) 100%),
+    var(--page);
+  background-blend-mode:multiply,normal;
+}
+.pxbook-page::before{ /* grano de papel sutil, estático */
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background:radial-gradient(rgba(0,0,0,.018) 1px, transparent 1px) 0 0/3px 3px;
+}
+/* canto dorado de página (gilt edge — de Atelier) */
+.pxbook-page::after{
+  content:""; position:absolute; top:0; bottom:0; right:0; width:5px; pointer-events:none;
+  background:var(--gold-foil-band); background-size:200% 100%; opacity:.85;
+  box-shadow:-1px 0 3px rgba(122,90,34,.5);
+}
+.pxbook-pagenum{ position:absolute; bottom:10px; right:16px; z-index:2;
+  font-family:var(--font-serif); font-style:italic; font-size:12px;
+  color:var(--gold-deep); opacity:.5; }
+
+/* ── CONTRAPORTADA ─────────────────────────────────────────────── */
+.pxbook-back .pxbook-thanks{ font-family:var(--font-display); font-style:italic;
+  font-weight:300; font-size:clamp(26px,5vw,38px);
+  background:var(--gold-foil-grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+/* ── UI / CONTROLES ────────────────────────────────────────────── */
+.pxbook-ui{ animation:pxUiIn 600ms ease 400ms both; }
+.pxbook-studioname{ font-size:11px; letter-spacing:.30em; text-transform:uppercase;
+  color:var(--gold-bright); opacity:.85; font-family:system-ui,sans-serif; }
+.pxbook-close{
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  padding:7px 15px; border-radius:999px; font-size:13px; color:#f3e8d2; font-family:system-ui,sans-serif;
+  background:linear-gradient(180deg, rgba(231,200,132,.12), rgba(231,200,132,.05));
+  border:1px solid rgba(231,200,132,.34); backdrop-filter:blur(8px);
+  transition:background .25s, box-shadow .25s, transform .15s;
+}
+.pxbook-close:hover{ background:rgba(231,200,132,.20); box-shadow:0 0 18px -4px rgba(231,200,132,.5); }
+.pxbook-close:active{ transform:scale(.96); }
+.pxbook-nav{
+  width:46px; height:46px; border-radius:999px; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center; color:#f3e8d2;
+  background:radial-gradient(circle at 50% 35%, rgba(231,200,132,.18), rgba(28,19,12,.6));
+  border:1px solid rgba(231,200,132,.40);
+  box-shadow:inset 0 1px 0 rgba(255,243,212,.18), 0 6px 18px -8px rgba(0,0,0,.6);
+  backdrop-filter:blur(8px);
+  transition:transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .25s, border-color .25s;
+}
+.pxbook-nav:hover{ transform:translateY(-2px); border-color:var(--gold-bright);
+  box-shadow:inset 0 1px 0 rgba(255,243,212,.25), 0 0 22px -4px rgba(231,200,132,.55); }
+.pxbook-nav:active{ transform:scale(.94); }
+.pxbook-nav:disabled{ opacity:.35; cursor:default; transform:none; box-shadow:none; }
+.pxbook-nav svg{ filter:drop-shadow(0 0 4px rgba(231,200,132,.4)); }
+/* contador en pill de cristal (de Enchanted) */
+.pxbook-counter{
+  display:inline-flex; align-items:baseline; gap:8px; justify-content:center; min-width:74px;
+  font-family:var(--font-serif); font-style:italic; font-size:13px; letter-spacing:.12em;
+  color:rgba(243,232,210,.6); padding:8px 16px; border-radius:999px;
+  background:rgba(20,12,8,.4); border:1px solid rgba(231,200,132,.20); backdrop-filter:blur(8px);
+}
+.pxbook-counter b{ font-family:var(--font-display); font-style:italic; font-weight:500; font-size:17px;
+  background:var(--gold-foil-grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
+/* launcher flotante */
+.pxbook-launch{
+  background:linear-gradient(135deg,var(--gold-foil),var(--gold) 60%,var(--gold-deep));
+  color:#2a1c10; font-family:system-ui,sans-serif; font-weight:600;
+  box-shadow:0 14px 36px -12px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.2);
+  transition:transform .25s, box-shadow .25s;
+}
+.pxbook-launch:hover{ transform:translateY(-2px);
+  box-shadow:0 18px 44px -12px rgba(0,0,0,.55), 0 0 26px rgba(231,200,132,.5); }
+
+/* ── PANTALLA DE CARGA ENCANTADA (libro flotante, de Atelier) ──── */
+.pxbook-loading{ position:relative; display:flex; flex-direction:column; align-items:center; gap:18px; z-index:5; }
+.pxbook-loading .pxbook-loglow{
+  position:absolute; top:6px; width:200px; height:200px; border-radius:50%;
+  background:radial-gradient(circle, var(--glow-core) 0%, var(--glow-warm) 45%, transparent 70%);
+  filter:blur(6px); animation:pxAura 3.4s ease-in-out infinite;
+}
+.pxbook-loading .pxbook-logbook{
+  position:relative; width:84px; height:108px; border-radius:3px 5px 5px 3px;
+  background:linear-gradient(135deg,#1d1812,#0d0a08);
+  box-shadow:0 18px 40px -14px #000, inset 0 0 0 1px rgba(197,165,114,.25);
+  animation:pxLoadFloat 3.4s ease-in-out infinite;
+}
+.pxbook-loading .pxbook-logspine{
+  position:absolute; left:6px; top:6px; bottom:6px; width:4px; border-radius:2px;
+  background:var(--gold-foil-band); background-size:200% 100%; opacity:.8;
+}
+.pxbook-loading .pxbook-logfoil{
+  position:absolute; inset:9px 9px 9px 16px; border-radius:2px; overflow:hidden;
+  border:1px solid transparent;
+  background:linear-gradient(#0d0a08,#0d0a08) padding-box, var(--gold-foil-band) border-box;
+}
+.pxbook-loading .pxbook-logfoil::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(110deg,transparent 40%,rgba(255,250,240,.6) 50%,transparent 60%);
+  background-size:250% 100%; animation:pxFoilSweep 2.8s ease-in-out infinite;
+}
+.pxbook-loading .pxbook-logtxt{
+  font-family:var(--font-display); font-style:italic; font-size:18px; letter-spacing:.04em;
+  background:var(--gold-foil-grad); -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:pxTextPulse 2.6s ease-in-out infinite;
+}
+.pxbook-loading .pxbook-logsub{
+  font-family:var(--font-serif); text-transform:uppercase; letter-spacing:.32em; font-size:10px;
+  color:var(--gold); opacity:.6;
+}
+
+/* ╔══ @KEYFRAMES (todos GPU: transform/opacity/filter/bg-position) ══╗ */
+@keyframes pxFoil{
+  0%{ opacity:0; transform:translate3d(-30%,0,0); }
+  18%{ opacity:1; } 38%{ opacity:0; transform:translate3d(120%,0,0); }
+  100%{ opacity:0; transform:translate3d(120%,0,0); }
+}
+@keyframes pxFoilIntro{
+  0%{ opacity:0; transform:translate3d(-60%,0,0); }
+  35%{ opacity:1; } 100%{ opacity:0; transform:translate3d(120%,0,0); }
+}
+@keyframes pxFoilSweep{ 0%{ background-position:0% 50%; } 100%{ background-position:200% 50%; } }
+@keyframes pxAura{ 0%,100%{ opacity:.7; transform:scale(1); } 50%{ opacity:1; transform:scale(1.04); } }
+@keyframes pxFrameGlow{
+  0%,100%{ box-shadow:0 0 0 0 rgba(231,200,132,0); border-color:rgba(231,200,132,.22); }
+  50%{ box-shadow:0 0 22px -2px rgba(231,200,132,.35); border-color:rgba(231,200,132,.45); }
+}
+@keyframes pxTitleGlow{
+  0%,100%{ filter:drop-shadow(0 0 0 rgba(231,200,132,0)); }
+  50%{ filter:drop-shadow(0 2px 10px rgba(231,200,132,.28)); }
+}
+@keyframes pxTwinkle{ 0%,100%{ opacity:.25 } 50%{ opacity:1 } }
+@keyframes pxDriftA{ 0%,100%{ transform:translate3d(0,0,0) } 50%{ transform:translate3d(10px,-16px,0) } }
+@keyframes pxDriftB{ 0%,100%{ transform:translate3d(0,0,0) } 50%{ transform:translate3d(-14px,12px,0) } }
+@keyframes pxStar{ 0%,100%{ opacity:0; transform:scale(.4) rotate(0deg); }
+  50%{ opacity:1; transform:scale(1) rotate(45deg); } }
+@keyframes pxPresent{
+  0%{ opacity:0; transform:perspective(2200px) rotateX(14deg) translateY(26px) scale(.92); }
+  60%{ opacity:1; }
+  100%{ opacity:1; transform:perspective(2200px) rotateX(0) translateY(0) scale(1); }
+}
+@keyframes pxFloor{ 0%,100%{ opacity:.85; transform:translateX(-50%) scaleX(1); }
+  50%{ opacity:.6; transform:translateX(-50%) scaleX(.94); } }
+@keyframes pxUiIn{ from{ opacity:0; transform:translateY(8px) } to{ opacity:1; transform:none } }
+@keyframes pxLoadFloat{ 0%,100%{ transform:translateY(0) rotate(-1.5deg) } 50%{ transform:translateY(-9px) rotate(1.5deg) } }
+@keyframes pxTextPulse{ 0%,100%{ opacity:.7 } 50%{ opacity:1 } }
+
+/* ── Accesibilidad: prefers-reduced-motion ─────────────────────── */
+@media (prefers-reduced-motion: reduce){
+  .pxbook-foil,.pxbook-aura,.pxbook-frame,.pxbook-title,.pxbook-dust,.pxbook-star,
+  .pxbook-stage,.pxbook-ui,.pxbook-floor,.pxbook-accentline,
+  .pxbook-loading .pxbook-loglow,.pxbook-loading .pxbook-logbook,
+  .pxbook-loading .pxbook-logfoil::after,.pxbook-loading .pxbook-logtxt{
+    animation:none !important;
+  }
+  .pxbook-foil{ opacity:0; }
+  .pxbook-aura{ opacity:.85; }
+  .pxbook-stage{ opacity:1; transform:none; }
+  .pxbook-ui{ opacity:1; transform:none; }
+  .pxbook-star,.pxbook-dust{ display:none; }   /* el movimiento es su esencia */
+}
+
+/* ── Móvil/tablet (portrait, 1 sola hoja) ──────────────────────── */
+@media (max-width:819px){
+  .pxbook-stage::before{ display:none; }       /* sin lomo izquierdo */
+  .pxbook-spine-center{ display:none; }         /* sin lomo central */
+  .pxbook-dust.c{ display:none; }               /* menos densidad */
+  .pxbook-star.s2,.pxbook-star.s4{ display:none; }
+}
+@media (max-width:600px){
+  .pxbook-dust.b{ display:none; }
+}
+/* fallback si no hay backdrop-filter (gama baja) */
+@supports not (backdrop-filter:blur(1px)){
+  .pxbook-close,.pxbook-nav,.pxbook-counter{ background:rgba(28,19,12,.85); backdrop-filter:none; }
+}
+`
+
 export function FinalDeliveryBook({
   gallery,
   assets,
@@ -82,8 +442,8 @@ export function FinalDeliveryBook({
   const [dims, setDims] = useState({ w: 480, h: 640 })
 
   const settings = gallery.bookSettings ?? {}
-  const tpl =
-    TEMPLATES[gallery.bookTemplateId ?? "luxury_xv"] ?? TEMPLATES.luxury_xv!
+  const tplId = gallery.bookTemplateId ?? "luxury_xv"
+  const tpl = TEMPLATES[tplId] ?? TEMPLATES.luxury_xv!
   const accent = s(settings.accent) || gallery.accentColor || tpl.accent
   const pageBg = s(settings.bgColor) || tpl.pageBg
   const photos = useMemo(
@@ -98,6 +458,9 @@ export function FinalDeliveryBook({
   const subtitle = s(settings.subtitle)
   const eventDate = s(settings.eventDate)
   const showLogo = settings.showLogo !== false && !!studio.logoUrl
+
+  // En portrait (móvil/tablet) el flipbook muestra 1 sola hoja → sin lomos centrales.
+  const isPortrait = dims.w < 520
 
   // Tamaño responsive del libro (proporción retrato 3:4).
   useEffect(() => {
@@ -142,16 +505,25 @@ export function FinalDeliveryBook({
   // Página de portada (tapa dura).
   const totalPages = photos.length + 2
 
+  // CSS vars de fallback inline (los tokens completos los pone .abby-book / [data-tpl]).
+  const wrapVars = {
+    "--gold": tpl.accent,
+    "--page": pageBg,
+    "--ink": tpl.ink,
+  } as React.CSSProperties
+
   return (
     <div
       ref={wrapRef}
-      className="abby-book"
+      className="abby-book pxbook-stagebg"
+      data-tpl={tplId}
+      data-open={page > 0 ? "1" : "0"}
       style={{
+        ...wrapVars,
         position: "relative",
         width: "100%",
         height: onClose ? "100vh" : "100svh",
         minHeight: onClose ? "100vh" : "640px",
-        background: `radial-gradient(120% 120% at 50% 0%, ${tpl.bg} 0%, #0b0a09 100%)`,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -159,8 +531,23 @@ export function FinalDeliveryBook({
         overflow: "hidden",
       }}
     >
+      <style>{PXBOOK_CSS}</style>
+
+      {/* CAPAS DE ESCENARIO — hermanas del libro, detrás (z-index 0/1) */}
+      <div className="pxbook-aura" aria-hidden />
+      <div className="pxbook-sparkles" aria-hidden>
+        <i className="pxbook-dust" />
+        <i className="pxbook-dust b" />
+        <i className="pxbook-dust c" />
+        <span className="pxbook-star s1" />
+        <span className="pxbook-star s2" />
+        <span className="pxbook-star s3" />
+        <span className="pxbook-star s4" />
+      </div>
+
       {/* Top bar */}
       <div
+        className="pxbook-ui"
         style={{
           position: "absolute",
           top: 0,
@@ -171,132 +558,123 @@ export function FinalDeliveryBook({
           justifyContent: "space-between",
           padding: "14px 18px",
           zIndex: 10,
-          color: "#efe6dc",
         }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            letterSpacing: "0.24em",
-            textTransform: "uppercase",
-            opacity: 0.7,
-            fontFamily: "system-ui, sans-serif",
-          }}
-        >
-          {studio.name}
-        </span>
+        <span className="pxbook-studioname">{studio.name}</span>
         {onClose && (
-          <button
-            onClick={onClose}
-            aria-label="Cerrar álbum"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              background: "rgba(255,255,255,.1)",
-              color: "#efe6dc",
-              border: "1px solid rgba(255,255,255,.18)",
-              borderRadius: 999,
-              padding: "7px 14px",
-              fontSize: 13,
-              cursor: "pointer",
-              backdropFilter: "blur(6px)",
-            }}
-          >
+          <button onClick={onClose} aria-label="Cerrar álbum" className="pxbook-close">
             <X size={15} /> Cerrar
           </button>
         )}
       </div>
 
       {!ready ? (
-        <div style={{ color: "#b89968", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-          <BookOpen size={28} className="animate-pulse" />
-          <span style={{ fontSize: 13, letterSpacing: "0.1em" }}>Preparando tu álbum…</span>
+        <div className="pxbook-loading">
+          <div className="pxbook-loglow" aria-hidden />
+          <div className="pxbook-logbook" aria-hidden>
+            <span className="pxbook-logspine" />
+            <span className="pxbook-logfoil" />
+          </div>
+          <p className="pxbook-logtxt">Preparando tu historia…</p>
+          <p className="pxbook-logsub">{studio.name}</p>
         </div>
       ) : (
-        <HTMLFlipBook
-          ref={bookRef}
-          width={dims.w}
-          height={dims.h}
-          size="stretch"
-          minWidth={260}
-          maxWidth={620}
-          minHeight={340}
-          maxHeight={920}
-          maxShadowOpacity={0.5}
-          showCover={true}
-          mobileScrollSupport={true}
-          drawShadow={true}
-          flippingTime={750}
-          usePortrait={true}
-          startPage={0}
-          className="abby-flipbook"
-          style={{}}
-          onFlip={(e: { data: number }) => setPage(e.data)}
-        >
-          {/* PORTADA (tapa dura) */}
-          <div data-density="hard" style={coverStyle(coverImg, tpl, accent)}>
-            <div style={coverScrim} />
-            <div style={{ position: "relative", textAlign: "center", padding: 28, color: "#fff" }}>
-              {showLogo && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={studio.logoUrl!} alt={studio.name} style={{ height: 38, objectFit: "contain", margin: "0 auto 18px", filter: "brightness(0) invert(1)", opacity: 0.95 }} />
-              )}
-              <p style={{ fontSize: 11, letterSpacing: "0.32em", textTransform: "uppercase", opacity: 0.85, margin: "0 0 14px" }}>
-                {subtitle || "Álbum de entrega"}
-              </p>
-              <h1 style={{ fontFamily: tpl.serif, fontStyle: "italic", fontWeight: 500, fontSize: "clamp(28px,6vw,44px)", lineHeight: 1.05, margin: 0 }}>
-                {quince || title}
-              </h1>
-              {eventDate && (
-                <p style={{ marginTop: 16, fontSize: 13, letterSpacing: "0.18em", textTransform: "uppercase", opacity: 0.9 }}>
-                  {eventDate}
+        <div className="pxbook-stage">
+          <div className="pxbook-floor" aria-hidden />
+          {!isPortrait && <div className="pxbook-spine-center" aria-hidden />}
+          <HTMLFlipBook
+            ref={bookRef}
+            width={dims.w}
+            height={dims.h}
+            size="stretch"
+            minWidth={260}
+            maxWidth={620}
+            minHeight={340}
+            maxHeight={920}
+            maxShadowOpacity={0.6}
+            showCover={true}
+            mobileScrollSupport={true}
+            drawShadow={true}
+            flippingTime={isPortrait ? 750 : 900}
+            usePortrait={true}
+            useMouseEvents={true}
+            clickEventForward={true}
+            swipeDistance={30}
+            startPage={0}
+            className="abby-flipbook"
+            style={{}}
+            onFlip={(e: { data: number }) => setPage(e.data)}
+          >
+            {/* PORTADA (tapa dura) */}
+            <div data-density="hard" className="pxbook-cover" style={coverStyle(coverImg, tpl, accent)}>
+              <div className="pxbook-scrim" />
+              <div className="pxbook-foil" aria-hidden />
+              <div className="pxbook-frame" aria-hidden />
+              <div style={{ position: "relative", textAlign: "center", padding: 28, color: "#fff", zIndex: 4 }}>
+                {showLogo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={studio.logoUrl!} alt={studio.name} style={{ height: 38, objectFit: "contain", margin: "0 auto 6px", filter: "brightness(0) invert(1) drop-shadow(0 0 8px rgba(0,0,0,.4))", opacity: 0.92 }} />
+                )}
+                {showLogo && <div className="pxbook-crest" aria-hidden />}
+                <p className="pxbook-eyebrow" style={{ margin: "16px 0 14px", opacity: 0.85 }}>
+                  {subtitle || "Álbum de entrega"}
                 </p>
-              )}
-              <div style={{ width: 44, height: 1, background: accent, margin: "20px auto 0", opacity: 0.9 }} />
-            </div>
-          </div>
-
-          {/* PÁGINAS DE FOTOS */}
-          {photos.map((a, i) => (
-            <div key={a.id} style={photoPageStyle(pageBg)}>
-              <div style={{ position: "relative", width: "100%", height: "100%", padding: "5%", boxSizing: "border-box" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={a.webUrl ?? a.thumbUrl ?? ""}
-                  alt={`${gallery.name} — foto ${i + 1}`}
-                  loading="lazy"
-                  decoding="async"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", boxShadow: "0 8px 30px -12px rgba(0,0,0,.45)" }}
-                />
-                <span style={{ position: "absolute", bottom: 10, right: 16, fontSize: 10, color: tpl.ink, opacity: 0.4, fontFamily: "system-ui, sans-serif" }}>
-                  {i + 1}
-                </span>
+                {tplId === "luxury_xv" && quince && (
+                  <p className="pxbook-script" style={{ margin: "0 0 2px" }}>Su quinceañera</p>
+                )}
+                <h1 className="pxbook-title" style={{ margin: 0 }}>
+                  {quince || title}
+                </h1>
+                {eventDate && (
+                  <p className="pxbook-date" style={{ marginTop: 16, opacity: 0.9 }}>
+                    {eventDate}
+                  </p>
+                )}
+                <div className="pxbook-accentline" />
               </div>
             </div>
-          ))}
 
-          {/* CONTRAPORTADA (tapa dura) */}
-          <div data-density="hard" style={{ ...coverStyleSolid(tpl), display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ textAlign: "center", color: "#efe6dc", padding: 28 }}>
-              {showLogo && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={studio.logoUrl!} alt={studio.name} style={{ height: 34, objectFit: "contain", margin: "0 auto 16px", filter: "brightness(0) invert(1)", opacity: 0.9 }} />
-              )}
-              <p style={{ fontFamily: tpl.serif, fontStyle: "italic", fontSize: 22, margin: 0 }}>Gracias.</p>
-              {!studio.hideBranding && (
-                <p style={{ marginTop: 18, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", opacity: 0.5 }}>
-                  {studio.name}
-                </p>
-              )}
+            {/* PÁGINAS DE FOTOS */}
+            {photos.map((a, i) => (
+              <div key={a.id} className="pxbook-page" style={photoPageStyle(pageBg)}>
+                <div style={{ position: "relative", width: "100%", height: "100%", padding: "5%", boxSizing: "border-box", zIndex: 1 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={a.webUrl ?? a.thumbUrl ?? ""}
+                    alt={`${gallery.name} — foto ${i + 1}`}
+                    loading="eager"
+                    fetchPriority={i < 4 ? "high" : "low"}
+                    decoding="async"
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", boxShadow: "0 8px 30px -12px rgba(0,0,0,.45)" }}
+                  />
+                  <span className="pxbook-pagenum">— {i + 1}</span>
+                </div>
+              </div>
+            ))}
+
+            {/* CONTRAPORTADA (tapa dura) */}
+            <div data-density="hard" className="pxbook-back" style={{ ...coverStyleSolid(tpl), display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ textAlign: "center", color: "#efe6dc", padding: 28 }}>
+                {showLogo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={studio.logoUrl!} alt={studio.name} style={{ height: 34, objectFit: "contain", margin: "0 auto 16px", filter: "brightness(0) invert(1)", opacity: 0.9 }} />
+                )}
+                <p className="pxbook-thanks" style={{ margin: 0 }}>Gracias.</p>
+                {!studio.hideBranding && (
+                  <p style={{ marginTop: 18, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", opacity: 0.5 }}>
+                    {studio.name}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        </HTMLFlipBook>
+          </HTMLFlipBook>
+        </div>
       )}
 
       {/* Controles inferiores */}
       {ready && (
         <div
+          className="pxbook-ui"
           style={{
             position: "absolute",
             bottom: 18,
@@ -309,13 +687,13 @@ export function FinalDeliveryBook({
             zIndex: 10,
           }}
         >
-          <button onClick={() => flip(-1)} aria-label="Página anterior" style={navBtn}>
+          <button onClick={() => flip(-1)} aria-label="Página anterior" className="pxbook-nav" disabled={page === 0}>
             <ChevronLeft size={20} />
           </button>
-          <span style={{ color: "#efe6dc", fontSize: 12, letterSpacing: "0.1em", minWidth: 64, textAlign: "center", opacity: 0.85 }}>
-            {Math.min(page + 1, totalPages)} / {totalPages}
+          <span className="pxbook-counter">
+            <b>{Math.min(page + 1, totalPages)}</b> / {totalPages}
           </span>
-          <button onClick={() => flip(1)} aria-label="Página siguiente" style={navBtn}>
+          <button onClick={() => flip(1)} aria-label="Página siguiente" className="pxbook-nav" disabled={page >= totalPages - 1}>
             <ChevronRight size={20} />
           </button>
         </div>
@@ -331,11 +709,11 @@ export function BookLauncher(props: {
   studio: BookStudio
 }) {
   const [open, setOpen] = useState(false)
-  const accent = props.gallery.accentColor || "#b89968"
   return (
     <>
       <button
         onClick={() => setOpen(true)}
+        className="pxbook-launch"
         style={{
           position: "fixed",
           right: 18,
@@ -344,16 +722,11 @@ export function BookLauncher(props: {
           display: "inline-flex",
           alignItems: "center",
           gap: 8,
-          background: accent,
-          color: "#14110f",
           border: "none",
           borderRadius: 999,
           padding: "13px 22px",
           fontSize: 14,
-          fontWeight: 600,
           cursor: "pointer",
-          boxShadow: "0 14px 36px -12px rgba(0,0,0,.5)",
-          fontFamily: "system-ui, sans-serif",
         }}
       >
         <BookOpen size={17} /> Abrir Luxury Book
@@ -368,24 +741,6 @@ export function BookLauncher(props: {
 }
 
 // ── estilos helper ───────────────────────────────────────────────────────────
-const navBtn: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 42,
-  height: 42,
-  borderRadius: 999,
-  background: "rgba(255,255,255,.1)",
-  color: "#efe6dc",
-  border: "1px solid rgba(255,255,255,.18)",
-  cursor: "pointer",
-  backdropFilter: "blur(6px)",
-}
-const coverScrim: React.CSSProperties = {
-  position: "absolute",
-  inset: 0,
-  background: "linear-gradient(180deg, rgba(0,0,0,.25) 0%, rgba(0,0,0,.55) 100%)",
-}
 function coverStyle(img: string | null, tpl: Template, accent: string): React.CSSProperties {
   return {
     width: "100%",
