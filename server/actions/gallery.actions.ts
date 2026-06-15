@@ -18,10 +18,36 @@ import {
   setGalleryEmbed,
   shareGalleryWithClient,
   updateGallery,
+  updateGalleryBookConfig,
   type CreateGalleryInput,
   type UpdateGalleryInput,
 } from "@/server/services/gallery.service"
 import { onGalleryLinkedToClient } from "@/server/services/project-automation.service"
+import {
+  galleryBookConfigSchema,
+  type GalleryBookConfigInput,
+} from "@/lib/validations/gallery-book.schema"
+
+// ─── Luxury Book (Abby XV Gallery): config del álbum digital por galería ─────
+export async function updateGalleryBookConfigAction(
+  galleryId: string,
+  raw: GalleryBookConfigInput,
+) {
+  const ctx = await requireStudioAuth()
+  const parsed = galleryBookConfigSchema.safeParse(raw)
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors }
+  }
+  try {
+    await updateGalleryBookConfig(ctx.studioId, galleryId, parsed.data)
+    revalidatePath(`/galleries/${galleryId}`)
+    return { success: true as const }
+  } catch (e) {
+    return {
+      error: { _root: [e instanceof Error ? e.message : "No se pudo guardar"] },
+    }
+  }
+}
 
 // ─── Schemas zod ───────────────────────────────────────────────────────────
 const uuidSchema = z.string().uuid("ID inválido")

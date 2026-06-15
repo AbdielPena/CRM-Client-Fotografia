@@ -209,6 +209,36 @@ export async function getGalleryById(
   return (data as unknown as GalleryRow | null) ?? null
 }
 
+// ─── Luxury Book (Abby XV Gallery) — config del álbum digital ────────────────
+export type GalleryBookConfig = {
+  enabled?: boolean
+  displayMode?: "classic" | "book" | "both"
+  templateId?: string | null
+  coverImage?: string | null
+  settings?: Record<string, unknown>
+}
+
+export async function updateGalleryBookConfig(
+  studioId: string,
+  galleryId: string,
+  config: GalleryBookConfig,
+): Promise<void> {
+  const db = srvc() as unknown as SupabaseClient
+  const patch: Record<string, unknown> = {}
+  if (config.enabled !== undefined) patch.book_enabled = config.enabled
+  if (config.displayMode !== undefined) patch.book_display_mode = config.displayMode
+  if (config.templateId !== undefined) patch.book_template_id = config.templateId || null
+  if (config.coverImage !== undefined) patch.book_cover_image = config.coverImage || null
+  if (config.settings !== undefined) patch.book_settings = config.settings
+  if (Object.keys(patch).length === 0) return
+  const { error } = await db
+    .from("galleries")
+    .update(patch)
+    .eq("id", galleryId)
+    .eq("studio_id", studioId)
+  if (error) throw error
+}
+
 export type CreateGalleryInput = {
   name: string
   projectId?: string | null
@@ -1259,6 +1289,11 @@ export type PublicGalleryView = {
     expiresAt: string | null
     coverThumbUrl: string | null
     coverWebUrl: string | null
+    bookEnabled: boolean
+    bookDisplayMode: "classic" | "book" | "both"
+    bookTemplateId: string | null
+    bookCoverImage: string | null
+    bookSettings: Record<string, unknown>
   }
   assets: PublicGalleryAsset[]
   tokenInfo: { id: string; expiresAt: string | null }
@@ -1285,7 +1320,7 @@ export async function validateGalleryToken(
   const { data: gallery } = await db
     .from("galleries")
     .select(
-      "id, studio_id, name, description, subtitle, welcome_text, visibility, allow_download, require_email, status, cover_asset_id, gallery_type, template_id, theme, cover_config, accent_color, event_date, expires_at",
+      "id, studio_id, name, description, subtitle, welcome_text, visibility, allow_download, require_email, status, cover_asset_id, gallery_type, template_id, theme, cover_config, accent_color, event_date, expires_at, book_enabled, book_display_mode, book_template_id, book_cover_image, book_settings",
     )
     .eq("id", tk.gallery_id)
     .is("deleted_at", null)
@@ -1337,6 +1372,15 @@ export async function validateGalleryToken(
       expiresAt: (gallery.expires_at as string | null) ?? null,
       coverThumbUrl: coverThumb,
       coverWebUrl: coverWeb,
+      bookEnabled: (gallery.book_enabled as boolean) ?? false,
+      bookDisplayMode: (["classic", "book", "both"].includes(
+        gallery.book_display_mode as string,
+      )
+        ? gallery.book_display_mode
+        : "classic") as "classic" | "book" | "both",
+      bookTemplateId: (gallery.book_template_id as string | null) ?? null,
+      bookCoverImage: (gallery.book_cover_image as string | null) ?? null,
+      bookSettings: (gallery.book_settings as Record<string, unknown>) ?? {},
     },
     assets: assetList.map((a): PublicGalleryAsset => {
       const m = metaOf(a)

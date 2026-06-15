@@ -12,6 +12,10 @@ import { getGalleryPrintState } from "@/server/services/print-selection.service"
 import { GalleryPasswordGate } from "@/components/public/gallery-password-gate"
 import { PublicGalleryView } from "@/components/public/public-gallery-view"
 import { FinalDeliveryView } from "@/components/public/final-delivery-view"
+import {
+  FinalDeliveryBook,
+  BookLauncher,
+} from "@/components/public/final-delivery-book"
 
 export const dynamic = "force-dynamic"
 // Sin esto, Next cachea los GET de Supabase (Data Cache, por URL de la query) y
@@ -107,31 +111,78 @@ export default async function PublicGalleryPage({ params }: PageProps) {
         )
       : view.assets
 
+    // Luxury Book Experience (Abby XV Gallery): modo de visualización opcional.
+    // Si book_enabled=false → 'classic' (galería actual intacta).
+    const displayMode = view.gallery.bookEnabled
+      ? view.gallery.bookDisplayMode
+      : "classic"
+    const bookAssets = deliveryAssets.map((a) => ({
+      id: a.id,
+      webUrl: a.webUrl,
+      thumbUrl: a.thumbUrl,
+      width: a.width,
+      height: a.height,
+    }))
+    const bookGallery = {
+      name: view.gallery.name,
+      accentColor: view.gallery.accentColor,
+      coverWebUrl: view.gallery.coverWebUrl,
+      bookTemplateId: view.gallery.bookTemplateId,
+      bookCoverImage: view.gallery.bookCoverImage,
+      bookSettings: view.gallery.bookSettings,
+    }
+    const bookStudio = {
+      name: studioInfo?.studios?.name ?? "PixelOS",
+      logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+      hideBranding: branding?.hide_studioflow_branding ?? false,
+    }
+
+    // Modo solo libro: el flipbook reemplaza la vista (la galería clásica sigue
+    // disponible si el estudio elige 'classic' o 'both').
+    if (displayMode === "book") {
+      return (
+        <FinalDeliveryBook
+          gallery={bookGallery}
+          assets={bookAssets}
+          studio={bookStudio}
+        />
+      )
+    }
+
     return (
-      <FinalDeliveryView
-        token={params.token}
-        gallery={{
-          id: view.gallery.id,
-          name: view.gallery.name,
-          description: view.gallery.description,
-          subtitle: view.gallery.subtitle,
-          welcomeText: view.gallery.welcomeText,
-          eventDate: view.gallery.eventDate,
-          accentColor: view.gallery.accentColor,
-          coverThumbUrl: view.gallery.coverThumbUrl,
-          coverWebUrl: view.gallery.coverWebUrl,
-          allow_download: view.gallery.allow_download,
-        }}
-        assets={deliveryAssets}
-        studio={{
-          name: studioInfo?.studios?.name ?? "PixelOS",
-          logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
-          primaryColor: branding?.primary_color ?? null,
-          hideBranding: branding?.hide_studioflow_branding ?? false,
-          footerHtml: branding?.custom_footer_html ?? null,
-        }}
-        driveLink={driveLink}
-      />
+      <>
+        <FinalDeliveryView
+          token={params.token}
+          gallery={{
+            id: view.gallery.id,
+            name: view.gallery.name,
+            description: view.gallery.description,
+            subtitle: view.gallery.subtitle,
+            welcomeText: view.gallery.welcomeText,
+            eventDate: view.gallery.eventDate,
+            accentColor: view.gallery.accentColor,
+            coverThumbUrl: view.gallery.coverThumbUrl,
+            coverWebUrl: view.gallery.coverWebUrl,
+            allow_download: view.gallery.allow_download,
+          }}
+          assets={deliveryAssets}
+          studio={{
+            name: studioInfo?.studios?.name ?? "PixelOS",
+            logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+            primaryColor: branding?.primary_color ?? null,
+            hideBranding: branding?.hide_studioflow_branding ?? false,
+            footerHtml: branding?.custom_footer_html ?? null,
+          }}
+          driveLink={driveLink}
+        />
+        {displayMode === "both" && (
+          <BookLauncher
+            gallery={bookGallery}
+            assets={bookAssets}
+            studio={bookStudio}
+          />
+        )}
+      </>
     )
   }
 

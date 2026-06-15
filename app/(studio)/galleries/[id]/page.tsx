@@ -26,6 +26,7 @@ import { GalleryDeleteButton } from "@/components/galleries/gallery-delete-butto
 import { GalleryExtrasInvoiceButton } from "@/components/galleries/gallery-extras-invoice-button"
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
 import { DriveBackupPanel } from "@/components/galleries/drive-backup-panel"
+import { LuxuryBookPanel } from "@/components/galleries/luxury-book-panel"
 import { getGoogleDriveStatus } from "@/server/services/gallery-drive.service"
 import { getDriveBackupStatusAction } from "@/server/actions/gallery-drive.actions"
 
@@ -229,6 +230,34 @@ export default async function GalleryDetailPage({
             needsReconnect={driveStatus.needsReconnect}
             driveEmail={driveStatus.email}
             initialStatus={driveBackup}
+          />
+        )}
+        {isFinalDelivery && (
+          <LuxuryBookPanel
+            galleryId={galleryId}
+            publicToken={activeToken?.token ?? null}
+            initial={{
+              enabled:
+                (gallery as unknown as { book_enabled?: boolean }).book_enabled ?? false,
+              displayMode: ((gallery as unknown as { book_display_mode?: string })
+                .book_display_mode ?? "classic") as "classic" | "book" | "both",
+              templateId:
+                (gallery as unknown as { book_template_id?: string | null })
+                  .book_template_id ?? null,
+              coverImage:
+                (gallery as unknown as { book_cover_image?: string | null })
+                  .book_cover_image ?? null,
+              settings:
+                ((gallery as unknown as { book_settings?: Record<string, unknown> })
+                  .book_settings ?? {}) as {
+                  title?: string
+                  subtitle?: string
+                  quinceaneraName?: string
+                  eventDate?: string
+                  accent?: string
+                  showLogo?: boolean
+                },
+            }}
           />
         )}
       </div>
