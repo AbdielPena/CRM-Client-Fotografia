@@ -193,7 +193,9 @@ const PXBOOK_CSS = `
 }
 
 /* ── PORTADA ───────────────────────────────────────────────────── */
-.pxbook-cover{ position:relative; overflow:hidden; }
+/* .pxbook-cover / .pxbook-back también son .stf__item → position:absolute
+   (ver nota en .pxbook-page). NO usar relative o el canto duro se descoloca. */
+.pxbook-cover{ position:absolute; overflow:hidden; }
 .pxbook-cover .pxbook-scrim{
   position:absolute; inset:0; pointer-events:none;
   background:
@@ -252,7 +254,15 @@ const PXBOOK_CSS = `
 
 /* ── PÁGINAS DE FOTO ───────────────────────────────────────────── */
 .pxbook-page{
-  position:relative;
+  /* ⚠️ CAUSA RAÍZ del "la foto cuelga debajo del libro": este div TAMBIÉN
+     recibe la clase .stf__item de StPageFlip, cuya CSS es
+     `.stf__item{ position:absolute }`. Si aquí ponemos position:relative lo
+     sobreescribimos (misma especificidad, nuestro <style> va después) y la
+     página SOFT se renderiza en FLUJO NORMAL, justo debajo del libro al voltear.
+     Debe quedar `absolute` (lo que StPageFlip espera) → la página se superpone
+     al libro. El absolute ya da contexto a ::before/::after/.pxbook-pagenum.
+     NO volver a poner relative. */
+  position:absolute;
   overflow:hidden;
   background:
     linear-gradient(90deg, rgba(0,0,0,.10) 0%, transparent 7%, transparent 93%, rgba(0,0,0,.08) 100%),
