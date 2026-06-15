@@ -253,6 +253,7 @@ const PXBOOK_CSS = `
 /* ── PÁGINAS DE FOTO ───────────────────────────────────────────── */
 .pxbook-page{
   position:relative;
+  overflow:hidden;
   background:
     linear-gradient(90deg, rgba(0,0,0,.10) 0%, transparent 7%, transparent 93%, rgba(0,0,0,.08) 100%),
     var(--page);
@@ -469,11 +470,17 @@ export function FinalDeliveryBook({
 
   // Tamaño responsive del libro (proporción retrato 3:4).
   useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    let t: ReturnType<typeof setTimeout> | undefined
     function measure() {
-      const el = wrapRef.current
-      if (!el) return
-      const availW = el.clientWidth
-      const availH = el.clientHeight
+      const node = wrapRef.current
+      if (!node) return
+      const availW = node.clientWidth
+      const availH = node.clientHeight
+      // Sin layout todavía: NO fijar dims al piso (se quedaría pegado en 260×
+      // con size="fixed"). El ResizeObserver re-dispara cuando haya tamaño real.
+      if (availW < 2 || availH < 2) return
       const portrait = availW < 820
       // En desktop el flipbook muestra doble página → cada hoja = mitad.
       const maxW = portrait ? Math.min(availW - 32, 560) : Math.min((availW - 48) / 2, 520)
@@ -484,12 +491,26 @@ export function FinalDeliveryBook({
         h = cap
         w = h * (3 / 4)
       }
-      setDims({ w: Math.max(260, Math.round(w)), h: Math.max(340, Math.round(h)) })
+      const nw = Math.max(260, Math.round(w))
+      const nh = Math.max(340, Math.round(h))
+      // Solo actualiza si cambió (evita re-montar el flipbook sin necesidad).
+      setDims((prev) => (prev.w === nw && prev.h === nh ? prev : { w: nw, h: nh }))
       setReady(true)
     }
+    // ResizeObserver: se dispara cuando el wrapper obtiene/cambia su tamaño real
+    // (a diferencia de window.resize, que no se emite en el layout inicial).
+    // Debounce: con size="fixed" el libro se re-monta por `key`, así que solo
+    // recalculamos cuando el tamaño se asienta.
+    const ro = new ResizeObserver(() => {
+      if (t) clearTimeout(t)
+      t = setTimeout(measure, 140)
+    })
+    ro.observe(el)
     measure()
-    window.addEventListener("resize", measure)
-    return () => window.removeEventListener("resize", measure)
+    return () => {
+      if (t) clearTimeout(t)
+      ro.disconnect()
+    }
   }, [])
 
   // Cerrar con Escape en modo overlay.
@@ -588,10 +609,11 @@ export function FinalDeliveryBook({
           <div className="pxbook-floor" aria-hidden />
           {!isPortrait && <div className="pxbook-spine-center" aria-hidden />}
           <HTMLFlipBook
+            key={`pf-${dims.w}x${dims.h}`}
             ref={bookRef}
             width={dims.w}
             height={dims.h}
-            size="stretch"
+            size="fixed"
             minWidth={260}
             maxWidth={620}
             minHeight={340}
@@ -611,7 +633,7 @@ export function FinalDeliveryBook({
             onFlip={(e: { data: number }) => setPage(e.data)}
           >
             {/* PORTADA (tapa dura) */}
-            <div data-density="hard" className="pxbook-cover" style={coverStyle(coverImg, tpl, accent)}>
+            <div data-density="hard" className="pxbook-cover" style={coverStyle(coverImg, tpl, accent, dims.w, dims.h)}>
               <div className="pxbook-scrim" />
               <div className="pxbook-foil" aria-hidden />
               <div className="pxbook-frame" aria-hidden />
@@ -641,7 +663,7 @@ export function FinalDeliveryBook({
 
             {/* PÁGINAS DE FOTOS */}
             {photos.map((a, i) => (
-              <div key={a.id} className="pxbook-page" style={photoPageStyle(pageBg)}>
+              <div key={a.id} className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
                 <div style={{ position: "relative", width: "100%", height: "100%", padding: "5%", boxSizing: "border-box", zIndex: 1 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -658,7 +680,7 @@ export function FinalDeliveryBook({
             ))}
 
             {/* CONTRAPORTADA (tapa dura) */}
-            <div data-density="hard" className="pxbook-back" style={{ ...coverStyleSolid(tpl), display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div data-density="hard" className="pxbook-back" style={{ ...coverStyleSolid(tpl, dims.w, dims.h), display: "flex", alignItems: "center", justifyContent: "center" }}>
               <div style={{ textAlign: "center", color: "#efe6dc", padding: 28 }}>
                 {showLogo && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -746,10 +768,19 @@ export function BookLauncher(props: {
 }
 
 // ── estilos helper ───────────────────────────────────────────────────────────
-function coverStyle(img: string | null, tpl: Template, accent: string): React.CSSProperties {
+// IMPORTANTE: cada página lleva ancho/alto EXPLÍCITO (px), no 100%. En el modo
+// flip las hojas blandas inactivas no reciben tamaño de StPageFlip y un 100%
+// colapsa a 0 → la imagen se desbordaba fuera del libro al voltear.
+function coverStyle(
+  img: string | null,
+  tpl: Template,
+  accent: string,
+  w: number,
+  h: number,
+): React.CSSProperties {
   return {
-    width: "100%",
-    height: "100%",
+    width: w,
+    height: h,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -760,13 +791,13 @@ function coverStyle(img: string | null, tpl: Template, accent: string): React.CS
     position: "relative",
   }
 }
-function coverStyleSolid(tpl: Template): React.CSSProperties {
+function coverStyleSolid(tpl: Template, w: number, h: number): React.CSSProperties {
   return {
-    width: "100%",
-    height: "100%",
+    width: w,
+    height: h,
     background: `linear-gradient(135deg, ${tpl.bg}, #0b0a09)`,
   }
 }
-function photoPageStyle(bg: string): React.CSSProperties {
-  return { width: "100%", height: "100%", background: bg, position: "relative" }
+function photoPageStyle(bg: string, w: number, h: number): React.CSSProperties {
+  return { width: w, height: h, background: bg, position: "relative" }
 }
