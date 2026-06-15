@@ -6,6 +6,7 @@ import { resolveTemplate } from "@/server/services/email-template.service"
 import { enqueueEmail } from "@/server/services/email.service"
 import * as drive from "@/server/services/google-drive.service"
 import { getDriveConnectionStatus } from "@/server/services/google-drive-oauth.service"
+import { fetchAllPaged } from "@/server/services/gallery.service"
 
 /**
  * Orquestador: respalda/entrega una galería de ENTREGA FINAL a Google Drive en
@@ -156,12 +157,17 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     const tracks: Array<"high_quality" | "social"> =
       b.track === "both" ? ["high_quality", "social"] : [b.track as "high_quality" | "social"]
 
-    const { data: assetsRaw } = await sb
-      .from("gallery_assets")
-      .select("id, original_name, original_key, web_key, mime_type, delivery_track")
-      .eq("gallery_id", b.gallery_id)
-      .eq("status", "completed")
-    const allAssets = (assetsRaw ?? []) as Array<{
+    const allAssets = (await fetchAllPaged((from, to) =>
+      sb
+        .from("gallery_assets")
+        .select(
+          "id, original_name, original_key, web_key, mime_type, delivery_track",
+        )
+        .eq("gallery_id", b.gallery_id)
+        .eq("status", "completed")
+        .order("created_at", { ascending: true })
+        .range(from, to),
+    )) as Array<{
       id: string
       original_name: string | null
       original_key: string | null

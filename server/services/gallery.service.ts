@@ -1053,21 +1053,48 @@ export async function bulkDeleteAssets(
   return { deleted: n }
 }
 
+/**
+ * Trae TODAS las filas de una consulta paginando en lotes. PostgREST/Supabase
+ * corta en 1000 filas por defecto (max-rows), así que una galería con +1000
+ * fotos solo devolvía las primeras 1000. Se recrea la query por lote con
+ * .range() hasta que un lote venga incompleto. El orden debe ser determinista.
+ */
+export async function fetchAllPaged(
+  makeQuery: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+  pageSize = 1000,
+): Promise<unknown[]> {
+  const out: unknown[] = []
+  // tope de seguridad (500 lotes = 500k filas) para no hacer loop infinito
+  for (let from = 0, i = 0; i < 500; i++, from += pageSize) {
+    const { data, error } = await makeQuery(from, from + pageSize - 1)
+    if (error) throw error
+    const batch = data ?? []
+    out.push(...batch)
+    if (batch.length < pageSize) break
+  }
+  return out
+}
+
 export async function getGalleryAssets(
   studioId: string,
   galleryId: string,
 ): Promise<GalleryAssetRow[]> {
   const supabase = srvc()
-  const { data, error } = await supabase
-    .from("gallery_assets")
-    .select("*")
-    .eq("studio_id", studioId)
-    .eq("gallery_id", galleryId)
-    .is("deleted_at", null)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true })
-  if (error) throw error
-  return (data ?? []) as unknown as GalleryAssetRow[]
+  const rows = await fetchAllPaged((from, to) =>
+    supabase
+      .from("gallery_assets")
+      .select("*")
+      .eq("studio_id", studioId)
+      .eq("gallery_id", galleryId)
+      .is("deleted_at", null)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  )
+  return rows as unknown as GalleryAssetRow[]
 }
 
 export type GalleryActivity = {
@@ -1327,17 +1354,21 @@ export async function validateGalleryToken(
     .maybeSingle()
   if (!gallery || gallery.status !== "published") return null
 
-  const { data: assets } = await db
-    .from("gallery_assets")
-    .select("id, width, height, thumb_key, web_key, status, metadata, delivery_track")
-    .eq("gallery_id", tk.gallery_id)
-    .is("deleted_at", null)
-    .eq("status", "completed")
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true })
-
+  const assetsRaw = await fetchAllPaged((from, to) =>
+    db
+      .from("gallery_assets")
+      .select(
+        "id, width, height, thumb_key, web_key, status, metadata, delivery_track",
+      )
+      .eq("gallery_id", tk.gallery_id)
+      .is("deleted_at", null)
+      .eq("status", "completed")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  )
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const assetList = (assets ?? []) as any[]
+  const assetList = assetsRaw as any[]
 
   // Portada: usa el cover elegido, o el primer asset como respaldo.
   const coverAsset =
