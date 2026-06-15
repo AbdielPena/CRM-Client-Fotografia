@@ -157,9 +157,12 @@ const PXBOOK_CSS = `
 
 /* ── Stage que envuelve el HTMLFlipBook ────────────────────────── */
 .pxbook-stage{
-  position:relative; perspective:2200px; z-index:2;
-  transform-origin:50% 60%;
-  animation:pxPresent 1100ms cubic-bezier(.2,.8,.2,1) both;
+  /* SIN perspective ni transform aquí: StPageFlip posiciona las páginas que
+     voltean con coords absolutas y un transform/perspective en un ancestro
+     rompe ese cálculo (la página colgaba fuera del libro). La perspectiva 3D
+     del flip la maneja la propia librería. La apertura es solo opacidad. */
+  position:relative; z-index:2;
+  animation:pxPresent 800ms ease both;
 }
 /* canto derecho dorado (book block) */
 .pxbook-stage::after{
@@ -382,10 +385,12 @@ const PXBOOK_CSS = `
 @keyframes pxDriftB{ 0%,100%{ transform:translate3d(0,0,0) } 50%{ transform:translate3d(-14px,12px,0) } }
 @keyframes pxStar{ 0%,100%{ opacity:0; transform:scale(.4) rotate(0deg); }
   50%{ opacity:1; transform:scale(1) rotate(45deg); } }
+/* Apertura SOLO opacidad: cualquier transform aquí descoloca el flip de
+   StPageFlip (un ancestro transformado rompe las coords absolutas de la
+   página que voltea). El fade igual da entrada elegante. */
 @keyframes pxPresent{
-  0%{ opacity:0; transform:perspective(2200px) rotateX(14deg) translateY(26px) scale(.92); }
-  60%{ opacity:1; }
-  100%{ opacity:1; transform:perspective(2200px) rotateX(0) translateY(0) scale(1); }
+  0%{ opacity:0; }
+  100%{ opacity:1; }
 }
 @keyframes pxFloor{ 0%,100%{ opacity:.85; transform:translateX(-50%) scaleX(1); }
   50%{ opacity:.6; transform:translateX(-50%) scaleX(.94); } }
