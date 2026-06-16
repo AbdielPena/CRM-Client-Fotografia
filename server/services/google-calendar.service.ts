@@ -443,6 +443,15 @@ export type ProjectEventPayload = {
   attendeeEmails?: string[]
 }
 
+// Permisos del invitado (cliente): el evento es SOLO-LECTURA para él. Solo el
+// estudio (organizador) lo edita desde StudioFlow. Evita que el cliente cambie
+// la fecha, invite a otros o vea la lista de invitados desde su calendario.
+const GUEST_LOCK = {
+  guestsCanModify: false,
+  guestsCanInviteOthers: false,
+  guestsCanSeeOtherGuests: false,
+} as const
+
 function buildEventBody(p: ProjectEventPayload) {
   const tz = p.timezone ?? 'America/Santo_Domingo'
   // Si no hay hora → evento all-day
@@ -455,6 +464,7 @@ function buildEventBody(p: ProjectEventPayload) {
       start: { date: p.date },
       end: { date: end },
       attendees: p.attendeeEmails?.map((email) => ({ email })),
+      ...GUEST_LOCK,
       source: { title: 'PixelOS', url: process.env.NEXT_PUBLIC_APP_URL ?? '' },
     }
   }
@@ -471,8 +481,61 @@ function buildEventBody(p: ProjectEventPayload) {
     start: { dateTime: startDateTime, timeZone: tz },
     end: { dateTime: endDateTime, timeZone: tz },
     attendees: p.attendeeEmails?.map((email) => ({ email })),
+    ...GUEST_LOCK,
     source: { title: 'PixelOS', url: process.env.NEXT_PUBLIC_APP_URL ?? '' },
   }
+}
+
+// Características del plan → texto para la descripción del evento (lo que el
+// cliente ve en el correo de invitación). includes puede venir como array JSON
+// o como texto separado por saltos/comas.
+type PkgInfo = {
+  name?: string | null
+  includes?: unknown
+  duration_hours?: number | null
+  edited_photos?: number | null
+  delivery_days?: number | null
+} | null
+
+function normalizeIncludes(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean)
+  if (typeof raw === 'string')
+    return raw
+      .split(/\r?\n|,/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  return []
+}
+
+function buildEventDescription(
+  notes: string | null | undefined,
+  pkg: PkgInfo,
+): string | undefined {
+  const parts: string[] = []
+  if (notes && notes.trim()) parts.push(notes.trim())
+
+  if (pkg && (pkg.name || pkg.includes)) {
+    const lines: string[] = ['━━━━━━━━━━━━━━━━━━━━']
+    if (pkg.name) lines.push(`PLAN: ${pkg.name}`)
+    const incs = normalizeIncludes(pkg.includes)
+    if (incs.length) {
+      lines.push('Incluye:')
+      for (const f of incs) lines.push(`• ${f}`)
+    }
+    const extras: string[] = []
+    if (pkg.duration_hours) extras.push(`Duración ${Number(pkg.duration_hours)} h`)
+    if (pkg.edited_photos) extras.push(`${pkg.edited_photos} fotos editadas`)
+    if (pkg.delivery_days) extras.push(`entrega en ${pkg.delivery_days} días`)
+    if (extras.length) lines.push(extras.join(' · '))
+    lines.push('━━━━━━━━━━━━━━━━━━━━')
+    lines.push(
+      'Para cualquier cambio en tu sesión o tu plan, contáctanos directamente.',
+    )
+    parts.push(lines.join('\n'))
+  }
+
+  const out = parts.join('\n\n').trim()
+  return out || undefined
 }
 
 function addHours(hhmm: string, hours: number): string {
@@ -511,9 +574,12 @@ export async function syncProjectToEvent(
 
   const body = buildEventBody(payload)
   const base = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(existingCalId)}/events`
-  const url = existingEventId
-    ? `${base}/${encodeURIComponent(existingEventId)}`
-    : base
+  // sendUpdates=all → Google envía el correo de invitación/actualización al
+  // cliente (attendee). Sin esto el invitado podría no recibir el email.
+  const url =
+    (existingEventId
+      ? `${base}/${encodeURIComponent(existingEventId)}`
+      : base) + '?sendUpdates=all'
   const method = existingEventId ? 'PATCH' : 'POST'
 
   const res = await fetch(url, {
@@ -602,7 +668,7 @@ export async function syncProjectById(
     const { data: project, error } = await supabase
       .from('projects')
       .select(
-        'id, studio_id, name, event_type, event_date, location, notes, client:clients(email, name)',
+        'id, studio_id, name, event_type, event_date, location, notes, client:clients(email, name), package:packages(name, includes, duration_hours, edited_photos, delivery_days)',
       )
       .eq('id', projectId)
       .eq('studio_id', studioId)
@@ -616,6 +682,10 @@ export async function syncProjectById(
     const clientName = (client as { name?: string } | null)?.name
     const clientEmail = (client as { email?: string } | null)?.email
 
+    const pkg = (
+      Array.isArray(project.package) ? project.package[0] : project.package
+    ) as PkgInfo
+
     const title = clientName
       ? `${project.name} — ${clientName}`
       : project.name
@@ -623,8 +693,10 @@ export async function syncProjectById(
     const result = await syncProjectToEvent({
       projectId: project.id,
       studioId,
+      // Descripción = notas del proyecto + características del plan seleccionado.
+      // El cliente lo ve en el correo de invitación de Google.
+      description: buildEventDescription(project.notes, pkg),
       title,
-      description: project.notes ?? undefined,
       date: project.event_date,
       startTime: null, // no tenemos event_time en el schema actual → all-day
       endTime: null,
