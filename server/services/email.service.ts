@@ -271,6 +271,7 @@ export function renderBookingApprovedForClient(params: {
   reserveDueInDays?: number | null
   replyToEmail?: string | null
   contractSignUrl?: string | null
+  sessionDetailsUrl?: string | null
 }) {
   const {
     studioName,
@@ -283,6 +284,7 @@ export function renderBookingApprovedForClient(params: {
     reserveDueInDays,
     replyToEmail,
     contractSignUrl,
+    sessionDetailsUrl,
   } = params
 
   const subject = `✅ Tu solicitud con ${studioName} fue aprobada`
@@ -296,13 +298,17 @@ export function renderBookingApprovedForClient(params: {
   const contractCta = contractSignUrl
     ? `<p style="margin: 16px 0 24px; text-align: center;"><a href="${escapeHtml(contractSignUrl)}" style="display: inline-block; background: ${escapeHtml(primaryColor)}; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 600;">Continuar con mi reserva</a></p>`
     : ''
+  const sessionCta = sessionDetailsUrl
+    ? `<p style="margin: 0 0 24px; text-align: center;"><a href="${escapeHtml(sessionDetailsUrl)}" style="display: inline-block; border: 1px solid ${escapeHtml(primaryColor)}; color: ${escapeHtml(primaryColor)}; text-decoration: none; padding: 11px 22px; border-radius: 8px; font-weight: 600; font-size: 14px;">Ver detalles de la sesión →</a></p>`
+    : ''
 
   const html = frame(`
   <h1 style="margin: 0 0 8px; font-size: 22px;">¡Gran noticia, ${escapeHtml(clientName)}!</h1>
-  <p style="margin: 0 0 24px; color: #4b5563;">Hemos aprobado tu solicitud para el paquete <strong>${escapeHtml(packageName)}</strong> el <strong>${escapeHtml(eventDate)}</strong>.</p>
+  <p style="margin: 0 0 24px; color: #4b5563;">Hemos aprobado tu solicitud para el plan <strong>${escapeHtml(packageName)}</strong> el <strong>${escapeHtml(eventDate)}</strong>.</p>
   <p style="margin: 0 0 16px; color: #4b5563;">Para confirmar tu sesión, continúa con estos pasos: revisa tu plan, completa el formulario y firma el contrato. Al final te mostraremos la factura para realizar el pago.</p>
   ${depositLine}
   ${contractCta}
+  ${sessionCta}
   ${replyLine}
   <p style="margin: 24px 0 0; color: #4b5563;">Estamos emocionados de trabajar contigo.</p>
 `, { studioName, accent: primaryColor, branding: params.branding })

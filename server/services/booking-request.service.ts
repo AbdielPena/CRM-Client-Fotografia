@@ -16,6 +16,7 @@ import {
 } from '@/server/services/email.service'
 import { getEmailBranding } from '@/server/services/email-template.service'
 import { getSessionPlanLabel } from '@/server/services/session-naming.service'
+import { getClientShareLinks } from '@/server/services/client-portal.service'
 import { logActivity } from '@/server/services/activity.service'
 import { notify } from '@/server/services/notification.service'
 import {
@@ -1043,6 +1044,25 @@ export async function approveBookingRequest(params: {
   try {
     const ctx = await loadContextForEmail(params.studioId, params.requestId)
     if (ctx) {
+      // Link "Ver detalles de la sesión": magic link del portal (email+código)
+      // que pre-llena el login y redirige a /portal/sessions/[projectId].
+      let sessionDetailsUrl: string | null = null
+      const projectId = conversionBundle?.projectId ?? null
+      if (projectId) {
+        try {
+          const share = await getClientShareLinks(
+            params.studioId,
+            params.requestId,
+          )
+          if (share?.portalUrl) {
+            sessionDetailsUrl = `${share.portalUrl}&next=${encodeURIComponent(
+              `/portal/sessions/${projectId}`,
+            )}`
+          }
+        } catch (e) {
+          console.error('[approveBookingRequest] sessionDetailsUrl failed', e)
+        }
+      }
       const { subject, html } = renderBookingApprovedForClient({
         studioName: ctx.studio.name,
         primaryColor: ctx.studio.primary_color ?? '#111827',
@@ -1056,6 +1076,7 @@ export async function approveBookingRequest(params: {
           ctx.request.pricing_snapshot?.reserve_due_in_days ?? null,
         replyToEmail: ctx.studio.email,
         contractSignUrl,
+        sessionDetailsUrl,
       })
       await enqueueEmail({
         studioId: params.studioId,
