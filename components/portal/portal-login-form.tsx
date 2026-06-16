@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2, KeyRound, Mail } from "lucide-react"
 import { toast } from "sonner"
@@ -42,6 +42,24 @@ export function PortalLoginForm() {
       }
     })
   }
+
+  // Magic link: si la URL trae email + código, entra directo (sin pedir clic).
+  const autoTried = useRef(false)
+  useEffect(() => {
+    const qEmail = params.get("email")
+    const qCode = params.get("code")
+    if (
+      !autoTried.current &&
+      qEmail &&
+      qEmail.includes("@") &&
+      qCode &&
+      qCode.trim().length >= 4
+    ) {
+      autoTried.current = true
+      submit()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <form

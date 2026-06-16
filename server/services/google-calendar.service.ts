@@ -6,6 +6,7 @@ import {
   getSessionPlanLabel,
   formatSessionTitle,
 } from '@/server/services/session-naming.service'
+import { ensureClientAccessCode } from '@/server/services/client-portal.service'
 
 /**
  * Integración Google Calendar (Fase 2b).
@@ -677,7 +678,7 @@ export async function syncProjectById(
     const { data: project, error } = await supabase
       .from('projects')
       .select(
-        'id, studio_id, name, event_type, event_date, location, notes, package_id, client:clients(email, name), package:packages(name, includes, duration_hours, edited_photos, delivery_days)',
+        'id, studio_id, name, event_type, event_date, location, notes, package_id, client:clients(id, email, name), package:packages(name, includes, duration_hours, edited_photos, delivery_days)',
       )
       .eq('id', projectId)
       .eq('studio_id', studioId)
@@ -707,15 +708,29 @@ export async function syncProjectById(
         ? `${project.name} — ${clientName}`
         : project.name
 
-    // Link a los detalles de la sesión en el portal del cliente. Va al login con
-    // next (sin credenciales en el evento compartido); tras entrar cae en la
-    // página de la sesión.
+    // Link a los detalles de la sesión en el portal del cliente. MAGIC LINK
+    // (email + código del cliente) → entra directo, sin pedir acceso. El login
+    // auto-entra cuando el link trae email+code (ver portal-login-form).
+    const clientId = (client as { id?: string } | null)?.id
     const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
-    const sessionUrl = appBase
-      ? `${appBase}/portal/login?next=${encodeURIComponent(
-          `/portal/sessions/${project.id}`,
-        )}`
-      : null
+    let sessionUrl: string | null = null
+    if (appBase) {
+      const next = encodeURIComponent(`/portal/sessions/${project.id}`)
+      let code: string | null = null
+      if (clientId) {
+        try {
+          code = await ensureClientAccessCode(studioId, clientId)
+        } catch {
+          code = null
+        }
+      }
+      sessionUrl =
+        clientEmail && code
+          ? `${appBase}/portal/login?email=${encodeURIComponent(
+              clientEmail,
+            )}&code=${encodeURIComponent(code)}&next=${next}`
+          : `${appBase}/portal/login?next=${next}`
+    }
 
     const result = await syncProjectToEvent({
       projectId: project.id,
