@@ -514,6 +514,7 @@ function normalizeIncludes(raw: unknown): string[] {
 function buildEventDescription(
   notes: string | null | undefined,
   pkg: PkgInfo,
+  sessionUrl?: string | null,
 ): string | undefined {
   const parts: string[] = []
   if (notes && notes.trim()) parts.push(notes.trim())
@@ -537,6 +538,10 @@ function buildEventDescription(
     )
     parts.push(lines.join('\n'))
   }
+
+  // Link a los detalles de la sesión en el portal del cliente (sin credenciales
+  // en el cuerpo del evento, que es compartido: lleva al login con next).
+  if (sessionUrl) parts.push(`📋 Ver detalles de tu sesión:\n${sessionUrl}`)
 
   const out = parts.join('\n\n').trim()
   return out || undefined
@@ -702,12 +707,22 @@ export async function syncProjectById(
         ? `${project.name} — ${clientName}`
         : project.name
 
+    // Link a los detalles de la sesión en el portal del cliente. Va al login con
+    // next (sin credenciales en el evento compartido); tras entrar cae en la
+    // página de la sesión.
+    const appBase = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+    const sessionUrl = appBase
+      ? `${appBase}/portal/login?next=${encodeURIComponent(
+          `/portal/sessions/${project.id}`,
+        )}`
+      : null
+
     const result = await syncProjectToEvent({
       projectId: project.id,
       studioId,
-      // Descripción = notas del proyecto + características del plan seleccionado.
-      // El cliente lo ve en el correo de invitación de Google.
-      description: buildEventDescription(project.notes, pkg),
+      // Descripción = notas + plan + link a los detalles de la sesión (portal).
+      // El cliente lo ve en el evento/correo de invitación de Google.
+      description: buildEventDescription(project.notes, pkg, sessionUrl),
       title,
       date: project.event_date,
       startTime: null, // no tenemos event_time en el schema actual → all-day
