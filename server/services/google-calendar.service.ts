@@ -2,6 +2,10 @@ import 'server-only'
 
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
+import {
+  getSessionPlanLabel,
+  formatSessionTitle,
+} from '@/server/services/session-naming.service'
 
 /**
  * Integración Google Calendar (Fase 2b).
@@ -668,7 +672,7 @@ export async function syncProjectById(
     const { data: project, error } = await supabase
       .from('projects')
       .select(
-        'id, studio_id, name, event_type, event_date, location, notes, client:clients(email, name), package:packages(name, includes, duration_hours, edited_photos, delivery_days)',
+        'id, studio_id, name, event_type, event_date, location, notes, package_id, client:clients(email, name), package:packages(name, includes, duration_hours, edited_photos, delivery_days)',
       )
       .eq('id', projectId)
       .eq('studio_id', studioId)
@@ -686,9 +690,17 @@ export async function syncProjectById(
       Array.isArray(project.package) ? project.package[0] : project.package
     ) as PkgInfo
 
-    const title = clientName
-      ? `${project.name} — ${clientName}`
-      : project.name
+    // Título de la agenda: "[Cliente] · [Categoría] #[N] - [Plan]" (N por precio
+    // dentro de la categoría). Si no hay plan/categoría → cae al formato anterior.
+    const planLabel = await getSessionPlanLabel(
+      studioId,
+      (project as { package_id?: string | null }).package_id,
+    )
+    const title = planLabel
+      ? formatSessionTitle(clientName, planLabel.label)
+      : clientName
+        ? `${project.name} — ${clientName}`
+        : project.name
 
     const result = await syncProjectToEvent({
       projectId: project.id,

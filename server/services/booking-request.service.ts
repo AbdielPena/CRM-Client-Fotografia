@@ -15,6 +15,7 @@ import {
   renderBookingRejectedForClient,
 } from '@/server/services/email.service'
 import { getEmailBranding } from '@/server/services/email-template.service'
+import { getSessionPlanLabel } from '@/server/services/session-naming.service'
 import { logActivity } from '@/server/services/activity.service'
 import { notify } from '@/server/services/notification.service'
 import {
@@ -451,7 +452,7 @@ async function loadContextForEmail(studioId: string, requestId: string) {
   const { data: request } = await svc
     .from('booking_requests')
     .select(
-      'id, client_name, client_email, event_date, pricing_snapshot, package:packages!inner ( name )',
+      'id, client_name, client_email, event_date, pricing_snapshot, package_id, package:packages!inner ( name )',
     )
     .eq('id', requestId)
     .eq('studio_id', studioId)
@@ -467,6 +468,13 @@ async function loadContextForEmail(studioId: string, requestId: string) {
 
   const pkgRaw = (request as { package: unknown }).package
   const pkg = Array.isArray(pkgRaw) ? pkgRaw[0] : pkgRaw
+  const packageName = (pkg as { name: string } | null)?.name ?? 'Tu paquete'
+
+  // Label de la sesión: "[Categoría] #[N] - [Plan]" (N por precio en categoría).
+  const planLabel = await getSessionPlanLabel(
+    studioId,
+    (request as { package_id?: string | null }).package_id,
+  )
 
   return {
     request: request as unknown as {
@@ -480,7 +488,9 @@ async function loadContextForEmail(studioId: string, requestId: string) {
         reserve_due_in_days?: number | null
       }
     },
-    packageName: (pkg as { name: string } | null)?.name ?? 'Tu paquete',
+    packageName,
+    /** Nombre formateado del plan para mostrar al cliente (cae a packageName). */
+    sessionPlanLabel: planLabel?.label ?? packageName,
     studio: studio as {
       name: string
       email: string | null
@@ -1038,7 +1048,7 @@ export async function approveBookingRequest(params: {
         primaryColor: ctx.studio.primary_color ?? '#111827',
         branding: await getEmailBranding(params.studioId),
         clientName: ctx.request.client_name,
-        packageName: ctx.packageName,
+        packageName: ctx.sessionPlanLabel,
         eventDate: ctx.request.event_date,
         depositAmount: ctx.request.pricing_snapshot?.deposit_amount ?? null,
         depositCurrency: ctx.request.pricing_snapshot?.currency ?? null,
