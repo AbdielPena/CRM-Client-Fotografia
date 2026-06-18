@@ -69,7 +69,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https://*.supabase.co https://*.r2.cloudflarestorage.com",
+              "img-src 'self' data: blob: https://*.supabase.co https://*.r2.cloudflarestorage.com https://abbypixel.com https://*.abbypixel.com",
               "font-src 'self' data:",
               "connect-src 'self' https://*.supabase.co https://accounts.google.com https://www.googleapis.com",
               "frame-src 'self' https://accounts.google.com",
