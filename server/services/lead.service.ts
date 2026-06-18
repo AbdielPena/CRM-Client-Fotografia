@@ -347,7 +347,7 @@ function appBaseUrl(): string {
 }
 
 /** Resuelve el studio por slug usando la vista pública (anon, respeta RLS). */
-async function resolveStudioBySlug(slug: string) {
+export async function resolveStudioBySlug(slug: string) {
   const supabase = createSupabasePublicClient()
   const { data } = await supabase
     .from('studios_public')
