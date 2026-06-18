@@ -11,6 +11,7 @@ const PUBLIC_PREFIXES = [
   '/auth', // callbacks OAuth / magic link
   '/invite',
   '/g/', // galerías públicas
+  '/vestidos/', // selección pública de vestidos del catálogo web (por token)
   '/portal', // portal cliente (matchea /portal y /portal/...)
   '/api/portal', // endpoints del portal (login, logout)
   '/contract-print', // página print del contrato (auth interna por path)
