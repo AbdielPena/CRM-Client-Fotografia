@@ -200,6 +200,7 @@ export type SelectionDress = {
   image: string | null
   rentalPrice: number | null
   deposit: number | null
+  isFinal: boolean
 }
 export type SelectionWithPrices = {
   token: string
@@ -209,8 +210,7 @@ export type SelectionWithPrices = {
   planInterest: string | null
   createdAt: string
   dresses: SelectionDress[]
-  totalRental: number
-  totalDeposit: number
+  finalImages: string[]
   matched: number
 }
 
@@ -221,7 +221,7 @@ export async function getSelectionsWithPrices(
   const [{ data: sels }, { data: cat }] = await Promise.all([
     sb
       .from('dress_selections')
-      .select('token, client_name, client_whatsapp, tentative_date, plan_interest, dresses, created_at')
+      .select('token, client_name, client_whatsapp, tentative_date, plan_interest, dresses, final_images, created_at')
       .eq('studio_id', studioId)
       .order('created_at', { ascending: false }),
     sb
@@ -241,36 +241,97 @@ export async function getSelectionsWithPrices(
       })
   }
 
-  return ((sels ?? []) as Array<Record<string, unknown>>).map((s) => {
-    const raw = Array.isArray(s.dresses) ? (s.dresses as Array<{ name?: string; image?: string }>) : []
-    let totalRental = 0
-    let totalDeposit = 0
-    let matched = 0
-    const dresses: SelectionDress[] = raw.map((d) => {
-      const hit = d.image ? priceByImage.get(d.image) : undefined
-      if (hit) {
-        matched++
-        if (hit.rental) totalRental += hit.rental
-        if (hit.deposit) totalDeposit += hit.deposit
-      }
-      return {
-        name: hit?.name || d.name || 'Vestido',
-        image: d.image ?? null,
-        rentalPrice: hit?.rental ?? null,
-        deposit: hit?.deposit ?? null,
-      }
-    })
+  return ((sels ?? []) as Array<Record<string, unknown>>).map((s) =>
+    mapSelection(s, priceByImage),
+  )
+}
+
+function mapSelection(
+  s: Record<string, unknown>,
+  priceByImage: Map<string, { name: string; rental: number | null; deposit: number | null }>,
+): SelectionWithPrices {
+  const raw = Array.isArray(s.dresses) ? (s.dresses as Array<{ name?: string; image?: string }>) : []
+  const finalImages = Array.isArray(s.final_images) ? (s.final_images as string[]) : []
+  let matched = 0
+  const dresses: SelectionDress[] = raw.map((d) => {
+    const hit = d.image ? priceByImage.get(d.image) : undefined
+    if (hit) matched++
     return {
-      token: s.token as string,
-      clientName: s.client_name as string,
-      clientWhatsapp: (s.client_whatsapp as string | null) ?? null,
-      tentativeDate: (s.tentative_date as string | null) ?? null,
-      planInterest: (s.plan_interest as string | null) ?? null,
-      createdAt: s.created_at as string,
-      dresses,
-      totalRental,
-      totalDeposit,
-      matched,
+      name: hit?.name || d.name || 'Vestido',
+      image: d.image ?? null,
+      rentalPrice: hit?.rental ?? null,
+      deposit: hit?.deposit ?? null,
+      isFinal: d.image ? finalImages.includes(d.image) : false,
     }
   })
+  return {
+    token: s.token as string,
+    clientName: s.client_name as string,
+    clientWhatsapp: (s.client_whatsapp as string | null) ?? null,
+    tentativeDate: (s.tentative_date as string | null) ?? null,
+    planInterest: (s.plan_interest as string | null) ?? null,
+    createdAt: s.created_at as string,
+    dresses,
+    finalImages,
+    matched,
+  }
+}
+
+// Selección ligada a un lead (para mostrarla en el detalle del lead).
+export async function getSelectionByLead(
+  studioId: string,
+  leadId: string,
+): Promise<SelectionWithPrices | null> {
+  const sb = db()
+  const [{ data: sel }, { data: cat }] = await Promise.all([
+    sb
+      .from('dress_selections')
+      .select('token, client_name, client_whatsapp, tentative_date, plan_interest, dresses, final_images, created_at')
+      .eq('studio_id', studioId)
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    sb.from('dress_catalog').select('image_url, name, rental_price, deposit').eq('studio_id', studioId),
+  ])
+  if (!sel) return null
+  const priceByImage = new Map<string, { name: string; rental: number | null; deposit: number | null }>()
+  for (const d of (cat ?? []) as Array<{ image_url: string | null; name: string; rental_price: unknown; deposit: unknown }>) {
+    if (d.image_url)
+      priceByImage.set(d.image_url, {
+        name: d.name,
+        rental: d.rental_price != null ? Number(d.rental_price) : null,
+        deposit: d.deposit != null ? Number(d.deposit) : null,
+      })
+  }
+  return mapSelection(sel as Record<string, unknown>, priceByImage)
+}
+
+// Marcar/desmarcar un vestido como el elegido final.
+export async function setFinalDress(
+  studioId: string,
+  token: string,
+  imageUrl: string,
+  isFinal: boolean,
+): Promise<string[]> {
+  const sb = db()
+  const { data } = await sb
+    .from('dress_selections')
+    .select('final_images')
+    .eq('studio_id', studioId)
+    .eq('token', token)
+    .maybeSingle()
+  const cur = Array.isArray((data as { final_images?: unknown } | null)?.final_images)
+    ? ((data as { final_images: string[] }).final_images)
+    : []
+  const next = isFinal
+    ? Array.from(new Set([...cur, imageUrl]))
+    : cur.filter((u) => u !== imageUrl)
+  const { error } = await sb
+    .from('dress_selections')
+    .update({ final_images: next })
+    .eq('studio_id', studioId)
+    .eq('token', token)
+  if (error) throw new Error(error.message)
+  return next
 }

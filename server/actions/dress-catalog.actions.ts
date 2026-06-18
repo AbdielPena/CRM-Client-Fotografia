@@ -11,6 +11,7 @@ import {
   createDress,
   updateDress,
   deleteDress,
+  setFinalDress,
 } from "@/server/services/dress-catalog.service"
 
 const storeSchema = z.object({
@@ -112,5 +113,21 @@ export async function deleteDressAction(id: string): Promise<Result> {
     return ok()
   } catch (e) {
     return fail(e)
+  }
+}
+
+// ── Vestido elegido final (marcar desde el lead / armario) ───────────────────
+export async function setFinalDressAction(
+  token: string,
+  imageUrl: string,
+  isFinal: boolean,
+): Promise<{ success: true; finalImages: string[] } | { error: string }> {
+  const ctx = await requireStudioAuth()
+  try {
+    const finalImages = await setFinalDress(ctx.studioId, token, imageUrl, isFinal)
+    revalidatePath("/armario")
+    return { success: true, finalImages }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "No se pudo guardar" }
   }
 }

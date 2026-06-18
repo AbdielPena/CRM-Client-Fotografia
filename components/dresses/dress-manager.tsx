@@ -3,17 +3,7 @@
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Store,
-  Shirt,
-  X,
-  ExternalLink,
-  MessageCircle,
-  Lock,
-} from "lucide-react"
+import { Plus, Pencil, Trash2, Store, Shirt, X, Lock } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,6 +16,7 @@ import {
   updateDressAction,
   deleteDressAction,
 } from "@/server/actions/dress-catalog.actions"
+import { SelectionView, type Selection } from "./selection-view"
 
 type DressStore = {
   id: string
@@ -47,29 +38,10 @@ type Dress = {
   notes: string | null
   is_active: boolean
 }
-type SelectionDress = {
-  name: string
-  image: string | null
-  rentalPrice: number | null
-  deposit: number | null
-}
-type Selection = {
-  token: string
-  clientName: string
-  clientWhatsapp: string | null
-  tentativeDate: string | null
-  planInterest: string | null
-  createdAt: string
-  dresses: SelectionDress[]
-  totalRental: number
-  totalDeposit: number
-  matched: number
-}
 
 const rd = (n: number | null | undefined) =>
   n == null ? "—" : "RD$" + Number(n).toLocaleString("es-DO")
 
-const APP = process.env.NEXT_PUBLIC_APP_URL || "https://my.abbypixel.com"
 const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-border-strong"
 
@@ -347,88 +319,9 @@ function SeleccionesTab({ selections }: { selections: Selection[] }) {
   }
   return (
     <div className="space-y-4">
-      {selections.map((s) => {
-        const date = new Date(s.createdAt).toLocaleDateString("es-DO", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        })
-        const waNum = (s.clientWhatsapp || "").replace(/\D/g, "")
-        return (
-          <div key={s.token} className="rounded-xl border border-border bg-card p-4">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">{s.clientName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {s.dresses.length} vestidos · {date}
-                  {s.planInterest ? ` · ${s.planInterest}` : ""}
-                  {s.tentativeDate ? ` · ${s.tentativeDate}` : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {waNum && (
-                  <a
-                    href={`https://wa.me/${waNum.length <= 10 ? "1" + waNum : waNum}`}
-                    target="_blank"
-                    rel="noopener"
-                    className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                  </a>
-                )}
-                <a
-                  href={`${APP}/vestidos/${s.token}`}
-                  target="_blank"
-                  rel="noopener"
-                  className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Ver link
-                </a>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
-              {s.dresses.map((d, i) => (
-                <div key={i} className="overflow-hidden rounded-lg border border-border bg-background">
-                  <div className="aspect-[3/4] w-full overflow-hidden bg-muted">
-                    {d.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={d.image} alt={d.name} loading="lazy" className="h-full w-full object-cover" />
-                    ) : null}
-                  </div>
-                  <div className="px-2 py-1.5">
-                    <p className="truncate text-[11px] font-medium text-foreground" title={d.name}>
-                      {d.name}
-                    </p>
-                    <p className="text-[11px] font-semibold text-foreground">
-                      {d.rentalPrice == null ? (
-                        <span className="text-muted-foreground">sin precio</span>
-                      ) : (
-                        rd(d.rentalPrice)
-                      )}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center justify-end gap-x-6 gap-y-1 border-t border-border pt-3 text-sm">
-              <span className="text-muted-foreground">
-                Depósito total: <span className="font-medium text-foreground">{rd(s.totalDeposit)}</span>
-              </span>
-              <span className="text-muted-foreground">
-                Renta total:{" "}
-                <span className="text-base font-semibold text-foreground">{rd(s.totalRental)}</span>
-              </span>
-              {s.matched < s.dresses.length && (
-                <span className="text-[11px] text-amber-600">
-                  {s.dresses.length - s.matched} sin precio registrado
-                </span>
-              )}
-            </div>
-          </div>
-        )
-      })}
+      {selections.map((s) => (
+        <SelectionView key={s.token} selection={s} />
+      ))}
     </div>
   )
 }

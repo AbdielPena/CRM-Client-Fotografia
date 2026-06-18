@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getLeadById } from "@/server/services/lead.service"
+import { getSelectionByLead } from "@/server/services/dress-catalog.service"
+import { SelectionView } from "@/components/dresses/selection-view"
 import { getEntityActivity } from "@/server/services/activity.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
@@ -35,10 +37,11 @@ const STATUS_OPTIONS = [
 export default async function LeadDetailPage({ params }: { params: { id: string } }) {
   const session = await requireStudioAuth()
 
-  const [lead, activity, unread] = await Promise.all([
+  const [lead, activity, unread, dressSelection] = await Promise.all([
     getLeadById(session.studioId, params.id),
     getEntityActivity(session.studioId, "lead", params.id),
     countUnreadNotifications(session.studioId),
+    getSelectionByLead(session.studioId, params.id),
   ])
 
   if (!lead) notFound()
@@ -81,6 +84,16 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main info */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Selección de vestidos (si la clienta armó una en la web) */}
+          {dressSelection && (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold text-foreground">
+                Vestidos seleccionados por la clienta
+              </h2>
+              <SelectionView selection={dressSelection} showHeader={false} />
+            </div>
+          )}
+
           {/* Contact info card */}
           <div className="sf-card p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4">Información de contacto</h2>
