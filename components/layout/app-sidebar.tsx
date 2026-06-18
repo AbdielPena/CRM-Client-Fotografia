@@ -47,6 +47,7 @@ import {
   HeartHandshake,
   Tag,
   MailCheck,
+  Shirt,
   type LucideIcon,
 } from "lucide-react"
 
@@ -99,6 +100,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
       { type: "link", href: "/leads", label: "Leads", icon: UserPlus },
+      { type: "link", href: "/armario", label: "Vestidos", icon: Shirt },
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
       { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
       { type: "link", href: "/projects", label: "Proyectos", icon: FolderOpen },
