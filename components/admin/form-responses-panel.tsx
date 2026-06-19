@@ -267,6 +267,15 @@ function formatValue(
     return raw === true ? "Sí" : "No"
   }
 
+  if (field.type === "checkboxes") {
+    const arr = Array.isArray(raw) ? raw : []
+    if (arr.length === 0)
+      return <span className="text-muted-foreground italic">— sin respuesta —</span>
+    return arr
+      .map((v) => (field.options ?? []).find((o) => o.value === String(v))?.label ?? String(v))
+      .join(", ")
+  }
+
   if (field.type === "select" || field.type === "radio") {
     const opt = (field.options ?? []).find((o) => o.value === String(raw))
     return opt ? opt.label : String(raw)

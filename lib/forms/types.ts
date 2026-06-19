@@ -21,6 +21,7 @@ export type FormFieldType =
   | 'select'
   | 'radio'
   | 'checkbox'
+  | 'checkboxes' // grupo de casillas multi-selección (valor = string[])
   | 'file'
   | 'explanation' // bloque de texto descriptivo (no es un input)
 
@@ -91,6 +92,10 @@ export function validateFormData(
         errors[field.key] = `Debes marcar ${field.label}`
         continue
       }
+      if (field.type === 'checkboxes' && (!Array.isArray(value) || value.length === 0)) {
+        errors[field.key] = `Selecciona al menos una opción en ${field.label}`
+        continue
+      }
     }
 
     if (value === '' || value === null || value === undefined) continue
@@ -132,6 +137,14 @@ export function validateFormData(
       case 'radio':
         if (field.options && !field.options.some((o) => o.value === value)) {
           errors[field.key] = 'Selecciona una opción válida'
+        }
+        break
+      case 'checkboxes':
+        if (Array.isArray(value) && field.options) {
+          const valid = new Set(field.options.map((o) => o.value))
+          if (value.some((v) => !valid.has(String(v)))) {
+            errors[field.key] = 'Selección inválida'
+          }
         }
         break
       case 'date':

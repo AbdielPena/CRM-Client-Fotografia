@@ -39,12 +39,13 @@ const FIELD_TYPES: { value: FormFieldType; label: string }[] = [
   { value: "date", label: "Fecha" },
   { value: "select", label: "Lista desplegable" },
   { value: "radio", label: "Opción única (radio)" },
+  { value: "checkboxes", label: "Casillas (varias opciones)" },
   { value: "checkbox", label: "Casilla de verificación" },
   { value: "explanation", label: "Explicación / nota (solo texto)" },
   { value: "file", label: "Archivo (próximamente)" },
 ]
 
-const TYPES_WITH_OPTIONS: FormFieldType[] = ["select", "radio"]
+const TYPES_WITH_OPTIONS: FormFieldType[] = ["select", "radio", "checkboxes"]
 
 /**
  * Campos "especiales" que el sistema reconoce y que disparan automatizaciones.
@@ -840,6 +841,17 @@ function PreviewField({ field }: { field: FormField }) {
         </div>
       ) : field.type === "select" ? (
         <div className={box}>{field.placeholder || "Selecciona…"}</div>
+      ) : field.type === "checkboxes" ? (
+        <div className="space-y-2">
+          {(field.options ?? []).map((o) => (
+            <label
+              key={o.value}
+              className="flex items-center gap-2 text-sm text-foreground"
+            >
+              <input type="checkbox" disabled className="h-4 w-4 accent-gold-600" /> {o.label}
+            </label>
+          ))}
+        </div>
       ) : field.type === "checkbox" ? (
         <label className="flex items-center gap-2 text-sm text-foreground">
           <input type="checkbox" disabled className="h-4 w-4 accent-gold-600" />

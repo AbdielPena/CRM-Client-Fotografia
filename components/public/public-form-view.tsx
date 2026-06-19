@@ -332,6 +332,33 @@ function renderInput(
           {field.placeholder ?? 'Acepto'}
         </label>
       )
+    case 'checkboxes': {
+      const arr = Array.isArray(value) ? (value as string[]) : []
+      return (
+        <div className="space-y-2">
+          {(field.options ?? []).map((o) => (
+            <label
+              key={o.value}
+              className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
+            >
+              <input
+                type="checkbox"
+                checked={arr.includes(o.value)}
+                onChange={(e) =>
+                  onChange(
+                    e.target.checked
+                      ? [...arr, o.value]
+                      : arr.filter((v) => v !== o.value),
+                  )
+                }
+                className="h-4 w-4 accent-gold-600"
+              />
+              {o.label}
+            </label>
+          ))}
+        </div>
+      )
+    }
     case 'file':
       return (
         <p className="text-xs text-muted-foreground">

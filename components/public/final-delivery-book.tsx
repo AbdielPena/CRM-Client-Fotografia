@@ -69,9 +69,7 @@ function s(v: unknown): string {
 // ║  Bloque <style> estático: solo depende de las CSS vars inline ║
 // ╚══════════════════════════════════════════════════════════════╝
 const PXBOOK_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Pinyon+Script&family=EB+Garamond:ital@0;1&display=swap');
-
-/* ── Tokens base + fuentes ─────────────────────────────────────── */
+/* ── Tokens base + fuentes (las @font se cargan por <link>, ver abajo) ── */
 .abby-book{
   --gold-deep:#7a5a22; --gold:#b89968; --gold-bright:#e7c884;
   --gold-foil:#fff3d4; --gold-spec:#fffaf0; --gold-line:#cbab74;
@@ -567,7 +565,13 @@ export function FinalDeliveryBook({
         overflow: "hidden",
       }}
     >
-      <style>{PXBOOK_CSS}</style>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Pinyon+Script&family=EB+Garamond:ital@0;1&display=swap"
+      />
+      <style dangerouslySetInnerHTML={{ __html: PXBOOK_CSS }} />
 
       {/* CAPAS DE ESCENARIO — hermanas del libro, detrás (z-index 0/1) */}
       <div className="pxbook-aura" aria-hidden />
