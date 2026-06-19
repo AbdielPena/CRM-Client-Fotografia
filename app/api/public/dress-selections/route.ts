@@ -5,7 +5,7 @@ import { createDressSelection } from "@/server/services/dress-selection.service"
 
 /**
  * Endpoint público de "selección de vestidos" del catálogo de abbypixel.com.
- *  - POST: guarda la selección (4–6 vestidos) + crea un lead, devuelve el link.
+ *  - POST: guarda la selección (1–6 vestidos) + crea un lead, devuelve el link.
  *  - OPTIONS: preflight CORS.
  * Mismo patrón de CORS/honeypot/rate-limit que /api/public/contact.
  */
@@ -77,7 +77,7 @@ const SelectionSchema = z.object({
   planInterest: z.string().trim().max(120).optional().or(z.literal("")),
   dresses: z
     .array(DressSchema)
-    .min(4, "Elige al menos 4 vestidos")
+    .min(1, "Elige al menos 1 vestido")
     .max(6, "Máximo 6 vestidos"),
   // Honeypot: debe llegar vacío.
   website: z.string().optional(),
