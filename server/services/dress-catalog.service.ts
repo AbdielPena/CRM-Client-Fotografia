@@ -200,6 +200,7 @@ export type SelectionDress = {
   image: string | null
   rentalPrice: number | null
   deposit: number | null
+  storeName: string | null
   isFinal: boolean
 }
 export type SelectionWithPrices = {
@@ -226,29 +227,42 @@ export async function getSelectionsWithPrices(
       .order('created_at', { ascending: false }),
     sb
       .from('dress_catalog')
-      .select('image_url, name, rental_price, deposit')
+      .select('image_url, name, rental_price, deposit, dress_stores(name)')
       .eq('studio_id', studioId),
   ])
 
-  // índice por image_url para cruzar el precio (la selección guarda la misma URL)
-  const priceByImage = new Map<string, { name: string; rental: number | null; deposit: number | null }>()
-  for (const d of (cat ?? []) as Array<{ image_url: string | null; name: string; rental_price: unknown; deposit: unknown }>) {
-    if (d.image_url)
-      priceByImage.set(d.image_url, {
-        name: d.name,
-        rental: d.rental_price != null ? Number(d.rental_price) : null,
-        deposit: d.deposit != null ? Number(d.deposit) : null,
-      })
-  }
-
+  const priceByImage = buildPriceMap(cat)
   return ((sels ?? []) as Array<Record<string, unknown>>).map((s) =>
     mapSelection(s, priceByImage),
   )
 }
 
+type PriceInfo = { name: string; storeName: string | null; rental: number | null; deposit: number | null }
+
+// índice por image_url para cruzar precio + TIENDA (la selección guarda la misma URL)
+function buildPriceMap(cat: unknown): Map<string, PriceInfo> {
+  const m = new Map<string, PriceInfo>()
+  for (const d of (Array.isArray(cat) ? cat : []) as Array<{
+    image_url: string | null
+    name: string
+    rental_price: unknown
+    deposit: unknown
+    dress_stores: { name?: string } | null
+  }>) {
+    if (d.image_url)
+      m.set(d.image_url, {
+        name: d.name,
+        storeName: d.dress_stores?.name ?? null,
+        rental: d.rental_price != null ? Number(d.rental_price) : null,
+        deposit: d.deposit != null ? Number(d.deposit) : null,
+      })
+  }
+  return m
+}
+
 function mapSelection(
   s: Record<string, unknown>,
-  priceByImage: Map<string, { name: string; rental: number | null; deposit: number | null }>,
+  priceByImage: Map<string, PriceInfo>,
 ): SelectionWithPrices {
   const raw = Array.isArray(s.dresses) ? (s.dresses as Array<{ name?: string; image?: string }>) : []
   const finalImages = Array.isArray(s.final_images) ? (s.final_images as string[]) : []
@@ -261,6 +275,7 @@ function mapSelection(
       image: d.image ?? null,
       rentalPrice: hit?.rental ?? null,
       deposit: hit?.deposit ?? null,
+      storeName: hit?.storeName ?? null,
       isFinal: d.image ? finalImages.includes(d.image) : false,
     }
   })
@@ -292,19 +307,13 @@ export async function getSelectionByLead(
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
-    sb.from('dress_catalog').select('image_url, name, rental_price, deposit').eq('studio_id', studioId),
+    sb
+      .from('dress_catalog')
+      .select('image_url, name, rental_price, deposit, dress_stores(name)')
+      .eq('studio_id', studioId),
   ])
   if (!sel) return null
-  const priceByImage = new Map<string, { name: string; rental: number | null; deposit: number | null }>()
-  for (const d of (cat ?? []) as Array<{ image_url: string | null; name: string; rental_price: unknown; deposit: unknown }>) {
-    if (d.image_url)
-      priceByImage.set(d.image_url, {
-        name: d.name,
-        rental: d.rental_price != null ? Number(d.rental_price) : null,
-        deposit: d.deposit != null ? Number(d.deposit) : null,
-      })
-  }
-  return mapSelection(sel as Record<string, unknown>, priceByImage)
+  return mapSelection(sel as Record<string, unknown>, buildPriceMap(cat))
 }
 
 // Marcar/desmarcar un vestido como el elegido final.

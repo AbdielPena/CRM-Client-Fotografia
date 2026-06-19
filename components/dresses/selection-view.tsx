@@ -12,6 +12,7 @@ type SelectionDress = {
   image: string | null
   rentalPrice: number | null
   deposit: number | null
+  storeName: string | null
   isFinal: boolean
 }
 export type Selection = {
@@ -150,6 +151,11 @@ export function SelectionView({
                 <p className="text-[11px] text-muted-foreground">
                   {d.rentalPrice == null ? "sin precio" : rd(d.rentalPrice)}
                 </p>
+                {d.storeName && (
+                  <p className="truncate text-[10px] text-muted-foreground/70" title={d.storeName}>
+                    🏬 {d.storeName}
+                  </p>
+                )}
               </div>
             </div>
           )
