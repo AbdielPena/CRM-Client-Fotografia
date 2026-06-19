@@ -11,6 +11,8 @@ interface PublicFormViewProps {
   initialData: Record<string, unknown>
   template: { name: string; description: string | null }
   studio: { id: string; name: string; primary_color: string | null } | null
+  bannerUrl?: string | null
+  logoUrl?: string | null
   errorFromQuery?: string
   /** Si viene del wizard de booking, al enviar regresa acá (siguiente paso). */
   returnTo?: string
@@ -22,6 +24,8 @@ export function PublicFormView({
   initialData,
   template,
   studio,
+  bannerUrl,
+  logoUrl,
   errorFromQuery,
   returnTo,
 }: PublicFormViewProps) {
@@ -121,14 +125,41 @@ export function PublicFormView({
 
   return (
     <div className="min-h-screen">
-      <header className="lx-glass sticky top-0 z-20">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3.5">
-          <span className="font-serif text-base font-semibold text-foreground">
-            {studio?.name ?? 'Studio'}
-          </span>
-          <span className="lx-overline">Formulario</span>
+      {/* Banner hero — foto del estudio o degradado de marca con logo */}
+      <div className="relative h-40 w-full overflow-hidden sm:h-52">
+        {bannerUrl ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={bannerUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-black/30" />
+          </>
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink-soft to-gold-800">
+            <div className="bg-luxe-radial pointer-events-none absolute inset-0 opacity-50" />
+          </div>
+        )}
+        <div className="relative flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
+          {logoUrl ? (
+            <span className="inline-flex items-center justify-center rounded-2xl bg-black/35 px-5 py-3 backdrop-blur-sm">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={logoUrl}
+                alt={studio?.name ?? 'Studio'}
+                className="h-8 w-auto max-w-[200px] object-contain"
+              />
+            </span>
+          ) : (
+            <span className="font-serif text-2xl font-semibold text-white drop-shadow">
+              {studio?.name ?? 'Studio'}
+            </span>
+          )}
+          <span className="lx-overline text-white/75">Formulario</span>
         </div>
-      </header>
+      </div>
 
       <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-6 px-4 py-8">
         <div className="lx-card animate-fade-in-up p-7">

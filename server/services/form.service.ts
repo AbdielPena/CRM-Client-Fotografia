@@ -669,6 +669,8 @@ export async function getPublicFormResponse(accessToken: string): Promise<{
   }
   template: { name: string; description: string | null }
   studio: { id: string; name: string; primary_color: string | null } | null
+  bannerUrl: string | null
+  logoUrl: string | null
 } | null> {
   const supabase = createSupabasePublicClient(accessToken)
 
@@ -706,6 +708,8 @@ export async function getPublicFormResponse(accessToken: string): Promise<{
   // Resolvemos studio con service (público no lo ve) — best-effort
   let studio: { id: string; name: string; primary_color: string | null } | null =
     null
+  let bannerUrl: string | null = null
+  let logoUrl: string | null = null
   try {
     const svc = createSupabaseServiceClient()
     const { data: s } = await svc
@@ -714,6 +718,16 @@ export async function getPublicFormResponse(accessToken: string): Promise<{
       .eq('id', response.studio_id as string)
       .maybeSingle()
     if (s) studio = s as unknown as typeof studio
+    // studio_branding (banner/logo) no está en los tipos generados → cliente untyped
+    const { untypedService } = await import('@/server/supabase/untyped')
+    const { data: br } = await untypedService()
+      .from('studio_branding')
+      .select('client_banner_url, logo_url')
+      .eq('studio_id', response.studio_id as string)
+      .maybeSingle()
+    bannerUrl =
+      (br as { client_banner_url?: string | null } | null)?.client_banner_url ?? null
+    logoUrl = (br as { logo_url?: string | null } | null)?.logo_url ?? null
   } catch {
     // no-op
   }
@@ -733,6 +747,8 @@ export async function getPublicFormResponse(accessToken: string): Promise<{
         (template as { description?: string | null } | null)?.description ?? null,
     },
     studio,
+    bannerUrl,
+    logoUrl,
   }
 }
 

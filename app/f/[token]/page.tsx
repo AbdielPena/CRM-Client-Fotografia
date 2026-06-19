@@ -17,7 +17,7 @@ export default async function PublicFormPage({
   const result = await getPublicFormResponse(params.token)
   if (!result) notFound()
 
-  const { response, template, studio } = result
+  const { response, template, studio, bannerUrl, logoUrl } = result
   const schema = (response.schema_snapshot as unknown as FormSchema) ?? {
     version: 1,
     fields: [],
@@ -65,6 +65,8 @@ export default async function PublicFormPage({
       initialData={response.data}
       template={template}
       studio={studio}
+      bannerUrl={bannerUrl}
+      logoUrl={logoUrl}
       errorFromQuery={searchParams?.error}
       returnTo={
         searchParams?.return?.startsWith("/b/") ? searchParams.return : undefined
