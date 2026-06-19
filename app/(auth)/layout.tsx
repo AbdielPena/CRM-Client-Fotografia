@@ -52,15 +52,15 @@ export default function AuthLayout({
         <aside className="relative hidden flex-col justify-center border-r border-border bg-muted/20 px-12 py-16 lg:flex xl:px-16">
           <Link
             href="/"
-            className="mb-12 inline-flex items-center gap-3"
-            aria-label="PixelOS"
+            className="mb-12 inline-flex items-center"
+            aria-label="Abby Pixel"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-foreground text-[15px] font-semibold text-background">
-              P
-            </span>
-            <span className="text-lg font-semibold tracking-tight text-foreground">
-              PixelOS
-            </span>
+            <span
+              className="brand-logo text-foreground"
+              role="img"
+              aria-label="Abby Pixel"
+              style={{ height: 30, width: 140 }}
+            />
           </Link>
 
           <div className="flex max-w-md flex-col gap-7">
@@ -89,15 +89,15 @@ export default function AuthLayout({
           <header className="flex items-center justify-center py-8 lg:hidden">
             <Link
               href="/"
-              className="inline-flex items-center gap-2.5"
-              aria-label="PixelOS"
+              className="inline-flex items-center"
+              aria-label="Abby Pixel"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-foreground text-[15px] font-semibold text-background">
-                P
-              </span>
-              <span className="text-lg font-semibold tracking-tight text-foreground">
-                PixelOS
-              </span>
+              <span
+                className="brand-logo text-foreground"
+                role="img"
+                aria-label="Abby Pixel"
+                style={{ height: 26, width: 122 }}
+              />
             </Link>
           </header>
 
@@ -107,7 +107,7 @@ export default function AuthLayout({
 
           <footer className="px-6 py-5">
             <p className="text-center text-[11.5px] text-muted-foreground/70">
-              © {new Date().getFullYear()} PixelOS · Hecho en RD para fotógrafos
+              © {new Date().getFullYear()} Abby Pixel · Hecho en RD para fotógrafos
               profesionales
             </p>
           </footer>
