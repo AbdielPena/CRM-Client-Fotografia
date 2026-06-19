@@ -59,11 +59,17 @@ function LoginPageInner() {
     >
       {/* Header */}
       <header className="space-y-1.5">
+        <span
+          className="brand-logo text-foreground mb-4 block"
+          role="img"
+          aria-label="Abby Pixel"
+          style={{ height: 28, width: 132 }}
+        />
         <h1 className="text-[22px] font-semibold tracking-tight text-foreground">
           Iniciar sesión
         </h1>
         <p className="text-[13px] text-muted-foreground">
-          Bienvenido de vuelta a PixelOS.
+          Bienvenido de vuelta a Abby Pixel.
         </p>
       </header>
 
