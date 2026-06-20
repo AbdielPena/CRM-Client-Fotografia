@@ -857,7 +857,9 @@ export function PublicGalleryView({
           allowDownload={gallery.allow_download}
           isMarked={isMarked(assets[open].id)}
           locked={
-            !!gallery.selection_submitted ||
+            // Enviar la selección NO bloquea: el cliente puede seguir agregando
+            // o completando fotos desde el lightbox y reenviar (igual que la grilla).
+            // Solo bloquea un lock explícito del estudio o de la lista.
             !!gallery.selection_locked ||
             (activeColl?.is_locked ?? false)
           }
