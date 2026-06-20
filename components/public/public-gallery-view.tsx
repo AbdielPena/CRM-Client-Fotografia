@@ -188,12 +188,14 @@ export function PublicGalleryView({
   assets,
   studio,
   printState = null,
+  finalDeliveryDriveLink = null,
 }: {
   token: string
   gallery: Gallery
   assets: Asset[]
   studio: Studio
   printState?: GalleryPrintState | null
+  finalDeliveryDriveLink?: string | null
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
   const [open, setOpen] = useState<number | null>(null)
@@ -628,6 +630,25 @@ export function PublicGalleryView({
                 Si eliges más, contarán como extras.
               </p>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Entrega final lista: el cliente puede seguir seleccionando Y descargar */}
+      {finalDeliveryDriveLink && (
+        <div className="border-b border-gold-200 bg-gold-50 dark:border-gold-500/30 dark:bg-gold-500/10">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+            <p className="text-[12.5px] text-gold-900 dark:text-gold-100">
+              🎉 Tu entrega final está lista. Podés seguir agregando o quitando fotos con el ♥, y descargar tus fotos cuando quieras.
+            </p>
+            <a
+              href={finalDeliveryDriveLink}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gold-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-gold-700"
+            >
+              Descargar mis fotos
+            </a>
           </div>
         </div>
       )}

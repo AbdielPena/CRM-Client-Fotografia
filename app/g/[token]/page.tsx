@@ -11,7 +11,6 @@ import { getPublicBrandingByStudioId } from "@/server/services/studio-branding.s
 import { getGalleryPrintState } from "@/server/services/print-selection.service"
 import { GalleryPasswordGate } from "@/components/public/gallery-password-gate"
 import { PublicGalleryView } from "@/components/public/public-gallery-view"
-import { FinalDeliveryView } from "@/components/public/final-delivery-view"
 import {
   FinalDeliveryBook,
   BookLauncher,
@@ -149,23 +148,21 @@ export default async function PublicGalleryPage({ params }: PageProps) {
       )
     }
 
+    // El cliente debe poder SEGUIR SELECCIONANDO aunque la entrega ya esté lista:
+    // mostramos la galería de selección (con ♥, sobre TODAS las fotos) + un banner
+    // para descargar la entrega. Antes se mostraba FinalDeliveryView (sin corazones).
+    const deliveryPrintState = await getGalleryPrintState(view.gallery.id)
     return (
       <>
-        <FinalDeliveryView
+        <PublicGalleryView
           token={params.token}
           gallery={{
-            id: view.gallery.id,
-            name: view.gallery.name,
-            description: view.gallery.description,
-            subtitle: view.gallery.subtitle,
-            welcomeText: view.gallery.welcomeText,
-            eventDate: view.gallery.eventDate,
-            accentColor: view.gallery.accentColor,
-            coverThumbUrl: view.gallery.coverThumbUrl,
-            coverWebUrl: view.gallery.coverWebUrl,
-            allow_download: view.gallery.allow_download,
+            ...view.gallery,
+            download_pin_required: studioInfo?.download_pin_required ?? false,
+            selection_submitted: studioInfo?.selection_submitted ?? false,
+            selection_locked: studioInfo?.selection_locked ?? false,
           }}
-          assets={deliveryAssets}
+          assets={view.assets}
           studio={{
             name: studioInfo?.studios?.name ?? "PixelOS",
             logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
@@ -173,7 +170,8 @@ export default async function PublicGalleryPage({ params }: PageProps) {
             hideBranding: branding?.hide_studioflow_branding ?? false,
             footerHtml: branding?.custom_footer_html ?? null,
           }}
-          driveLink={driveLink}
+          printState={deliveryPrintState}
+          finalDeliveryDriveLink={driveLink}
         />
         {displayMode === "both" && (
           <BookLauncher
