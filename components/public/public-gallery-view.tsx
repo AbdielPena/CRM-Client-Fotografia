@@ -647,7 +647,7 @@ export function PublicGalleryView({
               rel="noopener"
               className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gold-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-gold-700"
             >
-              Descargar mis fotos
+              ⬇ Descargar mis fotos (Google Drive)
             </a>
           </div>
         </div>

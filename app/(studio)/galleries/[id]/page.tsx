@@ -99,6 +99,20 @@ export default async function GalleryDetailPage({
     view_count: number
   } | undefined
 
+  // Link de la carpeta de Google Drive (respaldo de entrega) para compartir.
+  // gallery_drive_backups no está en los tipos generados → cast a any.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: driveRow } = await (supabase as any)
+    .from("gallery_drive_backups")
+    .select("web_view_link")
+    .eq("gallery_id", galleryId)
+    .not("web_view_link", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const driveLink =
+    (driveRow as { web_view_link: string | null } | null)?.web_view_link ?? null
+
   // Hidratar assets con thumbUrl + webUrl
   const assetsWithUrls = assets.map((a) => ({
     id: a.id,
@@ -306,6 +320,7 @@ export default async function GalleryDetailPage({
             ? { name: clientName, email: clientEmail, phone: clientPhone }
             : null
         }
+        driveLink={driveLink}
       />
     </>
   )

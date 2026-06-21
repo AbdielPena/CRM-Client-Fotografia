@@ -20,6 +20,8 @@ import {
   Palette,
   Activity,
   Sparkles,
+  MessageCircle,
+  ExternalLink,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -156,6 +158,7 @@ interface Props {
   activity: ActivityData
   coverImageUrl: string | null
   client: { name: string | null; email: string | null; phone: string | null } | null
+  driveLink?: string | null
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -172,6 +175,7 @@ export function GalleryDetailTabs({
   activity,
   coverImageUrl,
   client,
+  driveLink = null,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -282,7 +286,12 @@ export function GalleryDetailTabs({
         </TabsContent>
 
         <TabsContent value="share" className="mt-5">
-          <ShareTab gallery={gallery} publicToken={publicToken} />
+          <ShareTab
+            gallery={gallery}
+            publicToken={publicToken}
+            driveLink={driveLink}
+            client={client}
+          />
         </TabsContent>
 
         <TabsContent value="activity" className="mt-5">
@@ -1627,18 +1636,47 @@ function WatermarkTab({ gallery }: { gallery: Gallery }) {
 function ShareTab({
   gallery,
   publicToken,
+  driveLink = null,
+  client = null,
 }: {
   gallery: Gallery
   publicToken: string | null
+  driveLink?: string | null
+  client?: { name: string | null; email: string | null; phone: string | null } | null
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [token, setToken] = React.useState(publicToken)
   const [copied, setCopied] = React.useState(false)
+  const [driveCopied, setDriveCopied] = React.useState(false)
 
   const publicUrl = token
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/g/${token}`
     : null
+
+  // WhatsApp: número del cliente normalizado (RD/US sin código → +1) y mensajes.
+  const waPhone = (client?.phone ?? "").replace(/\D/g, "").replace(/^(\d{10})$/, "1$1")
+  const firstName = (client?.name ?? "").trim().split(/\s+/)[0] || ""
+  const greet = firstName ? `¡Hola ${firstName}! ` : "¡Hola! "
+  const waLink = (msg: string) =>
+    `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`
+  const msgSeleccion = publicUrl
+    ? `${greet}💛 Aquí está tu galería para que elijas tus fotos favoritas con el corazón ♥: ${publicUrl}`
+    : ""
+  const msgEntrega = publicUrl
+    ? `${greet}🎉 ¡Tu entrega final ya está lista! Puedes verla, seguir eligiendo fotos y descargarlas aquí: ${publicUrl}`
+    : ""
+  const msgDrive = driveLink
+    ? `${greet}📁 Aquí puedes descargar tus fotos desde Google Drive: ${driveLink}`
+    : ""
+
+  const handleCopyDrive = () => {
+    if (!driveLink) return
+    navigator.clipboard.writeText(driveLink)
+    setDriveCopied(true)
+    toast.success("Link de Drive copiado")
+    setTimeout(() => setDriveCopied(false), 2000)
+  }
 
   const handleGenerate = () => {
     const fd = new FormData()
@@ -1720,9 +1758,28 @@ function ShareTab({
                 {copied ? "Copiado" : "Copiar"}
               </button>
             </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <a
+                href={waLink(msgSeleccion)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> Compartir selección
+              </a>
+              <a
+                href={waLink(msgEntrega)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> Compartir entrega final
+              </a>
+            </div>
             <p className="mt-2 text-[11.5px] text-muted-foreground">
-              Compártelo por email o WhatsApp. El cliente podrá favoritar fotos
-              y crear listas de selección.
+              Es el mismo link: el cliente puede favoritar fotos con ♥, seguir
+              eligiendo y —si la entrega está lista— descargarlas.
+              {!waPhone && " (Agrega el teléfono del cliente para enviar directo por WhatsApp.)"}
             </p>
           </div>
         ) : (
@@ -1738,6 +1795,62 @@ function ShareTab({
               {pending ? "Generando…" : "Generar link"}
             </button>
           </div>
+        )}
+      </div>
+
+      {/* Google Drive — carpeta de descarga de la entrega final */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+          <ExternalLink className="h-4 w-4 text-muted-foreground" /> Google Drive
+        </h3>
+        {driveLink ? (
+          <div className="mt-3">
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={driveLink}
+                className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
+              />
+              <button
+                onClick={handleCopyDrive}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
+              >
+                {driveCopied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                {driveCopied ? "Copiado" : "Copiar"}
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a
+                href={driveLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"
+              >
+                <ExternalLink className="h-3.5 w-3.5" /> Abrir carpeta
+              </a>
+              <a
+                href={waLink(msgDrive)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> Compartir Drive
+              </a>
+            </div>
+            <p className="mt-2 text-[11.5px] text-muted-foreground">
+              Carpeta con las fotos en alta. El cliente también ve este botón de
+              descarga dentro de la galería de entrega.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-[12.5px] text-muted-foreground">
+            Aún no hay carpeta de Drive. Se genera automáticamente al respaldar la
+            entrega final en Google Drive.
+          </p>
         )}
       </div>
     </div>
