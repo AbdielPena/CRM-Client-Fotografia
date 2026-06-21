@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ExternalLink, Send } from "lucide-react"
+import { ArrowLeft, ArrowRight, ExternalLink, Send, Sparkles } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
@@ -19,6 +19,7 @@ import { getPinsByGallery } from "@/server/services/gallery-download-pin.service
 import { getGallerySelectionQuota } from "@/server/services/selection-quota.service"
 import { getGalleryPrintState } from "@/server/services/print-selection.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
+import { createSupabaseServiceClient } from "@/server/supabase/service"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { GalleryDetailTabs } from "@/components/galleries/gallery-detail-tabs"
@@ -113,6 +114,36 @@ export default async function GalleryDetailPage({
   const driveLink =
     (driveRow as { web_view_link: string | null } | null)?.web_view_link ?? null
 
+  // Relación selección ↔ entrega final (galerías separadas, se navegan entre sí).
+  // source_gallery_id no está en los tipos generados → cast a any. Service client
+  // para no depender de RLS (igual que getGalleryById).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sbRel = createSupabaseServiceClient() as any
+  const { data: deliveryRow } = await sbRel
+    .from("galleries")
+    .select("id, name")
+    .eq("studio_id", session.studioId)
+    .eq("source_gallery_id", galleryId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const deliveryGallery = deliveryRow as { id: string; name: string } | null
+
+  const sourceGalleryId =
+    (gallery as unknown as { source_gallery_id?: string | null }).source_gallery_id ?? null
+  let sourceGallery: { id: string; name: string } | null = null
+  if (sourceGalleryId) {
+    const { data: srcRow } = await sbRel
+      .from("galleries")
+      .select("id, name")
+      .eq("studio_id", session.studioId)
+      .eq("id", sourceGalleryId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    sourceGallery = srcRow as { id: string; name: string } | null
+  }
+
   // Hidratar assets con thumbUrl + webUrl
   const assetsWithUrls = assets.map((a) => ({
     id: a.id,
@@ -201,6 +232,25 @@ export default async function GalleryDetailPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {sourceGallery && (
+              <Link
+                href={`/galleries/${sourceGallery.id}`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:border-border-strong"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Galería de selección
+              </Link>
+            )}
+            {deliveryGallery && (
+              <Link
+                href={`/galleries/${deliveryGallery.id}`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-brand/30 bg-brand-soft/50 px-3 py-1.5 text-[12.5px] font-semibold text-brand transition-colors hover:bg-brand-soft"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Entrega final
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            )}
             {extrasQuota && (
               <GalleryExtrasInvoiceButton
                 galleryId={galleryId}
@@ -321,6 +371,7 @@ export default async function GalleryDetailPage({
             : null
         }
         driveLink={driveLink}
+        deliveryGalleryId={deliveryGallery?.id ?? null}
       />
     </>
   )

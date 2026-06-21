@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import {
@@ -38,6 +39,7 @@ import {
   createSetAction,
   deleteSetAction,
   enableFinalDeliveryAction,
+  createDeliveryGalleryAction,
 } from "@/server/actions/gallery-set.actions"
 import {
   createCollectionAction,
@@ -159,6 +161,8 @@ interface Props {
   coverImageUrl: string | null
   client: { name: string | null; email: string | null; phone: string | null } | null
   driveLink?: string | null
+  /** Si esta galería de selección ya tiene su entrega final separada, su id. */
+  deliveryGalleryId?: string | null
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -176,6 +180,7 @@ export function GalleryDetailTabs({
   coverImageUrl,
   client,
   driveLink = null,
+  deliveryGalleryId = null,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -235,6 +240,7 @@ export function GalleryDetailTabs({
             sets={sets}
             studioId={studioId}
             client={client}
+            deliveryGalleryId={deliveryGalleryId}
           />
         </TabsContent>
 
@@ -321,12 +327,14 @@ function PhotosTab({
   sets,
   studioId,
   client,
+  deliveryGalleryId = null,
 }: {
   gallery: Gallery
   assets: Asset[]
   sets: SetRow[]
   studioId: string
   client: { name: string | null; email: string | null; phone: string | null } | null
+  deliveryGalleryId?: string | null
 }) {
   // Si la galería tiene sets cuyo nombre matchea Redes/Máxima Calidad, mostrar
   // selector de target. Vale para entrega final O para galerías de selección que
@@ -346,7 +354,15 @@ function PhotosTab({
   const canDeliver = !!uploadTargets && assets.length > 0 && !!client
   return (
     <div className="space-y-5">
-      {!uploadTargets && (
+      {/* Galería de selección → ofrecer/abrir su entrega final SEPARADA. */}
+      {gallery.gallery_type !== "final_delivery" && (
+        <FinalDeliveryLinkBanner
+          galleryId={gallery.id}
+          deliveryGalleryId={deliveryGalleryId}
+        />
+      )}
+      {/* Entrega final sin carpetas de pista (raro) → recrearlas in-place. */}
+      {gallery.gallery_type === "final_delivery" && !uploadTargets && (
         <EnableFinalDeliveryBanner galleryId={gallery.id} />
       )}
       {canDeliver && client && (
@@ -1758,27 +1774,25 @@ function ShareTab({
                 {copied ? "Copiado" : "Copiar"}
               </button>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3">
               <a
-                href={waLink(msgSeleccion)}
+                href={waLink(
+                  gallery.gallery_type === "final_delivery" ? msgEntrega : msgSeleccion,
+                )}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
               >
-                <MessageCircle className="h-3.5 w-3.5" /> Compartir selección
-              </a>
-              <a
-                href={waLink(msgEntrega)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
-              >
-                <MessageCircle className="h-3.5 w-3.5" /> Compartir entrega final
+                <MessageCircle className="h-3.5 w-3.5" />
+                {gallery.gallery_type === "final_delivery"
+                  ? "Compartir entrega final por WhatsApp"
+                  : "Compartir selección por WhatsApp"}
               </a>
             </div>
             <p className="mt-2 text-[11.5px] text-muted-foreground">
-              Es el mismo link: el cliente puede favoritar fotos con ♥, seguir
-              eligiendo y —si la entrega está lista— descargarlas.
+              {gallery.gallery_type === "final_delivery"
+                ? "Link de la entrega final: el cliente ve sus fotos finales y las descarga (web/ZIP + Google Drive)."
+                : "Link de selección: el cliente favoritea con ♥ y elige sus fotos. La entrega final es una galería aparte, con su propio link."}
               {!waPhone && " (Agrega el teléfono del cliente para enviar directo por WhatsApp.)"}
             </p>
           </div>
@@ -1798,7 +1812,8 @@ function ShareTab({
         )}
       </div>
 
-      {/* Google Drive — carpeta de descarga de la entrega final */}
+      {/* Google Drive — solo en la galería de entrega final */}
+      {gallery.gallery_type === "final_delivery" && (
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
           <ExternalLink className="h-4 w-4 text-muted-foreground" /> Google Drive
@@ -1853,11 +1868,12 @@ function ShareTab({
           </p>
         )}
       </div>
+      )}
     </div>
   )
 }
 
-/** Banner que ofrece habilitar entrega final (crea los 2 sets) en cualquier galería. */
+/** Banner de recuperación: recrea las 2 carpetas de pista en una entrega final que las perdió. */
 function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
   const router = useRouter()
   const [pending, start] = useTransition()
@@ -1866,13 +1882,13 @@ function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
       try {
         const r = await enableFinalDeliveryAction(galleryId)
         if (r.created > 0) {
-          toast.success(`Entrega final habilitada — ${r.created} carpeta(s) creada(s)`)
+          toast.success(`${r.created} carpeta(s) creada(s)`)
         } else {
           toast.success("Las carpetas ya existían")
         }
         router.refresh()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Error al habilitar")
+        toast.error(e instanceof Error ? e.message : "Error")
       }
     })
 
@@ -1884,13 +1900,13 @@ function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
         </div>
         <div>
           <p className="text-[13px] font-semibold text-foreground">
-            ¿También querés usar esta galería para la entrega final?
+            Faltan las carpetas de entrega
           </p>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
-            Habilitalo y creamos automáticamente las carpetas{" "}
+            Creá las carpetas{" "}
             <span className="font-medium text-foreground">💎 Máxima Calidad</span> y{" "}
-            <span className="font-medium text-foreground">📱 Redes Sociales</span> dentro de la misma
-            galería. Tu selección original queda intacta.
+            <span className="font-medium text-foreground">📱 Redes Sociales</span> para subir y
+            clasificar las fotos de esta entrega.
           </p>
         </div>
       </div>
@@ -1901,8 +1917,79 @@ function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
         className="inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
       >
         {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-        Habilitar entrega final
+        Crear carpetas
       </button>
+    </div>
+  )
+}
+
+/**
+ * Banner en una galería de SELECCIÓN: crea (o abre) su galería de ENTREGA FINAL
+ * separada, con su propio link de descarga. La selección queda intacta.
+ */
+function FinalDeliveryLinkBanner({
+  galleryId,
+  deliveryGalleryId = null,
+}: {
+  galleryId: string
+  deliveryGalleryId?: string | null
+}) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+  const create = () =>
+    start(async () => {
+      try {
+        const r = await createDeliveryGalleryAction(galleryId)
+        toast.success(
+          r.created ? "Galería de entrega final creada" : "Abriendo la entrega final",
+        )
+        router.push(`/galleries/${r.galleryId}`)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error al crear la entrega")
+      }
+    })
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-brand/20 bg-brand-soft/40 p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-brand">
+          <Sparkles className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="text-[13px] font-semibold text-foreground">
+            {deliveryGalleryId
+              ? "Esta selección ya tiene su entrega final"
+              : "¿Lista la entrega final?"}
+          </p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            {deliveryGalleryId
+              ? "La entrega final es una galería aparte, con su propio link de descarga. Subí ahí las fotos editadas."
+              : "Creamos una galería de entrega final SEPARADA (con su propio link y las carpetas 💎 Máxima Calidad y 📱 Redes Sociales). Tu galería de selección queda intacta."}
+          </p>
+        </div>
+      </div>
+      {deliveryGalleryId ? (
+        <Link
+          href={`/galleries/${deliveryGalleryId}`}
+          className="inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-foreground hover:bg-brand/90"
+        >
+          <Sparkles className="h-3.5 w-3.5" /> Ver entrega final
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={create}
+          disabled={pending}
+          className="inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+        >
+          {pending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
+          Crear entrega final
+        </button>
+      )}
     </div>
   )
 }
