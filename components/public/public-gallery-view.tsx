@@ -182,6 +182,24 @@ function GalleryHero({
   )
 }
 
+/** Polling del export ZIP (endpoint público por token) hasta que está listo. */
+async function waitForZip(token: string, exportId: string): Promise<string> {
+  const base = `/api/galleries/public/${token}/zip/${exportId}`
+  for (let i = 0; i < 90; i++) {
+    await new Promise((r) => setTimeout(r, 2000))
+    const res = await fetch(base)
+    if (!res.ok) continue
+    const data = (await res.json()) as { status: string; error?: string | null }
+    if (data.status === "ready" || data.status === "completed") {
+      return `${base}?download=1`
+    }
+    if (data.status === "failed") {
+      throw new Error(data.error ?? "La descarga falló al generarse")
+    }
+  }
+  throw new Error("La descarga está tardando demasiado — intentá de nuevo en unos minutos")
+}
+
 export function PublicGalleryView({
   token,
   gallery,
@@ -208,6 +226,7 @@ export function PublicGalleryView({
   const [newCollName, setNewCollName] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [pinPrompt, setPinPrompt] = useState<{ assetId: string } | null>(null)
+  const [zipBusy, setZipBusy] = useState<string | null>(null) // key del botón ZIP ocupado
   const [quota, setQuota] = useState<{
     included: number | null
     selected: number
@@ -503,6 +522,52 @@ export function PublicGalleryView({
     window.location.href = downloadUrl(assetId)
   }
 
+  // ─── Descarga web por ZIP (entrega final) ────────────────────────────────
+  // Las fotos finales se separan por pista de calidad. Las fotos SIN pista
+  // (p. ej. de una galería de selección reciclada) no entran en estas descargas.
+  const byTrack = useMemo(() => {
+    const high_quality = assets.filter((a) => a.deliveryTrack === "high_quality")
+    const social = assets.filter((a) => a.deliveryTrack === "social")
+    return { high_quality, social }
+  }, [assets])
+  const hasTracks = byTrack.high_quality.length > 0 || byTrack.social.length > 0
+  const isFinalDelivery = gallery.galleryType === "final_delivery" || hasTracks
+
+  const requestZip = useCallback(
+    async (key: string, assetIds: string[], resolution: "web" | "original") => {
+      if (assetIds.length === 0) {
+        toast.error("No hay fotos para descargar")
+        return
+      }
+      if (assetIds.length > 2000) {
+        toast.error("Son demasiadas fotos para un solo ZIP (máx. 2000). Usá el link de Drive.")
+        return
+      }
+      setZipBusy(key)
+      try {
+        const res = await fetch(`/api/galleries/public/${token}/zip`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scope: "selection", assetIds, resolution }),
+        })
+        if (!res.ok) {
+          const err = (await res.json().catch(() => null)) as { error?: string } | null
+          throw new Error(err?.error ?? "No se pudo iniciar la descarga")
+        }
+        const { exportId } = (await res.json()) as { exportId: string }
+        toast.info("Preparando tu ZIP… puede tardar un momento")
+        const url = await waitForZip(token, exportId)
+        window.location.href = url
+        toast.success("¡Descarga iniciada!")
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error al descargar")
+      } finally {
+        setZipBusy(null)
+      }
+    },
+    [token],
+  )
+
   // Keyboard navigation in lightbox
   useEffect(() => {
     if (open === null) return
@@ -634,21 +699,128 @@ export function PublicGalleryView({
         </div>
       )}
 
-      {/* Entrega final lista: el cliente puede seguir seleccionando Y descargar */}
-      {finalDeliveryDriveLink && (
+      {/* Entrega final: seguir eligiendo con ♥ + descargar desde la web (ZIP) y/o Drive */}
+      {((isFinalDelivery && gallery.allow_download) || !!finalDeliveryDriveLink) && (
         <div className="border-b border-gold-200 bg-gold-50 dark:border-gold-500/30 dark:bg-gold-500/10">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-            <p className="text-[12.5px] text-gold-900 dark:text-gold-100">
-              🎉 Tu entrega final está lista. Podés seguir agregando o quitando fotos con el ♥, y descargar tus fotos cuando quieras.
-            </p>
-            <a
-              href={finalDeliveryDriveLink}
-              target="_blank"
-              rel="noopener"
-              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gold-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-gold-700"
-            >
-              ⬇ Descargar mis fotos (Google Drive)
-            </a>
+          <div className="mx-auto max-w-7xl px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="mr-1 text-[12.5px] font-medium text-gold-900 dark:text-gold-100">
+                🎉 Tu entrega final está lista. Podés seguir eligiendo con el ♥ y descargar tus fotos:
+              </p>
+
+              {/* Descargas web por ZIP */}
+              {isFinalDelivery && gallery.allow_download && (
+                <>
+                  {/* Tu selección (corazones) */}
+                  <button
+                    type="button"
+                    disabled={selectionCount === 0 || zipBusy !== null}
+                    onClick={() =>
+                      requestZip(
+                        "seleccion",
+                        activeColl ? activeColl.asset_ids : Array.from(favs),
+                        "original",
+                      )
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-full bg-gold-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-gold-700 disabled:opacity-50"
+                  >
+                    {zipBusy === "seleccion" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Heart className="h-3.5 w-3.5" fill="currentColor" />
+                    )}
+                    Descargar mi selección{selectionCount > 0 ? ` (${selectionCount})` : ""}
+                  </button>
+
+                  {/* Entrega final completa: por pista de calidad o todo */}
+                  {hasTracks ? (
+                    <>
+                      {byTrack.high_quality.length > 0 && (
+                        <button
+                          type="button"
+                          disabled={zipBusy !== null}
+                          onClick={() =>
+                            requestZip(
+                              "hq",
+                              byTrack.high_quality.map((a) => a.id),
+                              "original",
+                            )
+                          }
+                          className="inline-flex items-center gap-1.5 rounded-full border border-gold-300 bg-white px-4 py-1.5 text-xs font-semibold text-gold-800 hover:border-gold-400 disabled:opacity-50 dark:bg-transparent dark:text-gold-200"
+                        >
+                          {zipBusy === "hq" ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          Máxima calidad ({byTrack.high_quality.length})
+                        </button>
+                      )}
+                      {byTrack.social.length > 0 && (
+                        <button
+                          type="button"
+                          disabled={zipBusy !== null}
+                          onClick={() =>
+                            requestZip(
+                              "social",
+                              byTrack.social.map((a) => a.id),
+                              "web",
+                            )
+                          }
+                          className="inline-flex items-center gap-1.5 rounded-full border border-gold-300 bg-white px-4 py-1.5 text-xs font-semibold text-gold-800 hover:border-gold-400 disabled:opacity-50 dark:bg-transparent dark:text-gold-200"
+                        >
+                          {zipBusy === "social" ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          Redes sociales ({byTrack.social.length})
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={zipBusy !== null}
+                      onClick={() =>
+                        requestZip(
+                          "todo",
+                          assets.map((a) => a.id),
+                          "original",
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-full border border-gold-300 bg-white px-4 py-1.5 text-xs font-semibold text-gold-800 hover:border-gold-400 disabled:opacity-50 dark:bg-transparent dark:text-gold-200"
+                    >
+                      {zipBusy === "todo" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      Descargar todas ({assets.length})
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* Google Drive */}
+              {finalDeliveryDriveLink && (
+                <a
+                  href={finalDeliveryDriveLink}
+                  target="_blank"
+                  rel="noopener"
+                  className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-gold-300 bg-white px-4 py-1.5 text-xs font-semibold text-gold-800 hover:border-gold-400 dark:bg-transparent dark:text-gold-200"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Google Drive
+                </a>
+              )}
+            </div>
+
+            {isFinalDelivery && gallery.allow_download && (
+              <p className="mt-1.5 text-[11px] text-gold-800/80 dark:text-gold-200/70">
+                La descarga se prepara en un ZIP y puede tardar un momento según la cantidad de fotos.
+              </p>
+            )}
           </div>
         </div>
       )}
