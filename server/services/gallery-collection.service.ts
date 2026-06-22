@@ -448,14 +448,16 @@ export async function createCollectionAsClient(
 ): Promise<GalleryCollectionRow> {
   const supabase = svc()
 
-  const { data: gallery } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: gallery } = await (supabase as any)
     .from("galleries")
-    .select("id, studio_id, selection_locked")
+    .select("id, studio_id, selection_locked, gallery_type")
     .eq("id", galleryId)
     .is("deleted_at", null)
     .maybeSingle()
   if (!gallery) throw new Error("Galería no encontrada")
-  const g = gallery as { studio_id: string; selection_locked: boolean }
+  const g = gallery as { studio_id: string; selection_locked: boolean; gallery_type: string | null }
+  if (g.gallery_type === "final_delivery") throw new Error("La entrega final no permite selección")
   if (g.selection_locked) throw new Error("La galería está bloqueada")
 
   const { data: row, error } = await supabase

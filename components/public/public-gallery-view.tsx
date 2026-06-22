@@ -646,15 +646,22 @@ export function PublicGalleryView({
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-50 px-3 py-1 text-[12.5px] font-medium text-gold-700 dark:bg-gold-500/15 dark:text-gold-300">
-            <Heart className="h-3.5 w-3.5" fill="currentColor" />
-            {selectionCount}
-          </span>
+          {isFinalDelivery ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[12.5px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+              <Download className="h-3.5 w-3.5" />
+              Entrega final
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-50 px-3 py-1 text-[12.5px] font-medium text-gold-700 dark:bg-gold-500/15 dark:text-gold-300">
+              <Heart className="h-3.5 w-3.5" fill="currentColor" />
+              {selectionCount}
+            </span>
+          )}
         </div>
       </header>
 
-      {/* Banner de cuota — solo si el paquete tiene límite definido */}
-      {quota && quota.included !== null && (
+      {/* Banner de cuota — solo en galerías de SELECCIÓN */}
+      {!isFinalDelivery && quota && quota.included !== null && (
         <div
           className={`border-b ${
             quota.extras > 0
@@ -707,33 +714,12 @@ export function PublicGalleryView({
           <div className="mx-auto max-w-7xl px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <p className="mr-1 text-[12.5px] font-medium text-gold-900 dark:text-gold-100">
-                🎉 Tu entrega final está lista. Podés seguir eligiendo con el ♥ y descargar tus fotos:
+                🎉 Tus fotografías finales ya están listas. Podés verlas y descargarlas aquí:
               </p>
 
               {/* Descargas web por ZIP */}
               {isFinalDelivery && gallery.allow_download && (
                 <>
-                  {/* Tu selección (corazones) */}
-                  <button
-                    type="button"
-                    disabled={selectionCount === 0 || zipBusy !== null}
-                    onClick={() =>
-                      requestZip(
-                        "seleccion",
-                        activeColl ? activeColl.asset_ids : Array.from(favs),
-                        "original",
-                      )
-                    }
-                    className="inline-flex items-center gap-1.5 rounded-full bg-gold-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-gold-700 disabled:opacity-50"
-                  >
-                    {zipBusy === "seleccion" ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Heart className="h-3.5 w-3.5" fill="currentColor" />
-                    )}
-                    Descargar mi selección{selectionCount > 0 ? ` (${selectionCount})` : ""}
-                  </button>
-
                   {/* Entrega final completa: por pista de calidad o todo */}
                   {hasTracks ? (
                     <>
@@ -827,8 +813,8 @@ export function PublicGalleryView({
         </div>
       )}
 
-      {/* Banner informativo — sin bloquear: el cliente puede modificar y reenviar */}
-      {gallery.selection_submitted && (
+      {/* Banner informativo — solo en galerías de selección */}
+      {!isFinalDelivery && gallery.selection_submitted && (
         <div className="border-b border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10">
           <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
             <Send className="h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -839,8 +825,8 @@ export function PublicGalleryView({
         </div>
       )}
 
-      {/* Panel de listas — siempre visible y editable */}
-      {true && (
+      {/* Panel de listas — solo en galerías de selección */}
+      {!isFinalDelivery && (
         <div className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3">
             <p className="mr-2 text-[12px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -966,7 +952,7 @@ export function PublicGalleryView({
                   }
                   className={cn(
                     "group relative aspect-square overflow-hidden rounded-md bg-zinc-200 transition-all dark:bg-zinc-800",
-                    marked && "ring-2 ring-gold-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
+                    !isFinalDelivery && marked && "ring-2 ring-gold-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
                   )}
                 >
                   {a.thumbUrl ? (
@@ -980,24 +966,26 @@ export function PublicGalleryView({
                     />
                   ) : null}
 
-                  {/* Único botón = corazón */}
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      void toggleHeart(a.id)
-                    }}
-                    className={cn(
-                      "absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full backdrop-blur transition-all",
-                      marked
-                        ? "bg-gold-500 text-white opacity-100 shadow-md hover:bg-gold-600"
-                        : "bg-white/85 text-zinc-700 opacity-0 hover:bg-white group-hover:opacity-100",
-                    )}
-                    aria-label={marked ? "Quitar de selección" : "Agregar a selección"}
-                  >
-                    <Heart className="h-4 w-4" fill={marked ? "currentColor" : "none"} />
-                  </span>
+                  {/* Corazón de selección — solo en galerías de selección */}
+                  {!isFinalDelivery && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void toggleHeart(a.id)
+                      }}
+                      className={cn(
+                        "absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full backdrop-blur transition-all",
+                        marked
+                          ? "bg-gold-500 text-white opacity-100 shadow-md hover:bg-gold-600"
+                          : "bg-white/85 text-zinc-700 opacity-0 hover:bg-white group-hover:opacity-100",
+                      )}
+                      aria-label={marked ? "Quitar de selección" : "Agregar a selección"}
+                    >
+                      <Heart className="h-4 w-4" fill={marked ? "currentColor" : "none"} />
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -1005,8 +993,8 @@ export function PublicGalleryView({
         )}
       </main>
 
-      {/* Barra fija inferior: estado + opción de notificar al fotógrafo */}
-      {canSubmit && (
+      {/* Barra fija inferior: estado + opción de notificar al fotógrafo — solo selección */}
+      {!isFinalDelivery && canSubmit && (
         <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-3">
@@ -1049,17 +1037,14 @@ export function PublicGalleryView({
           asset={assets[open]}
           index={open}
           total={assets.length}
-          allowDownload={gallery.allow_download}
-          isMarked={isMarked(assets[open].id)}
-          locked={
-            // Enviar la selección NO bloquea: el cliente puede seguir agregando
-            // o completando fotos desde el lightbox y reenviar (igual que la grilla).
-            // Solo bloquea un lock explícito del estudio o de la lista.
+          allowDownload={isFinalDelivery ? true : gallery.allow_download}
+          isMarked={isFinalDelivery ? false : isMarked(assets[open].id)}
+          locked={isFinalDelivery ? true : (
             !!gallery.selection_locked ||
             (activeColl?.is_locked ?? false)
-          }
-          contextLabel={activeColl ? activeColl.name : "Favoritas"}
-          onMark={() => toggleHeart(assets[open].id)}
+          )}
+          contextLabel={isFinalDelivery ? "Entrega final" : (activeColl ? activeColl.name : "Favoritas")}
+          onMark={isFinalDelivery ? undefined : () => toggleHeart(assets[open].id)}
           onClose={() => setOpen(null)}
           onPrev={() => setOpen((i) => (i === null ? null : Math.max(0, i - 1)))}
           onNext={() =>
@@ -1187,7 +1172,7 @@ function Lightbox({
   isMarked: boolean
   locked: boolean
   contextLabel: string
-  onMark: () => void
+  onMark?: () => void
   onClose: () => void
   onPrev: () => void
   onNext: () => void
@@ -1203,7 +1188,7 @@ function Lightbox({
           {index + 1} / {total}
         </span>
         <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          {!locked && (
+          {!locked && onMark && (
             <button
               onClick={onMark}
               className={cn(

@@ -148,9 +148,8 @@ export default async function PublicGalleryPage({ params }: PageProps) {
       )
     }
 
-    // El cliente debe poder SEGUIR SELECCIONANDO aunque la entrega ya esté lista:
-    // mostramos la galería de selección (con ♥, sobre TODAS las fotos) + un banner
-    // para descargar la entrega. Antes se mostraba FinalDeliveryView (sin corazones).
+    // Entrega final: galería de solo vista + descarga (sin selección/corazones).
+    // PublicGalleryView detecta isFinalDelivery y oculta la UI de selección.
     const deliveryPrintState = await getGalleryPrintState(view.gallery.id)
     return (
       <>

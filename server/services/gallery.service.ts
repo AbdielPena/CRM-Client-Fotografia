@@ -1620,14 +1620,17 @@ export async function submitClientSelection(
     throw new Error("No hay fotos seleccionadas")
   }
 
-  // Cargar contexto de la galería (studio + nombre)
+  // Cargar contexto de la galería (studio + nombre + tipo)
   const { data: g } = await supabase
     .from("galleries")
-    .select("id, studio_id, name")
+    .select("id, studio_id, name, gallery_type")
     .eq("id", galleryId)
     .maybeSingle()
-  const gallery = g as { id: string; studio_id: string; name: string } | null
+  const gallery = g as { id: string; studio_id: string; name: string; gallery_type: string | null } | null
   if (!gallery) throw new Error("Galería no encontrada")
+  if (gallery.gallery_type === "final_delivery") {
+    throw new Error("La entrega final no permite selección")
+  }
 
   // Marcar la galería como con selección enviada (NO bloquear — cliente puede modificar)
   await supabase
@@ -1722,6 +1725,17 @@ export async function toggleFavorite(
   clientName: string | null,
 ): Promise<{ favorited: boolean }> {
   const supabase = svc()
+
+  // Bloquear favoritos en galerías de entrega final
+  const { data: gCheck } = await supabase
+    .from("galleries")
+    .select("gallery_type")
+    .eq("id", galleryId)
+    .maybeSingle()
+  if ((gCheck as { gallery_type: string | null } | null)?.gallery_type === "final_delivery") {
+    throw new Error("La entrega final no permite selección")
+  }
+
   const email = (clientEmail ?? "").trim().toLowerCase() || "anon@guest"
   const { data: existing } = await supabase
     .from("gallery_favorites")
