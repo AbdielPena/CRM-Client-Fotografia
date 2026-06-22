@@ -238,15 +238,17 @@ export function PublicGalleryView({
     packageName: string | null
   } | null>(null)
 
-  // Restore email from localStorage
+  // Restore email from localStorage (or default to anon when email not required)
   useEffect(() => {
     if (typeof window === "undefined") return
     const saved = window.localStorage.getItem(`gallery_email_${gallery.id}`)
     if (saved) {
       setEmail(saved)
       setEmailPrompt(false)
+    } else if (!gallery.require_email) {
+      setEmail("anon@guest")
     }
-  }, [gallery.id])
+  }, [gallery.id, gallery.require_email])
 
   // Cargar collections + favs cuando hay email
   const loadCollections = useCallback(async () => {
