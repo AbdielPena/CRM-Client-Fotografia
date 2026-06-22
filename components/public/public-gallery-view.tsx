@@ -482,7 +482,7 @@ export function PublicGalleryView({
       }
       if (
         !confirm(
-          `¿Enviar tu selección de ${favs.size} foto${favs.size === 1 ? "" : "s"}? Una vez enviada no podrás modificarla.`,
+          `¿Enviar tu selección de ${favs.size} foto${favs.size === 1 ? "" : "s"} al fotógrafo? Podrás seguir modificando tu selección después.`,
         )
       ) {
         return

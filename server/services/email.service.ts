@@ -596,3 +596,39 @@ export function renderInvoiceUpdate(params: {
 `, { studioName, accent: primaryColor, branding: params.branding })
   return { subject, html }
 }
+
+export function renderSelectionSubmittedForStudio(params: {
+  studioName: string
+  primaryColor?: string
+  branding?: EmailBranding | null
+  galleryName: string
+  clientEmail: string
+  photoCount: number
+  adminLink: string
+}) {
+  const {
+    studioName,
+    primaryColor = '#111827',
+    galleryName,
+    clientEmail,
+    photoCount,
+    adminLink,
+  } = params
+
+  const subject = `📸 Selección recibida — ${galleryName}`
+  const html = frame(`
+  <h1 style="margin: 0 0 8px; font-size: 22px;">Tu cliente envió su selección</h1>
+  <p style="margin: 0 0 24px; color: #4b5563;">Han elegido sus fotos favoritas y están listos para que empieces a editar.</p>
+
+  <div style="padding: 20px 22px; background: #F7F7F9; border-radius: 16px; border: 1px solid #ECECEF; margin: 24px 0;">
+    <table style="width: 100%; border-collapse: collapse;">
+      <tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px; width: 120px;">Galería</td><td style="padding: 8px 0; font-weight: 500;">${escapeHtml(galleryName)}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Cliente</td><td style="padding: 8px 0;">${escapeHtml(clientEmail === 'anon@guest' ? 'Visitante (sin email)' : clientEmail)}</td></tr>
+      <tr><td style="padding: 8px 0; color: #6b7280; font-size: 13px;">Fotos elegidas</td><td style="padding: 8px 0; font-weight: 600; color: ${escapeHtml(primaryColor)};">${photoCount}</td></tr>
+    </table>
+  </div>
+
+  <a href="${escapeHtml(adminLink)}" style="display: inline-block; padding: 12px 24px; background: ${escapeHtml(primaryColor)}; color: #fff; text-decoration: none; border-radius: 10px; font-size: 15px; font-weight: 600;">Ver selección →</a>
+`, { studioName, accent: primaryColor, branding: params.branding })
+  return { subject, html }
+}

@@ -323,6 +323,71 @@ export async function submitCollection(
     })
     .eq("id", c.gallery_id)
 
+  // Contar ítems de la colección + obtener datos del gallery para la notificación
+  const { count: itemCount } = await supabase
+    .from("gallery_collection_items")
+    .select("id", { count: "exact", head: true })
+    .eq("collection_id", collectionId)
+  const { data: gRow } = await supabase
+    .from("galleries")
+    .select("name")
+    .eq("id", c.gallery_id)
+    .maybeSingle()
+  const galleryName = (gRow as { name: string } | null)?.name ?? "Galería"
+  const photoCount = itemCount ?? 0
+
+  // Notificación in-app (best-effort)
+  try {
+    await supabase.from("notifications").insert({
+      studio_id: c.studio_id,
+      type: "gallery_selection_submitted",
+      title: "Cliente envió su selección",
+      body: `Eligió ${photoCount} foto${photoCount === 1 ? "" : "s"} en "${galleryName}".`,
+      action_url: `/galleries/${c.gallery_id}`,
+      related_entity_type: "gallery",
+      related_entity_id: c.gallery_id,
+    })
+  } catch (err) {
+    console.error("[submitCollection] notification falló:", err)
+  }
+
+  // Email al fotógrafo (best-effort)
+  try {
+    const { data: studio } = await supabase
+      .from("studios")
+      .select("name, email, primary_color")
+      .eq("id", c.studio_id)
+      .maybeSingle()
+    const s = studio as { name: string; email: string | null; primary_color: string | null } | null
+    if (s?.email) {
+      const { enqueueEmail, renderSelectionSubmittedForStudio } = await import("./email.service")
+      const { getEmailBranding } = await import("./email-template.service")
+      const branding = await getEmailBranding(c.studio_id)
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+      const { subject, html } = renderSelectionSubmittedForStudio({
+        studioName: s.name,
+        primaryColor: s.primary_color ?? undefined,
+        branding,
+        galleryName,
+        clientEmail: "anon@guest",
+        photoCount,
+        adminLink: `${appUrl}/galleries/${c.gallery_id}`,
+      })
+      await enqueueEmail({
+        studioId: c.studio_id,
+        toEmail: s.email,
+        toName: s.name,
+        subject,
+        bodyHtml: html,
+        relatedEntityType: "gallery",
+        relatedEntityId: c.gallery_id,
+        templateSlug: "selection_submitted_studio",
+      })
+    }
+  } catch (err) {
+    console.error("[submitCollection] email al studio falló:", err)
+  }
+
   // Automation: mover proyecto a "En edición". Lazy import para evitar ciclos.
   try {
     const { onSelectionSubmitted } = await import(

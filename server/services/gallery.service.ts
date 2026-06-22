@@ -1655,6 +1655,43 @@ export async function submitClientSelection(
     console.error("[submitClientSelection] notification falló:", err)
   }
 
+  // Email al fotógrafo (best-effort)
+  try {
+    const { data: studio } = await supabase
+      .from("studios")
+      .select("name, email, primary_color")
+      .eq("id", gallery.studio_id)
+      .maybeSingle()
+    const s = studio as { name: string; email: string | null; primary_color: string | null } | null
+    if (s?.email) {
+      const { enqueueEmail, renderSelectionSubmittedForStudio } = await import("./email.service")
+      const { getEmailBranding } = await import("./email-template.service")
+      const branding = await getEmailBranding(gallery.studio_id)
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+      const { subject, html } = renderSelectionSubmittedForStudio({
+        studioName: s.name,
+        primaryColor: s.primary_color ?? undefined,
+        branding,
+        galleryName: gallery.name,
+        clientEmail: email,
+        photoCount: favIds.length,
+        adminLink: `${appUrl}/galleries/${galleryId}`,
+      })
+      await enqueueEmail({
+        studioId: gallery.studio_id,
+        toEmail: s.email,
+        toName: s.name,
+        subject,
+        bodyHtml: html,
+        relatedEntityType: "gallery",
+        relatedEntityId: galleryId,
+        templateSlug: "selection_submitted_studio",
+      })
+    }
+  } catch (err) {
+    console.error("[submitClientSelection] email al studio falló:", err)
+  }
+
   // Notificar overage de cuota si aplica (best-effort)
   try {
     const { notifyOverLimitIfNeeded } = await import(
