@@ -292,6 +292,7 @@ export function GalleryDetailTabs({
             publicToken={publicToken}
             driveLink={driveLink}
             client={client}
+            hasDeliveryAssets={hasDelivery}
           />
         </TabsContent>
 
@@ -1643,11 +1644,13 @@ function ShareTab({
   publicToken,
   driveLink = null,
   client = null,
+  hasDeliveryAssets = false,
 }: {
   gallery: Gallery
   publicToken: string | null
   driveLink?: string | null
   client?: { name: string | null; email: string | null; phone: string | null } | null
+  hasDeliveryAssets?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -1766,22 +1769,22 @@ function ShareTab({
             <div className="mt-3">
               <a
                 href={waLink(
-                  gallery.gallery_type === "final_delivery" ? msgEntrega : msgSeleccion,
+                  hasDeliveryAssets ? msgEntrega : msgSeleccion,
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
-                {gallery.gallery_type === "final_delivery"
-                  ? "Compartir entrega final por WhatsApp"
+                {hasDeliveryAssets
+                  ? "Compartir galería por WhatsApp"
                   : "Compartir selección por WhatsApp"}
               </a>
             </div>
             <p className="mt-2 text-[11.5px] text-muted-foreground">
-              {gallery.gallery_type === "final_delivery"
-                ? "Link de la entrega final: el cliente ve sus fotos finales y las descarga (web/ZIP + Google Drive)."
-                : "Link de selección: el cliente favoritea con ♥ y elige sus fotos. La entrega final es una galería aparte, con su propio link."}
+              {hasDeliveryAssets
+                ? "El cliente ve su selección y la entrega final en la misma galería con un toggle."
+                : "Link de selección: el cliente favoritea con ♥ y elige sus fotos."}
               {!waPhone && " (Agrega el teléfono del cliente para enviar directo por WhatsApp.)"}
             </p>
           </div>
@@ -1801,8 +1804,8 @@ function ShareTab({
         )}
       </div>
 
-      {/* Google Drive — solo en la galería de entrega final */}
-      {gallery.gallery_type === "final_delivery" && (
+      {/* Google Drive — si tiene entrega habilitada o link de Drive */}
+      {(hasDeliveryAssets || !!driveLink) && (
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
           <ExternalLink className="h-4 w-4 text-muted-foreground" /> Google Drive
