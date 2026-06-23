@@ -42,7 +42,7 @@ async function countPendingSelections(sb: Sb, studioId: string): Promise<number>
       .from("galleries")
       .select("project_id")
       .eq("studio_id", studioId)
-      .eq("gallery_type", "final_delivery")
+      .not("delivery_ready_at", "is", null)
       .eq("status", "published")
       .is("deleted_at", null)
       .in("project_id", projectIds)

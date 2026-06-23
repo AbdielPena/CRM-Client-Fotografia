@@ -206,6 +206,7 @@ export function PublicGalleryView({
   assets,
   studio,
   printState = null,
+  deliveryReady = false,
   finalDeliveryDriveLink = null,
 }: {
   token: string
@@ -213,6 +214,7 @@ export function PublicGalleryView({
   assets: Asset[]
   studio: Studio
   printState?: GalleryPrintState | null
+  deliveryReady?: boolean
   finalDeliveryDriveLink?: string | null
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
@@ -524,16 +526,30 @@ export function PublicGalleryView({
     window.location.href = downloadUrl(assetId)
   }
 
-  // ─── Descarga web por ZIP (entrega final) ────────────────────────────────
-  // Las fotos finales se separan por pista de calidad. Las fotos SIN pista
-  // (p. ej. de una galería de selección reciclada) no entran en estas descargas.
+  // ─── Secciones: selección vs entrega final ────────────────────────────────
+  // La galería puede tener fotos de selección (sin track) y fotos de entrega
+  // (con track). Si tiene ambas, se muestra un toggle para cambiar entre secciones.
+  const selectionAssets = useMemo(
+    () => assets.filter((a) => !a.deliveryTrack),
+    [assets],
+  )
+  const deliveryAssets = useMemo(
+    () => assets.filter((a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality"),
+    [assets],
+  )
   const byTrack = useMemo(() => {
-    const high_quality = assets.filter((a) => a.deliveryTrack === "high_quality")
-    const social = assets.filter((a) => a.deliveryTrack === "social")
+    const high_quality = deliveryAssets.filter((a) => a.deliveryTrack === "high_quality")
+    const social = deliveryAssets.filter((a) => a.deliveryTrack === "social")
     return { high_quality, social }
-  }, [assets])
-  const hasTracks = byTrack.high_quality.length > 0 || byTrack.social.length > 0
-  const isFinalDelivery = gallery.galleryType === "final_delivery" || hasTracks
+  }, [deliveryAssets])
+  const hasTracks = deliveryAssets.length > 0
+  const hasSelection = selectionAssets.length > 0
+  const showBothSections = hasSelection && hasTracks && deliveryReady
+  const [activeSection, setActiveSection] = useState<"selection" | "delivery">(
+    deliveryReady && hasTracks ? "delivery" : "selection",
+  )
+  const isShowingDelivery = activeSection === "delivery" && hasTracks && deliveryReady
+  const visibleAssets = isShowingDelivery ? deliveryAssets : selectionAssets.length > 0 ? selectionAssets : assets
 
   const requestZip = useCallback(
     async (key: string, assetIds: string[], resolution: "web" | "original") => {
@@ -577,14 +593,14 @@ export function PublicGalleryView({
       if (e.key === "Escape") setOpen(null)
       if (e.key === "ArrowLeft") setOpen((i) => (i === null ? null : Math.max(0, i - 1)))
       if (e.key === "ArrowRight")
-        setOpen((i) => (i === null ? null : Math.min(assets.length - 1, i + 1)))
+        setOpen((i) => (i === null ? null : Math.min(visibleAssets.length - 1, i + 1)))
       if ((e.key === "f" || e.key === "F") && open !== null) {
-        void toggleHeart(assets[open].id)
+        void toggleHeart(visibleAssets[open].id)
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [open, assets, toggleHeart])
+  }, [open, visibleAssets, toggleHeart])
 
   // ─── Tema visual (template + overrides) ──────────────────────────────────
   const theme = useMemo(
@@ -641,12 +657,41 @@ export function PublicGalleryView({
                 {gallery.name}
               </h1>
               <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                {studio.name} · {assets.length} fotos
+                {studio.name} · {visibleAssets.length} fotos
               </p>
             </div>
           </div>
 
-          {isFinalDelivery ? (
+          {showBothSections ? (
+            <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
+              <button
+                type="button"
+                onClick={() => { setActiveSection("selection"); setOpen(null) }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
+                  activeSection === "selection"
+                    ? "bg-white text-gold-700 shadow-sm dark:bg-zinc-700 dark:text-gold-300"
+                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
+                )}
+              >
+                <Heart className="h-3 w-3" fill={activeSection === "selection" ? "currentColor" : "none"} />
+                Selección
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveSection("delivery"); setOpen(null) }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
+                  activeSection === "delivery"
+                    ? "bg-white text-emerald-700 shadow-sm dark:bg-zinc-700 dark:text-emerald-300"
+                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
+                )}
+              >
+                <Download className="h-3 w-3" />
+                Entrega final
+              </button>
+            </div>
+          ) : isShowingDelivery ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[12.5px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
               <Download className="h-3.5 w-3.5" />
               Entrega final
@@ -661,7 +706,7 @@ export function PublicGalleryView({
       </header>
 
       {/* Banner de cuota — solo en galerías de SELECCIÓN */}
-      {!isFinalDelivery && quota && quota.included !== null && (
+      {!isShowingDelivery && quota && quota.included !== null && (
         <div
           className={`border-b ${
             quota.extras > 0
@@ -709,7 +754,7 @@ export function PublicGalleryView({
       )}
 
       {/* Entrega final: seguir eligiendo con ♥ + descargar desde la web (ZIP) y/o Drive */}
-      {((isFinalDelivery && gallery.allow_download) || !!finalDeliveryDriveLink) && (
+      {((isShowingDelivery && gallery.allow_download) || !!finalDeliveryDriveLink) && (
         <div className="border-b border-gold-200 bg-gold-50 dark:border-gold-500/30 dark:bg-gold-500/10">
           <div className="mx-auto max-w-7xl px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -718,7 +763,7 @@ export function PublicGalleryView({
               </p>
 
               {/* Descargas web por ZIP */}
-              {isFinalDelivery && gallery.allow_download && (
+              {isShowingDelivery && gallery.allow_download && (
                 <>
                   {/* Entrega final completa: por pista de calidad o todo */}
                   {hasTracks ? (
@@ -773,7 +818,7 @@ export function PublicGalleryView({
                       onClick={() =>
                         requestZip(
                           "todo",
-                          assets.map((a) => a.id),
+                          visibleAssets.map((a) => a.id),
                           "original",
                         )
                       }
@@ -804,7 +849,7 @@ export function PublicGalleryView({
               )}
             </div>
 
-            {isFinalDelivery && gallery.allow_download && (
+            {isShowingDelivery && gallery.allow_download && (
               <p className="mt-1.5 text-[11px] text-gold-800/80 dark:text-gold-200/70">
                 La descarga se prepara en un ZIP y puede tardar un momento según la cantidad de fotos.
               </p>
@@ -814,7 +859,7 @@ export function PublicGalleryView({
       )}
 
       {/* Banner informativo — solo en galerías de selección */}
-      {!isFinalDelivery && gallery.selection_submitted && (
+      {!isShowingDelivery && gallery.selection_submitted && (
         <div className="border-b border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10">
           <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
             <Send className="h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -826,7 +871,7 @@ export function PublicGalleryView({
       )}
 
       {/* Panel de listas — solo en galerías de selección */}
-      {!isFinalDelivery && (
+      {!isShowingDelivery && (
         <div className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3">
             <p className="mr-2 text-[12px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -929,13 +974,13 @@ export function PublicGalleryView({
       )}
 
       <main id="fotos" className="mx-auto max-w-7xl px-4 py-6">
-        {assets.length === 0 ? (
+        {visibleAssets.length === 0 ? (
           <p className="py-12 text-center text-sm text-zinc-500">
             Aún no hay fotos en esta galería.
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {assets.map((a, i) => {
+            {visibleAssets.map((a, i) => {
               const marked = isMarked(a.id)
               return (
                 <button
@@ -952,7 +997,7 @@ export function PublicGalleryView({
                   }
                   className={cn(
                     "group relative aspect-square overflow-hidden rounded-md bg-zinc-200 transition-all dark:bg-zinc-800",
-                    !isFinalDelivery && marked && "ring-2 ring-gold-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
+                    !isShowingDelivery && marked && "ring-2 ring-gold-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
                   )}
                 >
                   {a.thumbUrl ? (
@@ -967,7 +1012,7 @@ export function PublicGalleryView({
                   ) : null}
 
                   {/* Corazón de selección — solo en galerías de selección */}
-                  {!isFinalDelivery && (
+                  {!isShowingDelivery && (
                     <span
                       role="button"
                       tabIndex={0}
@@ -994,7 +1039,7 @@ export function PublicGalleryView({
       </main>
 
       {/* Barra fija inferior: estado + opción de notificar al fotógrafo — solo selección */}
-      {!isFinalDelivery && canSubmit && (
+      {!isShowingDelivery && canSubmit && (
         <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
             <div className="flex items-center gap-3">
@@ -1032,25 +1077,25 @@ export function PublicGalleryView({
         </div>
       )}
 
-      {open !== null && assets[open] && (
+      {open !== null && visibleAssets[open] && (
         <Lightbox
-          asset={assets[open]}
+          asset={visibleAssets[open]}
           index={open}
-          total={assets.length}
-          allowDownload={isFinalDelivery ? true : gallery.allow_download}
-          isMarked={isFinalDelivery ? false : isMarked(assets[open].id)}
-          locked={isFinalDelivery ? true : (
+          total={visibleAssets.length}
+          allowDownload={isShowingDelivery ? true : gallery.allow_download}
+          isMarked={isShowingDelivery ? false : isMarked(visibleAssets[open].id)}
+          locked={isShowingDelivery ? true : (
             !!gallery.selection_locked ||
             (activeColl?.is_locked ?? false)
           )}
-          contextLabel={isFinalDelivery ? "Entrega final" : (activeColl ? activeColl.name : "Favoritas")}
-          onMark={isFinalDelivery ? undefined : () => toggleHeart(assets[open].id)}
+          contextLabel={isShowingDelivery ? "Entrega final" : (activeColl ? activeColl.name : "Favoritas")}
+          onMark={isShowingDelivery ? undefined : () => toggleHeart(visibleAssets[open].id)}
           onClose={() => setOpen(null)}
           onPrev={() => setOpen((i) => (i === null ? null : Math.max(0, i - 1)))}
           onNext={() =>
-            setOpen((i) => (i === null ? null : Math.min(assets.length - 1, i + 1)))
+            setOpen((i) => (i === null ? null : Math.min(visibleAssets.length - 1, i + 1)))
           }
-          onDownload={() => handleDownload(assets[open].id)}
+          onDownload={() => handleDownload(visibleAssets[open].id)}
         />
       )}
 

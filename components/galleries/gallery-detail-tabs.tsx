@@ -39,7 +39,6 @@ import {
   createSetAction,
   deleteSetAction,
   enableFinalDeliveryAction,
-  createDeliveryGalleryAction,
 } from "@/server/actions/gallery-set.actions"
 import {
   createCollectionAction,
@@ -161,8 +160,6 @@ interface Props {
   coverImageUrl: string | null
   client: { name: string | null; email: string | null; phone: string | null } | null
   driveLink?: string | null
-  /** Si esta galería de selección ya tiene su entrega final separada, su id. */
-  deliveryGalleryId?: string | null
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -180,7 +177,6 @@ export function GalleryDetailTabs({
   coverImageUrl,
   client,
   driveLink = null,
-  deliveryGalleryId = null,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -240,7 +236,6 @@ export function GalleryDetailTabs({
             sets={sets}
             studioId={studioId}
             client={client}
-            deliveryGalleryId={deliveryGalleryId}
           />
         </TabsContent>
 
@@ -327,14 +322,12 @@ function PhotosTab({
   sets,
   studioId,
   client,
-  deliveryGalleryId = null,
 }: {
   gallery: Gallery
   assets: Asset[]
   sets: SetRow[]
   studioId: string
   client: { name: string | null; email: string | null; phone: string | null } | null
-  deliveryGalleryId?: string | null
 }) {
   // Si la galería tiene sets cuyo nombre matchea Redes/Máxima Calidad, mostrar
   // selector de target. Vale para entrega final O para galerías de selección que
@@ -351,19 +344,15 @@ function PhotosTab({
         }))
       : undefined
 
+  const hasDeliveryAssets = assets.some(
+    (a) => a.delivery_track === "social" || a.delivery_track === "high_quality",
+  )
   const canDeliver = !!uploadTargets && assets.length > 0 && !!client
   return (
     <div className="space-y-5">
-      {/* Galería de selección → ofrecer/abrir su entrega final SEPARADA. */}
-      {gallery.gallery_type !== "final_delivery" && (
-        <FinalDeliveryLinkBanner
-          galleryId={gallery.id}
-          deliveryGalleryId={deliveryGalleryId}
-        />
-      )}
-      {/* Entrega final sin carpetas de pista (raro) → recrearlas in-place. */}
-      {gallery.gallery_type === "final_delivery" && !uploadTargets && (
-        <EnableFinalDeliveryBanner galleryId={gallery.id} />
+      {/* Habilitar entrega final (crea carpetas de pista en la misma galería). */}
+      {!uploadTargets && (
+        <EnableFinalDeliveryBanner galleryId={gallery.id} hasDeliveryAssets={hasDeliveryAssets} />
       )}
       {canDeliver && client && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 dark:bg-emerald-500/5">
@@ -1873,8 +1862,14 @@ function ShareTab({
   )
 }
 
-/** Banner de recuperación: recrea las 2 carpetas de pista en una entrega final que las perdió. */
-function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
+/** Banner para habilitar entrega final: crea las 2 carpetas de pista en la misma galería. */
+function EnableFinalDeliveryBanner({
+  galleryId,
+  hasDeliveryAssets,
+}: {
+  galleryId: string
+  hasDeliveryAssets: boolean
+}) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const enable = () =>
@@ -1882,7 +1877,7 @@ function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
       try {
         const r = await enableFinalDeliveryAction(galleryId)
         if (r.created > 0) {
-          toast.success(`${r.created} carpeta(s) creada(s)`)
+          toast.success(`${r.created} carpeta(s) de entrega creada(s)`)
         } else {
           toast.success("Las carpetas ya existían")
         }
@@ -1900,13 +1895,14 @@ function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
         </div>
         <div>
           <p className="text-[13px] font-semibold text-foreground">
-            Faltan las carpetas de entrega
+            {hasDeliveryAssets
+              ? "Faltan las carpetas de entrega"
+              : "¿Lista la entrega final?"}
           </p>
           <p className="mt-0.5 text-[12px] text-muted-foreground">
-            Creá las carpetas{" "}
-            <span className="font-medium text-foreground">💎 Máxima Calidad</span> y{" "}
-            <span className="font-medium text-foreground">📱 Redes Sociales</span> para subir y
-            clasificar las fotos de esta entrega.
+            {hasDeliveryAssets
+              ? "Recreá las carpetas de entrega para organizar las fotos finales."
+              : "Habilitá la entrega final en esta galería. Se crean las carpetas 💎 Máxima Calidad y 📱 Redes Sociales para subir las fotos editadas. Todo queda en la misma galería."}
           </p>
         </div>
       </div>
@@ -1917,79 +1913,8 @@ function EnableFinalDeliveryBanner({ galleryId }: { galleryId: string }) {
         className="inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
       >
         {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-        Crear carpetas
+        {hasDeliveryAssets ? "Crear carpetas" : "Habilitar entrega"}
       </button>
-    </div>
-  )
-}
-
-/**
- * Banner en una galería de SELECCIÓN: crea (o abre) su galería de ENTREGA FINAL
- * separada, con su propio link de descarga. La selección queda intacta.
- */
-function FinalDeliveryLinkBanner({
-  galleryId,
-  deliveryGalleryId = null,
-}: {
-  galleryId: string
-  deliveryGalleryId?: string | null
-}) {
-  const router = useRouter()
-  const [pending, start] = useTransition()
-  const create = () =>
-    start(async () => {
-      try {
-        const r = await createDeliveryGalleryAction(galleryId)
-        toast.success(
-          r.created ? "Galería de entrega final creada" : "Abriendo la entrega final",
-        )
-        router.push(`/galleries/${r.galleryId}`)
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Error al crear la entrega")
-      }
-    })
-
-  return (
-    <div className="flex items-start justify-between gap-3 rounded-xl border border-brand/20 bg-brand-soft/40 p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-brand">
-          <Sparkles className="h-4 w-4" />
-        </div>
-        <div>
-          <p className="text-[13px] font-semibold text-foreground">
-            {deliveryGalleryId
-              ? "Esta selección ya tiene su entrega final"
-              : "¿Lista la entrega final?"}
-          </p>
-          <p className="mt-0.5 text-[12px] text-muted-foreground">
-            {deliveryGalleryId
-              ? "La entrega final es una galería aparte, con su propio link de descarga. Subí ahí las fotos editadas."
-              : "Creamos una galería de entrega final SEPARADA (con su propio link y las carpetas 💎 Máxima Calidad y 📱 Redes Sociales). Tu galería de selección queda intacta."}
-          </p>
-        </div>
-      </div>
-      {deliveryGalleryId ? (
-        <Link
-          href={`/galleries/${deliveryGalleryId}`}
-          className="inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-foreground hover:bg-brand/90"
-        >
-          <Sparkles className="h-3.5 w-3.5" /> Ver entrega final
-        </Link>
-      ) : (
-        <button
-          type="button"
-          onClick={create}
-          disabled={pending}
-          className="inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
-        >
-          {pending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="h-3.5 w-3.5" />
-          )}
-          Crear entrega final
-        </button>
-      )}
     </div>
   )
 }

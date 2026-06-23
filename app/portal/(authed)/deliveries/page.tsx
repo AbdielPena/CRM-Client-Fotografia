@@ -49,15 +49,14 @@ export default async function PortalDeliveriesPage() {
     (d) => d.status === "delivered" || d.status === "reviewed",
   )
 
-  // Galerías de entrega final del cliente (las fotos editadas como galería).
-  // Cast a any: gallery_type no está en los tipos generados de la tabla.
+  // Galerías con entrega lista (delivery_ready_at no nulo).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createSupabaseServiceClient() as any
   const { data: galRaw } = await supabase
     .from("galleries")
     .select("id, name, cover_asset_id, asset_count, created_at")
     .eq("client_id", session.clientId)
-    .eq("gallery_type", "final_delivery")
+    .not("delivery_ready_at", "is", null)
     .eq("status", "published")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })

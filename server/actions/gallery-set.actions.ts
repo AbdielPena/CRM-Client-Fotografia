@@ -87,89 +87,16 @@ export async function enableFinalDeliveryAction(
     created++
   }
 
-  // Marcar la galería como entrega final — así el portal del cliente, la vista
-  // pública y los reportes la reconocen como tal (no como selección).
-  const { createSupabaseServiceClient } = await import("@/server/supabase/service")
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (createSupabaseServiceClient() as any)
-    .from("galleries")
-    .update({ gallery_type: "final_delivery" })
-    .eq("id", validGalleryId)
-    .eq("studio_id", session.studioId)
-
   revalidatePath(`/galleries/${validGalleryId}`)
   return { created }
 }
 
 /**
- * Crea una galería de ENTREGA FINAL SEPARADA a partir de una galería de selección.
- * Nace vacía (con sus 2 carpetas de pista: Máxima Calidad / Redes Sociales), ligada
- * al MISMO proyecto/cliente, con su PROPIO link público distinto al de selección.
- * Idempotente: si ya existe una entrega final ligada a esta selección, la devuelve.
+ * Habilita la entrega final DENTRO de la misma galería: crea los 2 sets
+ * estándar si no existen. No crea una galería separada.
+ * Alias de enableFinalDeliveryAction para mantener compatibilidad de imports.
  */
-export async function createDeliveryGalleryAction(
-  selectionGalleryId: string,
-): Promise<{ galleryId: string; created: boolean }> {
-  const session = await requireStudioAuth()
-  const id = uuidSchema.parse(selectionGalleryId)
-
-  const { createSupabaseServiceClient } = await import("@/server/supabase/service")
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = createSupabaseServiceClient() as any
-
-  const { data: src } = await sb
-    .from("galleries")
-    .select("id, name, project_id, client_id")
-    .eq("id", id)
-    .eq("studio_id", session.studioId)
-    .is("deleted_at", null)
-    .maybeSingle()
-  if (!src) throw new Error("Galería no encontrada")
-
-  // Idempotencia: ¿ya hay una entrega final ligada a esta selección?
-  const { data: existing } = await sb
-    .from("galleries")
-    .select("id")
-    .eq("studio_id", session.studioId)
-    .eq("source_gallery_id", id)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (existing?.id) {
-    return { galleryId: existing.id as string, created: false }
-  }
-
-  // Cliente: heredar de la galería de selección o, si falta, del proyecto.
-  let clientId: string | null = (src.client_id as string | null) ?? null
-  if (!clientId && src.project_id) {
-    const { data: proj } = await sb
-      .from("projects")
-      .select("client_id")
-      .eq("id", src.project_id)
-      .eq("studio_id", session.studioId)
-      .maybeSingle()
-    clientId = (proj?.client_id as string | null) ?? null
-  }
-
-  const { createGallery } = await import("@/server/services/gallery.service")
-  const newGallery = await createGallery(session.studioId, session.userId, {
-    name: `${src.name as string} — Entrega final`,
-    projectId: (src.project_id as string | null) ?? null,
-    clientId,
-    galleryType: "final_delivery",
-  })
-
-  await sb
-    .from("galleries")
-    .update({ source_gallery_id: id })
-    .eq("id", newGallery.id)
-    .eq("studio_id", session.studioId)
-
-  revalidatePath(`/galleries/${id}`)
-  revalidatePath(`/galleries/${newGallery.id}`)
-  return { galleryId: newGallery.id, created: true }
-}
+export const createDeliveryGalleryAction = enableFinalDeliveryAction
 
 export async function createSetAction(
   galleryId: string,

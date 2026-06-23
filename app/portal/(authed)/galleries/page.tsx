@@ -26,7 +26,7 @@ export default async function PortalGalleriesPage() {
   const { data: galleriesRaw } = await supabase
     .from("galleries")
     .select(
-      "id, name, status, asset_count, cover_asset_id, created_at, expires_at, gallery_type",
+      "id, name, status, asset_count, cover_asset_id, created_at, expires_at, gallery_type, delivery_ready_at",
     )
     .eq("client_id", session.clientId)
     .is("deleted_at", null)
@@ -158,8 +158,8 @@ export default async function PortalGalleriesPage() {
     )
   }
 
-  const selection = galleries.filter((g) => g.gallery_type !== "final_delivery")
-  const delivery = galleries.filter((g) => g.gallery_type === "final_delivery")
+  const selection = galleries.filter((g) => !g.delivery_ready_at)
+  const delivery = galleries.filter((g) => !!g.delivery_ready_at)
 
   // Estado de selección de impresión por galería de entrega final (resumen portal).
   const printStates: Record<string, GalleryPrintState | null> = {}

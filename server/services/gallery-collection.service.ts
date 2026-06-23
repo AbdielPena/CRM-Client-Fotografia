@@ -457,7 +457,6 @@ export async function createCollectionAsClient(
     .maybeSingle()
   if (!gallery) throw new Error("Galería no encontrada")
   const g = gallery as { studio_id: string; selection_locked: boolean; gallery_type: string | null }
-  if (g.gallery_type === "final_delivery") throw new Error("La entrega final no permite selección")
   if (g.selection_locked) throw new Error("La galería está bloqueada")
 
   const { data: row, error } = await supabase

@@ -335,20 +335,32 @@ export async function notifyClientFinalDeliveryAction(input: {
     .eq("studio_id", ctx.studioId)
     .eq("allow_download", false)
 
-  // Marcar como entrega final (si venía reciclada de selección) — así el portal
-  // y los reportes la reconocen como entrega y no como galería de selección.
-  if (gallery.gallery_type !== "final_delivery") {
-    await sb
-      .from("galleries")
-      .update({ gallery_type: "final_delivery" })
-      .eq("id", galleryId)
-      .eq("studio_id", ctx.studioId)
-  }
+  // Marcar delivery_ready_at (la entrega final vive dentro de la misma galería).
+  await sb
+    .from("galleries")
+    .update({ delivery_ready_at: new Date().toISOString() })
+    .eq("id", galleryId)
+    .eq("studio_id", ctx.studioId)
 
-  // 1) Token público
-  const { url, token: _token } = await createGalleryShareToken(ctx.studioId, galleryId, {
-    expiresAt: null,
-  })
+  // 1) Token público — reusar si ya existe uno activo
+  const { data: existingTokens } = await sb
+    .from("gallery_share_tokens")
+    .select("token")
+    .eq("gallery_id", galleryId)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+  const existingToken = (existingTokens as { token: string }[] | null)?.[0]?.token
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+  let url: string
+  if (existingToken) {
+    url = `${appUrl}/g/${existingToken}`
+  } else {
+    const created = await createGalleryShareToken(ctx.studioId, galleryId, {
+      expiresAt: null,
+    })
+    url = created.url
+  }
 
   // 2) Link de Drive. Si no hay backup con link, disparamos uno automáticamente
   //    (sube por categoría: quinceañera/boda/estudio/exterior — gallery-drive.service).

@@ -32,10 +32,10 @@ export default async function PortalHomePage() {
   const supabase = createSupabaseServiceClient()
 
   const [galRes, delivRes, invRes, payRes, bookRes, contRes] = await Promise.all([
-    // Galerías del cliente (todas) + cuáles son entrega final
-    supabase
+    // Galerías del cliente (todas) + cuáles tienen entrega lista
+    (supabase as any)
       .from("galleries")
-      .select("id, gallery_type")
+      .select("id, delivery_ready_at")
       .eq("client_id", session.clientId)
       .is("deleted_at", null),
     // Entregas manuales (client_deliveries) ya entregadas/vistas
@@ -77,7 +77,7 @@ export default async function PortalHomePage() {
   const galleriesAll = (galRes.data ?? []) as any[]
   const galleryCount = galleriesAll.length
   const finalDeliveryGalleries = galleriesAll.filter(
-    (g) => g.gallery_type === "final_delivery",
+    (g) => !!g.delivery_ready_at,
   ).length
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const manualDeliveries = ((delivRes.data ?? []) as any[]).filter(

@@ -80,15 +80,22 @@ export default async function PublicGalleryPage({ params }: PageProps) {
   // Branding del estudio (white-label): logo, color, footer.
   const branding = await getPublicBrandingByStudioId(view.gallery.studioId)
 
-  // ── Entrega final ──
-  // Si la galería es de entrega final O tiene fotos clasificadas en pistas
-  // (Máxima Calidad / Redes), el cliente ve la experiencia de entrega:
-  // carpetas explicadas, descargas ZIP y link de Google Drive.
+  // ── Entrega final (vive dentro de la misma galería) ──
   const hasDeliveryTracks = view.assets.some(
     (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
   )
-  if (view.gallery.galleryType === "final_delivery" || hasDeliveryTracks) {
-    // Cast a any: gallery_drive_backups no está en los tipos generados.
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: deliveryReadyRow } = await (supabase as any)
+    .from("galleries")
+    .select("delivery_ready_at")
+    .eq("id", view.gallery.id)
+    .maybeSingle()
+  const deliveryReady = !!(deliveryReadyRow as { delivery_ready_at: string | null } | null)?.delivery_ready_at
+
+  // Google Drive link (si existe backup completado)
+  let driveLink: string | null = null
+  if (hasDeliveryTracks || deliveryReady) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: driveRow } = await (supabase as any)
       .from("gallery_drive_backups")
@@ -98,112 +105,84 @@ export default async function PublicGalleryPage({ params }: PageProps) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
-    const driveLink =
-      (driveRow as { web_view_link: string | null } | null)?.web_view_link ?? null
+    driveLink = (driveRow as { web_view_link: string | null } | null)?.web_view_link ?? null
+  }
 
-    // En entrega final solo mostramos las fotos con track asignado (las finales).
-    // Una galería de selección reciclada puede tener además las fotos de prueba
-    // originales sin track — esas no van en la entrega.
-    const deliveryAssets = hasDeliveryTracks
-      ? view.assets.filter(
-          (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
-        )
-      : view.assets
-
-    // Luxury Book Experience (Abby XV Gallery): modo de visualización opcional.
-    // Si book_enabled=false → 'classic' (galería actual intacta).
-    const displayMode = view.gallery.bookEnabled
-      ? view.gallery.bookDisplayMode
-      : "classic"
-    const bookAssets = deliveryAssets.map((a) => ({
-      id: a.id,
-      webUrl: a.webUrl,
-      thumbUrl: a.thumbUrl,
-      width: a.width,
-      height: a.height,
-    }))
-    const bookGallery = {
-      name: view.gallery.name,
-      accentColor: view.gallery.accentColor,
-      coverWebUrl: view.gallery.coverWebUrl,
-      bookTemplateId: view.gallery.bookTemplateId,
-      bookCoverImage: view.gallery.bookCoverImage,
-      bookSettings: view.gallery.bookSettings,
-    }
-    const bookStudio = {
-      name: studioInfo?.studios?.name ?? "PixelOS",
-      logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
-      hideBranding: branding?.hide_studioflow_branding ?? false,
-    }
-
-    // Modo solo libro: el flipbook reemplaza la vista (la galería clásica sigue
-    // disponible si el estudio elige 'classic' o 'both').
-    if (displayMode === "book") {
-      return (
-        <FinalDeliveryBook
-          gallery={bookGallery}
-          assets={bookAssets}
-          studio={bookStudio}
-        />
-      )
-    }
-
-    // Entrega final: galería de solo vista + descarga (sin selección/corazones).
-    // PublicGalleryView detecta isFinalDelivery y oculta la UI de selección.
-    const deliveryPrintState = await getGalleryPrintState(view.gallery.id)
+  // Luxury Book: modo solo-libro reemplaza toda la vista
+  if (hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "book") {
+    const deliveryAssets = view.assets.filter(
+      (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
+    )
     return (
-      <>
-        <PublicGalleryView
-          token={params.token}
-          gallery={{
-            ...view.gallery,
-            download_pin_required: studioInfo?.download_pin_required ?? false,
-            selection_submitted: studioInfo?.selection_submitted ?? false,
-            selection_locked: studioInfo?.selection_locked ?? false,
-          }}
-          assets={view.assets}
-          studio={{
-            name: studioInfo?.studios?.name ?? "PixelOS",
-            logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
-            primaryColor: branding?.primary_color ?? null,
-            hideBranding: branding?.hide_studioflow_branding ?? false,
-            footerHtml: branding?.custom_footer_html ?? null,
-          }}
-          printState={deliveryPrintState}
-          finalDeliveryDriveLink={driveLink}
-        />
-        {displayMode === "both" && (
-          <BookLauncher
-            gallery={bookGallery}
-            assets={bookAssets}
-            studio={bookStudio}
-          />
-        )}
-      </>
+      <FinalDeliveryBook
+        gallery={{
+          name: view.gallery.name,
+          accentColor: view.gallery.accentColor,
+          coverWebUrl: view.gallery.coverWebUrl,
+          bookTemplateId: view.gallery.bookTemplateId,
+          bookCoverImage: view.gallery.bookCoverImage,
+          bookSettings: view.gallery.bookSettings,
+        }}
+        assets={deliveryAssets.map((a) => ({
+          id: a.id, webUrl: a.webUrl, thumbUrl: a.thumbUrl,
+          width: a.width, height: a.height,
+        }))}
+        studio={{
+          name: studioInfo?.studios?.name ?? "PixelOS",
+          logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+          hideBranding: branding?.hide_studioflow_branding ?? false,
+        }}
+      />
     )
   }
 
-  // Estado de selección de impresión (si el plan la incluye y está habilitada).
   const printState = await getGalleryPrintState(view.gallery.id)
 
   return (
-    <PublicGalleryView
-      token={params.token}
-      gallery={{
-        ...view.gallery,
-        download_pin_required: studioInfo?.download_pin_required ?? false,
-        selection_submitted: studioInfo?.selection_submitted ?? false,
-        selection_locked: studioInfo?.selection_locked ?? false,
-      }}
-      assets={view.assets}
-      studio={{
-        name: studioInfo?.studios?.name ?? "PixelOS",
-        logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
-        primaryColor: branding?.primary_color ?? null,
-        hideBranding: branding?.hide_studioflow_branding ?? false,
-        footerHtml: branding?.custom_footer_html ?? null,
-      }}
-      printState={printState}
-    />
+    <>
+      <PublicGalleryView
+        token={params.token}
+        gallery={{
+          ...view.gallery,
+          download_pin_required: studioInfo?.download_pin_required ?? false,
+          selection_submitted: studioInfo?.selection_submitted ?? false,
+          selection_locked: studioInfo?.selection_locked ?? false,
+        }}
+        assets={view.assets}
+        studio={{
+          name: studioInfo?.studios?.name ?? "PixelOS",
+          logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+          primaryColor: branding?.primary_color ?? null,
+          hideBranding: branding?.hide_studioflow_branding ?? false,
+          footerHtml: branding?.custom_footer_html ?? null,
+        }}
+        printState={printState}
+        deliveryReady={deliveryReady}
+        finalDeliveryDriveLink={driveLink}
+      />
+      {hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "both" && (
+        <BookLauncher
+          gallery={{
+            name: view.gallery.name,
+            accentColor: view.gallery.accentColor,
+            coverWebUrl: view.gallery.coverWebUrl,
+            bookTemplateId: view.gallery.bookTemplateId,
+            bookCoverImage: view.gallery.bookCoverImage,
+            bookSettings: view.gallery.bookSettings,
+          }}
+          assets={view.assets
+            .filter((a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality")
+            .map((a) => ({
+              id: a.id, webUrl: a.webUrl, thumbUrl: a.thumbUrl,
+              width: a.width, height: a.height,
+            }))}
+          studio={{
+            name: studioInfo?.studios?.name ?? "PixelOS",
+            logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+            hideBranding: branding?.hide_studioflow_branding ?? false,
+          }}
+        />
+      )}
+    </>
   )
 }

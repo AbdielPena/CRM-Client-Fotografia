@@ -145,7 +145,7 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
       .in("project_id", projectIds),
     sb
       .from("galleries")
-      .select("project_id, gallery_type, status, selection_submitted")
+      .select("project_id, gallery_type, status, selection_submitted, delivery_ready_at")
       .eq("studio_id", studioId)
       .is("deleted_at", null)
       .in("project_id", projectIds),
@@ -192,7 +192,7 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
     const pGalleries = galleries.filter((g) => g.project_id === p.id)
     const selectionSubmitted = pGalleries.some((g) => g.selection_submitted === true)
     const finalGalleryPublished = pGalleries.some(
-      (g) => g.gallery_type === "final_delivery" && g.status === "published",
+      (g) => !!(g as any).delivery_ready_at && g.status === "published",
     )
     const pTasks = tasks.filter((t) => t.entity_id === p.id)
     const sendSelTask = pTasks.find((t) => t.workflow_stage === "send_selection") ?? null

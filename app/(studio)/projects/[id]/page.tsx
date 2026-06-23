@@ -86,7 +86,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const supabase = createSupabaseServiceClient()
   const { data: galleriesRaw } = await supabase
     .from("galleries")
-    .select("id, name, status, asset_count, cover_asset_id, created_at, gallery_type")
+    .select("id, name, status, asset_count, cover_asset_id, created_at, gallery_type, delivery_ready_at")
     .eq("studio_id", session.studioId)
     .eq("project_id", params.id)
     .is("deleted_at", null)
@@ -332,12 +332,12 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                         <div className="mt-0.5 flex items-center gap-1.5">
                           <span
                             className={
-                              g.gallery_type === "final_delivery"
+                              g.delivery_ready_at
                                 ? "inline-flex rounded-full bg-brand-soft px-1.5 py-0.5 text-[9.5px] font-semibold text-brand"
                                 : "inline-flex rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-medium text-muted-foreground"
                             }
                           >
-                            {g.gallery_type === "final_delivery" ? "Entrega final" : "Selección"}
+                            {g.delivery_ready_at ? "Entrega lista" : "Selección"}
                           </span>
                           <span className="text-[11px] text-muted-foreground">
                             {g.asset_count ?? 0} foto
