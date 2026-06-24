@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
-import { Check, Crosshair, Loader2, Palette } from "lucide-react"
+import { Check, Crosshair, ImageIcon, Loader2, Palette, UploadCloud, X } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -13,7 +13,7 @@ import {
   type GalleryMode,
   type GalleryTextAlign,
 } from "@/lib/galleries/templates"
-import { saveGalleryAppearanceAction } from "@/server/actions/gallery.actions"
+import { saveGalleryAppearanceAction, setCoverAssetAction } from "@/server/actions/gallery.actions"
 
 interface AppearanceState {
   templateId: string
@@ -32,6 +32,13 @@ interface AppearanceState {
   focalY: number
 }
 
+interface CoverAsset {
+  id: string
+  thumbUrl: string | null
+  webUrl: string | null
+  original_name: string
+}
+
 interface Props {
   galleryId: string
   galleryType: "selection" | "final_delivery"
@@ -42,20 +49,28 @@ interface Props {
     subtitle: string | null
     welcomeText: string | null
     coverImageUrl?: string | null
+    coverAssetId?: string | null
   }
+  assets?: CoverAsset[]
 }
 
 const str = (v: unknown, def = "") => (typeof v === "string" ? v : def)
 const numClamp = (v: unknown, def: number, min: number, max: number) =>
   typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : def
 
-export function GalleryAppearanceTab({ galleryId, galleryType, initial }: Props) {
+export function GalleryAppearanceTab({ galleryId, galleryType, initial, assets = [] }: Props) {
   const router = useRouter()
   const [pending, start] = useTransition()
+  const [coverBusy, setCoverBusy] = useState(false)
+  const [currentCoverId, setCurrentCoverId] = useState(initial.coverAssetId ?? null)
+  const [externalCoverUrl, setExternalCoverUrl] = useState<string | null>(null)
+  const coverFileRef = useRef<HTMLInputElement>(null)
+  const [showAllAssets, setShowAllAssets] = useState(false)
 
   const t = initial.theme ?? {}
   const c = initial.coverConfig ?? {}
-  const coverImageUrl = initial.coverImageUrl ?? null
+  const currentCover = assets.find((a) => a.id === currentCoverId)
+  const coverImageUrl = externalCoverUrl || currentCover?.webUrl || currentCover?.thumbUrl || (initial.coverImageUrl ?? null)
   const [s, setS] = useState<AppearanceState>({
     templateId: initial.templateId || "classic_proofing",
     mode: t.mode === "dark" ? "dark" : (t.mode === "light" ? "light" : "light"),
@@ -259,9 +274,158 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial }: Props)
           </div>
         </section>
 
-        {/* Portada */}
+        {/* Imagen de portada */}
         <section className="sf-card space-y-4 p-5">
-          <h3 className="text-sm font-semibold text-foreground">Portada</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Imagen de portada</h3>
+            {currentCoverId && (
+              <button
+                type="button"
+                disabled={coverBusy}
+                onClick={() => {
+                  setCoverBusy(true)
+                  start(async () => {
+                    try {
+                      await setCoverAssetAction(galleryId, null)
+                      setCurrentCoverId(null)
+                      setExternalCoverUrl(null)
+                      toast.success("Portada eliminada")
+                      router.refresh()
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Error")
+                    } finally {
+                      setCoverBusy(false)
+                    }
+                  })
+                }}
+                className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive"
+              >
+                <X className="h-3 w-3" /> Quitar portada
+              </button>
+            )}
+          </div>
+
+          {assets.length > 0 ? (
+            <>
+              <p className="text-[12px] text-muted-foreground">
+                Elige una foto de la galería como portada:
+              </p>
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
+                {(showAllAssets ? assets : assets.slice(0, 16)).map((a) => {
+                  const selected = a.id === currentCoverId
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      disabled={coverBusy}
+                      onClick={() => {
+                        setCoverBusy(true)
+                        start(async () => {
+                          try {
+                            await setCoverAssetAction(galleryId, a.id)
+                            setCurrentCoverId(a.id)
+                            setExternalCoverUrl(null)
+                            toast.success("Portada actualizada")
+                            router.refresh()
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Error")
+                          } finally {
+                            setCoverBusy(false)
+                          }
+                        })
+                      }}
+                      className={`group relative aspect-square overflow-hidden rounded-lg border-2 transition-all ${
+                        selected
+                          ? "border-brand ring-2 ring-brand/30"
+                          : "border-transparent hover:border-brand/40"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={a.thumbUrl || a.webUrl || ""}
+                        alt={a.original_name}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                      {selected && (
+                        <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-brand-foreground shadow">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              {!showAllAssets && assets.length > 16 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllAssets(true)}
+                  className="text-xs font-medium text-brand hover:underline"
+                >
+                  Ver las {assets.length} fotos
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="text-[12px] text-muted-foreground">
+              Aún no hay fotos en la galería. Sube fotos para poder elegir una portada.
+            </p>
+          )}
+
+          <div className="flex items-center gap-3 border-t border-border pt-3">
+            <button
+              type="button"
+              disabled={coverBusy}
+              onClick={() => coverFileRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60"
+            >
+              {coverBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
+              Subir imagen externa
+            </button>
+            <span className="text-[11px] text-muted-foreground">
+              JPG, PNG o WebP
+            </span>
+          </div>
+          <input
+            ref={coverFileRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              e.target.value = ""
+              setCoverBusy(true)
+              try {
+                const fd = new FormData()
+                fd.append("file", file)
+                fd.append("variant", "gallery-cover")
+                const res = await fetch("/api/studio/branding/logo", { method: "POST", body: fd })
+                const json = (await res.json()) as { url?: string; error?: string }
+                if (!res.ok || !json.url) throw new Error(json.error || "Error al subir")
+                setExternalCoverUrl(json.url)
+                await setCoverAssetAction(galleryId, null)
+                setCurrentCoverId(null)
+                await saveGalleryAppearanceAction(galleryId, {
+                  templateId: s.templateId,
+                  theme: { mode: s.mode, ...(s.accent ? { accent: s.accent } : {}), ...(s.columns ? { columns: s.columns } : {}) },
+                  coverConfig: { ...c, imageUrl: json.url, title: s.coverTitle.trim() || null, subtitle: s.coverSubtitle.trim() || null, focalX: s.focalX, focalY: s.focalY, overlay: s.overlay, overlayIntensity: s.overlayIntensity, showButton: s.showButton, buttonLabel: s.buttonLabel.trim() || null, textAlign: s.textAlign },
+                  welcomeText: s.welcomeText.trim() || null,
+                })
+                toast.success("Portada externa subida")
+                router.refresh()
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : "Error al subir")
+              } finally {
+                setCoverBusy(false)
+              }
+            }}
+          />
+        </section>
+
+        {/* Portada — texto y overlay */}
+        <section className="sf-card space-y-4 p-5">
+          <h3 className="text-sm font-semibold text-foreground">Texto de portada</h3>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className={labelCls}>Título (sobre la portada)</label>

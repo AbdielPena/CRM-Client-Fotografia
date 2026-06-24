@@ -599,6 +599,20 @@ export async function saveGalleryAppearanceAction(
   return { ok: true }
 }
 
+export async function setCoverAssetAction(
+  galleryId: string,
+  coverAssetId: string | null,
+): Promise<{ ok: true }> {
+  const ctx = await requireStudioAuth()
+  uuidSchema.parse(galleryId)
+  if (coverAssetId) uuidSchema.parse(coverAssetId)
+  await updateGallery(ctx.studioId, ctx.userId, galleryId, {
+    coverAssetId: coverAssetId ?? null,
+  })
+  revalidatePath(`/galleries/${galleryId}`)
+  return { ok: true }
+}
+
 export async function setAssetsDeliveryTrackAction(
   galleryId: string,
   assetIds: string[],

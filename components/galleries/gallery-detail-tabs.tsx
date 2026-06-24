@@ -282,7 +282,14 @@ export function GalleryDetailTabs({
               subtitle: gallery.subtitle,
               welcomeText: gallery.welcome_text,
               coverImageUrl,
+              coverAssetId: (gallery as unknown as { cover_asset_id?: string | null }).cover_asset_id ?? null,
             }}
+            assets={assets.filter((a) => a.status === "completed").map((a) => ({
+              id: a.id,
+              thumbUrl: a.thumbUrl,
+              webUrl: a.webUrl,
+              original_name: a.original_name,
+            }))}
           />
         </TabsContent>
 
