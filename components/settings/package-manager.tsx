@@ -42,6 +42,7 @@ interface Package {
   durationHours?: number
   editedPhotos?: number
   deliveryDays?: number
+  balanceDueOffsetDays?: number
   includes?: string
   isActive: boolean
   contractTemplateId?: string
@@ -754,6 +755,29 @@ function PackageForm({
           <p className="mt-1 text-xs text-muted-foreground">
             Días para entregar tras la sesión. El sistema calcula la fecha de
             entrega y prioriza según el cumpleaños. Déjalo vacío si no aplica.
+          </p>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Vencimiento del saldo (2da factura)
+          </label>
+          <select
+            name="balanceDueOffsetDays"
+            defaultValue={String(defaultValues?.balanceDueOffsetDays ?? 0)}
+            className={inputCls}
+          >
+            <option value="0">El día de la sesión de fotos</option>
+            <option value="-1">1 día antes de la sesión</option>
+            <option value="-2">2 días antes de la sesión</option>
+            <option value="-3">3 días antes de la sesión</option>
+            <option value="-7">1 semana antes de la sesión</option>
+            <option value="1">1 día después de la sesión</option>
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Cuándo vence la factura de saldo (el resto a pagar). Se calcula
+            automáticamente a partir de la fecha de la sesión reservada. La
+            reserva (1ra factura) usa sus propios días de vencimiento.
           </p>
         </div>
 

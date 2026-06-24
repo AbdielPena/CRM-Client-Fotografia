@@ -110,6 +110,8 @@ export async function createPackage(
   ;(insert as Record<string, unknown>).service_category_id = data.serviceCategoryId || null
   // cover_image_url: portada del plan (URL del bucket). "" / null → sin portada.
   ;(insert as Record<string, unknown>).cover_image_url = data.coverImageUrl || null
+  // balance_due_offset_days: vencimiento del saldo relativo a la sesión (0 = mismo día).
+  ;(insert as Record<string, unknown>).balance_due_offset_days = data.balanceDueOffsetDays ?? 0
   if (printEntitlements !== undefined) {
     ;(insert as Record<string, unknown>).print_entitlements = printEntitlements
   }
@@ -148,6 +150,8 @@ export async function updatePackage(
     patch.service_category_id = data.serviceCategoryId || null
   if (data.coverImageUrl !== undefined)
     patch.cover_image_url = data.coverImageUrl || null
+  if (data.balanceDueOffsetDays !== undefined)
+    patch.balance_due_offset_days = data.balanceDueOffsetDays ?? 0
 
   // Slug: si el user lo escribe explícito → usamos su valor (sanitizado).
   // Si cambia el nombre sin slug explícito → regeneramos para mantener SEO-friendly.

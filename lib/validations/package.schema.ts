@@ -24,6 +24,9 @@ export const createPackageSchema = z.object({
   // Tiempo estimado de entrega del servicio (en días). Editable por plan; no es
   // un valor fijo del sistema. Alimenta el cálculo de fechas de entrega.
   deliveryDays: z.coerce.number().int().min(0).max(365).optional(),
+  // Vencimiento de la factura de SALDO (2da factura) relativo a la fecha de la
+  // sesión: 0 = el día de la sesión, -1 = un día antes, +1 = un día después.
+  balanceDueOffsetDays: z.coerce.number().int().min(-60).max(60).optional(),
   includes: z.string().max(2000).optional().or(z.literal("")),
   isActive: z.boolean().default(true),
   // Plantilla de contrato y formulario que se aplican por defecto cuando un
