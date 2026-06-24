@@ -101,10 +101,17 @@ function GalleryHero({
   accent: string
   photoCount: number
 }) {
-  const [imgError, setImgError] = useState(false)
-  const bg = imgError
-    ? gallery.coverThumbUrl
-    : gallery.coverWebUrl || gallery.coverThumbUrl
+  // Candidatos de portada en orden de prioridad:
+  // 1) imagen externa subida (cover_config.imageUrl) — full URL
+  // 2) web rendition (sin watermark si aplica)
+  // 3) thumb (siempre sin watermark) — último respaldo
+  const candidates = [
+    cover.imageUrl || null,
+    gallery.coverWebUrl,
+    gallery.coverThumbUrl,
+  ].filter((u): u is string => !!u)
+  const [imgIdx, setImgIdx] = useState(0)
+  const bg = candidates[Math.min(imgIdx, candidates.length - 1)] ?? null
   if (!bg) return null
   const title = cover.title || gallery.name
   const subtitle =
@@ -129,7 +136,7 @@ function GalleryHero({
         style={{
           objectPosition: `${(cover.focalX ?? 0.5) * 100}% ${(cover.focalY ?? 0.5) * 100}%`,
         }}
-        onError={() => { if (!imgError) setImgError(true) }}
+        onError={() => setImgIdx((i) => (i < candidates.length - 1 ? i + 1 : i))}
       />
       {cover.overlay !== "none" && (
         <div

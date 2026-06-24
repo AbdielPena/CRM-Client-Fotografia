@@ -29,8 +29,14 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!view) {
     return { title: "Galería no disponible", robots: { index: false, follow: false } }
   }
-  // OG image en resolución web (1600px) — no el thumb de 400px (preview pixelado).
-  const ogImage = view.gallery.coverWebUrl || view.gallery.coverThumbUrl
+  // OG image: portada externa (cover_config.imageUrl) si existe, si no la
+  // resolución web (1600px) — no el thumb de 400px (preview pixelado).
+  const externalCover =
+    typeof (view.gallery.coverConfig as Record<string, unknown> | undefined)?.["imageUrl"] ===
+    "string"
+      ? ((view.gallery.coverConfig as Record<string, unknown>)["imageUrl"] as string)
+      : null
+  const ogImage = externalCover || view.gallery.coverWebUrl || view.gallery.coverThumbUrl
   const branding = await getPublicBrandingByStudioId(view.gallery.studioId)
   return {
     title: view.gallery.name,
