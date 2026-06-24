@@ -14,9 +14,11 @@ import {
   createGalleryShareToken,
   deleteGallery,
   publishGallery,
+  reorderAssets,
   setAssetsDeliveryTrack,
   setGalleryEmbed,
   shareGalleryWithClient,
+  sortAssetsByName,
   updateGallery,
   updateGalleryBookConfig,
   type CreateGalleryInput,
@@ -609,6 +611,28 @@ export async function setCoverAssetAction(
   await updateGallery(ctx.studioId, ctx.userId, galleryId, {
     coverAssetId: coverAssetId ?? null,
   })
+  revalidatePath(`/galleries/${galleryId}`)
+  return { ok: true }
+}
+
+export async function sortAssetsByNameAction(
+  galleryId: string,
+): Promise<{ sorted: number }> {
+  const ctx = await requireStudioAuth()
+  uuidSchema.parse(galleryId)
+  const result = await sortAssetsByName(ctx.studioId, galleryId)
+  revalidatePath(`/galleries/${galleryId}`)
+  return result
+}
+
+export async function reorderAssetsAction(
+  galleryId: string,
+  orderedIds: string[],
+): Promise<{ ok: true }> {
+  const ctx = await requireStudioAuth()
+  uuidSchema.parse(galleryId)
+  z.array(uuidSchema).max(5000).parse(orderedIds)
+  await reorderAssets(ctx.studioId, galleryId, orderedIds)
   revalidatePath(`/galleries/${galleryId}`)
   return { ok: true }
 }

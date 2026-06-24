@@ -23,6 +23,7 @@ import {
   Sparkles,
   MessageCircle,
   ExternalLink,
+  ArrowDownAZ,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -381,6 +382,9 @@ function PhotosTab({
         </div>
       )}
       <AssetUploader galleryId={gallery.id} studioId={studioId} targets={uploadTargets} />
+      {assets.length > 1 && (
+        <SortByNameButton galleryId={gallery.id} />
+      )}
       {assets.length > 0 ? (
         <AssetGrid
           galleryId={gallery.id}
@@ -1868,6 +1872,39 @@ function ShareTab({
         )}
       </div>
       )}
+    </div>
+  )
+}
+
+function SortByNameButton({ galleryId }: { galleryId: string }) {
+  const router = useRouter()
+  const [busy, setBusy] = React.useState(false)
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          try {
+            const { sortAssetsByNameAction } = await import("@/server/actions/gallery.actions")
+            const r = await sortAssetsByNameAction(galleryId)
+            toast.success(`${r.sorted} fotos ordenadas por nombre`)
+            router.refresh()
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Error al ordenar")
+          } finally {
+            setBusy(false)
+          }
+        }}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+      >
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowDownAZ className="h-3.5 w-3.5" />}
+        Ordenar por nombre
+      </button>
+      <span className="text-[11px] text-muted-foreground">
+        (orden de captura de la cámara)
+      </span>
     </div>
   )
 }

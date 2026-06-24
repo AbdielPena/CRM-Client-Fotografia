@@ -1053,6 +1053,51 @@ export async function bulkDeleteAssets(
   return { deleted: n }
 }
 
+export async function sortAssetsByName(
+  studioId: string,
+  galleryId: string,
+): Promise<{ sorted: number }> {
+  const supabase = srvc() as unknown as SupabaseClient
+  const { data: assets } = await supabase
+    .from("gallery_assets")
+    .select("id, original_name")
+    .eq("gallery_id", galleryId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .order("original_name", { ascending: true })
+  if (!assets || assets.length === 0) return { sorted: 0 }
+  const sorted = assets as Array<{ id: string; original_name: string }>
+  const now = new Date().toISOString()
+  await Promise.all(
+    sorted.map((a, idx) =>
+      supabase
+        .from("gallery_assets")
+        .update({ sort_order: idx, updated_at: now })
+        .eq("id", a.id),
+    ),
+  )
+  return { sorted: sorted.length }
+}
+
+export async function reorderAssets(
+  studioId: string,
+  galleryId: string,
+  orderedIds: string[],
+): Promise<void> {
+  const supabase = srvc() as unknown as SupabaseClient
+  const now = new Date().toISOString()
+  await Promise.all(
+    orderedIds.map((id, idx) =>
+      supabase
+        .from("gallery_assets")
+        .update({ sort_order: idx, updated_at: now })
+        .eq("id", id)
+        .eq("gallery_id", galleryId)
+        .eq("studio_id", studioId),
+    ),
+  )
+}
+
 /**
  * Trae TODAS las filas de una consulta paginando en lotes. PostgREST/Supabase
  * corta en 1000 filas por defecto (max-rows), así que una galería con +1000
@@ -1358,12 +1403,13 @@ export async function validateGalleryToken(
     db
       .from("gallery_assets")
       .select(
-        "id, width, height, thumb_key, web_key, status, metadata, delivery_track",
+        "id, width, height, thumb_key, web_key, status, metadata, delivery_track, original_name",
       )
       .eq("gallery_id", tk.gallery_id)
       .is("deleted_at", null)
       .eq("status", "completed")
       .order("sort_order", { ascending: true })
+      .order("original_name", { ascending: true })
       .order("created_at", { ascending: true })
       .range(from, to),
   )

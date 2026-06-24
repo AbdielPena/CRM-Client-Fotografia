@@ -89,7 +89,7 @@ function formatEventDate(d: string): string | null {
   }
 }
 
-/** Portada hero full-bleed (premium) que aparece arriba de la galería. */
+/** Portada hero full-bleed (flat, amplia) que aparece arriba de la galería. */
 function GalleryHero({
   gallery,
   cover,
@@ -117,7 +117,7 @@ function GalleryHero({
         ? "items-end text-right"
         : "items-center text-center"
   return (
-    <section className="relative h-[70vh] min-h-[440px] w-full overflow-hidden">
+    <section className="relative w-full overflow-hidden" style={{ aspectRatio: "21/9", minHeight: "280px", maxHeight: "480px" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={bg}
@@ -138,16 +138,16 @@ function GalleryHero({
       )}
       <div
         className={cn(
-          "relative z-10 mx-auto flex h-full max-w-5xl flex-col justify-center gap-3 px-6",
+          "relative z-10 mx-auto flex h-full max-w-5xl flex-col justify-end gap-2 px-6 pb-8",
           align,
         )}
       >
-        <h1 className="text-4xl font-semibold leading-[1.05] sm:text-6xl" style={{ color: fg }}>
+        <h1 className="text-3xl font-bold leading-tight tracking-tight sm:text-5xl" style={{ color: fg }}>
           {title}
         </h1>
         {subtitle && (
           <p
-            className="text-base sm:text-lg"
+            className="text-sm font-medium sm:text-base"
             style={{ color: textLight ? "rgba(255,255,255,.85)" : "rgba(0,0,0,.7)" }}
           >
             {subtitle}
@@ -155,28 +155,30 @@ function GalleryHero({
         )}
         {gallery.welcomeText && (
           <p
-            className="max-w-xl text-sm"
-            style={{ color: textLight ? "rgba(255,255,255,.75)" : "rgba(0,0,0,.6)" }}
+            className="max-w-lg text-xs sm:text-sm"
+            style={{ color: textLight ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.55)" }}
           >
             {gallery.welcomeText}
           </p>
         )}
-        {cover.showButton && (
-          <a
-            href="#fotos"
-            className="mt-3 inline-block rounded-full px-6 py-2.5 text-sm font-semibold text-white shadow-lg transition-transform hover:scale-105"
-            style={{ background: accent }}
+        <div className="mt-2 flex items-center gap-3">
+          {cover.showButton && (
+            <a
+              href="#fotos"
+              className="inline-block rounded-full px-5 py-2 text-sm font-semibold text-white shadow transition-transform hover:scale-105"
+              style={{ background: accent }}
+            >
+              {cover.buttonLabel ||
+                (gallery.galleryType === "final_delivery" ? "Ver mis fotos" : "Ver fotos")}
+            </a>
+          )}
+          <span
+            className="text-xs font-medium"
+            style={{ color: textLight ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.55)" }}
           >
-            {cover.buttonLabel ||
-              (gallery.galleryType === "final_delivery" ? "Ver mis fotos" : "Entrar a seleccionar")}
-          </a>
-        )}
-        <p
-          className="mt-1 text-xs"
-          style={{ color: textLight ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.55)" }}
-        >
-          {photoCount} fotos
-        </p>
+            {photoCount} fotos
+          </span>
+        </div>
       </div>
     </section>
   )
@@ -979,7 +981,7 @@ export function PublicGalleryView({
             Aún no hay fotos en esta galería.
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {visibleAssets.map((a, i) => {
               const marked = isMarked(a.id)
               return (
@@ -996,7 +998,7 @@ export function PublicGalleryView({
                       : undefined
                   }
                   className={cn(
-                    "group relative aspect-square overflow-hidden rounded-md bg-zinc-200 transition-all dark:bg-zinc-800",
+                    "group relative aspect-[4/5] overflow-hidden rounded-xl bg-zinc-100 shadow-sm transition-all hover:shadow-md dark:bg-zinc-800",
                     !isShowingDelivery && marked && "ring-2 ring-gold-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
                   )}
                 >
@@ -1007,7 +1009,7 @@ export function PublicGalleryView({
                       alt={`Foto ${i + 1}`}
                       loading="lazy"
                       draggable={false}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
                     />
                   ) : null}
 
