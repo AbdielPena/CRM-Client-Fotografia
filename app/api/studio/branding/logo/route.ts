@@ -17,7 +17,8 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 const BUCKET = "studio-branding"
-const MAX_BYTES = 2 * 1024 * 1024 // 2 MB (límite del bucket)
+const MAX_BYTES = 2 * 1024 * 1024 // 2 MB
+const MAX_BYTES_COVER = 5 * 1024 * 1024 // 5 MB para portada de galería
 const ALLOWED: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -54,12 +55,6 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     )
   }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { error: "El archivo supera 2 MB." },
-      { status: 400 },
-    )
-  }
   const safeVariant = [
     "light",
     "dark",
@@ -67,9 +62,18 @@ export async function POST(req: NextRequest) {
     "banner",
     "package-cover",
     "book-cover",
+    "gallery-cover",
   ].includes(variant)
     ? variant
     : "light"
+
+  const maxSize = safeVariant === "gallery-cover" ? MAX_BYTES_COVER : MAX_BYTES
+  if (file.size > maxSize) {
+    return NextResponse.json(
+      { error: `El archivo supera ${maxSize / (1024 * 1024)} MB.` },
+      { status: 400 },
+    )
+  }
 
   const buffer = Buffer.from(await file.arrayBuffer())
   const path = `studios/${studioId}/${safeVariant}-${Date.now()}.${ext}`
