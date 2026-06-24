@@ -101,7 +101,10 @@ function GalleryHero({
   accent: string
   photoCount: number
 }) {
-  const bg = gallery.coverWebUrl || gallery.coverThumbUrl
+  const [imgError, setImgError] = useState(false)
+  const bg = imgError
+    ? gallery.coverThumbUrl
+    : gallery.coverWebUrl || gallery.coverThumbUrl
   if (!bg) return null
   const title = cover.title || gallery.name
   const subtitle =
@@ -126,6 +129,7 @@ function GalleryHero({
         style={{
           objectPosition: `${(cover.focalX ?? 0.5) * 100}% ${(cover.focalY ?? 0.5) * 100}%`,
         }}
+        onError={() => { if (!imgError) setImgError(true) }}
       />
       {cover.overlay !== "none" && (
         <div

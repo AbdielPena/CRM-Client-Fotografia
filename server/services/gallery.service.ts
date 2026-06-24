@@ -1438,7 +1438,19 @@ export async function validateGalleryToken(
     assetList[0] ||
     null
   const coverThumb = getAssetThumbUrl((coverAsset?.thumb_key as string | null) ?? null)
-  const coverWeb = getAssetWebUrl((coverAsset?.web_key as string | null) ?? null)
+  // Si watermark activo, usar web-clean.webp (sin marca) para la portada.
+  let coverWeb: string | null = null
+  if (coverAsset && gallery.watermark_enabled) {
+    const cleanKey = webCleanKey(
+      gallery.studio_id as string,
+      gallery.id as string,
+      coverAsset.id as string,
+    )
+    coverWeb = getAssetWebUrl(cleanKey)
+  }
+  if (!coverWeb) {
+    coverWeb = getAssetWebUrl((coverAsset?.web_key as string | null) ?? null)
+  }
 
   const metaOf = (a: Record<string, unknown>) =>
     (a.metadata && typeof a.metadata === "object" ? a.metadata : {}) as Record<string, unknown>
@@ -1516,7 +1528,7 @@ export async function getEmbeddableGallery(
   const { data: g } = await db
     .from("galleries")
     .select(
-      "id, studio_id, name, slug, description, subtitle, gallery_type, template_id, theme, cover_config, accent_color, event_date, layout_grid, status, expires_at, embed_enabled, embed_token, cover_asset_id, updated_at",
+      "id, studio_id, name, slug, description, subtitle, gallery_type, template_id, theme, cover_config, accent_color, event_date, layout_grid, status, expires_at, embed_enabled, embed_token, cover_asset_id, updated_at, watermark_enabled",
     )
     .eq("id", galleryId)
     .is("deleted_at", null)
@@ -1560,15 +1572,27 @@ export async function getEmbeddableGallery(
 
   // Portada (puede no estar en la página actual): query puntual.
   let coverUrl: string | null = null
-  if (g.cover_asset_id) {
+  const covId = g.cover_asset_id as string | null
+  if (covId && g.watermark_enabled) {
+    const cleanKey = webCleanKey(g.studio_id as string, g.id as string, covId)
+    coverUrl = getAssetWebUrl(cleanKey)
+  }
+  if (!coverUrl && covId) {
     const { data: cov } = await db
       .from("gallery_assets")
       .select("web_key")
-      .eq("id", g.cover_asset_id)
+      .eq("id", covId)
       .maybeSingle()
     coverUrl = getAssetWebUrl((cov?.web_key as string | null) ?? null)
-  } else if (list[0]) {
-    coverUrl = getAssetWebUrl((list[0].web_key as string | null) ?? null)
+  }
+  if (!coverUrl && list[0]) {
+    if (g.watermark_enabled) {
+      const cleanKey = webCleanKey(g.studio_id as string, g.id as string, list[0].id as string)
+      coverUrl = getAssetWebUrl(cleanKey)
+    }
+    if (!coverUrl) {
+      coverUrl = getAssetWebUrl((list[0].web_key as string | null) ?? null)
+    }
   }
 
   const metaOf = (a: Record<string, unknown>) =>
