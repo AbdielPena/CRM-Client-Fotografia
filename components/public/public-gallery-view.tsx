@@ -117,7 +117,7 @@ function GalleryHero({
         ? "items-end text-right"
         : "items-center text-center"
   return (
-    <section className="relative w-full overflow-hidden" style={{ aspectRatio: "21/9", minHeight: "280px", maxHeight: "480px" }}>
+    <section className="relative w-full overflow-hidden" style={{ aspectRatio: "16/9", minHeight: "360px", maxHeight: "640px" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={bg}
