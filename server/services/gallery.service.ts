@@ -138,6 +138,10 @@ function webKey(studioId: string, galleryId: string, assetId: string): string {
   return `${studioId}/${galleryId}/${assetId}/web.webp`
 }
 
+function webCleanKey(studioId: string, galleryId: string, assetId: string): string {
+  return `${studioId}/${galleryId}/${assetId}/web-clean.webp`
+}
+
 function extFromMime(mime: string): string {
   switch (mime) {
     case "image/jpeg":
@@ -876,6 +880,9 @@ async function processAssetSafely(
       .webp({ quality: 82 })
       .toBuffer()
 
+    // Copia limpia del web rendition (sin watermark) para portada/OG.
+    const webCleanBuf = Buffer.from(webBuf)
+
     // Watermark si la galería lo tiene activo. Solo afecta el web rendition;
     // thumb queda limpio (no vale la pena en 400px) y el original también.
     const { getWatermarkConfig, applyWatermark } = await import(
@@ -903,10 +910,12 @@ async function processAssetSafely(
 
     const tKey = thumbKey(studioId, galleryId, assetId)
     const wKey = webKey(studioId, galleryId, assetId)
+    const wcKey = webCleanKey(studioId, galleryId, assetId)
 
     if (isLocalStorage()) {
       await localWrite(RENDITIONS_BUCKET, tKey, thumbBuf)
       await localWrite(RENDITIONS_BUCKET, wKey, webBuf)
+      if (watermarkCfg) await localWrite(RENDITIONS_BUCKET, wcKey, webCleanBuf)
     } else {
       const upThumb = await supabase.storage
         .from(RENDITIONS_BUCKET)
@@ -917,6 +926,13 @@ async function processAssetSafely(
         .from(RENDITIONS_BUCKET)
         .upload(wKey, webBuf, { contentType: "image/webp", upsert: true })
       if (upWeb.error) throw upWeb.error
+
+      if (watermarkCfg) {
+        await supabase.storage
+          .from(RENDITIONS_BUCKET)
+          .upload(wcKey, webCleanBuf, { contentType: "image/webp", upsert: true })
+          .catch(() => {})
+      }
     }
 
     await supabase
@@ -1392,7 +1408,7 @@ export async function validateGalleryToken(
   const { data: gallery } = await db
     .from("galleries")
     .select(
-      "id, studio_id, name, description, subtitle, welcome_text, visibility, allow_download, require_email, status, cover_asset_id, gallery_type, template_id, theme, cover_config, accent_color, event_date, expires_at, book_enabled, book_display_mode, book_template_id, book_cover_image, book_settings",
+      "id, studio_id, name, description, subtitle, welcome_text, visibility, allow_download, require_email, status, cover_asset_id, gallery_type, template_id, theme, cover_config, accent_color, event_date, expires_at, book_enabled, book_display_mode, book_template_id, book_cover_image, book_settings, watermark_enabled",
     )
     .eq("id", tk.gallery_id)
     .is("deleted_at", null)
@@ -1417,12 +1433,17 @@ export async function validateGalleryToken(
   const assetList = assetsRaw as any[]
 
   // Portada: usa el cover elegido, o el primer asset como respaldo.
+  // Si la galería tiene watermark, intentamos la versión clean (sin marca) para la portada.
   const coverAsset =
     (gallery.cover_asset_id && assetList.find((a) => a.id === gallery.cover_asset_id)) ||
     assetList[0] ||
     null
   const coverThumb = getAssetThumbUrl((coverAsset?.thumb_key as string | null) ?? null)
-  const coverWeb = getAssetWebUrl((coverAsset?.web_key as string | null) ?? null)
+  let coverWeb = getAssetWebUrl((coverAsset?.web_key as string | null) ?? null)
+  if (coverAsset && gallery.watermark_enabled) {
+    const cleanKey = webCleanKey(gallery.studio_id as string, gallery.id as string, coverAsset.id as string)
+    coverWeb = getAssetWebUrl(cleanKey) || coverWeb
+  }
 
   const metaOf = (a: Record<string, unknown>) =>
     (a.metadata && typeof a.metadata === "object" ? a.metadata : {}) as Record<string, unknown>
