@@ -981,6 +981,91 @@ export async function reprocessAsset(
   void processAssetSafely(assetId, studioId, galleryId)
 }
 
+/** Devuelve el studio_id dueño de una galería (para auth por internal key). */
+export async function getGalleryStudioId(
+  galleryId: string,
+): Promise<string | null> {
+  const supabase = svc()
+  const { data } = await supabase
+    .from("galleries")
+    .select("studio_id")
+    .eq("id", galleryId)
+    .maybeSingle()
+  return (data?.studio_id as string | null) ?? null
+}
+
+/**
+ * Reprocesa en LOTE los assets atascados (pending/processing/failed) de una
+ * galería. A diferencia de reprocessAsset (fire-and-forget), aquí se AWAITea
+ * cada sub-lote con concurrencia baja para no agotar memoria del server cuando
+ * hay miles de fotos. Pensado para llamarse repetidamente hasta remaining=0.
+ */
+export async function reprocessStuckAssets(
+  studioId: string,
+  galleryId: string,
+  limit = 12,
+  concurrency = 3,
+): Promise<{ processed: number; remaining: number; completedAdded: number }> {
+  const supabase = svc()
+  const STUCK = ["pending", "processing", "failed"]
+
+  const { data: stuck } = await supabase
+    .from("gallery_assets")
+    .select("id")
+    .eq("studio_id", studioId)
+    .eq("gallery_id", galleryId)
+    .is("deleted_at", null)
+    .in("status", STUCK)
+    .order("created_at", { ascending: true })
+    .limit(limit)
+
+  const ids = (stuck ?? []).map((r) => r.id as string)
+
+  let completedAdded = 0
+  for (let i = 0; i < ids.length; i += concurrency) {
+    const chunk = ids.slice(i, i + concurrency)
+    const results = await Promise.all(
+      chunk.map(async (id) => {
+        try {
+          await processAssetSafely(id, studioId, galleryId)
+          const { data } = await supabase
+            .from("gallery_assets")
+            .select("status")
+            .eq("id", id)
+            .maybeSingle()
+          return data?.status === "completed"
+        } catch {
+          return false
+        }
+      }),
+    )
+    completedAdded += results.filter(Boolean).length
+  }
+
+  const { count } = await supabase
+    .from("gallery_assets")
+    .select("id", { count: "exact", head: true })
+    .eq("gallery_id", galleryId)
+    .is("deleted_at", null)
+    .in("status", STUCK)
+
+  // Mantener asset_count sincronizado con los completados reales.
+  const { count: completedCount } = await supabase
+    .from("gallery_assets")
+    .select("id", { count: "exact", head: true })
+    .eq("gallery_id", galleryId)
+    .is("deleted_at", null)
+    .eq("status", "completed")
+  if (typeof completedCount === "number") {
+    await supabase
+      .from("galleries")
+      .update({ asset_count: completedCount })
+      .eq("id", galleryId)
+  }
+
+  return { processed: ids.length, remaining: count ?? 0, completedAdded }
+}
+
 export async function deleteAsset(
   studioId: string,
   galleryId: string,

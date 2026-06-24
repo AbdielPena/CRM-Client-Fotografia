@@ -543,6 +543,31 @@ export async function notifyClientFinalDeliveryAction(input: {
   }
 }
 
+/**
+ * Cancela la entrega final de una galería: limpia `delivery_ready_at` y revierte
+ * `gallery_type` a "selection". Las fotos y la selección quedan intactas; solo
+ * se "des-publica" la entrega (el cliente deja de ver la sección de entrega y
+ * el banner de "fotos finales listas"). Reversible volviendo a enviar.
+ */
+export async function cancelDeliveryAction(input: {
+  galleryId: string
+}): Promise<{ ok: true }> {
+  const ctx = await requireStudioAuth()
+  const galleryId = uuidSchema.parse(input.galleryId)
+
+  const { untypedService } = await import("@/server/supabase/untyped")
+  const sb = untypedService()
+
+  await sb
+    .from("galleries")
+    .update({ delivery_ready_at: null, gallery_type: "selection" })
+    .eq("id", galleryId)
+    .eq("studio_id", ctx.studioId)
+
+  revalidatePath(`/galleries/${galleryId}`)
+  return { ok: true }
+}
+
 // ─── Galerías 2.0: apariencia / pistas / embed ──────────────────────────────
 
 const appearanceSchema = z.object({

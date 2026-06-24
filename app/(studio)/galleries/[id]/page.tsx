@@ -305,6 +305,8 @@ export default async function GalleryDetailPage({
             (gallery as unknown as { download_pin_required: boolean }).download_pin_required ?? false,
           selection_submitted: gallery.selection_submitted ?? false,
           gallery_type: gallery.gallery_type ?? "selection",
+          delivery_ready_at:
+            (gallery as unknown as { delivery_ready_at: string | null }).delivery_ready_at ?? null,
           template_id: gallery.template_id ?? "classic_proofing",
           theme: gallery.theme ?? {},
           cover_config: gallery.cover_config ?? {},

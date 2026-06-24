@@ -558,8 +558,11 @@ export function PublicGalleryView({
   const hasTracks = deliveryAssets.length > 0
   const hasSelection = selectionAssets.length > 0
   const showBothSections = hasSelection && hasTracks && deliveryReady
+  // Default SIEMPRE en "selección": aunque la entrega esté lista, el cliente
+  // debe poder seguir viendo todas sus fotos y re-seleccionar. El toggle da
+  // acceso a la entrega final cuando existe.
   const [activeSection, setActiveSection] = useState<"selection" | "delivery">(
-    deliveryReady && hasTracks ? "delivery" : "selection",
+    "selection",
   )
   const isShowingDelivery = activeSection === "delivery" && hasTracks && deliveryReady
   const visibleAssets = isShowingDelivery ? deliveryAssets : selectionAssets.length > 0 ? selectionAssets : assets
@@ -996,9 +999,17 @@ export function PublicGalleryView({
             {visibleAssets.map((a, i) => {
               const marked = isMarked(a.id)
               return (
-                <button
+                <div
                   key={a.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setOpen(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault()
+                      setOpen(i)
+                    }
+                  }}
                   style={
                     a.lqip
                       ? {
@@ -1009,7 +1020,7 @@ export function PublicGalleryView({
                       : undefined
                   }
                   className={cn(
-                    "group relative aspect-[4/5] overflow-hidden rounded-xl bg-zinc-100 shadow-sm transition-all hover:shadow-md dark:bg-zinc-800",
+                    "group relative aspect-[4/5] cursor-pointer overflow-hidden rounded-xl bg-zinc-100 shadow-sm transition-all hover:shadow-md dark:bg-zinc-800",
                     !isShowingDelivery && marked && "ring-2 ring-gold-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
                   )}
                 >
@@ -1024,27 +1035,27 @@ export function PublicGalleryView({
                     />
                   ) : null}
 
-                  {/* Corazón de selección — solo en galerías de selección */}
+                  {/* Corazón de selección — solo en galerías de selección.
+                      Siempre visible y clickeable (incl. móvil/touch). */}
                   {!isShowingDelivery && (
-                    <span
-                      role="button"
-                      tabIndex={0}
+                    <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         void toggleHeart(a.id)
                       }}
                       className={cn(
-                        "absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full backdrop-blur transition-all",
+                        "absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full shadow-md backdrop-blur transition-all active:scale-90",
                         marked
-                          ? "bg-gold-500 text-white opacity-100 shadow-md hover:bg-gold-600"
-                          : "bg-white/85 text-zinc-700 opacity-0 hover:bg-white group-hover:opacity-100",
+                          ? "bg-gold-500 text-white hover:bg-gold-600"
+                          : "bg-white/90 text-zinc-700 hover:bg-white hover:text-gold-600",
                       )}
                       aria-label={marked ? "Quitar de selección" : "Agregar a selección"}
                     >
-                      <Heart className="h-4 w-4" fill={marked ? "currentColor" : "none"} />
-                    </span>
+                      <Heart className="h-[18px] w-[18px]" fill={marked ? "currentColor" : "none"} />
+                    </button>
                   )}
-                </button>
+                </div>
               )
             })}
           </div>

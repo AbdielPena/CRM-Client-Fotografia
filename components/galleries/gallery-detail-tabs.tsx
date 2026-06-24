@@ -24,6 +24,8 @@ import {
   MessageCircle,
   ExternalLink,
   ArrowDownAZ,
+  CheckCircle2,
+  Ban,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -54,6 +56,7 @@ import {
   publishGalleryAction,
   shareGalleryAction,
   updateGalleryAction,
+  cancelDeliveryAction,
 } from "@/server/actions/gallery.actions"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -76,6 +79,7 @@ type Gallery = {
   selection_submitted: boolean
   // Galerías 2.0
   gallery_type: "selection" | "final_delivery"
+  delivery_ready_at: string | null
   template_id: string
   theme: Record<string, unknown>
   cover_config: Record<string, unknown>
@@ -359,6 +363,13 @@ function PhotosTab({
   const canDeliver = !!uploadTargets && assets.length > 0 && !!client
   return (
     <div className="space-y-5">
+      {/* Estado de entrega enviada: permite cancelar (des-publicar) la entrega. */}
+      {gallery.delivery_ready_at && (
+        <DeliveryStatusBanner
+          galleryId={gallery.id}
+          deliveryReadyAt={gallery.delivery_ready_at}
+        />
+      )}
       {/* Habilitar entrega final (crea carpetas de pista en la misma galería). */}
       {!uploadTargets && (
         <EnableFinalDeliveryBanner galleryId={gallery.id} hasDeliveryAssets={hasDeliveryAssets} />
@@ -1905,6 +1916,93 @@ function SortByNameButton({ galleryId }: { galleryId: string }) {
       <span className="text-[11px] text-muted-foreground">
         (orden de captura de la cámara)
       </span>
+    </div>
+  )
+}
+
+/** Banner cuando la entrega ya fue enviada al cliente: permite cancelarla. */
+function DeliveryStatusBanner({
+  galleryId,
+  deliveryReadyAt,
+}: {
+  galleryId: string
+  deliveryReadyAt: string
+}) {
+  const router = useRouter()
+  const [pending, start] = useTransition()
+  const [confirming, setConfirming] = React.useState(false)
+
+  const cancel = () =>
+    start(async () => {
+      try {
+        await cancelDeliveryAction({ galleryId })
+        toast.success("Entrega cancelada. El cliente ya no la verá.")
+        setConfirming(false)
+        router.refresh()
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Error")
+      }
+    })
+
+  const fecha = (() => {
+    try {
+      return new Date(deliveryReadyAt).toLocaleDateString("es-DO", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    } catch {
+      return null
+    }
+  })()
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-50/60 p-4 dark:bg-emerald-500/5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="text-[13px] font-semibold text-foreground">
+            Entrega final enviada{fecha ? ` · ${fecha}` : ""}
+          </p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            El cliente ve la sección de entrega en su galería. Podés volver a
+            enviarla (actualizar) con el botón de arriba, o cancelarla para
+            ocultarla. Cancelar no borra ninguna foto.
+          </p>
+        </div>
+      </div>
+      {confirming ? (
+        <div className="flex shrink-0 items-center gap-2 self-center">
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-[12.5px] font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
+            Confirmar
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            disabled={pending}
+            className="rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+          >
+            No
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg border border-red-500/40 px-3 py-1.5 text-[12.5px] font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+        >
+          <Ban className="h-3.5 w-3.5" />
+          Cancelar entrega
+        </button>
+      )}
     </div>
   )
 }
