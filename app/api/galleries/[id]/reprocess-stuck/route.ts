@@ -46,11 +46,21 @@ async function handle(
       6,
     )
 
+    const allowed = ["pending", "processing", "failed"] as const
+    const statusesParam = (url.searchParams.get("statuses") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s): s is (typeof allowed)[number] =>
+        (allowed as readonly string[]).includes(s),
+      )
+    const statuses = statusesParam.length > 0 ? statusesParam : allowed
+
     const result = await reprocessStuckAssets(
       studioId,
       params.id,
       limit,
       concurrency,
+      statuses,
     )
     return NextResponse.json(result)
   } catch (e) {
