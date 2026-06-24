@@ -1007,7 +1007,7 @@ export async function reprocessStuckAssets(
   concurrency = 3,
 ): Promise<{ processed: number; remaining: number; completedAdded: number }> {
   const supabase = svc()
-  const STUCK = ["pending", "processing", "failed"]
+  const STUCK = ["pending", "processing", "failed"] as const
 
   const { data: stuck } = await supabase
     .from("gallery_assets")
@@ -1015,7 +1015,7 @@ export async function reprocessStuckAssets(
     .eq("studio_id", studioId)
     .eq("gallery_id", galleryId)
     .is("deleted_at", null)
-    .in("status", STUCK)
+    .in("status", [...STUCK])
     .order("created_at", { ascending: true })
     .limit(limit)
 
@@ -1047,7 +1047,7 @@ export async function reprocessStuckAssets(
     .select("id", { count: "exact", head: true })
     .eq("gallery_id", galleryId)
     .is("deleted_at", null)
-    .in("status", STUCK)
+    .in("status", [...STUCK])
 
   // Mantener asset_count sincronizado con los completados reales.
   const { count: completedCount } = await supabase
