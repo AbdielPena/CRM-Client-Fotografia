@@ -1433,17 +1433,12 @@ export async function validateGalleryToken(
   const assetList = assetsRaw as any[]
 
   // Portada: usa el cover elegido, o el primer asset como respaldo.
-  // Si la galería tiene watermark, intentamos la versión clean (sin marca) para la portada.
   const coverAsset =
     (gallery.cover_asset_id && assetList.find((a) => a.id === gallery.cover_asset_id)) ||
     assetList[0] ||
     null
   const coverThumb = getAssetThumbUrl((coverAsset?.thumb_key as string | null) ?? null)
-  let coverWeb = getAssetWebUrl((coverAsset?.web_key as string | null) ?? null)
-  if (coverAsset && gallery.watermark_enabled) {
-    const cleanKey = webCleanKey(gallery.studio_id as string, gallery.id as string, coverAsset.id as string)
-    coverWeb = getAssetWebUrl(cleanKey) || coverWeb
-  }
+  const coverWeb = getAssetWebUrl((coverAsset?.web_key as string | null) ?? null)
 
   const metaOf = (a: Record<string, unknown>) =>
     (a.metadata && typeof a.metadata === "object" ? a.metadata : {}) as Record<string, unknown>

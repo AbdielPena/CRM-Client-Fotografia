@@ -126,12 +126,6 @@ function GalleryHero({
         style={{
           objectPosition: `${(cover.focalX ?? 0.5) * 100}% ${(cover.focalY ?? 0.5) * 100}%`,
         }}
-        onError={(e) => {
-          const img = e.currentTarget
-          if (img.src.includes("web-clean.webp")) {
-            img.src = img.src.replace("web-clean.webp", "web.webp")
-          }
-        }}
       />
       {cover.overlay !== "none" && (
         <div
