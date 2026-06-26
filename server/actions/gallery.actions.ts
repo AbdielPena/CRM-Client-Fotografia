@@ -592,6 +592,7 @@ const appearanceSchema = z.object({
       imageUrl: z.string().url().nullable(),
       focalX: z.number().min(0).max(1),
       focalY: z.number().min(0).max(1),
+      zoom: z.number().min(1).max(3),
       overlay: z.enum(["none", "light", "dark"]),
       overlayIntensity: z.number().min(0).max(1),
       title: z.string().max(160).nullable(),

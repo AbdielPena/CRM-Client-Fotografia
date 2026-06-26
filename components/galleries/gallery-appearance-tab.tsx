@@ -30,6 +30,7 @@ interface AppearanceState {
   welcomeText: string
   focalX: number
   focalY: number
+  zoom: number
 }
 
 interface CoverAsset {
@@ -87,6 +88,7 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial, assets =
     welcomeText: initial.welcomeText ?? "",
     focalX: numClamp(c.focalX, 0.5, 0, 1),
     focalY: numClamp(c.focalY, 0.5, 0, 1),
+    zoom: numClamp(c.zoom, 1, 1, 3),
   })
 
   // Arrastrar el foco de la portada sobre la imagen real.
@@ -139,6 +141,7 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial, assets =
             subtitle: s.coverSubtitle.trim() || null,
             focalX: s.focalX,
             focalY: s.focalY,
+            zoom: s.zoom,
             overlay: s.overlay,
             overlayIntensity: s.overlayIntensity,
             showButton: s.showButton,
@@ -535,7 +538,7 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial, assets =
             }}
             onPointerUp={() => setDragging(false)}
             onPointerCancel={() => setDragging(false)}
-            className="relative aspect-[16/10] w-full touch-none select-none overflow-hidden rounded-2xl border border-border cursor-grab active:cursor-grabbing"
+            className="relative aspect-[16/9] w-full touch-none select-none overflow-hidden rounded-2xl border border-border cursor-grab active:cursor-grabbing"
             style={{ fontFamily: tokens.fontStack }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -544,7 +547,11 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial, assets =
               alt=""
               draggable={false}
               className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-              style={{ objectPosition: `${s.focalX * 100}% ${s.focalY * 100}%` }}
+              style={{
+                objectPosition: `${s.focalX * 100}% ${s.focalY * 100}%`,
+                transform: s.zoom !== 1 ? `scale(${s.zoom})` : undefined,
+                transformOrigin: `${s.focalX * 100}% ${s.focalY * 100}%`,
+              }}
             />
             {s.overlay !== "none" && (
               <span
@@ -613,6 +620,32 @@ export function GalleryAppearanceTab({ galleryId, galleryType, initial, assets =
             ? "Arrastra el punto para elegir qué parte de la foto queda centrada en la portada. Recuerda Guardar."
             : "La portada usa la foto de cover real en la galería pública."}
         </p>
+
+        {coverImageUrl && (
+          <div className="mt-4">
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Zoom de la portada
+              </label>
+              <span className="text-[11px] tabular-nums text-muted-foreground">
+                {s.zoom.toFixed(2)}×
+              </span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={3}
+              step={0.05}
+              value={s.zoom}
+              onChange={(e) => update("zoom", Number(e.target.value))}
+              className="w-full accent-brand"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Acerca la imagen. Con zoom puedes mover el foco en cualquier
+              dirección (X e Y) para reencuadrar.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

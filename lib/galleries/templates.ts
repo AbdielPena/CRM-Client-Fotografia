@@ -34,6 +34,8 @@ export interface CoverConfig {
   /** foco de la imagen 0..1 */
   focalX?: number
   focalY?: number
+  /** zoom de la portada (1 = sin zoom, hasta 3x). Permite acercar y reencuadrar. */
+  zoom?: number
   overlay?: "none" | "light" | "dark"
   /** 0..1 */
   overlayIntensity?: number
@@ -279,12 +281,15 @@ export function resolveCoverConfig(raw: unknown): CoverConfig {
   const c = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>
   const num = (v: unknown, def: number) =>
     typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : def
+  const numZoom = (v: unknown, def: number) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.min(3, Math.max(1, v)) : def
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null)
   return {
     imageAssetId: str(c.imageAssetId),
     imageUrl: str(c.imageUrl),
     focalX: num(c.focalX, 0.5),
     focalY: num(c.focalY, 0.5),
+    zoom: numZoom(c.zoom, 1),
     overlay: c.overlay === "light" || c.overlay === "dark" ? c.overlay : "dark",
     overlayIntensity: num(c.overlayIntensity, 0.35),
     title: str(c.title),

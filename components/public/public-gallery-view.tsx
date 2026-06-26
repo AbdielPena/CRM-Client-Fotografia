@@ -126,15 +126,23 @@ function GalleryHero({
       : cover.textAlign === "right"
         ? "items-end text-right"
         : "items-center text-center"
+  const fx = (cover.focalX ?? 0.5) * 100
+  const fy = (cover.focalY ?? 0.5) * 100
+  const zoom = cover.zoom ?? 1
   return (
-    <section className="relative w-full overflow-hidden" style={{ aspectRatio: "16/9", minHeight: "360px", maxHeight: "640px" }}>
+    <section
+      className="relative w-full overflow-hidden"
+      style={{ aspectRatio: "16/9", minHeight: "440px", maxHeight: "840px" }}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={bg}
         alt=""
         className="absolute inset-0 h-full w-full object-cover"
         style={{
-          objectPosition: `${(cover.focalX ?? 0.5) * 100}% ${(cover.focalY ?? 0.5) * 100}%`,
+          objectPosition: `${fx}% ${fy}%`,
+          transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+          transformOrigin: `${fx}% ${fy}%`,
         }}
         onError={() => setImgIdx((i) => (i < candidates.length - 1 ? i + 1 : i))}
       />
