@@ -18,6 +18,11 @@ import {
 // Listado + detalle
 // ----------------------------------------------------------------------------
 
+/** Formatea una lista de labels para el operador PostgREST `in`/`not.in`. */
+function pgInList(labels: string[]): string {
+  return '(' + labels.map((l) => '"' + l.replace(/"/g, '""') + '"').join(',') + ')'
+}
+
 export async function getProjects(
   studioId: string,
   opts: {
@@ -26,9 +31,21 @@ export async function getProjects(
     serviceCategoryId?: string
     page?: number
     pageSize?: number
+    /** Solo proyectos cuyo status esté en esta lista (p.ej. completados). */
+    onlyStatuses?: string[]
+    /** Excluir proyectos cuyo status esté en esta lista (p.ej. completados). */
+    excludeStatuses?: string[]
   } = {},
 ) {
-  const { status, search, serviceCategoryId, page = 1, pageSize = 50 } = opts
+  const {
+    status,
+    search,
+    serviceCategoryId,
+    page = 1,
+    pageSize = 50,
+    onlyStatuses,
+    excludeStatuses,
+  } = opts
   const supabase = createSupabaseServerClient()
   const from = (page - 1) * pageSize
   const to = from + pageSize - 1
@@ -52,6 +69,11 @@ export async function getProjects(
   // service_category_id es columna nueva (no en tipos) → cast
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (serviceCategoryId) query = query.eq('service_category_id' as any, serviceCategoryId)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (onlyStatuses && onlyStatuses.length) query = query.in('status', onlyStatuses as any)
+  if (excludeStatuses && excludeStatuses.length) {
+    query = query.not('status', 'in', pgInList(excludeStatuses))
+  }
   if (search && search.trim()) {
     const term = `%${search.trim()}%`
     query = query.ilike('name', term)
@@ -68,6 +90,44 @@ export async function getProjects(
     pageSize,
     totalPages: Math.ceil(total / pageSize) || 1,
   }
+}
+
+/**
+ * Cuenta proyectos del studio con filtros opcionales por status (head count, sin
+ * traer filas). Lo usan los badges del toggle Activos/Completados en /projects.
+ */
+export async function countProjects(
+  studioId: string,
+  opts: {
+    search?: string
+    serviceCategoryId?: string
+    onlyStatuses?: string[]
+    excludeStatuses?: string[]
+  } = {},
+): Promise<number> {
+  const { search, serviceCategoryId, onlyStatuses, excludeStatuses } = opts
+  const supabase = createSupabaseServerClient()
+
+  let query = supabase
+    .from('projects')
+    .select('id', { count: 'exact', head: true })
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (serviceCategoryId) query = query.eq('service_category_id' as any, serviceCategoryId)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (onlyStatuses && onlyStatuses.length) query = query.in('status', onlyStatuses as any)
+  if (excludeStatuses && excludeStatuses.length) {
+    query = query.not('status', 'in', pgInList(excludeStatuses))
+  }
+  if (search && search.trim()) {
+    query = query.ilike('name', `%${search.trim()}%`)
+  }
+
+  const { count, error } = await query
+  if (error) throwServiceError('PROJECT_OP_FAILED', error)
+  return count ?? 0
 }
 
 export async function getProjectById(studioId: string, projectId: string) {

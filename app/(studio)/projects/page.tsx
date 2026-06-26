@@ -6,14 +6,17 @@ import {
   Settings2,
   LayoutGrid,
   KanbanSquare,
+  CircleDot,
+  CheckCircle2,
 } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
-import { getProjects } from "@/server/services/project.service"
+import { getProjects, countProjects } from "@/server/services/project.service"
 import { getProjectStatuses } from "@/server/services/project-status.service"
 import { getServiceCategories } from "@/server/services/service-category.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
+import { isCompletedProjectLabel } from "@/lib/projects/status"
 import { formatDate } from "@/lib/utils/currency"
 import { cn } from "@/lib/utils/cn"
 
@@ -52,6 +55,7 @@ type ProjectRow = {
 }
 
 type ViewMode = "grid" | "kanban"
+type Scope = "active" | "completed"
 
 export default async function ProjectsPage({
   searchParams,
@@ -62,29 +66,61 @@ export default async function ProjectsPage({
     category?: string
     page?: string
     view?: string
+    scope?: string
   }
 }) {
   const session = await requireStudioAuth()
   const search = searchParams.q
-  const status = searchParams.status
   const category = searchParams.category
   const page = Number(searchParams.page ?? 1)
-  const view: ViewMode = searchParams.view === "kanban" ? "kanban" : "grid"
+  const scope: Scope = searchParams.scope === "completed" ? "completed" : "active"
+  const viewParam: ViewMode = searchParams.view === "kanban" ? "kanban" : "grid"
+  // En "Completados" siempre usamos grid (no hay pipeline que arrastrar).
+  const view: ViewMode = scope === "completed" ? "grid" : viewParam
+  // El filtro por estado solo aplica en la vista de activos.
+  const status = scope === "active" ? searchParams.status : undefined
 
-  // En kanban traemos hasta 200 sin paginar; en grid usamos paginación normal.
-  const fetchOpts =
-    view === "kanban"
-      ? { search, serviceCategoryId: category, page: 1, pageSize: 200 }
-      : { search, status, serviceCategoryId: category, page }
-
-  const [data, statuses, categories, unread] = await Promise.all([
-    getProjects(session.studioId, fetchOpts),
+  // Primero los estados para poder dividir activos/completados.
+  const [statuses, categories, unread] = await Promise.all([
     getProjectStatuses(session.studioId),
     getServiceCategories(session.studioId).catch(() => []),
     countUnreadNotifications(session.studioId),
   ])
 
-  const STATUS_CHIPS: FilterChip[] = statuses.map((s) => ({
+  const completedStatuses = statuses.filter((s) => isCompletedProjectLabel(s.label))
+  const activeStatuses = statuses.filter((s) => !isCompletedProjectLabel(s.label))
+  const completedLabels = completedStatuses.map((s) => s.label)
+  // Label terminal para la columna "Completar" del kanban (si existe el estado).
+  const terminalLabel = completedStatuses[0]?.label ?? null
+
+  // Filtro de proyectos según scope.
+  const scopeFilter =
+    scope === "completed"
+      ? { onlyStatuses: completedLabels }
+      : { excludeStatuses: completedLabels }
+
+  const fetchOpts =
+    view === "kanban"
+      ? { search, serviceCategoryId: category, page: 1, pageSize: 200, ...scopeFilter }
+      : { search, status, serviceCategoryId: category, page, ...scopeFilter }
+
+  const [data, activeCount, completedCount] = await Promise.all([
+    getProjects(session.studioId, fetchOpts),
+    countProjects(session.studioId, {
+      search,
+      serviceCategoryId: category,
+      excludeStatuses: completedLabels,
+    }),
+    completedLabels.length
+      ? countProjects(session.studioId, {
+          search,
+          serviceCategoryId: category,
+          onlyStatuses: completedLabels,
+        })
+      : Promise.resolve(0),
+  ])
+
+  const STATUS_CHIPS: FilterChip[] = activeStatuses.map((s) => ({
     key: s.label,
     label: s.label,
   }))
@@ -95,7 +131,15 @@ export default async function ProjectsPage({
 
   const buildHref = (overrides: Record<string, string | undefined>) => {
     const params = new URLSearchParams()
-    const merged = { q: search, status, category, page: undefined, view, ...overrides }
+    const merged = {
+      q: search,
+      status,
+      category,
+      page: undefined,
+      view,
+      scope: scope === "completed" ? "completed" : undefined,
+      ...overrides,
+    }
     for (const [k, v] of Object.entries(merged)) {
       if (v) params.set(k, v)
     }
@@ -103,11 +147,28 @@ export default async function ProjectsPage({
     return qs ? `/projects?${qs}` : "/projects"
   }
 
+  // Hrefs del toggle de scope (resetean status + página).
+  const activeScopeHref = (() => {
+    const params = new URLSearchParams()
+    if (search) params.set("q", search)
+    if (category) params.set("category", category)
+    if (viewParam === "kanban") params.set("view", "kanban")
+    const qs = params.toString()
+    return qs ? `/projects?${qs}` : "/projects"
+  })()
+  const completedScopeHref = (() => {
+    const params = new URLSearchParams()
+    if (search) params.set("q", search)
+    if (category) params.set("category", category)
+    params.set("scope", "completed")
+    return `/projects?${params.toString()}`
+  })()
+
   return (
     <>
       <AppTopbar
         title="Proyectos"
-        description={`${data.total} proyecto${data.total === 1 ? "" : "s"} en total`}
+        description={`${activeCount} activo${activeCount === 1 ? "" : "s"} · ${completedCount} completado${completedCount === 1 ? "" : "s"}`}
         unreadNotifications={unread}
         actions={
           <div className="flex items-center gap-2">
@@ -125,13 +186,55 @@ export default async function ProjectsPage({
       />
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
+        {/* Scope: Activos | Completados (vista aparte) */}
+        <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
+          <Link
+            href={activeScopeHref}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
+              scope === "active"
+                ? "bg-brand text-brand-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <CircleDot className="h-3.5 w-3.5" /> Activos
+            <span
+              className={cn(
+                "ml-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                scope === "active" ? "bg-white/20" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {activeCount}
+            </span>
+          </Link>
+          <Link
+            href={completedScopeHref}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
+              scope === "completed"
+                ? "bg-emerald-600 text-white"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" /> Completados
+            <span
+              className={cn(
+                "ml-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                scope === "completed" ? "bg-white/20" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {completedCount}
+            </span>
+          </Link>
+        </div>
+
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <SearchInput
             placeholder="Buscar proyectos…"
             className="w-full lg:w-80"
           />
 
-          {view === "grid" && (
+          {scope === "active" && view === "grid" && (
             <FilterChips
               baseHref="/projects"
               paramName="status"
@@ -148,62 +251,82 @@ export default async function ProjectsPage({
               paramName="category"
               current={category}
               chips={CATEGORY_CHIPS}
-              preserveQuery={{ q: search, status, view }}
+              preserveQuery={{
+                q: search,
+                status,
+                view,
+                scope: scope === "completed" ? "completed" : undefined,
+              }}
             />
           )}
 
-          {/* View toggle */}
-          <div className="ml-auto inline-flex rounded-lg border border-border bg-card p-0.5">
-            <Link
-              href={buildHref({ view: "grid" })}
-              className={cn(
-                "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors",
-                view === "grid"
-                  ? "bg-brand text-brand-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Grid
-            </Link>
-            <Link
-              href={buildHref({ view: "kanban" })}
-              className={cn(
-                "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors",
-                view === "kanban"
-                  ? "bg-brand text-brand-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <KanbanSquare className="h-3.5 w-3.5" /> Kanban
-            </Link>
-          </div>
+          {/* View toggle: solo en activos */}
+          {scope === "active" && (
+            <div className="ml-auto inline-flex rounded-lg border border-border bg-card p-0.5">
+              <Link
+                href={buildHref({ view: "grid" })}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors",
+                  view === "grid"
+                    ? "bg-brand text-brand-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Grid
+              </Link>
+              <Link
+                href={buildHref({ view: "kanban" })}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors",
+                  view === "kanban"
+                    ? "bg-brand text-brand-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <KanbanSquare className="h-3.5 w-3.5" /> Kanban
+              </Link>
+            </div>
+          )}
         </div>
 
         {data.items.length === 0 ? (
           <div className="rounded-xl border border-border bg-card">
             <EmptyState
-              icon={<FolderOpen className="h-5 w-5" />}
+              icon={
+                scope === "completed" ? (
+                  <CheckCircle2 className="h-5 w-5" />
+                ) : (
+                  <FolderOpen className="h-5 w-5" />
+                )
+              }
               title={
-                search || status || category
-                  ? "No encontramos proyectos"
-                  : "Aún no tienes proyectos"
+                scope === "completed"
+                  ? "Aún no hay proyectos completados"
+                  : search || status || category
+                    ? "No encontramos proyectos"
+                    : "Aún no tienes proyectos"
               }
               description={
-                search || status || category
-                  ? "Prueba ajustando tu búsqueda o limpia los filtros."
-                  : "Crea tu primer proyecto para empezar a gestionar tus sesiones."
+                scope === "completed"
+                  ? "Cuando marques un proyecto como “Completado” aparecerá aquí, separado de los pendientes."
+                  : search || status || category
+                    ? "Prueba ajustando tu búsqueda o limpia los filtros."
+                    : "Crea tu primer proyecto para empezar a gestionar tus sesiones."
               }
-              accent={!search && !status && !category}
+              accent={scope === "active" && !search && !status && !category}
             >
-              <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
-                <Link href="/projects/new">Nuevo proyecto</Link>
-              </Button>
+              {scope === "active" && (
+                <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
+                  <Link href="/projects/new">Nuevo proyecto</Link>
+                </Button>
+              )}
             </EmptyState>
           </div>
         ) : view === "kanban" ? (
           <ProjectKanbanView
             projects={data.items as unknown as ProjectCard[]}
-            statuses={statuses}
+            statuses={activeStatuses}
+            completedStatusLabel={terminalLabel}
           />
         ) : (
           <>
@@ -265,7 +388,13 @@ export default async function ProjectsPage({
                 total={data.total}
                 pageSize={data.pageSize}
                 baseHref="/projects"
-                preserveQuery={{ q: search, status, category, view: "grid" }}
+                preserveQuery={{
+                  q: search,
+                  status,
+                  category,
+                  view: "grid",
+                  scope: scope === "completed" ? "completed" : undefined,
+                }}
                 itemsLabel="proyectos"
               />
             )}
