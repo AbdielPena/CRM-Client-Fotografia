@@ -634,9 +634,30 @@ export async function setCoverAssetAction(
   const ctx = await requireStudioAuth()
   uuidSchema.parse(galleryId)
   if (coverAssetId) uuidSchema.parse(coverAssetId)
-  await updateGallery(ctx.studioId, ctx.userId, galleryId, {
+
+  const patch: { coverAssetId: string | null; coverConfig?: Record<string, unknown> } = {
     coverAssetId: coverAssetId ?? null,
-  })
+  }
+
+  // Portada por foto de la galería y portada externa son mutuamente excluyentes.
+  // Al elegir una foto como portada, quitamos la externa (cover_config.imageUrl)
+  // para que el editor admin y la vista pública muestren lo mismo.
+  if (coverAssetId) {
+    const { untypedService } = await import("@/server/supabase/untyped")
+    const sb = untypedService()
+    const { data } = await sb
+      .from("galleries")
+      .select("cover_config")
+      .eq("id", galleryId)
+      .eq("studio_id", ctx.studioId)
+      .maybeSingle()
+    const cfg = { ...((data?.cover_config as Record<string, unknown> | null) ?? {}) }
+    delete cfg.imageUrl
+    delete cfg.imageAssetId
+    patch.coverConfig = cfg
+  }
+
+  await updateGallery(ctx.studioId, ctx.userId, galleryId, patch)
   revalidatePath(`/galleries/${galleryId}`)
   return { ok: true }
 }

@@ -132,13 +132,25 @@ export default async function GalleryDetailPage({
     webUrl: getAssetWebUrl(a.web_key),
   }))
 
-  // Imagen de portada para el editor de apariencia (foco): la portada elegida,
-  // o la primera foto completada como respaldo.
-  const coverAsset =
-    assetsWithUrls.find((a) => a.id === gallery.cover_asset_id) ??
-    assetsWithUrls.find((a) => a.status === "completed") ??
-    assetsWithUrls[0]
-  const coverImageUrl = coverAsset?.webUrl ?? coverAsset?.thumbUrl ?? null
+  // Imagen de portada para el editor de apariencia (foco). Prioridad:
+  //  1) asset elegido como portada (cover_asset_id)
+  //  2) portada externa subida (cover_config.imageUrl)
+  //  3) primera foto completada como respaldo
+  // (Antes ignoraba la portada externa → al subir una, el editor mostraba otra foto.)
+  const externalCover =
+    typeof (gallery.cover_config as Record<string, unknown> | null)?.["imageUrl"] === "string"
+      ? ((gallery.cover_config as Record<string, unknown>)["imageUrl"] as string)
+      : null
+  const coverById = assetsWithUrls.find((a) => a.id === gallery.cover_asset_id)
+  const fallbackAsset =
+    assetsWithUrls.find((a) => a.status === "completed") ?? assetsWithUrls[0]
+  const coverImageUrl =
+    coverById?.webUrl ??
+    coverById?.thumbUrl ??
+    externalCover ??
+    fallbackAsset?.webUrl ??
+    fallbackAsset?.thumbUrl ??
+    null
 
   // Selecciones por favoritos (flujo "Avisar al fotógrafo") con marca de enviada.
   const submittedBy =
