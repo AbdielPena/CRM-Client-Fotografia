@@ -34,6 +34,11 @@ import {
 
 export const metadata: Metadata = { title: "Proyectos" }
 
+// Render siempre dinámico: evita que la navegación soft (toggle de vista/scope,
+// chips) sirva un shell de prefetch cacheado sin el contenido — con loading.tsx
+// del segmento (studio) eso dejaba el tablero en blanco hasta recargar.
+export const dynamic = "force-dynamic"
+
 const TYPE_LABELS: Record<string, string> = {
   wedding: "Boda",
   portrait: "Retrato",
@@ -190,6 +195,7 @@ export default async function ProjectsPage({
         <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
           <Link
             href={activeScopeHref}
+            prefetch={false}
             className={cn(
               "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
               scope === "active"
@@ -209,6 +215,7 @@ export default async function ProjectsPage({
           </Link>
           <Link
             href={completedScopeHref}
+            prefetch={false}
             className={cn(
               "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
               scope === "completed"
@@ -241,6 +248,7 @@ export default async function ProjectsPage({
               current={status}
               chips={STATUS_CHIPS}
               preserveQuery={{ q: search, category, view: "grid" }}
+              prefetch={false}
               className="flex-1"
             />
           )}
@@ -257,6 +265,7 @@ export default async function ProjectsPage({
                 view,
                 scope: scope === "completed" ? "completed" : undefined,
               }}
+              prefetch={false}
             />
           )}
 
@@ -265,6 +274,7 @@ export default async function ProjectsPage({
             <div className="ml-auto inline-flex rounded-lg border border-border bg-card p-0.5">
               <Link
                 href={buildHref({ view: "grid" })}
+                prefetch={false}
                 className={cn(
                   "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors",
                   view === "grid"
@@ -276,6 +286,7 @@ export default async function ProjectsPage({
               </Link>
               <Link
                 href={buildHref({ view: "kanban" })}
+                prefetch={false}
                 className={cn(
                   "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors",
                   view === "kanban"
@@ -395,6 +406,7 @@ export default async function ProjectsPage({
                   view: "grid",
                   scope: scope === "completed" ? "completed" : undefined,
                 }}
+                prefetch={false}
                 itemsLabel="proyectos"
               />
             )}

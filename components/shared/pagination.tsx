@@ -20,6 +20,8 @@ interface PaginationProps {
   preserveQuery?: Record<string, string | undefined>
   /** Label del item en plural (default "resultados"). */
   itemsLabel?: string
+  /** Si false, desactiva el prefetch (evita servir shell sin contenido en soft-nav). */
+  prefetch?: boolean
   className?: string
 }
 
@@ -34,6 +36,7 @@ export function Pagination({
   baseHref,
   preserveQuery = {},
   itemsLabel = "resultados",
+  prefetch,
   className,
 }: PaginationProps) {
   if (totalPages <= 1) return null
@@ -76,6 +79,7 @@ export function Pagination({
         {canPrev ? (
           <Link
             href={buildHref(page - 1)}
+            prefetch={prefetch}
             className={cn(
               "inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2.5 text-caption font-medium text-foreground",
               "transition-colors duration-fast hover:bg-muted",
@@ -101,6 +105,7 @@ export function Pagination({
         {canNext ? (
           <Link
             href={buildHref(page + 1)}
+            prefetch={prefetch}
             className={cn(
               "inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2.5 text-caption font-medium text-foreground",
               "transition-colors duration-fast hover:bg-muted",

@@ -25,6 +25,8 @@ interface FilterChipsProps {
   allLabel?: string
   /** Query adicional a preservar en el href. */
   preserveQuery?: Record<string, string | undefined>
+  /** Si false, desactiva el prefetch (evita servir shell sin contenido en soft-nav). */
+  prefetch?: boolean
   className?: string
 }
 
@@ -39,6 +41,7 @@ export function FilterChips({
   chips,
   allLabel = "Todos",
   preserveQuery = {},
+  prefetch,
   className,
 }: FilterChipsProps) {
   const layoutId = React.useId()
@@ -69,6 +72,7 @@ export function FilterChips({
         <Link
           key={item.key || "__all"}
           href={buildHref(item.key || undefined)}
+          prefetch={prefetch}
           className={cn(
             "relative whitespace-nowrap rounded-full px-3 py-1.5 text-caption font-semibold transition-colors duration-fast",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30",
