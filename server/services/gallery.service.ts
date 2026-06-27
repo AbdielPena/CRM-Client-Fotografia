@@ -121,6 +121,11 @@ function publicRenditionUrl(supabaseUrl: string, key: string | null): string | n
   return `${supabaseUrl.replace(/\/$/, "")}/storage/v1/object/public/${RENDITIONS_BUCKET}/${key}`
 }
 
+/** URL pública de una rendition (thumb/web). Para consumidores externos (API v1). */
+export function renditionUrl(key: string | null): string | null {
+  return publicRenditionUrl(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "", key)
+}
+
 function uniqueSlug(name: string): string {
   const base = slugify(name, { lower: true, strict: true }).slice(0, 60) || "galeria"
   return `${base}-${createId().slice(0, 6)}`
@@ -173,8 +178,11 @@ export type ListGalleryOptions = {
 export async function getGalleries(
   studioId: string,
   opts: ListGalleryOptions = {},
+  serviceRole = false,
 ): Promise<{ rows: GalleryRow[]; total: number }> {
-  const supabase = srvc()
+  // serviceRole=true: para callers sin sesión de cookie (API v1 con token), que
+  // ya filtran por studioId explícitamente. Default = cliente con RLS (web).
+  const supabase = serviceRole ? svc() : srvc()
 
   let q = supabase
     .from("galleries")
@@ -200,8 +208,9 @@ export async function getGalleries(
 export async function getGalleryById(
   studioId: string,
   galleryId: string,
+  serviceRole = false,
 ): Promise<GalleryRow | null> {
-  const supabase = srvc()
+  const supabase = serviceRole ? svc() : srvc()
   const { data, error } = await supabase
     .from("galleries")
     .select("*")
@@ -822,6 +831,162 @@ export async function confirmAssetUpload(
   return asset as unknown as GalleryAssetRow
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Subida desde el programa de ESCRITORIO (procesamiento local).
+// El desktop genera las renditions con sharp en la PC (mismas specs que
+// processAssetSafely) y las sube directo, evitando el cuello de botella del
+// Sharp del servidor. Flujo: prepareDesktop → PUT original + renditions →
+// completeDesktop. Si el desktop no puede generar, cae al `confirm` normal
+// (server procesa).
+// ────────────────────────────────────────────────────────────────────────────
+
+export type DesktopPreparedUpload = {
+  assetId: string
+  originalKey: string
+  /** subida del original a gallery-originals */
+  original: { signedUrl: string; token: string }
+  /** subidas de las renditions a gallery-renditions (claves canónicas) */
+  renditions: {
+    thumb: { key: string; signedUrl: string; token: string }
+    web: { key: string; signedUrl: string; token: string }
+    webClean: { key: string; signedUrl: string; token: string }
+  }
+}
+
+/**
+ * Variante de `prepareAssetUpload` para el desktop: además del presigned del
+ * original, devuelve presigned URLs para subir thumb/web/web-clean ya generados
+ * en la PC. Crea el row con status='pending'. Solo modo nube.
+ */
+export async function prepareDesktopAssetUpload(
+  studioId: string,
+  params: PrepareUploadParams,
+): Promise<DesktopPreparedUpload> {
+  if (isLocalStorage()) {
+    throw new Error("La subida desde escritorio requiere almacenamiento en la nube")
+  }
+  if (!ALLOWED_MIME.has(params.mimeType)) {
+    throw new Error(`MIME no permitido: ${params.mimeType}`)
+  }
+  if (params.fileSize > 200 * 1024 * 1024) {
+    throw new Error("Archivo excede 200MB")
+  }
+
+  const supabase = svc()
+
+  const { data: gallery } = await supabase
+    .from("galleries")
+    .select("id, studio_id, status")
+    .eq("id", params.galleryId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (!gallery) throw new Error("Galería no encontrada")
+  if ((gallery as { status: string }).status === "archived") {
+    throw new Error("No se puede subir a una galería archivada")
+  }
+
+  const assetId = randomUUID()
+  const ext = extFromMime(params.mimeType)
+  const oKey = originalKey(studioId, params.galleryId, assetId, ext)
+  const tKey = thumbKey(studioId, params.galleryId, assetId)
+  const wKey = webKey(studioId, params.galleryId, assetId)
+  const wcKey = webCleanKey(studioId, params.galleryId, assetId)
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: insertError } = await (supabase as any).from("gallery_assets").insert({
+    id: assetId,
+    studio_id: studioId,
+    gallery_id: params.galleryId,
+    filename: `${assetId}.${ext}`,
+    original_name: params.filename,
+    mime_type: params.mimeType,
+    file_size: params.fileSize,
+    status: "pending",
+    original_key: oKey,
+    set_id: params.setId ?? null,
+    delivery_track: params.deliveryTrack ?? null,
+  })
+  if (insertError) throw insertError
+
+  const signOriginal = await supabase.storage
+    .from(ORIGINALS_BUCKET)
+    .createSignedUploadUrl(oKey)
+  if (signOriginal.error) throw signOriginal.error
+
+  const signThumb = await supabase.storage
+    .from(RENDITIONS_BUCKET)
+    .createSignedUploadUrl(tKey)
+  if (signThumb.error) throw signThumb.error
+  const signWeb = await supabase.storage
+    .from(RENDITIONS_BUCKET)
+    .createSignedUploadUrl(wKey)
+  if (signWeb.error) throw signWeb.error
+  const signWebClean = await supabase.storage
+    .from(RENDITIONS_BUCKET)
+    .createSignedUploadUrl(wcKey)
+  if (signWebClean.error) throw signWebClean.error
+
+  return {
+    assetId,
+    originalKey: oKey,
+    original: { signedUrl: signOriginal.data.signedUrl, token: signOriginal.data.token },
+    renditions: {
+      thumb: { key: tKey, signedUrl: signThumb.data.signedUrl, token: signThumb.data.token },
+      web: { key: wKey, signedUrl: signWeb.data.signedUrl, token: signWeb.data.token },
+      webClean: {
+        key: wcKey,
+        signedUrl: signWebClean.data.signedUrl,
+        token: signWebClean.data.token,
+      },
+    },
+  }
+}
+
+/**
+ * Marca un asset como `completed` tras que el desktop subió original +
+ * renditions. Setea dimensiones, thumb_key/web_key y metadata (lqip, aspect).
+ */
+export async function completeDesktopAsset(
+  studioId: string,
+  galleryId: string,
+  assetId: string,
+  data: {
+    width: number
+    height: number
+    lqip?: string | null
+    format?: string | null
+  },
+): Promise<GalleryAssetRow> {
+  const supabase = svc()
+  const tKey = thumbKey(studioId, galleryId, assetId)
+  const wKey = webKey(studioId, galleryId, assetId)
+  const aspect = data.height > 0 ? data.width / data.height : null
+
+  const { data: asset, error } = await supabase
+    .from("gallery_assets")
+    .update({
+      status: "completed",
+      width: data.width,
+      height: data.height,
+      thumb_key: tKey,
+      web_key: wKey,
+      metadata: {
+        format: data.format ?? null,
+        lqip: data.lqip ?? null,
+        aspect,
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    .eq("id", assetId)
+    .eq("studio_id", studioId)
+    .eq("gallery_id", galleryId)
+    .select("*")
+    .single()
+  if (error) throw error
+  return asset as unknown as GalleryAssetRow
+}
+
 async function processAssetSafely(
   assetId: string,
   studioId: string,
@@ -1231,8 +1396,9 @@ export async function fetchAllPaged(
 export async function getGalleryAssets(
   studioId: string,
   galleryId: string,
+  serviceRole = false,
 ): Promise<GalleryAssetRow[]> {
-  const supabase = srvc()
+  const supabase = serviceRole ? svc() : srvc()
   const rows = await fetchAllPaged((from, to) =>
     supabase
       .from("gallery_assets")

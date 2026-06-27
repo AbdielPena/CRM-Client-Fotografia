@@ -195,17 +195,13 @@ export async function validateApiToken(plaintext: string): Promise<{
   if (token.revoked_at) return null
   if (token.expires_at && new Date(token.expires_at) < new Date()) return null
 
-  // Update usage (best-effort)
+  // Marcar último uso (best-effort). NO tocar usage_count aquí: hacerlo sin el
+  // valor actual lo reseteaba a 0. Si se quiere conteo exacto, hacerlo por RPC.
   void sb
     .from("api_tokens")
-    .update({
-      last_used_at: new Date().toISOString(),
-      usage_count: 0, // se incrementa via raw SQL si quisiéramos, simplificamos
-    })
+    .update({ last_used_at: new Date().toISOString() })
     .eq("id", token.id)
 
-  // Mejor: incrementar atómicamente via RPC sería ideal. Por ahora usar
-  // un fetch + update siguiente. Skipeado por performance.
   return {
     studioId: token.studio_id,
     tokenId: token.id,

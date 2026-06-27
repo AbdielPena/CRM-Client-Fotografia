@@ -34,6 +34,7 @@ const PUBLIC_PREFIXES = [
   '/api/public',
   '/embed', // script embebible de formularios (público, estático)
   '/api/internal', // API por ID para web local co-alojada (auth por X-Internal-Key)
+  '/api/v1', // API del programa de escritorio (cada handler exige Bearer api_token, NO sesión)
   '/api/deploy', // hooks de deploy desde GitHub Actions (auth por Bearer interno)
   '/api/cron', // cron jobs (auth por Bearer token interno en cada endpoint)
   '/_next',
