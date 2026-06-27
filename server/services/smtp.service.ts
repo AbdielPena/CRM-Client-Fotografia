@@ -59,6 +59,11 @@ function getEnvTransporter(): Transporter | null {
     auth: { user, pass: password },
     // Algunos hosts compartidos (cPanel) tienen certs auto-firmados
     tls: { rejectUnauthorized: false },
+    // Timeouts: un envío nunca debe colgarse más que la ventana del reaper
+    // (15 min) del drenador, para no quedar atascado en 'sending'.
+    connectionTimeout: 30_000,
+    greetingTimeout: 30_000,
+    socketTimeout: 30_000,
   })
 
   return cachedEnvTransporter

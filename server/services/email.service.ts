@@ -2,12 +2,10 @@ import 'server-only'
 
 import { createSupabaseServiceClient } from '@/server/supabase/service'
 import { throwServiceError } from '@/lib/utils/api-error'
-import { sendEmail as sendViaSmtp } from './smtp.service'
 import { wrapLuxuryEmail, type LuxuryEmailOptions } from '@/lib/email/luxury-layout'
 import type { Database } from '@/types/supabase'
 
 type EmailInsert = Database['public']['Tables']['email_queue']['Insert']
-type EmailUpdate = Database['public']['Tables']['email_queue']['Update']
 
 export type EnqueueEmailInput = {
   studioId: string
@@ -27,8 +25,9 @@ export type EnqueueEmailInput = {
 }
 
 /**
- * Encola un email. El worker (edge function `email-worker`) drena la cola
- * cada N minutos y llama al proveedor real (Resend).
+ * Encola un email (status 'pending'). El DRENADOR interno
+ * (`/api/internal/v1/email-drain`, disparado por un cron del VPS cada minuto)
+ * lo envía por mailcow — sin Resend, todo interno. Sale en ≤60s.
  *
  * Usamos service-role porque:
  *  - En contextos públicos (p.ej. tras un submit del form anon), el invoker
@@ -69,51 +68,11 @@ export async function enqueueEmail(input: EnqueueEmailInput): Promise<string> {
   if (error) throwServiceError("EMAIL_ENQUEUE_FAILED", error)
   const queueId = (data as { id: string }).id
 
-  // En dev o cuando SMTP está configurado: intentar envío inmediato.
-  // Marca la fila como 'sent' o 'failed' según el resultado, así la cola
-  // sirve como audit log. Si falla, el worker puede reintentar después.
-  await tryImmediateSend(queueId, input)
-
+  // El envío lo hace el DRENADOR interno (cron del VPS → /api/internal/v1/
+  // email-drain → mailcow). Encolar = insertar 'pending'; sale en ≤60s. Es el
+  // ÚNICO camino de envío (sin envío inmediato) para evitar carreras de
+  // doble-envío con el drenador.
   return queueId
-}
-
-/**
- * Envío inmediato (best-effort). No bloquea al caller si falla;
- * la fila queda en email_queue con status 'failed' o 'pending' para retry.
- */
-async function tryImmediateSend(queueId: string, input: EnqueueEmailInput): Promise<void> {
-  const smtpReady = !!process.env.SMTP_HOST && !!process.env.SMTP_USER
-  if (!smtpReady) return // deja la fila pending para que el worker la tome
-
-  const result = await sendViaSmtp({
-    studioId: input.studioId,
-    to: input.toEmail,
-    toName: input.toName ?? null,
-    subject: input.subject,
-    html: input.bodyHtml,
-    text: input.bodyText ?? null,
-    // Mismo criterio que en enqueue: enviar desde la cuenta autenticada y
-    // poner el correo del estudio como Reply-To.
-    fromEmail: null,
-    fromName: input.fromName ?? null,
-    replyTo: input.replyTo ?? input.fromEmail ?? null,
-  })
-
-  const supabase = createSupabaseServiceClient()
-  const patch: EmailUpdate = result.ok
-    ? {
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-        provider: 'smtp',
-        provider_message_id: result.messageId ?? null,
-      }
-    : {
-        status: 'failed',
-        failed_at: new Date().toISOString(),
-        last_error: result.error ?? 'unknown error',
-      }
-
-  await supabase.from('email_queue').update(patch).eq('id', queueId)
 }
 
 /** Helper mínimo para generar body_text cuando solo tenemos HTML. */

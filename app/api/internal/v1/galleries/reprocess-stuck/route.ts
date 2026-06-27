@@ -4,6 +4,7 @@ import {
   reprocessStuckAssets,
   getGalleryStudioId,
 } from "@/server/services/gallery.service"
+import { safeEqual } from "@/lib/utils/timing-safe"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-internal-key") ??
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
     null
-  if (!provided || provided !== expected) {
+  if (!safeEqual(provided, expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
