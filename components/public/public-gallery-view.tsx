@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Heart,
   Download,
@@ -239,6 +239,9 @@ export function PublicGalleryView({
   finalDeliveryDriveLink?: string | null
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
+  // Assets que el usuario tocó localmente — `loadFavs` no debe pisarlos con
+  // datos viejos de un GET en vuelo (causaba que el corazón se quitara solo).
+  const dirtyFavsRef = useRef<Set<string>>(new Set())
   const [open, setOpen] = useState<number | null>(null)
   const [email, setEmail] = useState<string | null>(null)
   const [emailPrompt, setEmailPrompt] = useState(gallery.require_email)
@@ -299,7 +302,19 @@ export function PublicGalleryView({
       )
       if (!res.ok) return
       const data = (await res.json()) as { favorites?: string[] }
-      if (data.favorites) setFavs(new Set(data.favorites))
+      if (data.favorites) {
+        const server = data.favorites
+        setFavs((prev) => {
+          const next = new Set(server)
+          // Preservar toggles locales recientes: si un GET lento resuelve
+          // después de que el usuario marcó/desmarcó, no lo revertimos.
+          for (const id of dirtyFavsRef.current) {
+            if (prev.has(id)) next.add(id)
+            else next.delete(id)
+          }
+          return next
+        })
+      }
     } catch {
       // silent
     }
@@ -410,6 +425,8 @@ export function PublicGalleryView({
 
       // Caso 2: sin lista activa → favorito general (siempre modificable)
       const wasFav = favs.has(assetId)
+      // Marcar como "tocado localmente" para que un loadFavs en vuelo no lo pise.
+      dirtyFavsRef.current.add(assetId)
       // Optimistic
       setFavs((prev) => {
         const next = new Set(prev)
@@ -423,6 +440,7 @@ export function PublicGalleryView({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ assetId, clientEmail: email ?? "" }),
         })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const j = (await res.json()) as { favorited?: boolean }
         setFavs((prev) => {
           const next = new Set(prev)
@@ -431,7 +449,7 @@ export function PublicGalleryView({
           return next
         })
       } catch {
-        // Revertir
+        // Revertir al estado PREVIO al click (no borrar a ciegas).
         setFavs((prev) => {
           const next = new Set(prev)
           if (wasFav) next.add(assetId)
