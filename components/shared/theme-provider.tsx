@@ -35,9 +35,20 @@ function getSystemTheme(): ResolvedTheme {
     : "light"
 }
 
+// Rutas públicas de cliente (formularios, reserva, firma, factura, feedback,
+// registro): SIEMPRE en claro. Un visitante con el celular en modo oscuro NO
+// debe ver el formulario negro. NO incluye /g (galería, tiene su propio tema)
+// ni el CRM (respeta la preferencia del fotógrafo).
+const FORCE_LIGHT_RE = /^\/(f|r|fb|sign|p|b|booking|i)(\/|$)/
+
+function isForcedLightPath(): boolean {
+  return typeof window !== "undefined" && FORCE_LIGHT_RE.test(window.location.pathname)
+}
+
 function applyThemeClass(resolved: ResolvedTheme) {
   const root = document.documentElement
-  if (resolved === "dark") {
+  const eff: ResolvedTheme = isForcedLightPath() ? "light" : resolved
+  if (eff === "dark") {
     root.classList.add("dark")
     root.style.colorScheme = "dark"
   } else {
@@ -53,14 +64,16 @@ function applyThemeClass(resolved: ResolvedTheme) {
 export const themeScript = `
 (function() {
   try {
+    var forceLight = /^\\/(f|r|fb|sign|p|b|booking|i)(\\/|$)/.test(location.pathname);
     var stored = localStorage.getItem('${STORAGE_KEY}') || 'system';
     var resolved = stored === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : stored;
-    if (resolved === 'dark') {
+    if (!forceLight && resolved === 'dark') {
       document.documentElement.classList.add('dark');
       document.documentElement.style.colorScheme = 'dark';
     } else {
+      document.documentElement.classList.remove('dark');
       document.documentElement.style.colorScheme = 'light';
     }
   } catch (e) {}
