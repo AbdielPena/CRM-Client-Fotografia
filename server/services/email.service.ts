@@ -44,9 +44,14 @@ export async function enqueueEmail(input: EnqueueEmailInput): Promise<string> {
     subject: input.subject,
     body_html: input.bodyHtml,
     body_text: input.bodyText ?? stripHtml(input.bodyHtml),
-    from_email: input.fromEmail ?? null,
+    // mailcow autentica como UNA cuenta (mail@abbypixel.com) y rechaza enviar
+    // "como" otra dirección → 553 sender not owned. Por eso NO seteamos From a
+    // soporte@/correo-del-estudio: dejamos from_email=null (el worker usa su
+    // remitente autenticado) y mandamos el correo del estudio como Reply-To,
+    // así las respuestas del cliente llegan igual al estudio.
+    from_email: null,
     from_name: input.fromName ?? null,
-    reply_to: input.replyTo ?? null,
+    reply_to: input.replyTo ?? input.fromEmail ?? null,
     template_slug: input.templateSlug ?? null,
     related_entity_type: input.relatedEntityType ?? null,
     related_entity_id: input.relatedEntityId ?? null,
@@ -87,9 +92,11 @@ async function tryImmediateSend(queueId: string, input: EnqueueEmailInput): Prom
     subject: input.subject,
     html: input.bodyHtml,
     text: input.bodyText ?? null,
-    fromEmail: input.fromEmail ?? null,
+    // Mismo criterio que en enqueue: enviar desde la cuenta autenticada y
+    // poner el correo del estudio como Reply-To.
+    fromEmail: null,
     fromName: input.fromName ?? null,
-    replyTo: input.replyTo ?? null,
+    replyTo: input.replyTo ?? input.fromEmail ?? null,
   })
 
   const supabase = createSupabaseServiceClient()
