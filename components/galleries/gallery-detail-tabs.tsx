@@ -667,6 +667,24 @@ function SelectionsTab({
   const [copyFormat, setCopyFormat] = React.useState<CopyFormat>("none")
   const [copySep, setCopySep] = React.useState<CopySep>("newline")
 
+  // Compartir la selección como vista aparte (solo los favoritos del cliente).
+  const [selShareUrl, setSelShareUrl] = React.useState<string | null>(null)
+  const handleShareSelection = () => {
+    const fd = new FormData()
+    fd.set("viewMode", "selection")
+    startTransition(async () => {
+      try {
+        const res = await shareGalleryAction(galleryId, fd)
+        const url = `${typeof window !== "undefined" ? window.location.origin : ""}/g/${res.token}`
+        setSelShareUrl(url)
+        await navigator.clipboard.writeText(url)
+        toast.success("Link de selección copiado")
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+
   const rawNames = activeFav
     ? favItems.map((a) => a.original_name)
     : items.map((i) => i.original_name)
@@ -860,15 +878,55 @@ function SelectionsTab({
                     ` · enviada ${new Date(activeFav.submittedAt).toLocaleDateString("es-DO")}`}
                 </p>
               </div>
-              <button
-                onClick={openCopyDialog}
-                disabled={favItems.length === 0}
-                className="inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-muted px-2.5 text-[12px] font-medium text-foreground hover:bg-muted/70 disabled:opacity-40"
-              >
-                <Copy className="h-3 w-3" />
-                Copiar nombres
-              </button>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <button
+                  onClick={handleShareSelection}
+                  disabled={pending || favItems.length === 0}
+                  title="Compartir esta selección como vista aparte"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-2.5 text-[12px] font-medium text-brand-foreground hover:bg-brand/90 disabled:opacity-40"
+                >
+                  <Share2 className="h-3 w-3" />
+                  {pending ? "Generando…" : "Compartir"}
+                </button>
+                <button
+                  onClick={openCopyDialog}
+                  disabled={favItems.length === 0}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-muted px-2.5 text-[12px] font-medium text-foreground hover:bg-muted/70 disabled:opacity-40"
+                >
+                  <Copy className="h-3 w-3" />
+                  Copiar nombres
+                </button>
+              </div>
             </div>
+
+            {selShareUrl && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand/30 bg-brand-soft/40 px-3 py-2">
+                <Share2 className="h-3.5 w-3.5 flex-shrink-0 text-brand" />
+                <input
+                  readOnly
+                  value={selShareUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="min-w-0 flex-1 bg-transparent font-mono text-[12px] text-foreground outline-none"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(selShareUrl)
+                    toast.success("Copiado")
+                  }}
+                  className="inline-flex h-7 items-center gap-1 rounded-md bg-brand px-2 text-[11.5px] font-medium text-brand-foreground hover:bg-brand/90"
+                >
+                  <Copy className="h-3 w-3" /> Copiar
+                </button>
+                <a
+                  href={`https://wa.me/?text=${encodeURIComponent(`✨ Aquí está tu selección final de fotos, en una vista aparte: ${selShareUrl}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-7 items-center gap-1 rounded-md bg-[#25D366] px-2 text-[11.5px] font-semibold text-white hover:bg-[#1eb858]"
+                >
+                  <MessageCircle className="h-3 w-3" /> WhatsApp
+                </a>
+              </div>
+            )}
 
             {favItems.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border bg-card/40 px-6 py-12 text-center text-sm text-muted-foreground">
