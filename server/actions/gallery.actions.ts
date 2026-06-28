@@ -257,13 +257,17 @@ export async function shareGalleryAction(
   const ctx = await requireStudioAuth()
   const expiresAt = pickString(formData, "expiresAt")
   const clientEmail = pickString(formData, "clientEmail")
+  const viewMode =
+    pickString(formData, "viewMode") === "selection" ? "selection" : "full"
 
-  const result = clientEmail
-    ? await shareGalleryWithClient(ctx.studioId, galleryId, {
-        clientEmail,
-        expiresAt,
-      })
-    : await createGalleryShareToken(ctx.studioId, galleryId, { expiresAt })
+  // Modo selección: link aparte que muestra SOLO los favoritos del cliente.
+  const result =
+    clientEmail && viewMode === "full"
+      ? await shareGalleryWithClient(ctx.studioId, galleryId, {
+          clientEmail,
+          expiresAt,
+        })
+      : await createGalleryShareToken(ctx.studioId, galleryId, { expiresAt, viewMode })
 
   revalidatePath(`/galleries/${galleryId}`)
   return result

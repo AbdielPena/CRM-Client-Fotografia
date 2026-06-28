@@ -1569,6 +1569,8 @@ export function getAssetWebUrl(webKey: string | null): string | null {
 
 export type ShareTokenOptions = {
   expiresAt?: string | null
+  /** 'full' = galería completa; 'selection' = solo los favoritos del cliente. */
+  viewMode?: "full" | "selection"
 }
 
 export async function createGalleryShareToken(
@@ -1579,11 +1581,13 @@ export async function createGalleryShareToken(
   const supabase = srvc()
   const token = createId() + createId() // 48 chars
 
-  const { error } = await supabase.from("gallery_share_tokens").insert({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).from("gallery_share_tokens").insert({
     studio_id: studioId,
     gallery_id: galleryId,
     token,
     expires_at: opts.expiresAt ?? null,
+    view_mode: opts.viewMode ?? "full",
   })
   if (error) throw error
 
@@ -1640,6 +1644,8 @@ export type PublicGalleryView = {
   }
   assets: PublicGalleryAsset[]
   tokenInfo: { id: string; expiresAt: string | null }
+  /** 'full' = galería completa; 'selection' = solo los favoritos del cliente. */
+  viewMode: "full" | "selection"
 }
 
 /**
@@ -1652,13 +1658,17 @@ export async function validateGalleryToken(
   const supabase = svc()
   const db = supabase as unknown as SupabaseClient
 
-  const { data: tk } = await supabase
+  // Cliente sin tipar: la columna view_mode es nueva (no está en los tipos gen).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: tk } = (await db
     .from("gallery_share_tokens")
-    .select("id, gallery_id, studio_id, expires_at, revoked_at")
+    .select("id, gallery_id, studio_id, expires_at, revoked_at, view_mode")
     .eq("token", token)
-    .maybeSingle()
+    .maybeSingle()) as { data: any }
   if (!tk || tk.revoked_at) return null
   if (tk.expires_at && new Date(tk.expires_at).getTime() < Date.now()) return null
+  const viewMode: "full" | "selection" =
+    (tk as { view_mode?: string }).view_mode === "selection" ? "selection" : "full"
 
   const { data: gallery } = await db
     .from("galleries")
@@ -1685,7 +1695,20 @@ export async function validateGalleryToken(
       .range(from, to),
   )
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const assetList = assetsRaw as any[]
+  let assetList = assetsRaw as any[]
+
+  // Modo selección: mostrar SOLO los favoritos del cliente (unión de todos los
+  // client_email). El resto del flujo (portada, return) opera sobre esta lista.
+  if (viewMode === "selection") {
+    const { data: favRows } = await supabase
+      .from("gallery_favorites")
+      .select("asset_id")
+      .eq("gallery_id", tk.gallery_id)
+    const favSet = new Set(
+      ((favRows ?? []) as Array<{ asset_id: string }>).map((r) => r.asset_id),
+    )
+    assetList = assetList.filter((a) => favSet.has(a.id as string))
+  }
 
   // Portada: usa el cover elegido, o el primer asset como respaldo.
   const coverAsset =
@@ -1759,6 +1782,7 @@ export async function validateGalleryToken(
       }
     }),
     tokenInfo: { id: tk.id as string, expiresAt: tk.expires_at as string | null },
+    viewMode,
   }
 }
 

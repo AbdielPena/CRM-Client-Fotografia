@@ -1679,6 +1679,8 @@ function ShareTab({
   const [token, setToken] = React.useState(publicToken)
   const [copied, setCopied] = React.useState(false)
   const [driveCopied, setDriveCopied] = React.useState(false)
+  const [selToken, setSelToken] = React.useState<string | null>(null)
+  const [selCopied, setSelCopied] = React.useState(false)
 
   const publicUrl = token
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/g/${token}`
@@ -1719,6 +1721,34 @@ function ShareTab({
         toast.error(err instanceof Error ? err.message : "Error")
       }
     })
+  }
+
+  // ── Link de SOLO selección (vista aparte con los favoritos del cliente) ──
+  const selUrl = selToken
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/g/${selToken}`
+    : null
+  const msgSel = selUrl
+    ? `${greet}✨ Aquí está tu selección final de fotos, en una vista aparte: ${selUrl}`
+    : ""
+  const handleGenerateSelection = () => {
+    const fd = new FormData()
+    fd.set("viewMode", "selection")
+    startTransition(async () => {
+      try {
+        const result = await shareGalleryAction(gallery.id, fd)
+        setSelToken(result.token)
+        toast.success("Link de selección generado")
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+  const handleCopySel = () => {
+    if (!selUrl) return
+    navigator.clipboard.writeText(selUrl)
+    setSelCopied(true)
+    toast.success("Link copiado")
+    setTimeout(() => setSelCopied(false), 2000)
   }
 
   const handlePublish = () => {
@@ -1823,6 +1853,55 @@ function ShareTab({
               {pending ? "Generando…" : "Generar link"}
             </button>
           </div>
+        )}
+      </div>
+
+      {/* Compartir SOLO la selección del cliente (vista aparte con sus favoritos) */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+          <Share2 className="h-4 w-4 text-muted-foreground" /> Vista de selección (aparte)
+        </h3>
+        <p className="mt-1 text-[12px] text-muted-foreground">
+          Link que muestra SOLO las fotos que el cliente marcó con ♥, separadas de la
+          galería completa.
+        </p>
+        {selUrl ? (
+          <div className="mt-3">
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={selUrl}
+                className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
+              />
+              <button
+                onClick={handleCopySel}
+                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
+              >
+                {selCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                {selCopied ? "Copiado" : "Copiar"}
+              </button>
+            </div>
+            <a
+              href={waLink(msgSel)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
+            >
+              <MessageCircle className="h-3.5 w-3.5" /> Compartir selección por WhatsApp
+            </a>
+            <p className="mt-2 text-[11.5px] text-muted-foreground">
+              Refleja los favoritos actuales del cliente.
+              {!waPhone && " (Agrega el teléfono del cliente para enviar directo.)"}
+            </p>
+          </div>
+        ) : (
+          <button
+            onClick={handleGenerateSelection}
+            disabled={pending}
+            className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-4 text-sm font-medium text-foreground hover:bg-muted/50 disabled:opacity-50"
+          >
+            <Share2 className="h-3.5 w-3.5" /> {pending ? "Generando…" : "Generar link de selección"}
+          </button>
         )}
       </div>
 

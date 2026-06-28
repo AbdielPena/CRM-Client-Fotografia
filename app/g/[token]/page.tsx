@@ -11,6 +11,7 @@ import { getPublicBrandingByStudioId } from "@/server/services/studio-branding.s
 import { getGalleryPrintState } from "@/server/services/print-selection.service"
 import { GalleryPasswordGate } from "@/components/public/gallery-password-gate"
 import { PublicGalleryView } from "@/components/public/public-gallery-view"
+import { PublicSelectionView } from "@/components/public/public-selection-view"
 import {
   FinalDeliveryBook,
   BookLauncher,
@@ -85,6 +86,32 @@ export default async function PublicGalleryPage({ params }: PageProps) {
 
   // Branding del estudio (white-label): logo, color, footer.
   const branding = await getPublicBrandingByStudioId(view.gallery.studioId)
+
+  // ── Vista de SOLO selección (token con view_mode='selection') ──
+  // Los assets ya vienen filtrados a los favoritos del cliente.
+  if (view.viewMode === "selection") {
+    return (
+      <PublicSelectionView
+        token={params.token}
+        gallery={{
+          name: view.gallery.name,
+          subtitle: view.gallery.subtitle,
+          eventDate: view.gallery.eventDate,
+          accentColor: view.gallery.accentColor,
+          coverWebUrl: view.gallery.coverWebUrl,
+          allow_download: view.gallery.allow_download,
+        }}
+        assets={view.assets}
+        studio={{
+          name: studioInfo?.studios?.name ?? "PixelOS",
+          logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+          primaryColor: branding?.primary_color ?? null,
+          hideBranding: branding?.hide_studioflow_branding ?? false,
+          footerHtml: branding?.custom_footer_html ?? null,
+        }}
+      />
+    )
+  }
 
   // ── Entrega final (vive dentro de la misma galería) ──
   const hasDeliveryTracks = view.assets.some(
