@@ -29,7 +29,7 @@ export function ProjectsByStatus({ rows }: Props) {
           <FolderOpen className="h-4 w-4 text-muted-foreground" />
         </div>
         <p className="text-body-sm text-muted-foreground">
-          Sin proyectos todavía
+          Sin sesiones todavía
         </p>
       </div>
     )
@@ -50,7 +50,7 @@ export function ProjectsByStatus({ rows }: Props) {
   return (
     <div>
       <div className="mb-4 flex items-baseline justify-between gap-3">
-        <p className="text-caption text-muted-foreground">Total de proyectos</p>
+        <p className="text-caption text-muted-foreground">Total de sesiones</p>
         <p className="text-h3 font-semibold text-foreground tabular-nums">
           {total}
         </p>

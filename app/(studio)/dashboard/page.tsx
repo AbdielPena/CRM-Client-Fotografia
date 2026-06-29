@@ -198,7 +198,7 @@ export default async function DashboardPage() {
             Exportar
           </Button>
           <Button asChild size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>
-            <Link href="/projects/new">Nuevo proyecto</Link>
+            <Link href="/projects/new">Nueva sesión</Link>
           </Button>
         </div>
       </div>
@@ -274,12 +274,12 @@ export default async function DashboardPage() {
               delay={0.1}
             />
             <StatCard
-              title="Proyectos activos"
+              title="Sesiones activas"
               tone="emerald"
               value={data.stats.activeProjects}
-              subtitle="Reservados + en proceso"
+              subtitle="Reservadas + en proceso"
               href="/projects?status=in_progress"
-              tooltip="Ver proyectos activos"
+              tooltip="Ver sesiones activas"
               delay={0.15}
             />
           </div>

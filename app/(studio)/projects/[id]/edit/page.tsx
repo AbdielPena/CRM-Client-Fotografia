@@ -10,7 +10,7 @@ import { countUnreadNotifications } from "@/server/services/notification.service
 import { updateProjectAction } from "@/server/actions/project.actions"
 import { AppTopbar } from "@/components/layout/app-topbar"
 
-export const metadata: Metadata = { title: "Editar proyecto" }
+export const metadata: Metadata = { title: "Editar sesión" }
 
 const PROJECT_TYPES = [
   { value: "xv_años", label: "XV años" },
@@ -72,9 +72,9 @@ export default async function EditProjectPage({
   return (
     <>
       <AppTopbar
-        eyebrow="Proyectos"
+        eyebrow="Sesiones"
         title={`Editar: ${project.name as string}`}
-        description="Modifica los datos del proyecto"
+        description="Modifica los datos de la sesión"
         unreadNotifications={unread}
       />
 
@@ -96,7 +96,7 @@ export default async function EditProjectPage({
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Nombre del proyecto <span className="text-danger">*</span>
+                  Nombre de la sesión <span className="text-danger">*</span>
                 </label>
                 <input
                   name="name"
@@ -175,7 +175,7 @@ export default async function EditProjectPage({
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Notas del proyecto
+                  Notas de la sesión
                 </label>
                 <textarea
                   name="notes"

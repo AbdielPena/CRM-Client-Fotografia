@@ -34,7 +34,7 @@ import {
   type ProjectCard,
 } from "@/components/projects/project-kanban-view"
 
-export const metadata: Metadata = { title: "Proyectos" }
+export const metadata: Metadata = { title: "Sesiones" }
 
 // Render siempre dinámico: evita que la navegación soft (toggle de vista/scope,
 // chips) sirva un shell de prefetch cacheado sin el contenido — con loading.tsx
@@ -184,7 +184,7 @@ export default async function ProjectsPage({
   return (
     <>
       <AppTopbar
-        title="Proyectos"
+        title="Sesiones"
         description={`${activeCount} activo${activeCount === 1 ? "" : "s"} · ${completedCount} completado${completedCount === 1 ? "" : "s"}`}
         unreadNotifications={unread}
         actions={
@@ -196,7 +196,7 @@ export default async function ProjectsPage({
               </Link>
             </Button>
             <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
-              <Link href="/projects/new">Nuevo proyecto</Link>
+              <Link href="/projects/new">Nueva sesión</Link>
             </Button>
           </div>
         }
@@ -249,7 +249,7 @@ export default async function ProjectsPage({
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <SearchInput
-            placeholder="Buscar proyectos…"
+            placeholder="Buscar sesiones…"
             className="w-full lg:w-80"
           />
 
@@ -324,23 +324,23 @@ export default async function ProjectsPage({
               }
               title={
                 scope === "completed"
-                  ? "Aún no hay proyectos completados"
+                  ? "Aún no hay sesiones completadas"
                   : search || status || category
-                    ? "No encontramos proyectos"
-                    : "Aún no tienes proyectos"
+                    ? "No encontramos sesiones"
+                    : "Aún no tienes sesiones"
               }
               description={
                 scope === "completed"
-                  ? "Cuando marques un proyecto como “Completado” aparecerá aquí, separado de los pendientes."
+                  ? "Cuando marques una sesión como “Completada” aparecerá aquí, separada de las pendientes."
                   : search || status || category
                     ? "Prueba ajustando tu búsqueda o limpia los filtros."
-                    : "Crea tu primer proyecto para empezar a gestionar tus sesiones."
+                    : "Crea tu primera sesión para empezar a organizar tu trabajo."
               }
               accent={scope === "active" && !search && !status && !category}
             >
               {scope === "active" && (
                 <Button asChild size="sm" leftIcon={<Plus className="h-4 w-4" />}>
-                  <Link href="/projects/new">Nuevo proyecto</Link>
+                  <Link href="/projects/new">Nueva sesión</Link>
                 </Button>
               )}
             </EmptyState>
@@ -425,7 +425,7 @@ export default async function ProjectsPage({
                   scope: scope === "completed" ? "completed" : undefined,
                 }}
                 prefetch={false}
-                itemsLabel="proyectos"
+                itemsLabel="sesiones"
               />
             )}
           </>

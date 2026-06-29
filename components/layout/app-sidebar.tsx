@@ -104,7 +104,7 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/armario", label: "Vestidos", icon: Shirt },
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
       { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
-      { type: "link", href: "/projects", label: "Proyectos", icon: FolderOpen },
+      { type: "link", href: "/projects", label: "Sesiones", icon: FolderOpen },
       { type: "link", href: "/colaboradores", label: "Colaboradores", icon: UserCog },
     ],
   },

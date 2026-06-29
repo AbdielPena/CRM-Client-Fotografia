@@ -33,7 +33,7 @@ interface AppTopbarProps {
 const QUICK_ACTIONS = [
   { href: "/leads/new", label: "Nuevo lead", icon: UserPlus },
   { href: "/clients/new", label: "Nuevo cliente", icon: UserPlus },
-  { href: "/projects/new", label: "Nuevo proyecto", icon: FolderPlus },
+  { href: "/projects/new", label: "Nueva sesión", icon: FolderPlus },
   { href: "/invoices/new", label: "Nueva factura", icon: Receipt },
   { href: "/contracts/new", label: "Nuevo contrato", icon: FileText },
   // Paquetes se crean/editan por modal en ajustes (no hay /packages/new)
@@ -114,7 +114,7 @@ export function AppTopbar({
             ref={searchRef}
             type="search"
             name="q"
-            placeholder="Buscar clientes, proyectos…"
+            placeholder="Buscar clientes, sesiones…"
             aria-label="Buscar en el estudio"
             className={cn(
               "h-8 w-full rounded-lg border border-transparent bg-muted/60 pl-8 pr-3 text-[13px] text-foreground",

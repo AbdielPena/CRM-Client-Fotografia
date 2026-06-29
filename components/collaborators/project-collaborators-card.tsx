@@ -72,12 +72,14 @@ export function ProjectCollaboratorsCard({
   roster,
   currency = "DOP",
   requirements = [],
+  eventDate = null,
 }: {
   projectId: string
   assignments: ProjectCollaboratorUI[]
   roster: RosterOption[]
   currency?: string
   requirements?: RequirementStatus[]
+  eventDate?: string | null
 }) {
   const router = useRouter()
   const [modal, setModal] = React.useState<
@@ -278,6 +280,7 @@ export function ProjectCollaboratorsCard({
           projectId={projectId}
           roster={roster}
           editing={modal.mode === "edit" ? modal.row : null}
+          eventDate={eventDate}
           onClose={() => setModal(null)}
           onSaved={() => {
             setModal(null)
@@ -293,12 +296,14 @@ function AssignModal({
   projectId,
   roster,
   editing,
+  eventDate,
   onClose,
   onSaved,
 }: {
   projectId: string
   roster: RosterOption[]
   editing: ProjectCollaboratorUI | null
+  eventDate?: string | null
   onClose: () => void
   onSaved: () => void
 }) {
@@ -481,7 +486,7 @@ function AssignModal({
               <input
                 name="serviceDate"
                 type="date"
-                defaultValue={editing?.serviceDate ?? ""}
+                defaultValue={(editing?.serviceDate ?? eventDate ?? "").slice(0, 10)}
                 className={inputCls}
               />
             </div>

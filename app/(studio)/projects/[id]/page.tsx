@@ -46,7 +46,7 @@ import {
 import Link from "next/link"
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Detalle del proyecto" }
+export const metadata: Metadata = { title: "Detalle de la sesión" }
 
 const TYPE_LABELS: Record<string, string> = {
   wedding: "Boda",
@@ -274,9 +274,9 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   return (
     <>
       <AppTopbar
-        eyebrow="Proyectos"
+        eyebrow="Sesiones"
         title={project.name as string}
-        description={[TYPE_LABELS[eventType ?? ""] ?? eventType, clientLabel].filter(Boolean).join(" · ") || "Detalle del proyecto"}
+        description={[TYPE_LABELS[eventType ?? ""] ?? eventType, clientLabel].filter(Boolean).join(" · ") || "Detalle de la sesión"}
         unreadNotifications={unread}
         actions={
           <>
@@ -358,7 +358,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               <div className="py-8 text-center">
                 <ImageIcon className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  Sin galerías vinculadas a este proyecto
+                  Sin galerías vinculadas a esta sesión
                 </p>
               </div>
             ) : (
@@ -422,6 +422,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             roster={collaboratorRoster}
             currency={currency}
             requirements={requirementStatuses}
+            eventDate={eventDate}
           />
 
           {/* Formularios del cliente */}
@@ -585,7 +586,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               <div className="mb-3 flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold text-foreground">
-                  Otros proyectos del cliente ({otherProjects.length})
+                  Otras sesiones del cliente ({otherProjects.length})
                 </h2>
               </div>
               <div className="space-y-1">

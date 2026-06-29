@@ -8,7 +8,7 @@ import { createProjectAction } from "@/server/actions/project.actions"
 import Link from "next/link"
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Nuevo proyecto" }
+export const metadata: Metadata = { title: "Nueva sesión" }
 
 const PROJECT_TYPES = [
   { value: "xv_años", label: "XV años" },
@@ -59,9 +59,9 @@ export default async function NewProjectPage({
   return (
     <>
       <AppTopbar
-        eyebrow="Proyectos"
-        title="Nuevo proyecto"
-        description="Crea un nuevo proyecto fotográfico"
+        eyebrow="Sesiones"
+        title="Nueva sesión"
+        description="Crea una nueva sesión fotográfica"
         unreadNotifications={unread}
       />
 
@@ -105,7 +105,7 @@ export default async function NewProjectPage({
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Nombre del proyecto <span className="text-danger">*</span>
+                  Nombre de la sesión <span className="text-danger">*</span>
                 </label>
                 <input
                   name="name"
@@ -182,7 +182,7 @@ export default async function NewProjectPage({
 
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1">
-                  Notas del proyecto
+                  Notas de la sesión
                 </label>
                 <textarea
                   name="notes"
@@ -266,7 +266,7 @@ export default async function NewProjectPage({
                 type="submit"
                 className="px-5 py-2.5 bg-brand text-brand-foreground text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors"
               >
-                Crear proyecto
+                Crear sesión
               </button>
               <Link
                 href="/projects"
