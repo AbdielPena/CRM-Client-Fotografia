@@ -37,6 +37,9 @@ export type CollaboratorUI = {
   baseRate: number | null
   notes: string | null
   status: "active" | "inactive"
+  assignments?: number
+  totalPending?: number
+  totalPaid?: number
 }
 
 const inputCls =
@@ -69,6 +72,9 @@ export function CollaboratorManager({
       (c.serviceOffered ?? "").toLowerCase().includes(q)
     )
   })
+
+  const totalPending = filtered.reduce((s, c) => s + (c.totalPending ?? 0), 0)
+  const totalPaid = filtered.reduce((s, c) => s + (c.totalPaid ?? 0), 0)
 
   const handleDelete = (c: CollaboratorUI) => {
     if (!confirm(`¿Eliminar a ${c.name}? No se borra de proyectos pasados.`)) return
@@ -113,6 +119,23 @@ export function CollaboratorManager({
           </button>
         </div>
       </div>
+
+      {(totalPending > 0 || totalPaid > 0) && (
+        <div className="flex flex-wrap gap-3">
+          <div className="sf-card flex-1 px-4 py-3">
+            <p className="text-[11px] text-muted-foreground">Por pagar a colaboradores</p>
+            <p className="text-lg font-bold tabular-nums text-amber-600 dark:text-amber-400">
+              {formatCurrency(totalPending, "DOP")}
+            </p>
+          </div>
+          <div className="sf-card flex-1 px-4 py-3">
+            <p className="text-[11px] text-muted-foreground">Pagado a colaboradores</p>
+            <p className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {formatCurrency(totalPaid, "DOP")}
+            </p>
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="sf-card flex flex-col items-center justify-center px-6 py-16 text-center">
@@ -180,6 +203,23 @@ export function CollaboratorManager({
                 {c.baseRate != null && c.baseRate > 0 && (
                   <p className="font-medium text-foreground">
                     Tarifa base: {formatCurrency(c.baseRate, "DOP")}
+                  </p>
+                )}
+                {(c.assignments ?? 0) > 0 && (
+                  <p className="flex flex-wrap gap-x-2 gap-y-0.5 pt-0.5">
+                    <span className="text-muted-foreground">
+                      {c.assignments} proyecto{c.assignments === 1 ? "" : "s"}
+                    </span>
+                    {(c.totalPending ?? 0) > 0 && (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        Pend: {formatCurrency(c.totalPending ?? 0, "DOP")}
+                      </span>
+                    )}
+                    {(c.totalPaid ?? 0) > 0 && (
+                      <span className="text-emerald-600 dark:text-emerald-400">
+                        Pag: {formatCurrency(c.totalPaid ?? 0, "DOP")}
+                      </span>
+                    )}
                   </p>
                 )}
                 {c.status === "inactive" && (

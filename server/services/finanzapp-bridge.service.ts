@@ -259,3 +259,130 @@ export async function recordIncomeToFinanzApp(
     alreadyExisted: result.already_existed,
   }
 }
+
+// ===========================================================================
+// PAGOS A COLABORADORES (cuentas por pagar) — Fase 3 del módulo Colaboradores
+// ---------------------------------------------------------------------------
+// Deuda pendiente → finanzapp.payables (estado pendiente). Al pagarse → gasto
+// en finanzapp.transactions + payable 'pagada'. Bidireccional: el CRM lee el
+// estado de los payables para reflejar pagos hechos en FinanzApp.
+// external_reference del payable = `crm-collab:<projectCollaboratorId>`.
+// Todas best-effort: si el studio no tiene workspace mapeado → skipped.
+// ===========================================================================
+
+const collabRef = (assignmentId: string) => `crm-collab:${assignmentId}`
+type FinzResult = { ok: boolean; skipped?: "no_workspace" }
+
+/** Crea/actualiza el payable pendiente del pago acordado al colaborador. */
+export async function recordCollaboratorPayable(
+  studioId: string,
+  input: {
+    assignmentId: string
+    acreedor: string
+    monto: number
+    /** vencimiento = fecha del servicio/sesión. */
+    dueDate?: string | null
+    notas?: string | null
+  },
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_record_payable", {
+    p_workspace_id: workspaceId,
+    p_acreedor: input.acreedor || "Colaborador",
+    p_monto: input.monto,
+    p_fecha_emision: new Date().toISOString().slice(0, 10),
+    p_fecha_venc: input.dueDate ? input.dueDate.slice(0, 10) : null,
+    p_external_reference: collabRef(input.assignmentId),
+    p_notas: input.notas ?? "Pago a colaborador (CRM)",
+  })
+  if (error)
+    throwServiceError("FINZ_RECORD_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
+/** Salda el payable: lo marca 'pagada' y registra el gasto real. */
+export async function settleCollaboratorPayable(
+  studioId: string,
+  input: {
+    assignmentId: string
+    accountId?: string | null
+    paidAt?: string
+    descripcion?: string | null
+  },
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_settle_payable", {
+    p_workspace_id: workspaceId,
+    p_external_reference: collabRef(input.assignmentId),
+    p_cuenta_id: input.accountId ?? null,
+    p_fecha_pago: (input.paidAt ?? new Date().toISOString()).slice(0, 10),
+    p_descripcion: input.descripcion ?? null,
+  })
+  if (error)
+    throwServiceError("FINZ_SETTLE_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
+/** Cancela el payable (+ anula el gasto si existía). */
+export async function cancelCollaboratorPayable(
+  studioId: string,
+  assignmentId: string,
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_cancel_payable", {
+    p_workspace_id: workspaceId,
+    p_external_reference: collabRef(assignmentId),
+  })
+  if (error)
+    throwServiceError("FINZ_CANCEL_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
+/** Reabre el payable (vuelve a pendiente; anula el gasto). */
+export async function reopenCollaboratorPayable(
+  studioId: string,
+  assignmentId: string,
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_reopen_payable", {
+    p_workspace_id: workspaceId,
+    p_external_reference: collabRef(assignmentId),
+  })
+  if (error)
+    throwServiceError("FINZ_REOPEN_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
+/**
+ * Estados actuales de los payables de colaboradores en FinanzApp
+ * (external_reference → estado). Para la reconciliación inversa: si el usuario
+ * pagó el payable en FinanzApp, el CRM lo refleja como pagado.
+ */
+export async function listCollaboratorPayableStatuses(
+  studioId: string,
+): Promise<Record<string, string>> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return {}
+  const sb = untypedService()
+  const { data, error } = await sb.rpc("finz_list_payable_statuses", {
+    p_workspace_id: workspaceId,
+    p_prefix: "crm-collab:",
+  })
+  if (error) return {}
+  const out: Record<string, string> = {}
+  for (const r of (data ?? []) as Array<{
+    external_reference: string
+    estado: string
+  }>) {
+    if (r.external_reference) out[r.external_reference] = r.estado
+  }
+  return out
+}

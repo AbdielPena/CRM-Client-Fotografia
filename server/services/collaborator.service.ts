@@ -2,6 +2,13 @@ import "server-only"
 
 import { untypedService } from "@/server/supabase/untyped"
 import { throwServiceError } from "@/lib/utils/api-error"
+import {
+  recordCollaboratorPayable,
+  settleCollaboratorPayable,
+  cancelCollaboratorPayable,
+  reopenCollaboratorPayable,
+  listCollaboratorPayableStatuses,
+} from "./finanzapp-bridge.service"
 import type {
   CreateCollaboratorInput,
   UpdateCollaboratorInput,
@@ -143,10 +150,54 @@ export async function deleteCollaborator(
 }
 
 // ── Asignaciones por proyecto ────────────────────────────────────────────────
+/**
+ * Reconciliación inversa (FinanzApp → CRM): si un payable fue pagado/cancelado
+ * directamente en FinanzApp, refleja ese estado en el CRM. Best-effort.
+ */
+async function reconcileProjectPayments(
+  studioId: string,
+  projectId: string,
+): Promise<void> {
+  const sb = untypedService()
+  const { data: rows } = await sb
+    .from("project_collaborators")
+    .select("id, pay_status, finanzapp_payable_ref")
+    .eq("studio_id", studioId)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+    .not("finanzapp_payable_ref", "is", null)
+  const pend = ((rows ?? []) as Array<{
+    id: string
+    pay_status: string
+    finanzapp_payable_ref: string | null
+  }>).filter((r) => r.pay_status === "pending" && r.finanzapp_payable_ref)
+  if (pend.length === 0) return
+  const statuses = await listCollaboratorPayableStatuses(studioId)
+  for (const r of pend) {
+    if (statuses[r.finanzapp_payable_ref as string] === "pagada") {
+      await sb
+        .from("project_collaborators")
+        .update({
+          pay_status: "paid",
+          paid_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", r.id)
+        .eq("studio_id", studioId)
+    }
+  }
+}
+
 export async function listProjectCollaborators(
   studioId: string,
   projectId: string,
 ): Promise<ProjectCollaboratorRow[]> {
+  // Sincroniza pagos hechos directamente en FinanzApp antes de listar.
+  try {
+    await reconcileProjectPayments(studioId, projectId)
+  } catch (err) {
+    console.error("[collab] reconcile failed", err)
+  }
   const sb = untypedService()
   const { data, error } = await sb
     .from("project_collaborators")
@@ -205,7 +256,35 @@ export async function assignCollaborator(
       studioId,
       projectId,
     })
-  return row as ProjectCollaboratorRow
+
+  const created = row as ProjectCollaboratorRow
+  const agreed = Number(created.agreed_pay ?? 0)
+  // Fase 3: registrar la deuda en FinanzApp (best-effort, no bloquea).
+  if (agreed > 0) {
+    await sb
+      .from("project_collaborators")
+      .update({ finanzapp_payable_ref: `crm-collab:${created.id}` })
+      .eq("id", created.id)
+    const acreedor = created.collaborator?.name ?? "Colaborador"
+    try {
+      await recordCollaboratorPayable(studioId, {
+        assignmentId: created.id,
+        acreedor,
+        monto: agreed,
+        dueDate: created.service_date,
+        notas: created.role ? `Colaborador: ${created.role}` : null,
+      })
+      if (created.pay_status === "paid") {
+        await settleCollaboratorPayable(studioId, {
+          assignmentId: created.id,
+          descripcion: `Pago a colaborador: ${acreedor}`,
+        })
+      }
+    } catch (err) {
+      console.error("[collab→finanzapp] assign sync failed", err)
+    }
+  }
+  return created
 }
 
 export async function updateAssignment(
@@ -214,6 +293,20 @@ export async function updateAssignment(
   data: UpdateAssignmentInput,
 ): Promise<void> {
   const sb = untypedService()
+  const { data: existing } = await sb
+    .from("project_collaborators")
+    .select("agreed_pay, pay_status, service_date, collaborator:collaborators(name)")
+    .eq("id", assignmentId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  if (!existing) throw new Error("ASSIGNMENT_NOT_FOUND")
+  const prev = existing as {
+    agreed_pay: number
+    pay_status: string
+    service_date: string | null
+    collaborator: { name: string } | { name: string }[] | null
+  }
+
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (data.role !== undefined) patch.role = emptyToNull(data.role)
   if (data.agreedPay !== undefined) patch.agreed_pay = data.agreedPay ?? 0
@@ -228,6 +321,12 @@ export async function updateAssignment(
     patch.payment_method = emptyToNull(data.paymentMethod)
   if (data.notes !== undefined) patch.notes = emptyToNull(data.notes)
 
+  const newAgreed =
+    data.agreedPay !== undefined
+      ? data.agreedPay ?? 0
+      : Number(prev.agreed_pay ?? 0)
+  if (newAgreed > 0) patch.finanzapp_payable_ref = `crm-collab:${assignmentId}`
+
   const { error } = await sb
     .from("project_collaborators")
     .update(patch)
@@ -238,6 +337,38 @@ export async function updateAssignment(
       studioId,
       assignmentId,
     })
+
+  // Fase 3: sincronizar FinanzApp según la transición de pago (best-effort).
+  const newPay = data.payStatus ?? prev.pay_status
+  const c = prev.collaborator
+  const acreedor = (Array.isArray(c) ? c[0]?.name : c?.name) ?? "Colaborador"
+  const dueDate =
+    data.serviceDate !== undefined
+      ? emptyToNull(data.serviceDate)
+      : prev.service_date
+  try {
+    if (newAgreed > 0 && newPay !== "cancelled") {
+      await recordCollaboratorPayable(studioId, {
+        assignmentId,
+        acreedor,
+        monto: newAgreed,
+        dueDate,
+        notas: null,
+      })
+    }
+    if (newPay === "paid" && prev.pay_status !== "paid" && newAgreed > 0) {
+      await settleCollaboratorPayable(studioId, {
+        assignmentId,
+        descripcion: `Pago a colaborador: ${acreedor}`,
+      })
+    } else if (newPay === "pending" && prev.pay_status === "paid") {
+      await reopenCollaboratorPayable(studioId, assignmentId)
+    } else if (newPay === "cancelled") {
+      await cancelCollaboratorPayable(studioId, assignmentId)
+    }
+  } catch (err) {
+    console.error("[collab→finanzapp] update sync failed", err)
+  }
 }
 
 export async function removeAssignment(
@@ -255,4 +386,38 @@ export async function removeAssignment(
       studioId,
       assignmentId,
     })
+  // Fase 3: cancelar la deuda en FinanzApp (best-effort).
+  try {
+    await cancelCollaboratorPayable(studioId, assignmentId)
+  } catch (err) {
+    console.error("[collab→finanzapp] remove cancel failed", err)
+  }
+}
+
+/**
+ * Totales por colaborador (reporte): nº de asignaciones, monto pendiente y
+ * pagado, a través de todos los proyectos. Para la vista de Colaboradores.
+ */
+export async function getCollaboratorTotals(
+  studioId: string,
+): Promise<Record<string, { assignments: number; pending: number; paid: number }>> {
+  const sb = untypedService()
+  const { data } = await sb
+    .from("project_collaborators")
+    .select("collaborator_id, agreed_pay, pay_status")
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+  const out: Record<string, { assignments: number; pending: number; paid: number }> = {}
+  for (const r of (data ?? []) as Array<{
+    collaborator_id: string
+    agreed_pay: number
+    pay_status: string
+  }>) {
+    const t = (out[r.collaborator_id] ??= { assignments: 0, pending: 0, paid: 0 })
+    t.assignments += 1
+    const amt = Number(r.agreed_pay ?? 0)
+    if (r.pay_status === "paid") t.paid += amt
+    else if (r.pay_status === "pending") t.pending += amt
+  }
+  return out
 }
