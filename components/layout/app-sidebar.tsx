@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Users,
   UserPlus,
+  UserCog,
   FolderOpen,
   CalendarDays,
   ImageIcon,
@@ -104,6 +105,7 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
       { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
       { type: "link", href: "/projects", label: "Proyectos", icon: FolderOpen },
+      { type: "link", href: "/colaboradores", label: "Colaboradores", icon: UserCog },
     ],
   },
   {

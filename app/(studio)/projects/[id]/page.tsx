@@ -14,6 +14,11 @@ import { ClientPortalAccessCard } from "@/components/projects/client-portal-acce
 import { ensureClientAccessCode } from "@/server/services/client-portal.service"
 import { WhatsAppSendMenu } from "@/components/whatsapp/whatsapp-send-menu"
 import { FormResponsesPanel } from "@/components/admin/form-responses-panel"
+import {
+  listProjectCollaborators,
+  listCollaborators,
+} from "@/server/services/collaborator.service"
+import { ProjectCollaboratorsCard } from "@/components/collaborators/project-collaborators-card"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
 import {
   Calendar,
@@ -181,6 +186,33 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const deliveries = (deliveriesRaw ?? []) as Rec[]
   const otherProjects = (otherProjectsRaw ?? []) as Rec[]
 
+  // Colaboradores del proyecto + roster del estudio (para asignar) + costo total.
+  const [projCollabRows, rosterRows] = await Promise.all([
+    listProjectCollaborators(session.studioId, params.id).catch(() => []),
+    listCollaborators(session.studioId).catch(() => []),
+  ])
+  const projectCollaborators = projCollabRows.map((a) => ({
+    id: a.id,
+    role: a.role,
+    agreedPay: Number(a.agreed_pay ?? 0),
+    payStatus: a.pay_status,
+    confirmStatus: a.confirm_status,
+    serviceDate: a.service_date,
+    paymentMethod: a.payment_method,
+    notes: a.notes,
+    collaborator: a.collaborator
+      ? { id: a.collaborator.id, name: a.collaborator.name, type: a.collaborator.type }
+      : null,
+  }))
+  const collaboratorRoster = rosterRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    type: c.type,
+  }))
+  const collaboratorCost = projectCollaborators
+    .filter((a) => a.payStatus !== "cancelled")
+    .reduce((s, a) => s + a.agreedPay, 0)
+
   // Total pagado (suma de pagos completados/recibidos) — visión financiera del cliente
   const totalPaid = payments
     .filter((p) => ["completed", "received", "paid", "succeeded"].includes(String(p.status)))
@@ -193,6 +225,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const eventTime = (project.event_time as string | null) ?? null
   const totalAmount = project.total_amount as number | string | null
   const currency = (project.currency as string | null) ?? "DOP"
+
+  // Ganancia neta del proyecto = ingreso (precio del proyecto, o lo pagado si no
+  // hay precio) − costo de colaboradores (pagos acordados no cancelados).
+  const projectIncome = totalAmount != null ? Number(totalAmount) : totalPaid
+  const netProfit = projectIncome - collaboratorCost
 
   const clientLabel = client ? (client.name as string) : ""
 
@@ -351,6 +388,14 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               </div>
             )}
           </div>
+
+          {/* Colaboradores del proyecto */}
+          <ProjectCollaboratorsCard
+            projectId={project.id as string}
+            assignments={projectCollaborators}
+            roster={collaboratorRoster}
+            currency={currency}
+          />
 
           {/* Formularios del cliente */}
           <FormResponsesPanel
@@ -581,6 +626,42 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               )}
             </dl>
           </div>
+
+          {/* Ganancia neta (ingreso − pagos a colaboradores) */}
+          {projectCollaborators.length > 0 && (
+            <div className="sf-card p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">Ganancia neta</h2>
+              </div>
+              <dl className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Ingreso del proyecto</dt>
+                  <dd className="font-medium tabular-nums text-foreground">
+                    {formatCurrency(projectIncome, currency)}
+                  </dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Pagos a colaboradores</dt>
+                  <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">
+                    − {formatCurrency(collaboratorCost, currency)}
+                  </dd>
+                </div>
+                <div className="flex justify-between border-t border-border/60 pt-2">
+                  <dt className="font-semibold text-foreground">Ganancia neta</dt>
+                  <dd
+                    className={
+                      netProfit >= 0
+                        ? "font-bold tabular-nums text-emerald-600 dark:text-emerald-400"
+                        : "font-bold tabular-nums text-rose-600 dark:text-rose-400"
+                    }
+                  >
+                    {formatCurrency(netProfit, currency)}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
 
           {/* Finance summary */}
           {invoices.length > 0 && (
