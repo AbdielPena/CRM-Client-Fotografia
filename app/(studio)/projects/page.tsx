@@ -145,16 +145,19 @@ export default async function ProjectsPage({
   const fetchOpts =
     view === "kanban"
       ? { search, serviceCategoryId: category, page: 1, pageSize: 200, ...scopeFilter }
-      : {
-          search,
-          status,
-          serviceCategoryId: category,
-          page,
-          ...scopeFilter,
-          // Activos en grilla: ordenar por cercanía (fecha más próxima primero).
-          ...(scope === "active" ? { orderBy: "event_date_asc" as const } : {}),
-          ...(whenRange ? { dateFrom: whenRange.from, dateTo: whenRange.to } : {}),
-        }
+      : scope === "active"
+        ? {
+            // Activos en grilla: traemos todas (hasta 200) y ordenamos por
+            // proximidad en JS (próximas primero, pasadas después).
+            search,
+            status,
+            serviceCategoryId: category,
+            page: 1,
+            pageSize: 200,
+            ...scopeFilter,
+            ...(whenRange ? { dateFrom: whenRange.from, dateTo: whenRange.to } : {}),
+          }
+        : { search, status, serviceCategoryId: category, page, ...scopeFilter }
 
   const [data, activeCount, completedCount] = await Promise.all([
     getProjects(session.studioId, fetchOpts),
@@ -171,6 +174,22 @@ export default async function ProjectsPage({
         })
       : Promise.resolve(0),
   ])
+
+  // Orden por cercanía SOLO en la grilla de activos: las próximas a hoy primero
+  // (ascendente), luego las pasadas (más reciente primero), y sin fecha al final.
+  if (scope === "active" && view === "grid") {
+    const todayMs = Date.parse(todayStr)
+    const proximityKey = (ed: string | null) => {
+      if (!ed) return Number.POSITIVE_INFINITY
+      const t = Date.parse(String(ed).slice(0, 10))
+      if (Number.isNaN(t)) return Number.POSITIVE_INFINITY
+      // futuro/hoy: distancia pequeña → arriba. pasado: bucket alto, más reciente primero.
+      return t >= todayMs ? t - todayMs : todayMs - t + 1e15
+    }
+    ;(data.items as unknown as ProjectRow[]).sort(
+      (a, b) => proximityKey(a.event_date) - proximityKey(b.event_date),
+    )
+  }
 
   // Badge "falta colaborador" (solo en grid): proyectos cuyo plan requiere
   // colaboradores aún no asignados.
