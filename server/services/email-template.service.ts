@@ -32,6 +32,7 @@ export type TemplateSlug =
   | "invoice_created"
   | "payment_received"
   | "payment_pending"
+  | "session_balance_reminder"
   // Galería
   | "gallery_available"
   | "gallery_selection_pending"
@@ -257,6 +258,23 @@ export const TEMPLATE_CATALOG: Record<
       { key: "total_price", label: "Monto", example: "$1,500.00" },
       { key: "due_date", label: "Vencimiento", example: "15 jun" },
       { key: "payment_url", label: "Link de pago", example: "https://..." },
+    ],
+  },
+  session_balance_reminder: {
+    label: "Recordatorio de saldo (sesión)",
+    description:
+      "Recuerda al cliente el saldo restante el día antes y el día de su sesión.",
+    category: "invoice",
+    defaultSubject: "Recordatorio de pago — tu sesión es {{when_label}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>Te recordamos que tu sesión <strong>{{session_name}}</strong> es <strong>{{when_label}}</strong> ({{session_date}}). Para dejar todo listo, queda pendiente el saldo de <strong>{{balance_amount}}</strong>.</p><p><a href="{{portal_url}}" class="btn">Ver mi saldo</a></p><p>¡Nos vemos muy pronto! 💛</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "session_name", label: "Sesión", example: "Quinceañera de María" },
+      { key: "when_label", label: "Cuándo", example: "mañana / hoy" },
+      { key: "session_date", label: "Fecha de la sesión", example: "29 jun" },
+      { key: "balance_amount", label: "Saldo restante", example: "DOP 29,300.00" },
+      { key: "portal_url", label: "Link del portal", example: "https://..." },
     ],
   },
   gallery_available: {
