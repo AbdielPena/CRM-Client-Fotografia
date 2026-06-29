@@ -35,6 +35,11 @@ export async function getProjects(
     onlyStatuses?: string[]
     /** Excluir proyectos cuyo status esté en esta lista (p.ej. completados). */
     excludeStatuses?: string[]
+    /** Filtro por rango de event_date (inclusive, formato YYYY-MM-DD). */
+    dateFrom?: string
+    dateTo?: string
+    /** Orden por fecha del evento. Default: descendente (más reciente primero). */
+    orderBy?: "event_date_asc" | "event_date_desc"
   } = {},
 ) {
   const {
@@ -45,6 +50,9 @@ export async function getProjects(
     pageSize = 50,
     onlyStatuses,
     excludeStatuses,
+    dateFrom,
+    dateTo,
+    orderBy,
   } = opts
   const supabase = createSupabaseServerClient()
   const from = (page - 1) * pageSize
@@ -61,7 +69,10 @@ export async function getProjects(
     )
     .eq('studio_id', studioId)
     .is('deleted_at', null)
-    .order('event_date', { ascending: false, nullsFirst: false })
+    .order('event_date', {
+      ascending: orderBy === "event_date_asc",
+      nullsFirst: false,
+    })
     .range(from, to)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,6 +85,8 @@ export async function getProjects(
   if (excludeStatuses && excludeStatuses.length) {
     query = query.not('status', 'in', pgInList(excludeStatuses))
   }
+  if (dateFrom) query = query.gte('event_date', dateFrom)
+  if (dateTo) query = query.lte('event_date', dateTo)
   if (search && search.trim()) {
     const term = `%${search.trim()}%`
     query = query.ilike('name', term)
@@ -103,9 +116,12 @@ export async function countProjects(
     serviceCategoryId?: string
     onlyStatuses?: string[]
     excludeStatuses?: string[]
+    dateFrom?: string
+    dateTo?: string
   } = {},
 ): Promise<number> {
-  const { search, serviceCategoryId, onlyStatuses, excludeStatuses } = opts
+  const { search, serviceCategoryId, onlyStatuses, excludeStatuses, dateFrom, dateTo } =
+    opts
   const supabase = createSupabaseServerClient()
 
   let query = supabase
@@ -121,6 +137,8 @@ export async function countProjects(
   if (excludeStatuses && excludeStatuses.length) {
     query = query.not('status', 'in', pgInList(excludeStatuses))
   }
+  if (dateFrom) query = query.gte('event_date', dateFrom)
+  if (dateTo) query = query.lte('event_date', dateTo)
   if (search && search.trim()) {
     query = query.ilike('name', `%${search.trim()}%`)
   }

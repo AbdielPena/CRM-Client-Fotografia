@@ -74,6 +74,7 @@ export default async function ProjectsPage({
     page?: string
     view?: string
     scope?: string
+    when?: string
   }
 }) {
   const session = await requireStudioAuth()
@@ -86,6 +87,41 @@ export default async function ProjectsPage({
   const view: ViewMode = scope === "completed" ? "grid" : viewParam
   // El filtro por estado solo aplica en la vista de activos.
   const status = scope === "active" ? searchParams.status : undefined
+
+  // ── Filtro por cercanía de fecha (Hoy / Esta semana / Este mes) ──
+  // Calculado en hora RD para que "hoy" sea correcto sin importar el TZ del server.
+  const RD_TZ = "America/Santo_Domingo"
+  const todayStr = new Intl.DateTimeFormat("en-CA", {
+    timeZone: RD_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+  const [ty, tm, tdy] = todayStr.split("-").map(Number)
+  const pad2 = (n: number) => String(n).padStart(2, "0")
+  const ymd = (dt: Date) =>
+    `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`
+  const baseDay = new Date(Date.UTC(ty, tm - 1, tdy))
+  const monOff = (baseDay.getUTCDay() + 6) % 7 // lunes = inicio de semana
+  const weekStart = new Date(baseDay)
+  weekStart.setUTCDate(baseDay.getUTCDate() - monOff)
+  const weekEnd = new Date(weekStart)
+  weekEnd.setUTCDate(weekStart.getUTCDate() + 6)
+  const WHEN_RANGES: Record<string, { from: string; to: string }> = {
+    hoy: { from: todayStr, to: todayStr },
+    semana: { from: ymd(weekStart), to: ymd(weekEnd) },
+    mes: {
+      from: ymd(new Date(Date.UTC(ty, tm - 1, 1))),
+      to: ymd(new Date(Date.UTC(ty, tm, 0))),
+    },
+  }
+  const when =
+    scope === "active" && ["hoy", "semana", "mes"].includes(searchParams.when ?? "")
+      ? (searchParams.when as "hoy" | "semana" | "mes")
+      : undefined
+  // Solo aplica/visible en la grilla de activos (el kanban es por estado).
+  const applyWhen = scope === "active" && view === "grid"
+  const whenRange = applyWhen && when ? WHEN_RANGES[when] : null
 
   // Primero los estados para poder dividir activos/completados.
   const [statuses, categories, unread] = await Promise.all([
@@ -109,7 +145,16 @@ export default async function ProjectsPage({
   const fetchOpts =
     view === "kanban"
       ? { search, serviceCategoryId: category, page: 1, pageSize: 200, ...scopeFilter }
-      : { search, status, serviceCategoryId: category, page, ...scopeFilter }
+      : {
+          search,
+          status,
+          serviceCategoryId: category,
+          page,
+          ...scopeFilter,
+          // Activos en grilla: ordenar por cercanía (fecha más próxima primero).
+          ...(scope === "active" ? { orderBy: "event_date_asc" as const } : {}),
+          ...(whenRange ? { dateFrom: whenRange.from, dateTo: whenRange.to } : {}),
+        }
 
   const [data, activeCount, completedCount] = await Promise.all([
     getProjects(session.studioId, fetchOpts),
@@ -137,6 +182,21 @@ export default async function ProjectsPage({
         )
       : new Set<string>()
 
+  // Conteos para los chips de cercanía (solo en grilla de activos).
+  const whenCounts = applyWhen
+    ? await Promise.all(
+        (["hoy", "semana", "mes"] as const).map((k) =>
+          countProjects(session.studioId, {
+            search,
+            serviceCategoryId: category,
+            excludeStatuses: completedLabels,
+            dateFrom: WHEN_RANGES[k].from,
+            dateTo: WHEN_RANGES[k].to,
+          }),
+        ),
+      )
+    : [0, 0, 0]
+
   const STATUS_CHIPS: FilterChip[] = activeStatuses.map((s) => ({
     key: s.label,
     label: s.label,
@@ -154,6 +214,7 @@ export default async function ProjectsPage({
       category,
       page: undefined,
       view,
+      when,
       scope: scope === "completed" ? "completed" : undefined,
       ...overrides,
     }
@@ -170,6 +231,7 @@ export default async function ProjectsPage({
     if (search) params.set("q", search)
     if (category) params.set("category", category)
     if (viewParam === "kanban") params.set("view", "kanban")
+    if (when) params.set("when", when)
     const qs = params.toString()
     return qs ? `/projects?${qs}` : "/projects"
   })()
@@ -247,6 +309,23 @@ export default async function ProjectsPage({
           </Link>
         </div>
 
+        {/* Cercanía de fecha: Hoy / Esta semana / Este mes (grilla de activos) */}
+        {applyWhen && (
+          <FilterChips
+            baseHref="/projects"
+            paramName="when"
+            current={when}
+            allLabel="Todas"
+            chips={[
+              { key: "hoy", label: "Hoy", count: whenCounts[0] },
+              { key: "semana", label: "Esta semana", count: whenCounts[1] },
+              { key: "mes", label: "Este mes", count: whenCounts[2] },
+            ]}
+            preserveQuery={{ q: search, status, category, view: "grid" }}
+            prefetch={false}
+          />
+        )}
+
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <SearchInput
             placeholder="Buscar sesiones…"
@@ -259,7 +338,7 @@ export default async function ProjectsPage({
               paramName="status"
               current={status}
               chips={STATUS_CHIPS}
-              preserveQuery={{ q: search, category, view: "grid" }}
+              preserveQuery={{ q: search, category, view: "grid", when }}
               prefetch={false}
               className="flex-1"
             />
@@ -275,6 +354,7 @@ export default async function ProjectsPage({
                 q: search,
                 status,
                 view,
+                when,
                 scope: scope === "completed" ? "completed" : undefined,
               }}
               prefetch={false}
@@ -422,6 +502,7 @@ export default async function ProjectsPage({
                   status,
                   category,
                   view: "grid",
+                  when,
                   scope: scope === "completed" ? "completed" : undefined,
                 }}
                 prefetch={false}
