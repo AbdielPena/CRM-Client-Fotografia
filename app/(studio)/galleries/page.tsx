@@ -216,6 +216,7 @@ export default async function GalleriesPage() {
                             day: "numeric",
                             month: "short",
                             year: "numeric",
+                            timeZone: "UTC",
                           })}
                         </span>
                       )}

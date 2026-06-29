@@ -114,7 +114,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
                 )}
                 {eventDate && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    {formatDate(new Date(eventDate))}
+                    {formatDate(eventDate)}
                   </p>
                 )}
               </div>

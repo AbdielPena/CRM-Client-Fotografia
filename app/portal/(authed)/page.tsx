@@ -172,7 +172,7 @@ export default async function PortalHomePage() {
       label: "Reservas",
       value: String(bookings.length),
       sub: bookings[0]?.event_date
-        ? `próxima: ${formatDateShort(new Date(bookings[0].event_date))}`
+        ? `próxima: ${formatDateShort(bookings[0].event_date as string)}`
         : undefined,
       tint: "bg-brand-soft text-gold-600",
     },

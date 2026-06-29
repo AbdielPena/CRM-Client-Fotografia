@@ -136,7 +136,7 @@ export default async function BookingsListPage({
                     )}
                   </DataTableCell>
                   <DataTableCell className="hidden text-muted-foreground lg:table-cell">
-                    {formatDateShort(new Date(req.event_date))}
+                    {formatDateShort(req.event_date as string)}
                     {req.event_time ? (
                       <span className="ml-1 text-caption">
                         · {req.event_time.slice(0, 5)}

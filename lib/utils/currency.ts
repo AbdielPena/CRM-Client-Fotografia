@@ -6,22 +6,44 @@ export function formatCurrency(amount: number, currency = "USD", locale = "es-MX
   }).format(amount)
 }
 
+// Una fecha "solo día" (YYYY-MM-DD) viene sin hora; new Date() la interpreta
+// como medianoche UTC y en husos negativos (RD = UTC-4) retrocede un día al
+// mostrarla. Para esas fechas formateamos en UTC y así se ve el día correcto.
+// (Los timestamps con hora se siguen mostrando en hora local.)
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Parsea una fecha "solo día" como fecha LOCAL (no UTC), evitando el corrimiento
+ * de un día. Útil cuando luego se formatea con `.toLocaleDateString()`. Para
+ * timestamps con hora, devuelve `new Date(value)` normal.
+ */
+export function parseDateOnly(value: string | null | undefined): Date | null {
+  if (!value) return null
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value))
+  if (!m) return new Date(value)
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+}
+
 export function formatDate(date: Date | string | null, locale = "es-MX") {
   if (!date) return "—"
-  return new Intl.DateTimeFormat(locale, {
+  const opts: Intl.DateTimeFormatOptions = {
     day: "2-digit",
     month: "long",
     year: "numeric",
-  }).format(new Date(date))
+  }
+  if (typeof date === "string" && DATE_ONLY.test(date)) opts.timeZone = "UTC"
+  return new Intl.DateTimeFormat(locale, opts).format(new Date(date))
 }
 
 export function formatDateShort(date: Date | string | null, locale = "es-MX") {
   if (!date) return "—"
-  return new Intl.DateTimeFormat(locale, {
+  const opts: Intl.DateTimeFormatOptions = {
     day: "2-digit",
     month: "short",
     year: "numeric",
-  }).format(new Date(date))
+  }
+  if (typeof date === "string" && DATE_ONLY.test(date)) opts.timeZone = "UTC"
+  return new Intl.DateTimeFormat(locale, opts).format(new Date(date))
 }
 
 /**

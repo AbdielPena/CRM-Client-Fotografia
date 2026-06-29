@@ -401,7 +401,7 @@ export default async function ProjectsPage({
                       {project.event_date && (
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span>{formatDate(new Date(project.event_date))}</span>
+                          <span>{formatDate(project.event_date as string)}</span>
                         </div>
                       )}
                     </div>

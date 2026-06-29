@@ -240,7 +240,7 @@ export default async function LeadsPage({
                   </DataTableCell>
                   <DataTableCell className="hidden text-muted-foreground lg:table-cell">
                     {lead.event_date
-                      ? formatDateShort(new Date(lead.event_date))
+                      ? formatDateShort(lead.event_date as string)
                       : "—"}
                   </DataTableCell>
                   <DataTableCell>

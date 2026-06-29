@@ -387,7 +387,7 @@ function ProjectCardView({
           {project.event_date && (
             <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground">
               <Calendar className="h-3 w-3" />
-              {formatDate(new Date(project.event_date))}
+              {formatDate(project.event_date as string)}
             </span>
           )}
         </div>

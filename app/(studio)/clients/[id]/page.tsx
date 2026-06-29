@@ -219,7 +219,7 @@ export default async function ClientDetailPage({
                             {(eventType && PROJECT_TYPE_LABELS[eventType]) ??
                               eventType ??
                               "Proyecto"}
-                            {eventDate ? ` · ${formatDate(new Date(eventDate))}` : ""}
+                            {eventDate ? ` · ${formatDate(eventDate)}` : ""}
                           </p>
                         </div>
                         <StatusBadge status={String(project.status)} />
@@ -429,7 +429,7 @@ export default async function ClientDetailPage({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-foreground group-hover:text-primary">
                           {b.event_date
-                            ? `Sesión ${formatDate(new Date(b.event_date))}`
+                            ? `Sesión ${formatDate(b.event_date as string)}`
                             : "Reserva"}
                         </p>
                         <p className="text-[11.5px] text-muted-foreground">

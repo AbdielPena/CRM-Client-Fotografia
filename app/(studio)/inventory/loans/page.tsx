@@ -169,7 +169,7 @@ export default async function InventoryLoansPage({
                         </Link>
                       ) : l.booking ? (
                         <span className="text-muted-foreground">
-                          📅 {formatDate(new Date(l.booking.event_date))}
+                          📅 {formatDate(l.booking.event_date as string)}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>

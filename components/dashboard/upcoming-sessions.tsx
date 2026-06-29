@@ -44,7 +44,9 @@ export function UpcomingSessions({ projects }: Props) {
   return (
     <ul className="-mx-5 divide-y divide-border/60">
       {projects.map((p, idx) => {
-        const date = p.event_date ? new Date(p.event_date) : null
+        const date = p.event_date
+          ? new Date(String(p.event_date).slice(0, 10) + "T00:00:00")
+          : null
         const clientName = Array.isArray(p.client)
           ? p.client[0]?.name
           : (p.client as { name?: string } | null)?.name

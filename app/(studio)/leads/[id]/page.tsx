@@ -124,7 +124,7 @@ export default async function LeadDetailPage({ params }: { params: { id: string 
                 <div className="flex items-center gap-3">
                   <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                   <span className="text-sm text-foreground">
-                    {formatDate(new Date(eventDate))}
+                    {formatDate(eventDate)}
                   </span>
                 </div>
               )}

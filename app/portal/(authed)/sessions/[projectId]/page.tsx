@@ -107,7 +107,7 @@ export default async function PortalSessionDetailsPage({
       0,
     )
 
-  const d = p.event_date ? new Date(p.event_date) : null
+  const d = p.event_date ? new Date(String(p.event_date).slice(0, 10) + "T00:00:00") : null
   const dateStr = d
     ? new Intl.DateTimeFormat("es", {
         weekday: "long",

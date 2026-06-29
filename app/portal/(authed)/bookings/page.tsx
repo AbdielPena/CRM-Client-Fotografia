@@ -45,7 +45,7 @@ export default async function PortalBookingsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {bookings.map((b, i) => {
-            const d = b.event_date ? new Date(b.event_date) : null
+            const d = b.event_date ? new Date(String(b.event_date).slice(0, 10) + "T00:00:00") : null
             return (
               <div
                 key={b.id}

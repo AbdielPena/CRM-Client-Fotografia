@@ -192,7 +192,7 @@ export function NewLoanForm({
                   <option value="">— Ninguno —</option>
                   {bookings.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {new Date(b.event_date).toLocaleDateString("es-DO")} ·{" "}
+                      {new Date(b.event_date).toLocaleDateString("es-DO", { timeZone: "UTC" })} ·{" "}
                       {b.event_type}
                     </option>
                   ))}

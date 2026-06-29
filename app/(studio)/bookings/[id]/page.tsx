@@ -342,7 +342,7 @@ export default async function BookingRequestDetailPage({
             {/* Evento */}
             <Section title="Evento">
               <Row icon={<Calendar className="h-5 w-5" />} label="Fecha">
-                {formatDateShort(new Date(req.event_date))}
+                {formatDateShort(req.event_date as string)}
                 {req.event_time && (
                   <span className="text-xs text-muted-foreground ml-2">
                     · {req.event_time.slice(0, 5)}

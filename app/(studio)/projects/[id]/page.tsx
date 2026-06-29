@@ -264,7 +264,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     (client?.phone as string | null) ?? (client?.whatsapp as string | null) ?? null
   const waVars = {
     clienteNombre: clientLabel || null,
-    fecha: eventDate ? formatDate(new Date(eventDate)) : null,
+    fecha: eventDate ? formatDate(eventDate) : null,
     lugar: (project.location as string | null) ?? null,
     link: invoices[0]
       ? `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/i/${invoices[0].id}`
@@ -313,15 +313,15 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               <div className="flex items-center gap-4 px-5 py-4">
                 <div className="w-12 h-12 bg-muted/30 rounded-lg flex flex-col items-center justify-center flex-shrink-0 border border-border/60">
                   <span className="text-sm font-bold text-foreground leading-none">
-                    {new Date(eventDate).getDate()}
+                    {new Date(eventDate).toLocaleString("es", { day: "numeric", timeZone: "UTC" })}
                   </span>
                   <span className="text-[10px] text-muted-foreground uppercase mt-0.5">
-                    {new Date(eventDate).toLocaleString("es", { month: "short" })}
+                    {new Date(eventDate).toLocaleString("es", { month: "short", timeZone: "UTC" })}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">
-                    {formatDate(new Date(eventDate))}
+                    {formatDate(eventDate)}
                   </p>
                   {eventTime && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -604,7 +604,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                         {TYPE_LABELS[String(p.event_type ?? "")] ??
                           String(p.event_type ?? "")}
                         {p.event_date
-                          ? ` · ${formatDateShort(new Date(String(p.event_date)))}`
+                          ? ` · ${formatDateShort(String(p.event_date))}`
                           : ""}
                       </p>
                     </div>
@@ -628,7 +628,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               {eventDate && (
                 <div className="flex items-start gap-3">
                   <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <span className="text-foreground">{formatDate(new Date(eventDate))}</span>
+                  <span className="text-foreground">{formatDate(eventDate)}</span>
                 </div>
               )}
               {totalAmount != null && (
