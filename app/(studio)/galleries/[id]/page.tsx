@@ -328,6 +328,8 @@ export default async function GalleryDetailPage({
           download_pin_required:
             (gallery as unknown as { download_pin_required: boolean }).download_pin_required ?? false,
           selection_submitted: gallery.selection_submitted ?? false,
+          selection_locked:
+            (gallery as unknown as { selection_locked?: boolean }).selection_locked ?? false,
           gallery_type: gallery.gallery_type ?? "selection",
           delivery_ready_at:
             (gallery as unknown as { delivery_ready_at: string | null }).delivery_ready_at ?? null,

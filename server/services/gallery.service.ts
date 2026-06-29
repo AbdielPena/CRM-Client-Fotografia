@@ -2091,6 +2091,17 @@ export async function toggleFavorite(
 ): Promise<{ favorited: boolean }> {
   const supabase = svc()
 
+  // Bloqueo del fotógrafo: si la selección está bloqueada (ya empezó a editar),
+  // el cliente no puede modificar su selección hasta que el fotógrafo reabra.
+  const { data: gLock } = await supabase
+    .from("galleries")
+    .select("selection_locked")
+    .eq("id", galleryId)
+    .maybeSingle()
+  if ((gLock as { selection_locked?: boolean } | null)?.selection_locked) {
+    throw new Error("locked")
+  }
+
   const email = (clientEmail ?? "").trim().toLowerCase() || "anon@guest"
   const { data: existing } = await supabase
     .from("gallery_favorites")

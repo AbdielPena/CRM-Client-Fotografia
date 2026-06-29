@@ -60,6 +60,7 @@ import {
   shareGalleryAction,
   updateGalleryAction,
   cancelDeliveryAction,
+  setSelectionLockedAction,
 } from "@/server/actions/gallery.actions"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ type Gallery = {
   watermark_opacity: number
   download_pin_required: boolean
   selection_submitted: boolean
+  selection_locked: boolean
   // Galerías 2.0
   gallery_type: "selection" | "final_delivery"
   delivery_ready_at: string | null
@@ -1764,6 +1766,25 @@ function ShareTab({
   const [resel, setResel] = React.useState<ReselectionInfo | null>(reselection)
   const [reselCopied, setReselCopied] = React.useState(false)
   const [creatingResel, startReselTransition] = useTransition()
+  const [locked, setLocked] = React.useState(!!gallery.selection_locked)
+  const [lockBusy, startLockTransition] = useTransition()
+
+  const handleToggleLock = () => {
+    const next = !locked
+    startLockTransition(async () => {
+      try {
+        await setSelectionLockedAction(gallery.id, next)
+        setLocked(next)
+        toast.success(
+          next
+            ? "Selección bloqueada — el cliente ya no puede modificar"
+            : "Selección reabierta — el cliente puede volver a elegir",
+        )
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
 
   const publicUrl = token
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/g/${token}`
@@ -1916,6 +1937,43 @@ function ShareTab({
           </button>
         </div>
       )}
+
+      {/* Estado de la selección: bloquear al empezar a editar / reabrir */}
+      <div
+        className={cn(
+          "rounded-xl border p-4",
+          locked
+            ? "border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10"
+            : "border-border bg-card",
+        )}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-foreground">
+              {locked ? "🔒 Selección bloqueada" : "🔓 Selección abierta"}
+            </p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              {locked
+                ? "El cliente NO puede modificar su selección. Reábrela para darle acceso de nuevo."
+                : "El cliente puede elegir y seguir ajustando (incluso después de enviar). Bloquéala cuando empieces a editar."}
+            </p>
+          </div>
+          <button
+            onClick={handleToggleLock}
+            disabled={lockBusy}
+            className={cn(
+              "flex-shrink-0 rounded-lg px-4 py-2 text-xs font-semibold text-white disabled:opacity-50",
+              locked ? "bg-emerald-600 hover:bg-emerald-700" : "bg-amber-500 hover:bg-amber-600",
+            )}
+          >
+            {lockBusy
+              ? "…"
+              : locked
+                ? "Permitir volver a seleccionar"
+                : "Bloquear (ya empecé a editar)"}
+          </button>
+        </div>
+      </div>
 
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="text-[14px] font-semibold text-foreground">

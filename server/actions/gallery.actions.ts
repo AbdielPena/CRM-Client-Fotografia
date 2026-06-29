@@ -244,6 +244,20 @@ export async function publishGalleryAction(galleryId: string): Promise<void> {
   revalidatePath("/galleries")
 }
 
+/**
+ * Bloquea/reabre la selección del cliente. `true` = "ya empecé a editar" (el
+ * cliente no puede modificar). `false` = darle acceso para volver a seleccionar.
+ * Enviar la selección NO bloquea — solo este toggle lo hace.
+ */
+export async function setSelectionLockedAction(
+  galleryId: string,
+  locked: boolean,
+): Promise<void> {
+  const ctx = await requireStudioAuth()
+  await updateGallery(ctx.studioId, ctx.userId, galleryId, { selectionLocked: locked })
+  revalidatePath(`/galleries/${galleryId}`)
+}
+
 export async function deleteGalleryAction(galleryId: string): Promise<void> {
   const ctx = await requireStudioAuth()
   await deleteGallery(ctx.studioId, ctx.userId, galleryId)

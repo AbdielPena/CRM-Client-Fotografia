@@ -374,6 +374,11 @@ export function PublicGalleryView({
   //  - No hay lista → toggle favorito general
   const toggleHeart = useCallback(
     async (assetId: string) => {
+      // Bloqueo del fotógrafo: ya empezó a editar → el cliente no puede tocar.
+      if (gallery.selection_locked) {
+        toast.error("El fotógrafo ya está editando — la selección está bloqueada por ahora")
+        return
+      }
       // Caso 1: lista activa — siempre se puede modificar
       if (activeColl) {
         const isIn = activeColl.asset_ids.includes(assetId)
@@ -440,7 +445,10 @@ export function PublicGalleryView({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ assetId, clientEmail: email ?? "" }),
         })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) {
+          const body = (await res.json().catch(() => null)) as { error?: string } | null
+          throw new Error(body?.error === "locked" ? "locked" : `HTTP ${res.status}`)
+        }
         const j = (await res.json()) as { favorited?: boolean }
         setFavs((prev) => {
           const next = new Set(prev)
@@ -448,7 +456,7 @@ export function PublicGalleryView({
           else next.delete(assetId)
           return next
         })
-      } catch {
+      } catch (err) {
         // Revertir al estado PREVIO al click (no borrar a ciegas).
         setFavs((prev) => {
           const next = new Set(prev)
@@ -456,10 +464,14 @@ export function PublicGalleryView({
           else next.delete(assetId)
           return next
         })
-        toast.error("No se pudo guardar")
+        toast.error(
+          err instanceof Error && err.message === "locked"
+            ? "El fotógrafo ya está editando — la selección está bloqueada por ahora"
+            : "No se pudo guardar",
+        )
       }
     },
-    [activeColl, favs, email, token, loadCollections],
+    [activeColl, favs, email, token, loadCollections, gallery.selection_locked],
   )
 
   const createCollection = useCallback(async () => {
@@ -900,8 +912,19 @@ export function PublicGalleryView({
         </div>
       )}
 
+      {/* Banner: selección bloqueada por el fotógrafo (ya empezó a editar) */}
+      {!isShowingDelivery && gallery.selection_locked && (
+        <div className="border-b border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
+            <p className="text-[12.5px] text-amber-900 dark:text-amber-200">
+              🔒 El fotógrafo ya comenzó a editar tu selección, por eso está bloqueada por ahora. Si necesitas un cambio, escríbele.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Banner informativo — solo en galerías de selección */}
-      {!isShowingDelivery && gallery.selection_submitted && (
+      {!isShowingDelivery && gallery.selection_submitted && !gallery.selection_locked && (
         <div className="border-b border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10">
           <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
             <Send className="h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
