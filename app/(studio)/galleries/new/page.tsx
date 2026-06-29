@@ -6,6 +6,7 @@ import { AppTopbar } from "@/components/layout/app-topbar"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
+import { untypedService } from "@/server/supabase/untyped"
 import { createGalleryAction } from "@/server/actions/gallery.actions"
 
 export const metadata: Metadata = { title: "Nueva galería" }
@@ -40,6 +41,19 @@ export default async function NewGalleryPage({
     name: string
     client_id: string | null
   }>
+
+  // Si viene de un proyecto con quinceañera registrada, pre-llenar el nombre de
+  // la galería con el nombre de la quinceañera (columna nueva → cliente untyped).
+  let prefillName = ""
+  if (searchParams.projectId) {
+    const { data: proj } = await untypedService()
+      .from("projects")
+      .select("quinceanera_name")
+      .eq("id", searchParams.projectId)
+      .maybeSingle()
+    prefillName =
+      (proj as { quinceanera_name?: string | null } | null)?.quinceanera_name ?? ""
+  }
 
   const inputCls =
     "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
@@ -106,6 +120,7 @@ export default async function NewGalleryPage({
               <input
                 name="name"
                 required
+                defaultValue={prefillName}
                 placeholder="ej. Boda Andrea & Miguel — Sesión completa"
                 className={inputCls}
               />

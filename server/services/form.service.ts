@@ -837,6 +837,38 @@ function extractBirthdayFromForm(
   return null
 }
 
+/**
+ * Extrae el nombre de la quinceañera y de la madre del formulario, por key
+ * conocida (nombre_quinceanera / nombre_madre) o por label. Para copiarlos al
+ * proyecto (quinceanera_name se usa como nombre por defecto de las galerías).
+ */
+function extractNamesFromForm(
+  schema: FormSchema | null,
+  data: Record<string, unknown>,
+): { quinceaneraName: string | null; motherName: string | null } {
+  const norm = (s: string) =>
+    s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[_\s-]+/g, "")
+  const val = (k: string): string | null => {
+    const v = data[k]
+    return typeof v === "string" && v.trim() ? v.trim() : null
+  }
+  let quince = val("nombre_quinceanera")
+  let madre = val("nombre_madre")
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fields = (schema as any)?.fields
+  if (Array.isArray(fields)) {
+    for (const f of fields) {
+      const key = String(f?.key ?? f?.id ?? "")
+      const v = val(key)
+      if (!v) continue
+      const tag = norm(key) + norm(String(f?.label ?? ""))
+      if (!quince && tag.includes("quincea")) quince = v
+      if (!madre && (tag.includes("madre") || tag.includes("mama"))) madre = v
+    }
+  }
+  return { quinceaneraName: quince, motherName: madre }
+}
+
 export async function submitPublicForm(
   accessToken: string,
   data: Record<string, unknown>,
@@ -901,14 +933,24 @@ export async function submitPublicForm(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       projectId = ((br as any)?.project_id as string | null) ?? null
     }
-    if (projectId && birthday) {
-      await svc
-        .from('projects')
-        // quinceanera_birthday es columna nueva (aún no en los tipos generados)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .update({ quinceanera_birthday: birthday } as any)
-        .eq('id', projectId)
-        .eq('studio_id', response.studio_id as string)
+    const { quinceaneraName, motherName } = extractNamesFromForm(
+      response.schema_snapshot as unknown as FormSchema,
+      data,
+    )
+    if (projectId) {
+      const patch: Record<string, unknown> = {}
+      if (birthday) patch.quinceanera_birthday = birthday
+      if (quinceaneraName) patch.quinceanera_name = quinceaneraName
+      if (motherName) patch.mother_name = motherName
+      if (Object.keys(patch).length > 0) {
+        // columnas nuevas (aún no en los tipos generados)
+        await svc
+          .from('projects')
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .update(patch as any)
+          .eq('id', projectId)
+          .eq('studio_id', response.studio_id as string)
+      }
     }
     if (projectId) {
       const { recomputeProjectDelivery } = await import('./delivery.service')
