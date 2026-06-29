@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 
 import { AppSidebar } from "@/components/layout/app-sidebar"
+import { LiveRefresh } from "@/components/shared/live-refresh"
 import {
   SIDEBAR_COOKIE_NAME,
   SidebarProvider,
@@ -27,6 +28,8 @@ export default async function StudioLayout({
 
   return (
     <SidebarProvider initialCollapsed={sidebarCollapsed}>
+      {/* Auto-refresco en vivo: re-pide los datos al volver a la pestaña + cada 30s */}
+      <LiveRefresh />
       <div className="flex h-screen overflow-hidden bg-background text-foreground">
         <AppSidebar
           studioName={session.studioName}
