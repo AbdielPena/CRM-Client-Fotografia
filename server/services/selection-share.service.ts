@@ -176,7 +176,14 @@ export async function shareSelectionGallery(
   let whatsappLink: string | null = null
   if (clientPhone) {
     const digits = clientPhone.replace(/\D/g, "")
-    const msg = `¡Hola ${clientName ?? ""}! ✨ Tu galería "${g.name}" ya está lista para que elijas tus fotos favoritas: ${url}`
+    const { getSelectionWaTemplate } = await import("./share-message.service")
+    const { renderWaMessage, firstNameOf } = await import("@/lib/share/wa-message")
+    const tpl = await getSelectionWaTemplate(studioId)
+    const msg = renderWaMessage(tpl, {
+      cliente: firstNameOf(clientName),
+      galeria: g.name,
+      link: url,
+    })
     whatsappLink = `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`
   } else if (sendWhatsapp && g.client_id) {
     errors.push("El cliente no tiene teléfono registrado")

@@ -31,6 +31,7 @@ import { toast } from "sonner"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
+import { renderWaMessage } from "@/lib/share/wa-message"
 import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
 import { DeliverToClientButton } from "@/components/galleries/deliver-to-client-modal"
@@ -165,6 +166,8 @@ interface Props {
   coverImageUrl: string | null
   client: { name: string | null; email: string | null; phone: string | null } | null
   driveLink?: string | null
+  /** Mensaje de WhatsApp de selección (editable en Ajustes → WhatsApp). */
+  waSelectionTemplate?: string
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -182,6 +185,7 @@ export function GalleryDetailTabs({
   coverImageUrl,
   client,
   driveLink = null,
+  waSelectionTemplate,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -305,6 +309,7 @@ export function GalleryDetailTabs({
             driveLink={driveLink}
             client={client}
             hasDeliveryAssets={hasDelivery}
+            waSelectionTemplate={waSelectionTemplate}
           />
         </TabsContent>
 
@@ -1725,12 +1730,14 @@ function ShareTab({
   driveLink = null,
   client = null,
   hasDeliveryAssets = false,
+  waSelectionTemplate,
 }: {
   gallery: Gallery
   publicToken: string | null
   driveLink?: string | null
   client?: { name: string | null; email: string | null; phone: string | null } | null
   hasDeliveryAssets?: boolean
+  waSelectionTemplate?: string
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -1739,6 +1746,7 @@ function ShareTab({
   const [driveCopied, setDriveCopied] = React.useState(false)
   const [selToken, setSelToken] = React.useState<string | null>(null)
   const [selCopied, setSelCopied] = React.useState(false)
+  const [msgCopied, setMsgCopied] = React.useState(false)
 
   const publicUrl = token
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/g/${token}`
@@ -1750,8 +1758,13 @@ function ShareTab({
   const greet = firstName ? `¡Hola ${firstName}! ` : "¡Hola! "
   const waLink = (msg: string) =>
     `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`
+  // Mensaje de selección: viene del template editable (Ajustes → WhatsApp).
   const msgSeleccion = publicUrl
-    ? `${greet}💛 Aquí está tu galería para que elijas tus fotos favoritas con el corazón ♥: ${publicUrl}`
+    ? renderWaMessage(waSelectionTemplate, {
+        cliente: firstName,
+        galeria: gallery.name,
+        link: publicUrl,
+      })
     : ""
   const msgEntrega = publicUrl
     ? `${greet}🎉 ¡Tu entrega final ya está lista! Puedes verla, seguir eligiendo fotos y descargarlas aquí: ${publicUrl}`
@@ -1829,6 +1842,15 @@ function ShareTab({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleCopyMsg = () => {
+    const m = hasDeliveryAssets ? msgEntrega : msgSeleccion
+    if (!m) return
+    navigator.clipboard.writeText(m)
+    setMsgCopied(true)
+    toast.success("Mensaje copiado")
+    setTimeout(() => setMsgCopied(false), 2000)
+  }
+
   return (
     <div className="max-w-2xl space-y-4">
       {gallery.status !== "published" && (
@@ -1891,6 +1913,31 @@ function ShareTab({
                   : "Compartir selección por WhatsApp"}
               </a>
             </div>
+
+            {/* Mensaje listo para copiar (el mismo que va por WhatsApp) */}
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                  Mensaje para el cliente
+                </span>
+                <button
+                  onClick={handleCopyMsg}
+                  className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-emerald-800 hover:bg-white dark:border-emerald-500/40 dark:bg-transparent dark:text-emerald-300"
+                >
+                  {msgCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {msgCopied ? "Copiado" : "Copiar mensaje"}
+                </button>
+              </div>
+              <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground">
+                {hasDeliveryAssets ? msgEntrega : msgSeleccion}
+              </p>
+              {!hasDeliveryAssets && (
+                <p className="mt-1.5 text-[10.5px] text-muted-foreground">
+                  Se edita en Ajustes → WhatsApp y se actualiza en todas las galerías.
+                </p>
+              )}
+            </div>
+
             <p className="mt-2 text-[11.5px] text-muted-foreground">
               {hasDeliveryAssets
                 ? "El cliente ve su selección y la entrega final en la misma galería con un toggle."

@@ -30,6 +30,7 @@ import { DriveBackupPanel } from "@/components/galleries/drive-backup-panel"
 import { LuxuryBookPanel } from "@/components/galleries/luxury-book-panel"
 import { getGoogleDriveStatus } from "@/server/services/gallery-drive.service"
 import { getDriveBackupStatusAction } from "@/server/actions/gallery-drive.actions"
+import { getSelectionWaTemplate } from "@/server/services/share-message.service"
 
 export const metadata: Metadata = { title: "Detalle de galería" }
 
@@ -113,6 +114,9 @@ export default async function GalleryDetailPage({
     .maybeSingle()
   const driveLink =
     (driveRow as { web_view_link: string | null } | null)?.web_view_link ?? null
+
+  // Mensaje de WhatsApp de selección (fuente única, editable en Ajustes → WhatsApp).
+  const waSelectionTemplate = await getSelectionWaTemplate(session.studioId)
 
   // Hidratar assets con thumbUrl + webUrl
   const assetsWithUrls = assets.map((a) => ({
@@ -340,6 +344,7 @@ export default async function GalleryDetailPage({
             : null
         }
         driveLink={driveLink}
+        waSelectionTemplate={waSelectionTemplate}
       />
     </>
   )
