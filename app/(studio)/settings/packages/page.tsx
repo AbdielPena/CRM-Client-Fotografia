@@ -2,6 +2,7 @@ import { requireStudioAuth } from "@/server/middleware/auth"
 import { getPackages } from "@/server/services/package.service"
 import { getServiceCategories } from "@/server/services/service-category.service"
 import { normalizeEntitlements } from "@/lib/print/entitlements"
+import { normalizeRequirements } from "@/lib/collaborators/requirements"
 import { getContractTemplates } from "@/server/services/contract.service"
 import { listFormTemplates } from "@/server/services/form.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
@@ -67,6 +68,7 @@ export default async function PackagesSettingsPage() {
             service_category_id?: string | null
             cover_image_url?: string | null
             print_entitlements?: unknown
+            collaborator_requirements?: unknown
           }>).map((p) => ({
             id: p.id,
             name: p.name,
@@ -85,6 +87,9 @@ export default async function PackagesSettingsPage() {
             serviceCategoryId: p.service_category_id ?? undefined,
             coverImageUrl: p.cover_image_url ?? undefined,
             printEntitlements: normalizeEntitlements(p.print_entitlements),
+            collaboratorRequirements: normalizeRequirements(
+              p.collaborator_requirements,
+            ),
           }))}
         />
       </div>

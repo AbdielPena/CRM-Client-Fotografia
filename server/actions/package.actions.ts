@@ -10,6 +10,10 @@ import {
 } from "@/server/services/package.service"
 import { createPackageSchema, updatePackageSchema } from "@/lib/validations/package.schema"
 import { normalizeEntitlements, type PrintEntitlements } from "@/lib/print/entitlements"
+import {
+  normalizeRequirements,
+  type CollaboratorRequirement,
+} from "@/lib/collaborators/requirements"
 
 function parsePrintEntitlements(
   raw: FormDataEntryValue | null,
@@ -17,6 +21,17 @@ function parsePrintEntitlements(
   if (typeof raw !== "string" || !raw) return undefined
   try {
     return normalizeEntitlements(JSON.parse(raw))
+  } catch {
+    return undefined
+  }
+}
+
+function parseCollaboratorRequirements(
+  raw: FormDataEntryValue | null,
+): CollaboratorRequirement[] | undefined {
+  if (typeof raw !== "string" || !raw) return undefined
+  try {
+    return normalizeRequirements(JSON.parse(raw))
   } catch {
     return undefined
   }
@@ -51,6 +66,7 @@ export async function createPackageAction(formData: FormData) {
     session.studioId,
     parsed.data,
     parsePrintEntitlements(formData.get("printEntitlements")),
+    parseCollaboratorRequirements(formData.get("collaboratorRequirements")),
   )
   revalidatePath("/settings/packages")
   return { success: true }
@@ -85,6 +101,7 @@ export async function updatePackageAction(packageId: string, formData: FormData)
     packageId,
     parsed.data,
     parsePrintEntitlements(formData.get("printEntitlements")),
+    parseCollaboratorRequirements(formData.get("collaboratorRequirements")),
   )
   revalidatePath("/settings/packages")
   return { success: true }

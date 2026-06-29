@@ -2,11 +2,21 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { Users, Plus, Pencil, Trash2, X, BadgeCheck } from "lucide-react"
+import {
+  Users,
+  Plus,
+  Pencil,
+  Trash2,
+  X,
+  BadgeCheck,
+  AlertTriangle,
+  CheckCircle2,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
 import { formatCurrency } from "@/lib/utils/currency"
+import type { RequirementStatus } from "@/lib/collaborators/requirements"
 import {
   COLLABORATOR_TYPES,
   collaboratorTypeLabel,
@@ -59,11 +69,13 @@ export function ProjectCollaboratorsCard({
   assignments,
   roster,
   currency = "DOP",
+  requirements = [],
 }: {
   projectId: string
   assignments: ProjectCollaboratorUI[]
   roster: RosterOption[]
   currency?: string
+  requirements?: RequirementStatus[]
 }) {
   const router = useRouter()
   const [modal, setModal] = React.useState<
@@ -116,6 +128,46 @@ export function ProjectCollaboratorsCard({
           + Asignar
         </button>
       </div>
+
+      {/* Validación de requisitos del plan */}
+      {requirements.length > 0 && (
+        <div className="space-y-2 border-b border-border/60 px-5 py-3">
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {requirements.map((r) => (
+              <span key={r.type} className="flex items-center gap-1.5 text-xs">
+                {r.satisfied ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                ) : (
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-600" />
+                )}
+                <span className="text-foreground">{r.label}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {r.assigned}/{r.required}
+                </span>
+                <span
+                  className={cn(
+                    "font-semibold",
+                    r.satisfied ? "text-emerald-600" : "text-amber-600",
+                  )}
+                >
+                  {r.satisfied ? "Validado" : "Falta"}
+                </span>
+              </span>
+            ))}
+          </div>
+          {requirements.some((r) => !r.satisfied) && (
+            <p className="rounded-md bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+              {requirements
+                .filter((r) => !r.satisfied)
+                .map(
+                  (r) =>
+                    `Este proyecto requiere ${r.label.toLowerCase()}${r.required > 1 ? ` (${r.required})` : ""} y aún falta asignar.`,
+                )
+                .join(" ")}
+            </p>
+          )}
+        </div>
+      )}
 
       {assignments.length === 0 ? (
         <div className="py-8 text-center">

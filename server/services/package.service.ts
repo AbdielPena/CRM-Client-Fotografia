@@ -10,6 +10,7 @@ import type {
   UpdatePackageInput,
 } from '@/lib/validations/package.schema'
 import type { PrintEntitlements } from '@/lib/print/entitlements'
+import type { CollaboratorRequirement } from '@/lib/collaborators/requirements'
 
 // Convierte el campo `includes` (string multi-línea) a array jsonb
 function parseIncludes(value: string | undefined | null): string[] {
@@ -84,6 +85,7 @@ export async function createPackage(
   studioId: string,
   data: CreatePackageInput,
   printEntitlements?: PrintEntitlements,
+  collaboratorRequirements?: CollaboratorRequirement[],
 ) {
   const explicit = data.slug?.trim() || ''
   const base = explicit || buildSlug(data.name) || 'paquete'
@@ -115,6 +117,9 @@ export async function createPackage(
   if (printEntitlements !== undefined) {
     ;(insert as Record<string, unknown>).print_entitlements = printEntitlements
   }
+  // collaborator_requirements: requisitos de colaboradores del plan (Fase 2).
+  ;(insert as Record<string, unknown>).collaborator_requirements =
+    collaboratorRequirements ?? []
   return packagesRepo.create(insert)
 }
 
@@ -123,6 +128,7 @@ export async function updatePackage(
   packageId: string,
   data: UpdatePackageInput,
   printEntitlements?: PrintEntitlements,
+  collaboratorRequirements?: CollaboratorRequirement[],
 ) {
   const existing = await packagesRepo.findById(packageId)
   if (!existing || existing.studio_id !== studioId) {
@@ -131,6 +137,8 @@ export async function updatePackage(
 
   const patch: Record<string, unknown> = {}
   if (printEntitlements !== undefined) patch.print_entitlements = printEntitlements
+  if (collaboratorRequirements !== undefined)
+    patch.collaborator_requirements = collaboratorRequirements
   if (data.name !== undefined) patch.name = data.name
   if (data.description !== undefined)
     patch.description = data.description || null

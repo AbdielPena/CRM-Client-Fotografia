@@ -29,8 +29,10 @@ import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
 import { PrintEntitlementsEditor } from "./print-entitlements-editor"
+import { CollaboratorRequirementsEditor } from "./collaborator-requirements-editor"
 import { CategoryIcon } from "@/components/shared/icon-selector"
 import type { PrintEntitlements } from "@/lib/print/entitlements"
+import type { CollaboratorRequirement } from "@/lib/collaborators/requirements"
 
 interface Package {
   id: string
@@ -50,6 +52,7 @@ interface Package {
   serviceCategoryId?: string
   coverImageUrl?: string
   printEntitlements?: PrintEntitlements
+  collaboratorRequirements?: CollaboratorRequirement[]
 }
 
 interface TemplateOption {
@@ -877,6 +880,10 @@ function PackageForm({
         </div>
 
         <PrintEntitlementsEditor defaultValue={defaultValues?.printEntitlements} />
+
+        <CollaboratorRequirementsEditor
+          defaultValue={defaultValues?.collaboratorRequirements}
+        />
 
         <div className="flex items-center gap-3 sm:col-span-2">
           <button

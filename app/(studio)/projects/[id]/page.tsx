@@ -19,6 +19,11 @@ import {
   listCollaborators,
 } from "@/server/services/collaborator.service"
 import { ProjectCollaboratorsCard } from "@/components/collaborators/project-collaborators-card"
+import {
+  normalizeRequirements,
+  evaluateRequirements,
+  type RequirementStatus,
+} from "@/lib/collaborators/requirements"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
 import {
   Calendar,
@@ -213,6 +218,27 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     .filter((a) => a.payStatus !== "cancelled")
     .reduce((s, a) => s + a.agreedPay, 0)
 
+  // Validación de requisitos del plan (Fase 2): el plan del proyecto puede
+  // exigir N colaboradores de cierto tipo → avisar si faltan.
+  const pkgId =
+    (project.package_id as string | null) ?? (pkg?.id as string | undefined) ?? null
+  let requirementStatuses: RequirementStatus[] = []
+  if (pkgId) {
+    const { data: pkgReq } = await supabase
+      .from("packages")
+      .select("collaborator_requirements")
+      .eq("id", pkgId)
+      .maybeSingle()
+    const reqs = normalizeRequirements(
+      (pkgReq as { collaborator_requirements?: unknown } | null)
+        ?.collaborator_requirements,
+    )
+    const assignedTypes = projectCollaborators
+      .filter((a) => a.payStatus !== "cancelled")
+      .map((a) => a.collaborator?.type ?? "")
+    requirementStatuses = evaluateRequirements(reqs, assignedTypes)
+  }
+
   // Total pagado (suma de pagos completados/recibidos) — visión financiera del cliente
   const totalPaid = payments
     .filter((p) => ["completed", "received", "paid", "succeeded"].includes(String(p.status)))
@@ -395,6 +421,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             assignments={projectCollaborators}
             roster={collaboratorRoster}
             currency={currency}
+            requirements={requirementStatuses}
           />
 
           {/* Formularios del cliente */}
