@@ -1,9 +1,8 @@
 import "server-only"
 
-import {
-  createGalleryShareToken,
-  getGalleryById,
-} from "@/server/services/gallery.service"
+import { createId } from "@paralleldrive/cuid2"
+
+import { getGalleryById } from "@/server/services/gallery.service"
 import { untypedService } from "@/server/supabase/untyped"
 
 export type ShareSelectionResult = {
@@ -89,9 +88,23 @@ export async function shareSelectionGallery(
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
   const existing = (tokens as { token: string }[] | null)?.[0]?.token
-  const url = existing
-    ? `${appUrl}/g/${existing}`
-    : (await createGalleryShareToken(studioId, galleryId, { expiresAt: null })).url
+  let url: string
+  if (existing) {
+    url = `${appUrl}/g/${existing}`
+  } else {
+    // Insert con service-role (untyped). NO usar createGalleryShareToken: usa el
+    // cliente con RLS y desde la API (sin cookie) la inserción se deniega.
+    const token = createId() + createId() // 48 chars, igual que la web
+    const { error: tokErr } = await sb.from("gallery_share_tokens").insert({
+      studio_id: studioId,
+      gallery_id: galleryId,
+      token,
+      expires_at: null,
+      view_mode: "full",
+    })
+    if (tokErr) throw tokErr
+    url = `${appUrl}/g/${token}`
+  }
 
   // 3) Cliente + estudio.
   let clientName: string | null = null
