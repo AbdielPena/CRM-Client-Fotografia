@@ -322,6 +322,7 @@ function AssignModal({
           const cf = new FormData()
           cf.set("name", String(fd.get("newName") ?? ""))
           cf.set("type", String(fd.get("newType") ?? "otro"))
+          cf.set("email", String(fd.get("newEmail") ?? ""))
           const res = await createCollaboratorAction(cf)
           fd.set("collaboratorId", res.id)
           await assignCollaboratorAction(projectId, fd)
@@ -377,6 +378,20 @@ function AssignModal({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className={labelCls}>
+                  Correo electrónico{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (para enviarle la invitación)
+                  </span>
+                </label>
+                <input
+                  name="newEmail"
+                  type="email"
+                  placeholder="colaborador@correo.com"
+                  className={inputCls}
+                />
               </div>
               {roster.length > 0 && (
                 <button
