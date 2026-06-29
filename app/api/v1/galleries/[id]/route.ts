@@ -4,6 +4,7 @@ import { requireApiToken } from "@/server/middleware/api-auth"
 import { getGalleryById } from "@/server/services/gallery.service"
 import { getSetsByGallery } from "@/server/services/gallery-set.service"
 import { getWatermarkConfig } from "@/server/services/gallery-watermark.service"
+import { untypedService } from "@/server/supabase/untyped"
 
 export const dynamic = "force-dynamic"
 
@@ -16,6 +17,18 @@ export async function GET(
 
   const gallery = await getGalleryById(auth.studioId, params.id, true)
   if (!gallery) return NextResponse.json({ error: "Galería no encontrada" }, { status: 404 })
+
+  // Cliente vinculado (para la confirmación de "Subir y compartir" en el desktop).
+  let client: { name: string | null; email: string | null; phone: string | null } | null = null
+  if (gallery.client_id) {
+    const { data: cli } = await untypedService()
+      .from("clients")
+      .select("name, email, phone")
+      .eq("id", gallery.client_id)
+      .eq("studio_id", auth.studioId)
+      .maybeSingle()
+    client = (cli as { name: string | null; email: string | null; phone: string | null } | null) ?? null
+  }
 
   const [sets, watermark] = await Promise.all([
     getSetsByGallery(auth.studioId, params.id),
@@ -35,6 +48,7 @@ export async function GET(
       deliveryReadyAt: (gallery as { delivery_ready_at?: string | null }).delivery_ready_at ?? null,
       coverAssetId: gallery.cover_asset_id,
     },
+    client,
     sets: sets.map((s) => ({
       id: s.id,
       name: s.name,
