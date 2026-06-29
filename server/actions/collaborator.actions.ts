@@ -17,6 +17,7 @@ import {
   updateAssignment,
   removeAssignment,
 } from "@/server/services/collaborator.service"
+import { sendCollaboratorInvite } from "@/server/services/collaborator-invite.service"
 
 function firstError(issues: { message: string }[]): string {
   return issues[0]?.message ?? "Datos inválidos"
@@ -84,8 +85,35 @@ export async function assignCollaboratorAction(
     notes: formData.get("notes"),
   })
   if (!parsed.success) throw new Error(firstError(parsed.error.issues))
-  await assignCollaborator(session.studioId, projectId, parsed.data)
+  const row = await assignCollaborator(session.studioId, projectId, parsed.data)
+  // Invitación automática por correo al asignar (se puede omitir con sendInvite=false).
+  const sendInvite = formData.get("sendInvite") !== "false"
+  if (sendInvite) {
+    try {
+      await sendCollaboratorInvite(session.studioId, row.id)
+    } catch (err) {
+      console.error("[collab] invite on assign failed", err)
+    }
+  }
   revalidatePath(`/projects/${projectId}`)
+  return { ok: true as const }
+}
+
+/** Reenvía (o envía) la invitación por correo a un colaborador asignado. */
+export async function resendCollaboratorInviteAction(
+  assignmentId: string,
+  projectId: string,
+) {
+  const session = await requireStudioAuth()
+  const res = await sendCollaboratorInvite(session.studioId, assignmentId)
+  revalidatePath(`/projects/${projectId}`)
+  if (!res.ok) {
+    throw new Error(
+      res.reason === "no_email"
+        ? "El colaborador no tiene correo registrado"
+        : "No se pudo enviar la invitación",
+    )
+  }
   return { ok: true as const }
 }
 

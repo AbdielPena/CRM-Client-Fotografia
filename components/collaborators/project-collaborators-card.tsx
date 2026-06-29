@@ -11,6 +11,7 @@ import {
   BadgeCheck,
   AlertTriangle,
   CheckCircle2,
+  Mail,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -28,6 +29,7 @@ import {
   updateAssignmentAction,
   removeAssignmentAction,
   createCollaboratorAction,
+  resendCollaboratorInviteAction,
 } from "@/server/actions/collaborator.actions"
 
 export type ProjectCollaboratorUI = {
@@ -90,6 +92,18 @@ export function ProjectCollaboratorsCard({
       try {
         await removeAssignmentAction(row.id, projectId)
         toast.success("Colaborador quitado")
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+
+  const resendInvite = (row: ProjectCollaboratorUI) => {
+    startTransition(async () => {
+      try {
+        await resendCollaboratorInviteAction(row.id, projectId)
+        toast.success("Invitación enviada")
         router.refresh()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error")
@@ -215,6 +229,14 @@ export function ProjectCollaboratorsCard({
                 )}
               </div>
               <div className="flex flex-shrink-0 items-center gap-1">
+                <button
+                  onClick={() => resendInvite(a)}
+                  disabled={pending}
+                  title="Enviar / reenviar invitación por correo"
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                </button>
                 {a.payStatus !== "cancelled" && (
                   <button
                     onClick={() => togglePaid(a)}
@@ -283,12 +305,14 @@ function AssignModal({
   const [pending, startTransition] = React.useTransition()
   // En modo asignar: elegir existente o crear nuevo.
   const [newMode, setNewMode] = React.useState(roster.length === 0)
+  const [sendInvite, setSendInvite] = React.useState(true)
   const isEdit = !!editing
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = e.currentTarget
     const fd = new FormData(form)
+    if (!isEdit) fd.set("sendInvite", sendInvite ? "true" : "false")
     startTransition(async () => {
       try {
         if (isEdit) {
@@ -430,6 +454,18 @@ function AssignModal({
               className={cn(inputCls, "resize-y")}
             />
           </div>
+
+          {!isEdit && (
+            <label className="flex items-center gap-2 pt-1 text-xs text-foreground">
+              <input
+                type="checkbox"
+                checked={sendInvite}
+                onChange={(e) => setSendInvite(e.target.checked)}
+                className="h-3.5 w-3.5 rounded border-border"
+              />
+              Enviar invitación por correo (si tiene email)
+            </label>
+          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <button
