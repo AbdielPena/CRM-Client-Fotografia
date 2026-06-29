@@ -999,11 +999,18 @@ export async function submitPublicForm(
             .limit(1)
             .maybeSingle()
           if (ownerId && !existing) {
+            // Meta de entrega = 2 días antes del cumpleaños (misma regla que la
+            // fecha estimada de entrega para quinceañeras).
+            const deliverBy = (() => {
+              const d = new Date(`${birthday}T00:00:00Z`)
+              d.setUTCDate(d.getUTCDate() - 2)
+              return d.toISOString().slice(0, 10)
+            })()
             const { createTask } = await import('./task.service')
             await createTask(response.studio_id as string, ownerId, {
               title: `Entregar fotos antes del cumpleaños de ${clientName}`,
-              description: `El cumpleaños (${birthday}) cae antes de las 3 semanas de edición desde la sesión (${sessionDate}). Prioriza la entrega para que llegue antes de la fecha.`,
-              dueDate: birthday,
+              description: `El cumpleaños (${birthday}) cae antes de las 3 semanas de edición desde la sesión (${sessionDate}). Entrega objetivo: ${deliverBy} (2 días antes del cumpleaños).`,
+              dueDate: deliverBy,
               priority: 'high',
               assignedToUserId: ownerId,
               entityType: 'project',
