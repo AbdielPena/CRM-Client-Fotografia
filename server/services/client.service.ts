@@ -286,6 +286,36 @@ export async function updateClient(
   }
   const client = await clientsRepo.update(clientId, patch)
 
+  // Propagar el cambio de correo a las copias denormalizadas: las reservas
+  // (booking_requests.client_email) y los formularios (form_responses.client_email)
+  // guardan un snapshot del correo. Sin esto, los correos de reserva/recordatorio
+  // seguían yendo al correo viejo aunque se corrigiera el cliente. Best-effort.
+  const oldEmail = (existing as { email: string | null }).email
+  const newEmail = patch.email
+  if (data.email !== undefined && newEmail && oldEmail && newEmail !== oldEmail) {
+    try {
+      const { untypedService } = await import('@/server/supabase/untyped')
+      const sb = untypedService()
+      await sb
+        .from('booking_requests')
+        .update({ client_email: newEmail })
+        .eq('studio_id', studioId)
+        .eq('client_id', clientId)
+      await sb
+        .from('booking_requests')
+        .update({ client_email: newEmail })
+        .eq('studio_id', studioId)
+        .eq('client_email', oldEmail)
+      await sb
+        .from('form_responses')
+        .update({ client_email: newEmail })
+        .eq('studio_id', studioId)
+        .eq('client_email', oldEmail)
+    } catch (e) {
+      console.error('[client] propagar correo a copias denormalizadas falló', e)
+    }
+  }
+
   await logActivity({
     studioId,
     actorId,
