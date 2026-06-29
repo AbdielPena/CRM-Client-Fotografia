@@ -32,6 +32,8 @@ import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
 import { renderWaMessage } from "@/lib/share/wa-message"
+import type { ReselectionInfo } from "@/server/services/reselection.service"
+import { createReselectionAction } from "@/server/actions/reselection.actions"
 import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
 import { DeliverToClientButton } from "@/components/galleries/deliver-to-client-modal"
@@ -168,6 +170,10 @@ interface Props {
   driveLink?: string | null
   /** Mensaje de WhatsApp de selección (editable en Ajustes → WhatsApp). */
   waSelectionTemplate?: string
+  /** Cuántas fotos eligió el cliente (favoritos únicos) — para la 2da selección. */
+  favoritesCount?: number
+  /** Segunda selección existente (galería hija) si ya se creó. */
+  reselection?: ReselectionInfo | null
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -186,6 +192,8 @@ export function GalleryDetailTabs({
   client,
   driveLink = null,
   waSelectionTemplate,
+  favoritesCount = 0,
+  reselection = null,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -310,6 +318,8 @@ export function GalleryDetailTabs({
             client={client}
             hasDeliveryAssets={hasDelivery}
             waSelectionTemplate={waSelectionTemplate}
+            favoritesCount={favoritesCount}
+            reselection={reselection}
           />
         </TabsContent>
 
@@ -1731,6 +1741,8 @@ function ShareTab({
   client = null,
   hasDeliveryAssets = false,
   waSelectionTemplate,
+  favoritesCount = 0,
+  reselection = null,
 }: {
   gallery: Gallery
   publicToken: string | null
@@ -1738,6 +1750,8 @@ function ShareTab({
   client?: { name: string | null; email: string | null; phone: string | null } | null
   hasDeliveryAssets?: boolean
   waSelectionTemplate?: string
+  favoritesCount?: number
+  reselection?: ReselectionInfo | null
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -1747,6 +1761,9 @@ function ShareTab({
   const [selToken, setSelToken] = React.useState<string | null>(null)
   const [selCopied, setSelCopied] = React.useState(false)
   const [msgCopied, setMsgCopied] = React.useState(false)
+  const [resel, setResel] = React.useState<ReselectionInfo | null>(reselection)
+  const [reselCopied, setReselCopied] = React.useState(false)
+  const [creatingResel, startReselTransition] = useTransition()
 
   const publicUrl = token
     ? `${typeof window !== "undefined" ? window.location.origin : ""}/g/${token}`
@@ -1849,6 +1866,33 @@ function ShareTab({
     setMsgCopied(true)
     toast.success("Mensaje copiado")
     setTimeout(() => setMsgCopied(false), 2000)
+  }
+
+  // ── Segunda selección (re-selección sobre las fotos ya elegidas) ──
+  const handleCreateResel = () => {
+    startReselTransition(async () => {
+      try {
+        const info = await createReselectionAction(gallery.id)
+        setResel(info)
+        toast.success("Segunda selección creada")
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+  const reselMsg = resel?.url
+    ? renderWaMessage(waSelectionTemplate, {
+        cliente: firstName,
+        galeria: `${gallery.name} (2da selección)`,
+        link: resel.url,
+      })
+    : ""
+  const handleCopyResel = () => {
+    if (!resel?.url) return
+    navigator.clipboard.writeText(resel.url)
+    setReselCopied(true)
+    toast.success("Link copiado")
+    setTimeout(() => setReselCopied(false), 2000)
   }
 
   return (
@@ -1956,6 +2000,76 @@ function ShareTab({
               className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
             >
               {pending ? "Generando…" : "Generar link"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Segunda selección: el cliente afina sobre las fotos que ya eligió */}
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+          <Sparkles className="h-4 w-4 text-brand" /> Segunda selección (nueva ronda)
+        </h3>
+        {resel ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-[12px] text-muted-foreground">
+              Galería con las <strong className="text-foreground">{resel.assetCount}</strong> fotos
+              que el cliente eligió, para que afine y baje al número de su plan.
+              {resel.selectedCount > 0 && (
+                <>
+                  {" "}
+                  Ya re-eligió <strong className="text-foreground">{resel.selectedCount}</strong>.
+                </>
+              )}
+            </p>
+            {resel.url && (
+              <>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={resel.url}
+                    className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
+                  />
+                  <button
+                    onClick={handleCopyResel}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
+                  >
+                    {reselCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {reselCopied ? "Copiado" : "Copiar"}
+                  </button>
+                </div>
+                {waPhone && (
+                  <a
+                    href={waLink(reselMsg)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" /> Enviar 2da selección por WhatsApp
+                  </a>
+                )}
+                <Link
+                  href={`/galleries/${resel.childId}`}
+                  className="inline-flex items-center gap-1 text-[11.5px] font-medium text-brand hover:underline"
+                >
+                  Ver fotos y lo que re-eligió <ExternalLink className="h-3 w-3" />
+                </Link>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="mt-2">
+            <p className="text-[12px] text-muted-foreground">
+              {favoritesCount > 0
+                ? `El cliente eligió ${favoritesCount} fotos. Crea una segunda ronda con SOLO esas fotos para que afine y baje al número de su plan (lo que pase cuenta como extra).`
+                : "Cuando el cliente marque sus fotos, podrás crear una segunda ronda para que afine su selección."}
+            </p>
+            <button
+              onClick={handleCreateResel}
+              disabled={creatingResel || favoritesCount === 0}
+              className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+            >
+              {creatingResel ? "Creando…" : `Crear 2da selección (${favoritesCount})`}
             </button>
           </div>
         )}

@@ -31,6 +31,7 @@ import { LuxuryBookPanel } from "@/components/galleries/luxury-book-panel"
 import { getGoogleDriveStatus } from "@/server/services/gallery-drive.service"
 import { getDriveBackupStatusAction } from "@/server/actions/gallery-drive.actions"
 import { getSelectionWaTemplate } from "@/server/services/share-message.service"
+import { getReselectionForGallery } from "@/server/services/reselection.service"
 
 export const metadata: Metadata = { title: "Detalle de galería" }
 
@@ -169,6 +170,13 @@ export default async function GalleryDetailPage({
     submitted: !!submittedBy && f.clientEmail === submittedBy,
     submittedAt: submittedBy && f.clientEmail === submittedBy ? submittedAt : null,
   }))
+
+  // Segunda selección (re-selección): fotos que el cliente ya eligió, para que
+  // afine y baje al número del plan. favoritesCount = únicos elegidos.
+  const favoritesUnion = new Set<string>()
+  for (const f of favSelections) for (const id of f.assetIds) favoritesUnion.add(id)
+  const favoritesCount = favoritesUnion.size
+  const reselection = await getReselectionForGallery(session.studioId, galleryId)
 
   // Estado de selección de impresión (para el panel de producción).
   const printState = await getGalleryPrintState(galleryId)
@@ -345,6 +353,8 @@ export default async function GalleryDetailPage({
         }
         driveLink={driveLink}
         waSelectionTemplate={waSelectionTemplate}
+        favoritesCount={favoritesCount}
+        reselection={reselection}
       />
     </>
   )
