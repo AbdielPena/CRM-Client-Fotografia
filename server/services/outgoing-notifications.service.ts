@@ -130,6 +130,30 @@ export async function listOutgoingNotifications(
       ? all
       : all.filter((n) => n.category === opts.category)
 
+  // Agrupar por cliente: los correos del mismo cliente quedan contiguos (para
+  // que la UI pinte un encabezado por cliente), y los clientes se ordenan por
+  // su correo más reciente. Dentro de cada cliente, lo más reciente primero.
+  const clientKeyOf = (n: OutgoingNotification) =>
+    (n.toName?.trim() || n.toEmail || "—").toLowerCase()
+  const latestByClient = new Map<string, string>()
+  for (const n of filtered) {
+    const k = clientKeyOf(n)
+    const d = n.sentAt ?? n.createdAt
+    const prev = latestByClient.get(k)
+    if (!prev || d > prev) latestByClient.set(k, d)
+  }
+  filtered.sort((a, b) => {
+    const ka = clientKeyOf(a)
+    const kb = clientKeyOf(b)
+    if (ka !== kb) {
+      const la = latestByClient.get(ka) ?? ""
+      const lb = latestByClient.get(kb) ?? ""
+      if (la !== lb) return lb.localeCompare(la) // cliente con correo más reciente primero
+      return ka.localeCompare(kb)
+    }
+    return (b.sentAt ?? b.createdAt).localeCompare(a.sentAt ?? a.createdAt)
+  })
+
   const start = (page - 1) * pageSize
   return {
     items: filtered.slice(start, start + pageSize),

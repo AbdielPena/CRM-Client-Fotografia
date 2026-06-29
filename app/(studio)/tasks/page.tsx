@@ -86,6 +86,14 @@ export default async function TasksPage({
     }),
   ])
 
+  // El orden por fecha de entrega viene del servicio; aquí solo hundimos las
+  // completadas/canceladas al fondo (sort estable: conserva la fecha dentro de
+  // cada grupo). La página trae hasta 100 tareas = todas para este estudio.
+  const DONE = new Set(["completada", "cancelada"])
+  const sortedItems = [...tasks.items].sort(
+    (a, b) => (DONE.has(a.status) ? 1 : 0) - (DONE.has(b.status) ? 1 : 0),
+  )
+
   return (
     <>
       <AppTopbar
@@ -156,7 +164,7 @@ export default async function TasksPage({
           </EmptyState>
         ) : (
           <ul className="space-y-2">
-            {tasks.items.map((t) => {
+            {sortedItems.map((t) => {
               const StatusIcon = STATUS_ICONS[t.status] ?? Clock
               const isOverdue =
                 t.due_date &&

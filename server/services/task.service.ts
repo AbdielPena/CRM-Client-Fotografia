@@ -129,8 +129,10 @@ export async function getTasks(
     .select("*", { count: "exact" })
     .eq("studio_id", studioId)
     .is("deleted_at", null)
-    .order("priority", { ascending: false })
+    // Orden principal: por fecha de entrega/vencimiento (más próxima primero);
+    // sin fecha al final; a igualdad de fecha, mayor prioridad primero.
     .order("due_date", { ascending: true, nullsFirst: false })
+    .order("priority", { ascending: false })
     .range(from, to)
 
   if (opts.status) query = query.eq("status", opts.status)
