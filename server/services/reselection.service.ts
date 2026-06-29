@@ -33,6 +33,45 @@ function appUrl(): string {
   )
 }
 
+type Sb = ReturnType<typeof untypedService>
+
+/**
+ * Asset IDs que el cliente eligió en una galería. Cubre las DOS formas de
+ * seleccionar: ♥ generales (`gallery_favorites`) y los ítems de sus listas
+ * (`gallery_collection_items`). Unión sin duplicar — algunos clientes usan el
+ * corazón y otros arman una lista; antes la 2da selección solo miraba ♥ y
+ * fallaba ("el cliente aún no ha marcado fotos") cuando la selección era una lista.
+ */
+async function getSelectedAssetIds(sb: Sb, galleryId: string): Promise<string[]> {
+  const ids = new Set<string>()
+
+  const { data: favs } = await sb
+    .from("gallery_favorites")
+    .select("asset_id")
+    .eq("gallery_id", galleryId)
+  for (const f of (favs ?? []) as Array<{ asset_id: string | null }>) {
+    if (f.asset_id) ids.add(f.asset_id)
+  }
+
+  const { data: colls } = await sb
+    .from("gallery_collections")
+    .select("id")
+    .eq("gallery_id", galleryId)
+    .is("deleted_at", null)
+  const collIds = ((colls ?? []) as Array<{ id: string }>).map((c) => c.id)
+  if (collIds.length > 0) {
+    const { data: items } = await sb
+      .from("gallery_collection_items")
+      .select("asset_id")
+      .in("collection_id", collIds)
+    for (const it of (items ?? []) as Array<{ asset_id: string | null }>) {
+      if (it.asset_id) ids.add(it.asset_id)
+    }
+  }
+
+  return [...ids]
+}
+
 export async function getReselectionForGallery(
   studioId: string,
   parentGalleryId: string,
@@ -62,17 +101,14 @@ export async function getReselectionForGallery(
     .select("id", { count: "exact", head: true })
     .eq("gallery_id", c.id)
     .is("deleted_at", null)
-  const { count: selectedCount } = await sb
-    .from("gallery_favorites")
-    .select("asset_id", { count: "exact", head: true })
-    .eq("gallery_id", c.id)
+  const selectedCount = (await getSelectedAssetIds(sb, c.id)).length
 
   return {
     childId: c.id,
     token,
     url: token ? `${appUrl()}/g/${token}` : null,
     assetCount: assetCount ?? 0,
-    selectedCount: selectedCount ?? 0,
+    selectedCount,
     status: c.status,
   }
 }
@@ -104,14 +140,9 @@ export async function createReselectionGallery(
     template_id: string | null
   }
 
-  // Fotos que el cliente eligió (favoritos, unión de todos los clientes).
-  const { data: favs } = await sb
-    .from("gallery_favorites")
-    .select("asset_id")
-    .eq("gallery_id", parentGalleryId)
-  const favIds = [
-    ...new Set(((favs ?? []) as Array<{ asset_id: string }>).map((f) => f.asset_id)),
-  ]
+  // Fotos que el cliente eligió: ♥ generales + ítems de sus listas (un cliente
+  // puede usar cualquiera de las dos formas).
+  const favIds = await getSelectedAssetIds(sb, parentGalleryId)
   if (favIds.length === 0) {
     throw new Error("El cliente aún no ha marcado fotos para crear una segunda selección")
   }
@@ -138,6 +169,7 @@ export async function createReselectionGallery(
     slug,
     gallery_type: "selection",
     status: "published",
+    selection_enabled: true,
     visibility: p.visibility ?? "private",
     allow_download: false,
     require_email: p.require_email ?? false,
