@@ -9,6 +9,10 @@ import {
   reopenCollaboratorPayable,
   listCollaboratorPayableStatuses,
 } from "./finanzapp-bridge.service"
+import {
+  normalizeRequirements,
+  evaluateRequirements,
+} from "@/lib/collaborators/requirements"
 import type {
   CreateCollaboratorInput,
   UpdateCollaboratorInput,
@@ -391,6 +395,80 @@ export async function removeAssignment(
     await cancelCollaboratorPayable(studioId, assignmentId)
   } catch (err) {
     console.error("[collab→finanzapp] remove cancel failed", err)
+  }
+}
+
+/**
+ * De una lista de proyectos, devuelve el Set de IDs cuyo PLAN requiere
+ * colaboradores que aún NO están asignados (para el badge en la lista). 3
+ * queries fijas sin importar N. Best-effort: si algo falla devuelve vacío.
+ */
+export async function getProjectsMissingCollaborators(
+  studioId: string,
+  projectIds: string[],
+): Promise<Set<string>> {
+  if (projectIds.length === 0) return new Set()
+  const sb = untypedService()
+  try {
+    const { data: projRows } = await sb
+      .from("projects")
+      .select("id, package_id")
+      .eq("studio_id", studioId)
+      .in("id", projectIds)
+    const projs = ((projRows ?? []) as Array<{
+      id: string
+      package_id: string | null
+    }>).filter((p) => p.package_id)
+    const pkgIds = [...new Set(projs.map((p) => p.package_id as string))]
+    if (pkgIds.length === 0) return new Set()
+
+    const { data: pkgRows } = await sb
+      .from("packages")
+      .select("id, collaborator_requirements")
+      .in("id", pkgIds)
+    const reqByPkg = new Map<string, ReturnType<typeof normalizeRequirements>>()
+    for (const p of (pkgRows ?? []) as Array<{
+      id: string
+      collaborator_requirements: unknown
+    }>) {
+      const reqs = normalizeRequirements(p.collaborator_requirements)
+      if (reqs.length) reqByPkg.set(p.id, reqs)
+    }
+    const projsWithReq = projs.filter((p) => reqByPkg.has(p.package_id as string))
+    if (projsWithReq.length === 0) return new Set()
+
+    const { data: pcRows } = await sb
+      .from("project_collaborators")
+      .select("project_id, collaborator:collaborators(type)")
+      .eq("studio_id", studioId)
+      .in(
+        "project_id",
+        projsWithReq.map((p) => p.id),
+      )
+      .is("deleted_at", null)
+      .neq("pay_status", "cancelled")
+    const typesByProj = new Map<string, string[]>()
+    for (const r of (pcRows ?? []) as Array<{
+      project_id: string
+      collaborator: { type: string } | { type: string }[] | null
+    }>) {
+      const c = Array.isArray(r.collaborator) ? r.collaborator[0] : r.collaborator
+      if (!c?.type) continue
+      const arr = typesByProj.get(r.project_id) ?? []
+      arr.push(c.type)
+      typesByProj.set(r.project_id, arr)
+    }
+
+    const missing = new Set<string>()
+    for (const p of projsWithReq) {
+      const reqs = reqByPkg.get(p.package_id as string) ?? []
+      const statuses = evaluateRequirements(reqs, typesByProj.get(p.id) ?? [])
+      if (statuses.some((s) => !s.satisfied)) missing.add(p.id)
+    }
+    return missing
+  } catch (err) {
+    console.error("[collab] getProjectsMissingCollaborators failed", err)
+    return new Set()
   }
 }
 

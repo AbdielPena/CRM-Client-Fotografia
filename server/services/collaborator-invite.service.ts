@@ -254,7 +254,7 @@ export async function respondToInvite(
   const sb = untypedService()
   const { data: aRow } = await sb
     .from("project_collaborators")
-    .select("id")
+    .select("id, studio_id, project_id")
     .eq("confirm_token", token)
     .is("deleted_at", null)
     .maybeSingle()
@@ -270,5 +270,17 @@ export async function respondToInvite(
       updated_at: new Date().toISOString(),
     })
     .eq("id", a.id)
+
+  // Reflejar el estado en el evento de Google Calendar (best-effort).
+  if (a.studio_id && a.project_id) {
+    try {
+      const { syncProjectById } = await import(
+        "@/server/services/google-calendar.service"
+      )
+      void syncProjectById(a.studio_id, a.project_id).catch(() => {})
+    } catch {
+      /* sin integración → no-op */
+    }
+  }
   return { ok: true, status }
 }

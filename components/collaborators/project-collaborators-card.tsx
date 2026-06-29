@@ -445,6 +445,32 @@ function AssignModal({
               </select>
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Método de pago</label>
+              <select
+                name="paymentMethod"
+                defaultValue={editing?.paymentMethod ?? ""}
+                className={inputCls}
+              >
+                <option value="">—</option>
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="tarjeta">Tarjeta</option>
+                <option value="cheque">Cheque</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Fecha del servicio</label>
+              <input
+                name="serviceDate"
+                type="date"
+                defaultValue={editing?.serviceDate ?? ""}
+                className={inputCls}
+              />
+            </div>
+          </div>
           <div>
             <label className={labelCls}>Notas internas</label>
             <textarea

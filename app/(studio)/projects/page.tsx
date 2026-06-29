@@ -8,11 +8,13 @@ import {
   KanbanSquare,
   CircleDot,
   CheckCircle2,
+  AlertTriangle,
 } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getProjects, countProjects } from "@/server/services/project.service"
+import { getProjectsMissingCollaborators } from "@/server/services/collaborator.service"
 import { getProjectStatuses } from "@/server/services/project-status.service"
 import { getServiceCategories } from "@/server/services/service-category.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
@@ -124,6 +126,16 @@ export default async function ProjectsPage({
         })
       : Promise.resolve(0),
   ])
+
+  // Badge "falta colaborador" (solo en grid): proyectos cuyo plan requiere
+  // colaboradores aún no asignados.
+  const missingCollab =
+    view === "grid"
+      ? await getProjectsMissingCollaborators(
+          session.studioId,
+          (data.items as Array<{ id: string }>).map((i) => i.id),
+        )
+      : new Set<string>()
 
   const STATUS_CHIPS: FilterChip[] = activeStatuses.map((s) => ({
     key: s.label,
@@ -370,6 +382,12 @@ export default async function ProjectsPage({
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {clientName}
                     </p>
+
+                    {missingCollab.has(project.id) && (
+                      <span className="mt-2 inline-flex items-center gap-1 self-start rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                        <AlertTriangle className="h-3 w-3" /> Falta colaborador
+                      </span>
+                    )}
 
                     <div className="mt-4 space-y-1.5 border-t border-border/60 pt-3">
                       {project.event_type && (

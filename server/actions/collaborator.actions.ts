@@ -18,6 +18,13 @@ import {
   removeAssignment,
 } from "@/server/services/collaborator.service"
 import { sendCollaboratorInvite } from "@/server/services/collaborator-invite.service"
+import { syncProjectById } from "@/server/services/google-calendar.service"
+
+// Re-sincroniza el evento de Google Calendar del proyecto (best-effort, no
+// bloquea ni rompe si no hay integración) para reflejar los colaboradores.
+function resyncCalendar(studioId: string, projectId: string) {
+  void syncProjectById(studioId, projectId).catch(() => {})
+}
 
 function firstError(issues: { message: string }[]): string {
   return issues[0]?.message ?? "Datos inválidos"
@@ -95,6 +102,7 @@ export async function assignCollaboratorAction(
       console.error("[collab] invite on assign failed", err)
     }
   }
+  resyncCalendar(session.studioId, projectId)
   revalidatePath(`/projects/${projectId}`)
   return { ok: true as const }
 }
@@ -133,6 +141,7 @@ export async function updateAssignmentAction(
   })
   if (!parsed.success) throw new Error(firstError(parsed.error.issues))
   await updateAssignment(session.studioId, assignmentId, parsed.data)
+  resyncCalendar(session.studioId, projectId)
   revalidatePath(`/projects/${projectId}`)
   return { ok: true as const }
 }
@@ -143,6 +152,7 @@ export async function removeAssignmentAction(
 ) {
   const session = await requireStudioAuth()
   await removeAssignment(session.studioId, assignmentId)
+  resyncCalendar(session.studioId, projectId)
   revalidatePath(`/projects/${projectId}`)
   return { ok: true as const }
 }

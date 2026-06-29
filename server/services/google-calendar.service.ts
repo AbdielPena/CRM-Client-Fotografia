@@ -2,11 +2,22 @@ import 'server-only'
 
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
+import { untypedService } from '@/server/supabase/untyped'
 import {
   getSessionPlanLabel,
   formatSessionTitle,
 } from '@/server/services/session-naming.service'
 import { ensureClientAccessCode } from '@/server/services/client-portal.service'
+import { collaboratorTypeLabel } from '@/lib/constants/collaborators'
+
+type EventCollaborator = { name: string; role: string; confirmStatus: string }
+const CONFIRM_SHORT: Record<string, string> = {
+  pending: 'por confirmar',
+  invited: 'invitado',
+  confirmed: 'confirmado',
+  rejected: 'no asiste',
+  completed: 'completado',
+}
 
 /**
  * Integración Google Calendar (Fase 2b).
@@ -516,9 +527,19 @@ function buildEventDescription(
   notes: string | null | undefined,
   pkg: PkgInfo,
   sessionUrl?: string | null,
+  collaborators?: EventCollaborator[],
 ): string | undefined {
   const parts: string[] = []
   if (notes && notes.trim()) parts.push(notes.trim())
+
+  if (collaborators && collaborators.length) {
+    const lines: string[] = ['━━━━━━━━━━━━━━━━━━━━', 'EQUIPO / COLABORADORES:']
+    for (const c of collaborators) {
+      const st = CONFIRM_SHORT[c.confirmStatus] ?? c.confirmStatus
+      lines.push(`• ${c.role}: ${c.name} (${st})`)
+    }
+    parts.push(lines.join('\n'))
+  }
 
   if (pkg && (pkg.name || pkg.includes)) {
     const lines: string[] = ['━━━━━━━━━━━━━━━━━━━━']
@@ -732,12 +753,39 @@ export async function syncProjectById(
           : `${appBase}/portal/login?next=${next}`
     }
 
+    // Colaboradores asignados → se listan en la descripción del evento.
+    // Cliente sin tipar: project_collaborators no está en los tipos generados.
+    const { data: collabRows } = await untypedService()
+      .from('project_collaborators')
+      .select('role, confirm_status, collaborator:collaborators(name, type)')
+      .eq('project_id', project.id)
+      .eq('studio_id', studioId)
+      .is('deleted_at', null)
+    type CollabRow = {
+      role: string | null
+      confirm_status: string | null
+      collaborator:
+        | { name: string; type: string }
+        | { name: string; type: string }[]
+        | null
+    }
+    const collaborators: EventCollaborator[] = ((collabRows ?? []) as CollabRow[])
+      .map((r) => {
+        const c = Array.isArray(r.collaborator) ? r.collaborator[0] : r.collaborator
+        return {
+          name: c?.name ?? '',
+          role: r.role || collaboratorTypeLabel(c?.type),
+          confirmStatus: r.confirm_status ?? 'pending',
+        }
+      })
+      .filter((x) => x.name)
+
     const result = await syncProjectToEvent({
       projectId: project.id,
       studioId,
-      // Descripción = notas + plan + link a los detalles de la sesión (portal).
-      // El cliente lo ve en el evento/correo de invitación de Google.
-      description: buildEventDescription(project.notes, pkg, sessionUrl),
+      // Descripción = notas + colaboradores + plan + link a los detalles de la
+      // sesión (portal). El cliente lo ve en el evento/correo de Google.
+      description: buildEventDescription(project.notes, pkg, sessionUrl, collaborators),
       title,
       date: project.event_date,
       startTime: null, // no tenemos event_time en el schema actual → all-day
