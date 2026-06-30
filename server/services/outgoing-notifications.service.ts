@@ -162,6 +162,251 @@ export async function listOutgoingNotifications(
   }
 }
 
+// ============================================================================
+// Vista organizada: Clientes (por sesión) + Del sistema (por tipo)
+// ============================================================================
+
+export type OrgSession = {
+  projectId: string | null
+  projectName: string | null
+  eventDate: string | null
+  items: OutgoingNotification[]
+  lastAt: string
+}
+export type OrgClient = {
+  key: string
+  clientName: string
+  clientEmail: string
+  total: number
+  lastAt: string
+  sessions: OrgSession[]
+}
+export type OrgSystemGroup = {
+  category: OutgoingCategory
+  label: string
+  items: OutgoingNotification[]
+}
+export type OrganizedOutgoing = {
+  clients: OrgClient[]
+  system: OrgSystemGroup[]
+  clientCount: number
+  systemCount: number
+}
+
+/**
+ * Correos enviados organizados en dos bloques:
+ *  - **Clientes**: correos cuyo destinatario es un cliente del estudio,
+ *    agrupados por cliente y, dentro, por su sesión (proyecto). Resuelve el
+ *    proyecto de cada correo siguiendo su entidad relacionada (gallery/invoice/
+ *    contract/booking_request/form_response → su project_id; o project directo).
+ *  - **Del sistema**: el resto (avisos al estudio, invitaciones a colaboradores,
+ *    leads, pruebas), agrupados por tipo/categoría.
+ */
+export async function getOutgoingNotificationsOrganized(
+  studioId: string,
+): Promise<OrganizedOutgoing> {
+  const sb = untypedService()
+
+  const { data } = await sb
+    .from("email_queue")
+    .select(
+      "id, to_email, to_name, subject, template_slug, status, sent_at, failed_at, last_error, created_at, related_entity_type, related_entity_id",
+    )
+    .eq("studio_id", studioId)
+    .order("created_at", { ascending: false })
+    .limit(500)
+  const all = ((data ?? []) as QueueRow[]).map(mapRow)
+
+  // Email interno del estudio → sus avisos van a "Del sistema".
+  const { data: studioRow } = await sb
+    .from("studios")
+    .select("email")
+    .eq("id", studioId)
+    .maybeSingle()
+  const studioEmail = ((studioRow as { email: string | null } | null)?.email ?? "")
+    .trim()
+    .toLowerCase()
+
+  // Resolver project_id + client_id por entidad relacionada (lote por tipo).
+  const idsByType: Record<string, Set<string>> = {}
+  for (const n of all) {
+    if (n.relatedEntityType && n.relatedEntityId) {
+      ;(idsByType[n.relatedEntityType] ??= new Set()).add(n.relatedEntityId)
+    }
+  }
+  const entityProject = new Map<string, string | null>()
+  const entityClient = new Map<string, string | null>()
+  const resolveVia = async (type: string, table: string, hasClient: boolean) => {
+    const ids = idsByType[type]
+    if (!ids || ids.size === 0) return
+    const cols = hasClient ? "id, project_id, client_id" : "id, project_id"
+    const { data: rows } = await sb.from(table).select(cols).in("id", [...ids])
+    for (const r of (rows ?? []) as Array<{
+      id: string
+      project_id: string | null
+      client_id?: string | null
+    }>) {
+      entityProject.set(`${type}:${r.id}`, r.project_id ?? null)
+      if (hasClient) entityClient.set(`${type}:${r.id}`, r.client_id ?? null)
+    }
+  }
+  await Promise.all([
+    resolveVia("gallery", "galleries", true),
+    resolveVia("invoice", "invoices", true),
+    resolveVia("booking_request", "booking_requests", true),
+    resolveVia("contract", "contracts", false),
+    resolveVia("form_response", "form_responses", false),
+  ])
+
+  // Proyectos (directos + vía entidad) → nombre, fecha, client_id.
+  const projectIds = new Set<string>()
+  for (const n of all) {
+    if (n.relatedEntityType === "project" && n.relatedEntityId) projectIds.add(n.relatedEntityId)
+  }
+  for (const v of entityProject.values()) if (v) projectIds.add(v)
+  const projectMap = new Map<
+    string,
+    { name: string | null; eventDate: string | null; clientId: string | null }
+  >()
+  if (projectIds.size > 0) {
+    const { data: projRows } = await sb
+      .from("projects")
+      .select("id, name, event_date, client_id")
+      .in("id", [...projectIds])
+    for (const p of (projRows ?? []) as Array<{
+      id: string
+      name: string | null
+      event_date: string | null
+      client_id: string | null
+    }>) {
+      projectMap.set(p.id, { name: p.name, eventDate: p.event_date, clientId: p.client_id })
+    }
+  }
+
+  const projectIdForEmail = (n: OutgoingNotification): string | null => {
+    if (!n.relatedEntityType || !n.relatedEntityId) return null
+    if (n.relatedEntityType === "project") return n.relatedEntityId
+    return entityProject.get(`${n.relatedEntityType}:${n.relatedEntityId}`) ?? null
+  }
+  const clientIdForEmail = (n: OutgoingNotification): string | null => {
+    if (!n.relatedEntityType || !n.relatedEntityId) return null
+    if (n.relatedEntityType === "client") return n.relatedEntityId
+    const direct = entityClient.get(`${n.relatedEntityType}:${n.relatedEntityId}`)
+    if (direct) return direct
+    const pid = projectIdForEmail(n)
+    return pid ? (projectMap.get(pid)?.clientId ?? null) : null
+  }
+
+  // Clientes (id → nombre/email) para los client_id resueltos.
+  const clientIds = new Set<string>()
+  for (const n of all) {
+    const cid = clientIdForEmail(n)
+    if (cid) clientIds.add(cid)
+  }
+  const clientById = new Map<string, { name: string | null; email: string | null }>()
+  if (clientIds.size > 0) {
+    const { data: clientRows } = await sb
+      .from("clients")
+      .select("id, name, email")
+      .in("id", [...clientIds])
+    for (const c of (clientRows ?? []) as Array<{
+      id: string
+      name: string | null
+      email: string | null
+    }>) {
+      clientById.set(c.id, { name: c.name, email: c.email })
+    }
+  }
+
+  const SYSTEM_TYPES = new Set(["lead", "project_collaborator"])
+  // Es "del sistema" si: va al email interno del estudio, es un aviso *_studio,
+  // es de lead/colaborador, o no se resuelve ningún cliente.
+  const isSystemEmail = (n: OutgoingNotification, clientId: string | null): boolean => {
+    if (studioEmail && (n.toEmail || "").trim().toLowerCase() === studioEmail) return true
+    if (n.templateSlug && n.templateSlug.toLowerCase().includes("studio")) return true
+    if (n.relatedEntityType && SYSTEM_TYPES.has(n.relatedEntityType)) return true
+    return !clientId
+  }
+
+  const clientsMap = new Map<string, OrgClient>()
+  const systemMap = new Map<OutgoingCategory, OrgSystemGroup>()
+  let clientCount = 0
+  let systemCount = 0
+
+  for (const n of all) {
+    const at = n.sentAt ?? n.createdAt
+    const clientId = clientIdForEmail(n)
+    if (!clientId || isSystemEmail(n, clientId)) {
+      systemCount++
+      let g = systemMap.get(n.category)
+      if (!g) {
+        g = { category: n.category, label: OUTGOING_CATEGORY_LABELS[n.category], items: [] }
+        systemMap.set(n.category, g)
+      }
+      g.items.push(n)
+      continue
+    }
+    clientCount++
+    const c = clientById.get(clientId)
+    let cg = clientsMap.get(clientId)
+    if (!cg) {
+      cg = {
+        key: clientId,
+        clientName: c?.name || n.toName || n.toEmail,
+        clientEmail: c?.email || n.toEmail,
+        total: 0,
+        lastAt: at,
+        sessions: [],
+      }
+      clientsMap.set(clientId, cg)
+    }
+    cg.total++
+    if (at > cg.lastAt) cg.lastAt = at
+    const pid = projectIdForEmail(n)
+    const sessKey = pid ?? "__none__"
+    let sg = cg.sessions.find((s) => (s.projectId ?? "__none__") === sessKey)
+    if (!sg) {
+      const pm = pid ? projectMap.get(pid) : null
+      sg = {
+        projectId: pid,
+        projectName: pm?.name ?? null,
+        eventDate: pm?.eventDate ?? null,
+        items: [],
+        lastAt: at,
+      }
+      cg.sessions.push(sg)
+    }
+    sg.items.push(n)
+    if (at > sg.lastAt) sg.lastAt = at
+  }
+
+  const clients = [...clientsMap.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt))
+  for (const c of clients) {
+    c.sessions.sort((a, b) => b.lastAt.localeCompare(a.lastAt))
+    for (const s of c.sessions) {
+      s.items.sort((a, b) => (b.sentAt ?? b.createdAt).localeCompare(a.sentAt ?? a.createdAt))
+    }
+  }
+  const ORDER: OutgoingCategory[] = [
+    "booking",
+    "gallery",
+    "delivery",
+    "contract",
+    "invoice",
+    "engagement",
+    "client",
+    "otros",
+  ]
+  const system = [...systemMap.values()].sort(
+    (a, b) => ORDER.indexOf(a.category) - ORDER.indexOf(b.category),
+  )
+  for (const g of system) {
+    g.items.sort((a, b) => (b.sentAt ?? b.createdAt).localeCompare(a.sentAt ?? a.createdAt))
+  }
+
+  return { clients, system, clientCount, systemCount }
+}
+
 export async function getOutgoingNotification(
   studioId: string,
   id: string,
