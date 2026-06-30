@@ -41,6 +41,41 @@ export async function createProjectAction(formData: FormData) {
 }
 
 /**
+ * Registra/edita el vestido seleccionado para la sesión (quinceañera):
+ * nombre/código, proveedor, costo y notas internas. El costo entra en el
+ * cálculo interno de ganancia del proyecto.
+ */
+export async function saveSessionDressAction(
+  projectId: string,
+  data: {
+    dressName: string
+    dressProvider: string
+    dressCost: string
+    dressNotes: string
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const raw = (data.dressCost ?? "").trim()
+    const cost = raw === "" ? null : Number(raw)
+    if (cost !== null && (Number.isNaN(cost) || cost < 0)) {
+      return { ok: false, error: "El costo del vestido no es válido" }
+    }
+    const { setSessionDress } = await import("@/server/services/session-dress.service")
+    await setSessionDress(session.studioId, projectId, {
+      dressName: data.dressName ?? "",
+      dressProvider: data.dressProvider ?? "",
+      dressCost: cost,
+      dressNotes: data.dressNotes ?? "",
+    })
+    revalidatePath(`/projects/${projectId}`)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
+/**
  * Cambia MANUALMENTE la hora de una sesión, con motivo → actualiza Google
  * Calendar y avisa al cliente por correo + WhatsApp.
  */

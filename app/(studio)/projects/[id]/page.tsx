@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getProjectById } from "@/server/services/project.service"
 import { ChangeSessionTime } from "@/components/projects/change-session-time"
+import { SessionDressCard } from "@/components/projects/session-dress-card"
 import { listFormResponsesForProject } from "@/server/services/form.service"
 import { getEntityActivity } from "@/server/services/activity.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
@@ -253,10 +254,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const totalAmount = project.total_amount as number | string | null
   const currency = (project.currency as string | null) ?? "DOP"
 
+  // Vestido seleccionado (quinceañera) y su costo → entra en la ganancia.
+  const isQuince = /quince|xv/i.test(eventType ?? "")
+  const dressCost =
+    project.dress_cost != null && String(project.dress_cost) !== ""
+      ? Number(project.dress_cost)
+      : 0
   // Ganancia neta del proyecto = ingreso (precio del proyecto, o lo pagado si no
-  // hay precio) − costo de colaboradores (pagos acordados no cancelados).
+  // hay precio) − costo de colaboradores (pagos acordados no cancelados) − vestido.
   const projectIncome = totalAmount != null ? Number(totalAmount) : totalPaid
-  const netProfit = projectIncome - collaboratorCost
+  const netProfit = projectIncome - collaboratorCost - dressCost
 
   const clientLabel = client ? (client.name as string) : ""
 
@@ -429,6 +436,17 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             requirements={requirementStatuses}
             eventDate={eventDate}
           />
+
+          {/* Vestido seleccionado (solo quinceañeras) */}
+          {isQuince && (
+            <SessionDressCard
+              projectId={project.id as string}
+              dressName={(project.dress_name as string | null) ?? null}
+              dressProvider={(project.dress_provider as string | null) ?? null}
+              dressCost={dressCost > 0 ? dressCost : null}
+              dressNotes={(project.dress_notes as string | null) ?? null}
+            />
+          )}
 
           {/* Formularios del cliente */}
           <FormResponsesPanel
@@ -660,8 +678,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             </dl>
           </div>
 
-          {/* Ganancia neta (ingreso − pagos a colaboradores) */}
-          {projectCollaborators.length > 0 && (
+          {/* Ganancia neta (ingreso − vestido − colaboradores) */}
+          {(projectCollaborators.length > 0 || dressCost > 0) && (
             <div className="sf-card p-5">
               <div className="mb-3 flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -674,12 +692,22 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                     {formatCurrency(projectIncome, currency)}
                   </dd>
                 </div>
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">Pagos a colaboradores</dt>
-                  <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">
-                    − {formatCurrency(collaboratorCost, currency)}
-                  </dd>
-                </div>
+                {dressCost > 0 && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Costo del vestido</dt>
+                    <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">
+                      − {formatCurrency(dressCost, currency)}
+                    </dd>
+                  </div>
+                )}
+                {projectCollaborators.length > 0 && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Pagos a colaboradores</dt>
+                    <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">
+                      − {formatCurrency(collaboratorCost, currency)}
+                    </dd>
+                  </div>
+                )}
                 <div className="flex justify-between border-t border-border/60 pt-2">
                   <dt className="font-semibold text-foreground">Ganancia neta</dt>
                   <dd
