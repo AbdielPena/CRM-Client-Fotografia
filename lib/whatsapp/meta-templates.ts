@@ -120,6 +120,27 @@ export const WHATSAPP_TEMPLATE_CATALOG: WhatsAppTemplateDef[] = [
     emailSlug: "gallery_final_delivery_available",
   },
 
+  {
+    name: "cambio_hora_sesion",
+    label: "Cambio de hora de sesión",
+    category: "UTILITY",
+    language: "es",
+    body:
+      "¡Hola {{1}}! 💛 La hora de tu sesión con AbbyPixel cambió. Tu nueva hora es {{2}}. Te enviamos los detalles y el motivo a tu correo. ¡Cualquier duda, escríbenos!",
+    example: [NAME, "2:00 p. m."],
+    emailSlug: "session_time_changed",
+  },
+  {
+    name: "recordatorio_saldo",
+    label: "Recordatorio de saldo (sesión)",
+    category: "UTILITY",
+    language: "es",
+    body:
+      "¡Hola {{1}}! 💛 Se acerca tu sesión con AbbyPixel y queda un saldo pendiente. Revisa tu correo para el monto y los detalles. ¡Gracias!",
+    example: [NAME],
+    emailSlug: "session_balance_reminder",
+  },
+
   // ───────────────── MARKETING (saludos / promos / reseñas) ─────────────────
   {
     name: "cumpleanos_cliente",
