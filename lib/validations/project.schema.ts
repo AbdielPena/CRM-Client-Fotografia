@@ -17,6 +17,8 @@ export const createProjectSchema = z.object({
   eventType: z.string().min(1, "Selecciona un tipo de proyecto").max(100),
   status: z.enum(PROJECT_STATUSES).default("booked"),
   eventDate: z.string().optional().or(z.literal("")),
+  eventTime: z.string().optional().or(z.literal("")),
+  eventEndTime: z.string().optional().or(z.literal("")),
   location: z.string().max(200).optional().or(z.literal("")),
   notes: z.string().max(3000).optional().or(z.literal("")),
   packageId: z.string().optional().or(z.literal("")),

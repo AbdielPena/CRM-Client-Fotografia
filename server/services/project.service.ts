@@ -304,6 +304,8 @@ export async function updateProject(
   if (data.eventType !== undefined) patch.event_type = data.eventType
   if (data.status !== undefined) patch.status = data.status
   if (data.eventDate !== undefined) patch.event_date = data.eventDate || null
+  if (data.eventTime !== undefined) patch.event_time = data.eventTime || null
+  if (data.eventEndTime !== undefined) patch.event_end_time = data.eventEndTime || null
   if (data.location !== undefined) patch.location = data.location || null
   if (data.notes !== undefined) patch.notes = data.notes || null
   if (data.packageId !== undefined) patch.package_id = data.packageId || null
@@ -327,6 +329,8 @@ export async function updateProject(
   // evento; en cualquier otro caso actualiza.
   const touchedEventFields =
     data.eventDate !== undefined ||
+    data.eventTime !== undefined ||
+    data.eventEndTime !== undefined ||
     data.name !== undefined ||
     data.location !== undefined ||
     data.notes !== undefined

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getProjectById } from "@/server/services/project.service"
+import { ChangeSessionTime } from "@/components/projects/change-session-time"
 import { listFormResponsesForProject } from "@/server/services/form.service"
 import { getEntityActivity } from "@/server/services/activity.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
@@ -325,7 +326,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </p>
                   {eventTime && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                      <Clock className="h-3 w-3" /> {eventTime}
+                      <Clock className="h-3 w-3" /> {String(eventTime).slice(0, 5)}
                     </p>
                   )}
                   {project.location ? (
@@ -333,6 +334,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                       <MapPin className="h-3 w-3" /> {String(project.location)}
                     </p>
                   ) : null}
+                  <ChangeSessionTime
+                    projectId={String(project.id)}
+                    currentTime={eventTime}
+                  />
                 </div>
               </div>
             )}

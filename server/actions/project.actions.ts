@@ -40,6 +40,35 @@ export async function createProjectAction(formData: FormData) {
   redirect(`/projects/${project.id}`)
 }
 
+/**
+ * Cambia MANUALMENTE la hora de una sesión, con motivo → actualiza Google
+ * Calendar y avisa al cliente por correo + WhatsApp.
+ */
+export async function changeSessionTimeAction(
+  projectId: string,
+  newTime: string,
+  reason: string,
+): Promise<{ ok: boolean; error?: string; emailed?: boolean; whatsappApi?: boolean }> {
+  const session = await requireStudioAuth()
+  try {
+    const { changeSessionTime } = await import(
+      "@/server/services/session-schedule.service"
+    )
+    const res = await changeSessionTime(
+      session.studioId,
+      session.userId,
+      projectId,
+      newTime,
+      reason,
+    )
+    revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/projects")
+    return { ok: res.ok, emailed: res.emailed, whatsappApi: res.whatsappApi }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
 export async function updateProjectAction(projectId: string, formData: FormData) {
   const session = await requireStudioAuth()
 

@@ -33,6 +33,7 @@ export type TemplateSlug =
   | "payment_received"
   | "payment_pending"
   | "session_balance_reminder"
+  | "session_time_changed"
   // Galería
   | "gallery_available"
   | "gallery_selection_pending"
@@ -274,6 +275,23 @@ export const TEMPLATE_CATALOG: Record<
       { key: "when_label", label: "Cuándo", example: "mañana / hoy" },
       { key: "session_date", label: "Fecha de la sesión", example: "29 jun" },
       { key: "balance_amount", label: "Saldo restante", example: "DOP 29,300.00" },
+      { key: "portal_url", label: "Link del portal", example: "https://..." },
+    ],
+  },
+  session_time_changed: {
+    label: "Cambio de hora de sesión",
+    description: "Avisa al cliente que cambió la hora de su sesión, con el motivo.",
+    category: "booking",
+    defaultSubject: "Cambio de hora — tu sesión {{session_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p><p>Te informamos que la hora de tu sesión <strong>{{session_name}}</strong> del <strong>{{session_date}}</strong> cambió.</p><p>Antes: <strong>{{old_time}}</strong> &nbsp;→&nbsp; Ahora: <strong>{{new_time}}</strong></p><p><strong>Motivo:</strong> {{reason}}</p><p><a href="{{portal_url}}" class="btn">Ver mi sesión</a></p><p>Cualquier duda, escríbenos. 💛</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "session_name", label: "Sesión", example: "Quinceañera de María" },
+      { key: "session_date", label: "Fecha de la sesión", example: "26 jun" },
+      { key: "old_time", label: "Hora anterior", example: "10:00 a. m." },
+      { key: "new_time", label: "Hora nueva", example: "2:00 p. m." },
+      { key: "reason", label: "Motivo del cambio", example: "Ajuste de agenda" },
       { key: "portal_url", label: "Link del portal", example: "https://..." },
     ],
   },

@@ -699,7 +699,7 @@ export async function syncProjectById(
     const { data: project, error } = await supabase
       .from('projects')
       .select(
-        'id, studio_id, name, event_type, event_date, location, notes, package_id, client:clients(id, email, name), package:packages(name, includes, duration_hours, edited_photos, delivery_days)',
+        'id, studio_id, name, event_type, event_date, event_time, event_end_time, location, notes, package_id, client:clients(id, email, name), package:packages(name, includes, duration_hours, edited_photos, delivery_days)',
       )
       .eq('id', projectId)
       .eq('studio_id', studioId)
@@ -788,8 +788,9 @@ export async function syncProjectById(
       description: buildEventDescription(project.notes, pkg, sessionUrl, collaborators),
       title,
       date: project.event_date,
-      startTime: null, // no tenemos event_time en el schema actual → all-day
-      endTime: null,
+      // event_time/event_end_time son `time` ("HH:MM:SS") → a "HH:mm" para el evento.
+      startTime: project.event_time ? String(project.event_time).slice(0, 5) : null,
+      endTime: project.event_end_time ? String(project.event_end_time).slice(0, 5) : null,
       location: project.location ?? undefined,
       attendeeEmails: clientEmail ? [clientEmail] : undefined,
     })
