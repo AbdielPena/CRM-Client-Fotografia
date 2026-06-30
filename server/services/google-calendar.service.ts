@@ -605,13 +605,17 @@ export async function syncProjectToEvent(
 
   const body = buildEventBody(payload)
   const base = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(existingCalId)}/events`
-  // sendUpdates=all → Google envía el correo de invitación/actualización al
-  // cliente (attendee). Sin esto el invitado podría no recibir el email.
+  // CREAR (POST) → sendUpdates=all: Google le manda la invitación al cliente
+  // (attendee) para que agregue la sesión a su calendario.
+  // EDITAR (PATCH) → sendUpdates=none: actualiza el evento en silencio (el
+  // calendario del cliente se mueve solo) SIN spamear un correo en cada edición.
+  // Los cambios importantes (p.ej. la hora) se avisan con nuestro correo+WhatsApp.
+  const isUpdate = !!existingEventId
   const url =
     (existingEventId
       ? `${base}/${encodeURIComponent(existingEventId)}`
-      : base) + '?sendUpdates=all'
-  const method = existingEventId ? 'PATCH' : 'POST'
+      : base) + `?sendUpdates=${isUpdate ? 'none' : 'all'}`
+  const method = isUpdate ? 'PATCH' : 'POST'
 
   const res = await fetch(url, {
     method,
