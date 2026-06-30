@@ -48,6 +48,7 @@ export async function createProjectAction(formData: FormData) {
 export async function saveSessionDressAction(
   projectId: string,
   data: {
+    dressCatalogId?: string | null
     dressName: string
     dressProvider: string
     dressCost: string
@@ -63,6 +64,7 @@ export async function saveSessionDressAction(
     }
     const { setSessionDress } = await import("@/server/services/session-dress.service")
     await setSessionDress(session.studioId, projectId, {
+      dressCatalogId: data.dressCatalogId ?? null,
       dressName: data.dressName ?? "",
       dressProvider: data.dressProvider ?? "",
       dressCost: cost,

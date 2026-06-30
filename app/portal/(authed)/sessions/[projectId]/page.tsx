@@ -10,6 +10,7 @@ import {
   Receipt,
   FileText,
   ClipboardList,
+  Shirt,
 } from "lucide-react"
 
 import {
@@ -18,6 +19,8 @@ import {
 } from "@/server/services/client-portal.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { getSessionPlanLabel } from "@/server/services/session-naming.service"
+import { getDressPickerForClient } from "@/server/services/session-dress.service"
+import { PortalDressPicker } from "@/components/portal/portal-dress-picker"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { formatCurrency, formatDateShort } from "@/lib/utils/currency"
 import { PortalHeader } from "@/components/portal/portal-ui"
@@ -54,7 +57,7 @@ export default async function PortalSessionDetailsPage({
   const { data: project } = await supabase
     .from("projects")
     .select(
-      "id, name, event_type, event_date, event_time, event_end_time, location, package_id, status",
+      "id, name, event_type, event_date, event_time, event_end_time, location, package_id, status, dress_catalog_id, dress_name",
     )
     .eq("id", params.projectId)
     .eq("client_id", session.clientId)
@@ -66,6 +69,12 @@ export default async function PortalSessionDetailsPage({
   const p = project as any
 
   const plan = await getSessionPlanLabel(session.studioId, p.package_id)
+
+  // Selección de vestido por el cliente (solo quinceañeras), sin precio.
+  const isQuince = /quince|xv/i.test(String(p.event_type ?? ""))
+  const dressStores = isQuince
+    ? await getDressPickerForClient(session.studioId).catch(() => [])
+    : []
 
   const [{ data: invoicesRaw }, { data: contractsRaw }, { data: formsRaw }] =
     await Promise.all([
@@ -134,6 +143,21 @@ export default async function PortalSessionDetailsPage({
         {time && <Row icon={Clock} label="Hora" value={time} />}
         <Row icon={MapPin} label="Ubicación" value={p.location ?? "Por confirmar"} />
       </Section>
+
+      {/* Tu vestido (solo quinceañeras) — el cliente elige; sin precio */}
+      {isQuince && (
+        <Section icon={Shirt} title="Tu vestido">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Elige el vestido que deseas para tu sesión. Puedes cambiarlo cuando quieras.
+          </p>
+          <PortalDressPicker
+            projectId={p.id}
+            stores={dressStores}
+            currentDressId={p.dress_catalog_id ?? null}
+            currentDressName={p.dress_name ?? null}
+          />
+        </Section>
+      )}
 
       {/* Pago */}
       <Section icon={Receipt} title="Pago">
