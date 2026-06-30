@@ -39,6 +39,8 @@ import {
   History,
   Image as ImageIcon,
   User,
+  Users,
+  Shirt,
   Mail,
   Phone,
   Instagram,
@@ -265,6 +267,13 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const projectIncome = totalAmount != null ? Number(totalAmount) : totalPaid
   const netProfit = projectIncome - collaboratorCost - dressCost
 
+  // Badges de "pendiente": la HORA en toda sesión (parte importante); los
+  // COLABORADORES y el VESTIDO solo en sesiones de quinceañera.
+  const missingTime = !eventTime
+  const hasDress = !!((project.dress_name as string | null) || dressCost > 0)
+  const missingCollaborators = isQuince && projectCollaborators.length === 0
+  const missingDress = isQuince && !hasDress
+
   const clientLabel = client ? (client.name as string) : ""
 
   // WhatsApp de 1 clic (hub del cliente)
@@ -302,6 +311,26 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       />
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
+      {/* Pendientes por completar (hora en toda sesión; colaboradores/vestido en quinceañera) */}
+      {(missingTime || missingCollaborators || missingDress) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {missingTime && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11.5px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              <Clock className="h-3.5 w-3.5" /> Falta la hora
+            </span>
+          )}
+          {missingCollaborators && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11.5px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              <Users className="h-3.5 w-3.5" /> Faltan colaboradores
+            </span>
+          )}
+          {missingDress && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11.5px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              <Shirt className="h-3.5 w-3.5" /> Falta el vestido
+            </span>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main */}
         <div className="lg:col-span-2 space-y-6">

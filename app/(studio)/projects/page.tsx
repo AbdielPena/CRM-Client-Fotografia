@@ -9,6 +9,8 @@ import {
   CircleDot,
   CheckCircle2,
   AlertTriangle,
+  Clock,
+  Shirt,
 } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -58,6 +60,9 @@ type ProjectRow = {
   status: string
   event_type: string | null
   event_date: string | null
+  event_time: string | null
+  dress_name: string | null
+  dress_cost: number | string | null
   client: { name: string } | { name: string }[]
 }
 
@@ -482,11 +487,41 @@ export default async function ProjectsPage({
                       {clientName}
                     </p>
 
-                    {missingCollab.has(project.id) && (
-                      <span className="mt-2 inline-flex items-center gap-1 self-start rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-                        <AlertTriangle className="h-3 w-3" /> Falta colaborador
-                      </span>
-                    )}
+                    {(() => {
+                      // Pendientes: la HORA en toda sesión; COLABORADOR y VESTIDO
+                      // solo en quinceañeras.
+                      const isQuince = /quince|xv/i.test(project.event_type ?? "")
+                      const noTime = !project.event_time
+                      const noCollab = missingCollab.has(project.id)
+                      const noDress =
+                        isQuince &&
+                        !(
+                          project.dress_name ||
+                          (project.dress_cost != null && Number(project.dress_cost) > 0)
+                        )
+                      if (!noTime && !noCollab && !noDress) return null
+                      const cls =
+                        "inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+                      return (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {noTime && (
+                            <span className={cls}>
+                              <Clock className="h-3 w-3" /> Falta hora
+                            </span>
+                          )}
+                          {noCollab && (
+                            <span className={cls}>
+                              <AlertTriangle className="h-3 w-3" /> Falta colaborador
+                            </span>
+                          )}
+                          {noDress && (
+                            <span className={cls}>
+                              <Shirt className="h-3 w-3" /> Falta vestido
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     <div className="mt-4 space-y-1.5 border-t border-border/60 pt-3">
                       {project.event_type && (
