@@ -72,6 +72,18 @@ async function getSelectedAssetIds(sb: Sb, galleryId: string): Promise<string[]>
   return [...ids]
 }
 
+/**
+ * Cuántas fotos eligió el cliente en una galería (♥ generales + ítems de sus
+ * listas). MISMA fuente que usa `createReselectionGallery`, para que el
+ * contador del botón "Crear 2da selección" y la creación NUNCA se contradigan
+ * (antes la página contaba solo ♥ → 0 cuando el cliente usó una lista, y el
+ * botón quedaba deshabilitado aunque sí había selección).
+ */
+export async function countSelectedAssets(galleryId: string): Promise<number> {
+  const sb = untypedService()
+  return (await getSelectedAssetIds(sb, galleryId)).length
+}
+
 export async function getReselectionForGallery(
   studioId: string,
   parentGalleryId: string,

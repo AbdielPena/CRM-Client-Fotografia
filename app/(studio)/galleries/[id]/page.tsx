@@ -31,7 +31,10 @@ import { LuxuryBookPanel } from "@/components/galleries/luxury-book-panel"
 import { getGoogleDriveStatus } from "@/server/services/gallery-drive.service"
 import { getDriveBackupStatusAction } from "@/server/actions/gallery-drive.actions"
 import { getSelectionWaTemplate } from "@/server/services/share-message.service"
-import { getReselectionForGallery } from "@/server/services/reselection.service"
+import {
+  getReselectionForGallery,
+  countSelectedAssets,
+} from "@/server/services/reselection.service"
 
 export const metadata: Metadata = { title: "Detalle de galería" }
 
@@ -172,10 +175,10 @@ export default async function GalleryDetailPage({
   }))
 
   // Segunda selección (re-selección): fotos que el cliente ya eligió, para que
-  // afine y baje al número del plan. favoritesCount = únicos elegidos.
-  const favoritesUnion = new Set<string>()
-  for (const f of favSelections) for (const id of f.assetIds) favoritesUnion.add(id)
-  const favoritesCount = favoritesUnion.size
+  // afine y baje al número del plan. Cuenta ♥ generales + ítems de sus listas
+  // (misma fuente que la creación) — antes solo contaba ♥ y daba 0 cuando el
+  // cliente armó una lista, dejando el botón deshabilitado.
+  const favoritesCount = await countSelectedAssets(galleryId)
   const reselection = await getReselectionForGallery(session.studioId, galleryId)
 
   // Estado de selección de impresión (para el panel de producción).
