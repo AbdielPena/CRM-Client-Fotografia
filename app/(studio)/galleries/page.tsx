@@ -1,10 +1,14 @@
 import Link from "next/link"
-import { ImageIcon, Plus, Lock, Globe, KeyRound, Calendar } from "lucide-react"
+import { ImageIcon, Plus, Lock, Globe, KeyRound, Calendar, Cake } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { getGalleries, getAssetThumbUrl, getAssetWebUrl } from "@/server/services/gallery.service"
+import {
+  deriveDeliveryComputed,
+  type DeliveryStatus,
+} from "@/server/services/delivery.service"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
@@ -50,6 +54,73 @@ type GalleryListRow = {
   event_date: string | null
   selection_submitted: boolean
   created_at: string
+  project_id: string | null
+  delivery_ready_at: string | null
+}
+
+// ---- Cumpleaños + prioridad de entrega (regla quinceañera) -----------------
+// La entrega está pautada para lo que ocurra PRIMERO entre 2 días ANTES del
+// cumpleaños y 3 semanas después de la sesión (nunca antes de la sesión) —
+// misma regla que la RPC upsert_project_delivery. Usamos la fila de
+// client_deliveries si existe; si no, replicamos el cálculo como fallback.
+
+function addDaysStr(dateStr: string, days: number): string {
+  const d = new Date(dateStr.slice(0, 10) + "T00:00:00Z")
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function quinceDeadline(birthday: string, session: string | null): string {
+  const byBday = addDaysStr(birthday, -2)
+  if (!session) return byBday
+  const bySession = addDaysStr(session, 21)
+  let est = byBday <= bySession ? byBday : bySession
+  if (est < session) est = bySession // cumpleaños ya pasado / cae sobre la sesión
+  return est
+}
+
+type DeliveryBadge = {
+  birthday: string | null
+  status: DeliveryStatus
+  daysUntilDelivery: number | null
+  priority: "alta" | "media" | "baja"
+  overdue: boolean
+}
+
+const CHIP_ROSE =
+  "bg-rose-50 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300"
+const CHIP_AMBER =
+  "bg-amber-50 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300"
+const CHIP_EMERALD =
+  "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"
+const CHIP_MUTED = "bg-muted text-muted-foreground"
+
+/** Chip de prioridad según los días que quedan hasta la entrega pautada. */
+function priorityChip(
+  b: DeliveryBadge,
+  delivered: boolean,
+): { label: string; cls: string } {
+  if (delivered) return { label: "Entregada", cls: CHIP_EMERALD }
+  const d = b.daysUntilDelivery
+  if (b.overdue)
+    return {
+      label: `Entrega vencida${d !== null ? ` · ${Math.abs(d)}d` : ""}`,
+      cls: CHIP_ROSE,
+    }
+  if (d === 0) return { label: "Entrega HOY", cls: CHIP_ROSE }
+  const dias = d !== null ? ` · entrega en ${d}d` : ""
+  if (b.priority === "alta") return { label: `Alta${dias}`, cls: CHIP_ROSE }
+  if (b.priority === "media") return { label: `Media${dias}`, cls: CHIP_AMBER }
+  return { label: `Baja${dias}`, cls: CHIP_MUTED }
+}
+
+function fmtDateOnly(d: string): string {
+  return new Date(d.slice(0, 10) + "T00:00:00Z").toLocaleDateString("es-DO", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  })
 }
 
 export default async function GalleriesPage() {
@@ -125,6 +196,59 @@ export default async function GalleriesPage() {
     }
   }
 
+  // 4) Cumpleaños + prioridad de entrega por proyecto (regla 2 días antes).
+  //    quinceanera_birthday no está en los tipos generados → cast a any
+  //    (mismo patrón que project.service).
+  const projectIds = Array.from(
+    new Set(
+      galleries.map((g) => g.project_id).filter((x): x is string => Boolean(x)),
+    ),
+  )
+  const badgeByProject = new Map<string, DeliveryBadge>()
+  if (projectIds.length > 0) {
+    const [{ data: projRows }, { data: delRows }] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any)
+        .from("projects")
+        .select("id, quinceanera_birthday, event_date")
+        .eq("studio_id", session.studioId)
+        .in("id", projectIds)
+        .is("deleted_at", null),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (sb as any)
+        .from("client_deliveries")
+        .select("project_id, status, birthday, estimated_delivery_date")
+        .eq("studio_id", session.studioId)
+        .in("project_id", projectIds)
+        .is("deleted_at", null),
+    ])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dels = ((delRows ?? []) as any[])
+    const delByProject = new Map(dels.map((d) => [d.project_id as string, d]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const p of (projRows ?? []) as any[]) {
+      const del = delByProject.get(p.id)
+      const birthday: string | null =
+        del?.birthday ?? p.quinceanera_birthday ?? null
+      const status = (del?.status ?? "pendiente") as DeliveryStatus
+      const deadline: string | null =
+        del?.estimated_delivery_date ??
+        (birthday ? quinceDeadline(birthday, p.event_date ?? null) : null)
+      const computed = deriveDeliveryComputed({
+        status,
+        birthday,
+        estimatedDeliveryDate: deadline,
+      })
+      badgeByProject.set(p.id, {
+        birthday,
+        status,
+        daysUntilDelivery: computed.daysUntilDelivery,
+        priority: computed.priority,
+        overdue: computed.overdue,
+      })
+    }
+  }
+
   return (
     <>
       <AppTopbar
@@ -159,6 +283,17 @@ export default async function GalleriesPage() {
               const vis = VISIBILITY_ICON[g.visibility] ?? VISIBILITY_ICON.private!
               const VisIcon = vis.Icon
               const cover = coverByGallery.get(g.id) ?? null
+              const badge = g.project_id
+                ? badgeByProject.get(g.project_id)
+                : undefined
+              // Entregada si la fila de entrega lo dice o si la galería ya tiene
+              // la entrega final habilitada/enviada.
+              const prio = badge?.birthday
+                ? priorityChip(
+                    badge,
+                    badge.status === "entregada" || !!g.delivery_ready_at,
+                  )
+                : null
 
               return (
                 <Link
@@ -218,6 +353,33 @@ export default async function GalleriesPage() {
                             year: "numeric",
                             timeZone: "UTC",
                           })}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Cumpleaños + prioridad de entrega (pautada 2 días antes) */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {badge?.birthday ? (
+                        <>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-2 py-0.5 text-[10.5px] font-semibold text-pink-600 dark:bg-pink-500/15 dark:text-pink-300">
+                            <Cake className="h-3 w-3" />
+                            {fmtDateOnly(badge.birthday)}
+                          </span>
+                          {prio && (
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2 py-0.5 text-[10.5px] font-semibold",
+                                prio.cls,
+                              )}
+                            >
+                              {prio.label}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
+                          <Calendar className="h-3 w-3" />
+                          Sin fecha
                         </span>
                       )}
                     </div>

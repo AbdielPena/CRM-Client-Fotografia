@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getProjectById } from "@/server/services/project.service"
 import { ChangeSessionTime } from "@/components/projects/change-session-time"
+import { QuinceBirthday } from "@/components/projects/quince-birthday"
 import { SessionDressCard } from "@/components/projects/session-dress-card"
 import { getDressStores, getDressCatalog } from "@/server/services/dress-catalog.service"
 import { listFormResponsesForProject } from "@/server/services/form.service"
@@ -29,6 +30,7 @@ import {
 } from "@/lib/collaborators/requirements"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
 import {
+  Cake,
   Calendar,
   MapPin,
   DollarSign,
@@ -274,6 +276,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const hasDress = !!((project.dress_name as string | null) || dressCost > 0)
   const missingCollaborators = isQuince && projectCollaborators.length === 0
   const missingDress = isQuince && !hasDress
+  // Cumpleaños de la quinceañera: define la entrega pautada (2 días antes) y
+  // el badge de prioridad en Galerías.
+  const quinceBirthday = (project.quinceanera_birthday as string | null) ?? null
+  const missingBirthday = isQuince && !quinceBirthday
 
   // Catálogo de vestidos (solo quinceañera) para el selector, agrupado por tienda.
   let dressCatalog: Array<{
@@ -344,12 +350,17 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       />
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
-      {/* Pendientes por completar (hora en toda sesión; colaboradores/vestido en quinceañera) */}
-      {(missingTime || missingCollaborators || missingDress) && (
+      {/* Pendientes por completar (hora en toda sesión; colaboradores/vestido/cumpleaños en quinceañera) */}
+      {(missingTime || missingCollaborators || missingDress || missingBirthday) && (
         <div className="flex flex-wrap items-center gap-2">
           {missingTime && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11.5px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
               <Clock className="h-3.5 w-3.5" /> Falta la hora
+            </span>
+          )}
+          {missingBirthday && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11.5px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              <Cake className="h-3.5 w-3.5" /> Falta el cumpleaños
             </span>
           )}
           {missingCollaborators && (
@@ -408,6 +419,32 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                     currentTime={eventTime}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Cumpleaños de la quinceañera → define la entrega pautada (2 días antes) */}
+            {isQuince && (
+              <div className="border-t border-border/60 px-5 py-3">
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Cake className="h-3.5 w-3.5 text-pink-500" />
+                  {quinceBirthday ? (
+                    <>
+                      Cumpleaños:{" "}
+                      <span className="font-medium text-foreground">
+                        {formatDate(quinceBirthday)}
+                      </span>
+                      <span className="text-muted-foreground/70">
+                        · entrega pautada 2 días antes
+                      </span>
+                    </>
+                  ) : (
+                    "Cumpleaños sin registrar — se usa para pautar la entrega"
+                  )}
+                </p>
+                <QuinceBirthday
+                  projectId={String(project.id)}
+                  currentBirthday={quinceBirthday}
+                />
               </div>
             )}
           </div>
