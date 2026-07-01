@@ -78,31 +78,37 @@ export async function saveSessionDressAction(
 }
 
 /**
- * Guarda el cumpleaños de la quinceañera en la sesión y recalcula la entrega
- * (regla: 2 días antes del cumpleaños / 3 semanas después de la sesión, lo
- * que ocurra primero). Alimenta el badge de cumpleaños + prioridad en Galerías.
+ * Guarda los datos de la quinceañera en la sesión: nombre (se usa como nombre
+ * por defecto al crear galerías) y cumpleaños (define la entrega pautada: 2
+ * días antes del cumpleaños / 3 semanas después de la sesión, lo que ocurra
+ * primero). Alimenta el pre-llenado de galerías + el badge de prioridad.
  */
-export async function saveQuinceBirthdayAction(
+export async function saveQuinceDetailsAction(
   projectId: string,
-  birthday: string,
+  data: { name: string; birthday: string },
 ): Promise<{ ok: boolean; error?: string }> {
   const session = await requireStudioAuth()
   try {
-    const value = (birthday ?? "").trim()
-    if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const name = (data.name ?? "").trim().slice(0, 120)
+    const birthday = (data.birthday ?? "").trim()
+    if (birthday && !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) {
       return { ok: false, error: "Fecha inválida" }
     }
-    // quinceanera_birthday no está en los tipos generados → cliente untyped
-    // (mismo patrón que session-dress.service).
+    // quinceanera_name/_birthday no están en los tipos generados → cliente
+    // untyped (mismo patrón que session-dress.service).
     const { untypedService } = await import("@/server/supabase/untyped")
     const supabase = untypedService()
     const { error } = await supabase
       .from("projects")
-      .update({ quinceanera_birthday: value || null, updated_at: new Date().toISOString() })
+      .update({
+        quinceanera_name: name || null,
+        quinceanera_birthday: birthday || null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", projectId)
       .eq("studio_id", session.studioId)
       .is("deleted_at", null)
-    if (error) throw new Error("No se pudo guardar el cumpleaños")
+    if (error) throw new Error("No se pudieron guardar los datos")
 
     // Recalcular la entrega pautada (client_deliveries) con la nueva fecha.
     const { recomputeProjectDelivery } = await import(
