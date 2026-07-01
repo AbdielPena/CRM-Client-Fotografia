@@ -13,6 +13,7 @@ import {
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/shared/empty-state"
+import { GalleryCardMenu } from "@/components/galleries/gallery-card-menu"
 import { cn } from "@/lib/utils/cn"
 
 export const metadata: Metadata = { title: "Galerías" }
@@ -332,9 +333,16 @@ export default async function GalleriesPage() {
 
                   {/* Body */}
                   <div className="flex-1 space-y-2 p-4">
-                    <h3 className="truncate text-[14px] font-semibold text-foreground">
-                      {g.name}
-                    </h3>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="min-w-0 truncate text-[14px] font-semibold text-foreground">
+                        {g.name}
+                      </h3>
+                      <GalleryCardMenu
+                        galleryId={g.id}
+                        galleryName={g.name}
+                        assetCount={g.asset_count}
+                      />
+                    </div>
                     <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
                       <span className="inline-flex items-center gap-1">
                         <ImageIcon className="h-3 w-3" />
