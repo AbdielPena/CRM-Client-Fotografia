@@ -9,13 +9,14 @@ import {
   PrintSelectionError,
 } from "@/server/services/print-selection.service"
 import { apiError } from "@/lib/utils/api-error"
+import { optionalClientEmail } from "@/lib/validations/gallery.schema"
 
 const schema = z.object({
   action: z.enum(["add", "remove"]),
   assetId: z.string().uuid(),
   type: z.enum(["album_cover", "frame", "print"]),
   spec: z.string().max(40).nullable().optional(),
-  clientEmail: z.string().email().optional().or(z.literal("")),
+  clientEmail: optionalClientEmail,
   clientName: z.string().max(120).optional().or(z.literal("")),
 })
 

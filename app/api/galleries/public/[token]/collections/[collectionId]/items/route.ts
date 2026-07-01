@@ -9,10 +9,11 @@ import {
 } from "@/server/services/gallery-collection.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { apiError } from "@/lib/utils/api-error"
+import { optionalClientEmail } from "@/lib/validations/gallery.schema"
 
 const schema = z.object({
   assetIds: z.array(z.string().uuid()).max(2000),
-  clientEmail: z.string().email().optional().or(z.literal("")),
+  clientEmail: optionalClientEmail,
   clientName: z.string().max(120).optional().or(z.literal("")),
 })
 

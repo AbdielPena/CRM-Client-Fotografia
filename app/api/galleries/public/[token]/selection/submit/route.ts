@@ -6,9 +6,10 @@ import {
   validateGalleryToken,
 } from "@/server/services/gallery.service"
 import { apiError } from "@/lib/utils/api-error"
+import { optionalClientEmail } from "@/lib/validations/gallery.schema"
 
 const schema = z.object({
-  clientEmail: z.string().email().optional().or(z.literal("")),
+  clientEmail: optionalClientEmail,
 })
 
 /**

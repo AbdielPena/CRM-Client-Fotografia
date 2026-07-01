@@ -5,12 +5,13 @@ import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { validateGalleryToken } from "@/server/services/gallery.service"
 import { createZipExport } from "@/server/services/gallery-collections.service"
 import { apiError } from "@/lib/utils/api-error"
+import { optionalClientEmail } from "@/lib/validations/gallery.schema"
 
 const schema = z.object({
   scope: z.enum(["gallery", "collection", "selection"]),
   collectionId: z.string().uuid().optional(),
   assetIds: z.array(z.string().uuid()).max(2000).optional(),
-  clientEmail: z.string().email().optional().or(z.literal("")),
+  clientEmail: optionalClientEmail,
   // "original" solo se honra en galerías de entrega final (fotos ya pagadas).
   resolution: z.enum(["web", "original"]).optional(),
 })
