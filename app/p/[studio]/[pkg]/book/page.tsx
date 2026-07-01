@@ -6,6 +6,19 @@ import { createSupabasePublicClient } from "@/server/supabase/server"
 import { formatCurrency } from "@/lib/utils/currency"
 import { createBookingRequestSchema } from "@/lib/validations/booking-request.schema"
 import { createPublicBookingRequest } from "@/server/services/booking-request.service"
+import { getBookingFormConfigBySlug } from "@/server/services/booking-form.service"
+import { validateFormData } from "@/lib/forms/types"
+import {
+  bookingConsentText,
+  bookingIntroText,
+  bookingSubmitLabel,
+  customFieldName,
+  customFieldsToSchema,
+  resolveBuiltins,
+  type BookingCustomField,
+  type BookingFormConfig,
+  type ResolvedBuiltin,
+} from "@/lib/forms/booking-form"
 
 export const dynamic = "force-dynamic"
 export const fetchCache = "force-no-store"
@@ -98,6 +111,51 @@ async function submitBookingRequest(formData: FormData) {
     redirect(`/p/${raw.studioSlug}/${raw.packageSlug}/book?error=${msg}`)
   }
 
+  // Config del estudio: campos fijos obligatorios extra + preguntas propias.
+  const cfg = await getBookingFormConfigBySlug(raw.studioSlug).catch(
+    (): BookingFormConfig => ({}),
+  )
+  const builtinValue: Record<string, string> = {
+    clientPhone: raw.clientPhone,
+    clientWhatsapp: raw.clientWhatsapp,
+    eventType: raw.eventType,
+    eventTime: raw.eventTime,
+    eventLocation: raw.eventLocation,
+    additionalNotes: raw.additionalNotes,
+    guestCount: raw.guestCount != null ? String(raw.guestCount) : "",
+  }
+  for (const b of resolveBuiltins(cfg)) {
+    if (b.locked || !b.enabled || !b.required) continue
+    if (!String(builtinValue[b.key] ?? "").trim()) {
+      const msg = encodeURIComponent(`${b.label} es obligatorio`)
+      redirect(`/p/${raw.studioSlug}/${raw.packageSlug}/book?error=${msg}`)
+    }
+  }
+
+  // Preguntas propias — leer del FormData, validar y armar snapshot para metadata.
+  const customDefs = cfg.customFields ?? []
+  const customData: Record<string, unknown> = {}
+  for (const f of customDefs) {
+    const name = customFieldName(f.key)
+    customData[name] =
+      f.type === "checkboxes"
+        ? formData.getAll(name).map(String).filter(Boolean)
+        : String(formData.get(name) ?? "")
+  }
+  if (customDefs.length > 0) {
+    const errs = validateFormData(customFieldsToSchema(customDefs), customData)
+    const firstErr = Object.values(errs)[0]
+    if (firstErr) {
+      redirect(`/p/${raw.studioSlug}/${raw.packageSlug}/book?error=${encodeURIComponent(firstErr)}`)
+    }
+  }
+  const customFields = customDefs
+    .map((f) => {
+      const v = customData[customFieldName(f.key)]
+      return { key: f.key, label: f.label, value: Array.isArray(v) ? v.join(", ") : String(v ?? "") }
+    })
+    .filter((c) => c.value.trim() !== "")
+
   // IP y user-agent para auditoría anti-abuso
   const hdrs = headers()
   const ip =
@@ -109,6 +167,7 @@ async function submitBookingRequest(formData: FormData) {
   const result = await createPublicBookingRequest(parsed.data, {
     ip: ip ?? undefined,
     userAgent: userAgent ?? undefined,
+    customFields,
   })
 
   if (result.status === "not_found") {
@@ -160,6 +219,16 @@ export default async function BookingFormPage({
   const dd = String(today.getDate()).padStart(2, "0")
   const minDate = `${yyyy}-${mm}-${dd}`
 
+  // Config del formulario (por estudio): campos fijos visibles/obligatorios/
+  // renombrados + preguntas propias.
+  const config = await getBookingFormConfigBySlug(params.studio).catch(
+    (): BookingFormConfig => ({}),
+  )
+  const builtins = resolveBuiltins(config)
+  const clientFields = builtins.filter((b) => b.group === "client" && b.enabled)
+  const eventFields = builtins.filter((b) => b.group === "event" && b.enabled)
+  const customFields = config.customFields ?? []
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
@@ -204,10 +273,8 @@ export default async function BookingFormPage({
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
               Reserva tu sesión
             </h1>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Completa tus datos y revisaremos tu solicitud en las próximas 24
-              horas. Te contactaremos para confirmar disponibilidad y coordinar
-              el pago de la reserva.
+            <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">
+              {bookingIntroText(config)}
             </p>
           </div>
 
@@ -248,98 +315,56 @@ export default async function BookingFormPage({
             </div>
 
             {/* Datos del cliente */}
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900 mb-4">
-                Tus datos
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field
-                  label="Nombre completo"
-                  name="clientName"
-                  required
-                  placeholder="Ej: María Pérez"
-                />
-                <Field
-                  label="Email"
-                  name="clientEmail"
-                  type="email"
-                  required
-                  placeholder="tu@email.com"
-                />
-                <Field
-                  label="Teléfono"
-                  name="clientPhone"
-                  type="tel"
-                  placeholder="(809) 000-0000"
-                />
-                <Field
-                  label="WhatsApp"
-                  name="clientWhatsapp"
-                  type="tel"
-                  placeholder="(809) 000-0000"
-                  hint="Opcional — si es diferente al teléfono"
-                />
+            {clientFields.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900 mb-4">
+                  Tus datos
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {clientFields.map((f) => (
+                    <BuiltinInput
+                      key={f.key}
+                      f={f}
+                      minDate={minDate}
+                      pkgEventType={pkg.event_type}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Evento */}
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900 mb-4">
-                Detalles del evento
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field
-                  label="Tipo de evento"
-                  name="eventType"
-                  placeholder={pkg.event_type ?? "Ej: Quinceañera"}
-                  defaultValue={pkg.event_type ?? ""}
-                />
-                <Field
-                  label="Fecha del evento"
-                  name="eventDate"
-                  type="date"
-                  required
-                  min={minDate}
-                />
-                <Field
-                  label="Hora de inicio"
-                  name="eventTime"
-                  type="time"
-                  hint="Opcional"
-                />
-                <Field
-                  label="Invitados aprox."
-                  name="guestCount"
-                  type="number"
-                  min={0}
-                  placeholder="150"
-                  hint="Opcional"
-                />
-                <div className="sm:col-span-2">
-                  <Field
-                    label="Ubicación"
-                    name="eventLocation"
-                    placeholder="Ej: Salón Jardín Tropical, Santo Domingo"
-                    hint="Dirección, salón o coordenadas"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block">
-                    <span className="text-xs font-medium text-gray-700 mb-1.5 block">
-                      Notas adicionales
-                    </span>
-                    <textarea
-                      name="additionalNotes"
-                      rows={4}
-                      maxLength={2000}
-                      placeholder="Cuéntanos detalles importantes: estilo que te gusta, personas clave, referencias, etc."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-1"
-                      style={{ boxShadow: "none" }}
+            {eventFields.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900 mb-4">
+                  Detalles del evento
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {eventFields.map((f) => (
+                    <BuiltinInput
+                      key={f.key}
+                      f={f}
+                      minDate={minDate}
+                      pkgEventType={pkg.event_type}
                     />
-                  </label>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Preguntas propias del estudio */}
+            {customFields.length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900 mb-4">
+                  Información adicional
+                </h2>
+                <div className="grid grid-cols-1 gap-4">
+                  {customFields.map((f) => (
+                    <CustomInput key={f.key} f={f} />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Consentimiento */}
             <div className="pt-2 border-t border-gray-100">
@@ -350,11 +375,8 @@ export default async function BookingFormPage({
                   required
                   className="mt-0.5 h-4 w-4 rounded border-gray-300"
                 />
-                <span className="text-xs text-gray-600 leading-relaxed">
-                  Acepto que esta es una solicitud sujeta a disponibilidad. El{" "}
-                  studio me contactará para confirmar la fecha y coordinar el
-                  pago de reserva. Autorizo el uso de mis datos para gestionar
-                  esta reserva.
+                <span className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
+                  {bookingConsentText(config)}
                 </span>
               </label>
             </div>
@@ -364,7 +386,7 @@ export default async function BookingFormPage({
               className="w-full py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: primary }}
             >
-              Enviar solicitud
+              {bookingSubmitLabel(config)}
             </button>
 
             <p className="text-center text-xs text-gray-400">
@@ -467,6 +489,140 @@ function Field({
         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-1"
       />
       {hint && <span className="mt-1 text-[11px] text-gray-400">{hint}</span>}
+    </label>
+  )
+}
+
+const INPUT_CLS =
+  "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-1"
+
+// Render de un campo fijo según la config del estudio (visible/obligatorio/etiqueta).
+function BuiltinInput({
+  f,
+  minDate,
+  pkgEventType,
+}: {
+  f: ResolvedBuiltin
+  minDate: string
+  pkgEventType: string | null
+}) {
+  const inner =
+    f.input === "textarea" ? (
+      <label className="block">
+        <span className="text-xs font-medium text-gray-700 mb-1.5 block">
+          {f.label}
+          {f.required ? <span className="text-red-500"> *</span> : null}
+        </span>
+        <textarea
+          name={f.key}
+          rows={4}
+          maxLength={2000}
+          required={f.required}
+          placeholder={f.placeholder}
+          className={INPUT_CLS}
+          style={{ boxShadow: "none" }}
+        />
+        {f.hint && <span className="mt-1 text-[11px] text-gray-400">{f.hint}</span>}
+      </label>
+    ) : (
+      <Field
+        label={f.label}
+        name={f.key}
+        type={f.input}
+        required={f.required}
+        placeholder={
+          f.key === "eventType" ? pkgEventType ?? "Ej: Quinceañera" : f.placeholder
+        }
+        hint={f.hint}
+        defaultValue={f.key === "eventType" ? pkgEventType ?? "" : undefined}
+        min={f.key === "eventDate" ? minDate : f.key === "guestCount" ? 0 : undefined}
+      />
+    )
+  return f.fullWidth ? <div className="sm:col-span-2">{inner}</div> : inner
+}
+
+// Render de una pregunta propia del estudio.
+function CustomInput({ f }: { f: BookingCustomField }) {
+  const name = `custom_${f.key}`
+  const options = (f.options ?? []).filter((o) => o.trim())
+  const labelSpan = (
+    <span className="text-xs font-medium text-gray-700 mb-1.5 block">
+      {f.label}
+      {f.required ? <span className="text-red-500"> *</span> : null}
+    </span>
+  )
+  const help = f.help ? (
+    <span className="mt-1 block text-[11px] text-gray-400">{f.help}</span>
+  ) : null
+
+  if (f.type === "textarea") {
+    return (
+      <label className="block">
+        {labelSpan}
+        <textarea
+          name={name}
+          rows={3}
+          required={f.required}
+          placeholder={f.placeholder}
+          className={INPUT_CLS}
+          style={{ boxShadow: "none" }}
+        />
+        {help}
+      </label>
+    )
+  }
+  if (f.type === "select") {
+    return (
+      <label className="block">
+        {labelSpan}
+        <select name={name} required={f.required} defaultValue="" className={INPUT_CLS}>
+          <option value="" disabled>
+            Selecciona una opción…
+          </option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        {help}
+      </label>
+    )
+  }
+  if (f.type === "radio" || f.type === "checkboxes") {
+    const isRadio = f.type === "radio"
+    return (
+      <fieldset className="block">
+        {labelSpan}
+        <div className="space-y-1.5">
+          {options.map((o, i) => (
+            <label key={o} className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type={isRadio ? "radio" : "checkbox"}
+                name={name}
+                value={o}
+                required={isRadio ? f.required && i === 0 : undefined}
+                className="h-4 w-4"
+              />
+              {o}
+            </label>
+          ))}
+        </div>
+        {help}
+      </fieldset>
+    )
+  }
+  return (
+    <label className="block">
+      {labelSpan}
+      <input
+        type={f.type}
+        name={name}
+        required={f.required}
+        placeholder={f.placeholder}
+        className={INPUT_CLS}
+      />
+      {help}
     </label>
   )
 }

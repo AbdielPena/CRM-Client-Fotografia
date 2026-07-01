@@ -177,6 +177,7 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/settings/service-categories", label: "Categorías de Servicios", icon: Tag },
       { type: "link", href: "/settings/packages", label: "Paquetes", icon: Package },
       { type: "link", href: "/settings/forms", label: "Formularios", icon: ClipboardList },
+      { type: "link", href: "/settings/booking-form", label: "Formulario de reserva", icon: CalendarClock },
       { type: "link", href: "/settings/contracts", label: "Plantillas de contrato", icon: FileStack },
       { type: "link", href: "/settings/project-templates", label: "Plantillas de proyecto", icon: Layers },
       { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },

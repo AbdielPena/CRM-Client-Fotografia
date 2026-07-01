@@ -61,6 +61,7 @@ type BookingDetail = {
   approved_at: string | null
   rejected_at: string | null
   cancelled_at: string | null
+  metadata: Record<string, unknown> | null
   package: {
     id: string
     name: string
@@ -201,6 +202,12 @@ export default async function BookingRequestDetailPage({
   if (!raw) notFound()
 
   const req = raw as unknown as BookingDetail
+  // Respuestas a las preguntas propias del estudio (formulario de reserva configurable).
+  const customAnswers = (
+    Array.isArray((req.metadata as { custom_fields?: unknown } | null)?.custom_fields)
+      ? (req.metadata as { custom_fields: Array<{ label?: string; value?: string }> }).custom_fields
+      : []
+  ).filter((a) => a && (a.value ?? "").toString().trim() !== "")
   const [activity, formResponses, unread] = await Promise.all([
     getEntityActivity(session.studioId, "booking_request", req.id, 50),
     listFormResponsesForBooking({
@@ -375,6 +382,24 @@ export default async function BookingRequestDetailPage({
                 </div>
               )}
             </Section>
+
+            {/* Respuestas a las preguntas propias del estudio */}
+            {customAnswers.length > 0 && (
+              <Section title="Respuestas del formulario">
+                <div className="divide-y divide-border/50">
+                  {customAnswers.map((a, i) => (
+                    <div key={i} className="py-2">
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                        {a.label ?? "Pregunta"}
+                      </p>
+                      <p className="text-sm text-foreground whitespace-pre-line">
+                        {a.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+            )}
 
             {/* Motivos */}
             {req.status === "rejected" && req.rejection_reason && (

@@ -109,7 +109,12 @@ export type BookingRequestCreationResult =
  */
 export async function createPublicBookingRequest(
   input: CreateBookingRequestInput,
-  meta: { ip?: string; userAgent?: string },
+  meta: {
+    ip?: string
+    userAgent?: string
+    /** Respuestas a las preguntas propias del estudio (formulario configurable). */
+    customFields?: Array<{ key: string; label: string; value: string }>
+  },
 ): Promise<BookingRequestCreationResult> {
   const resolved = await resolveStudioAndPackage(
     input.studioSlug,
@@ -198,6 +203,10 @@ export async function createPublicBookingRequest(
       submitted_user_agent: meta.userAgent ?? null,
       package_snapshot: packageSnapshot,
       pricing_snapshot: pricingSnapshot,
+      metadata:
+        meta.customFields && meta.customFields.length > 0
+          ? { custom_fields: meta.customFields }
+          : {},
     },
     { elevated: true },
   )
