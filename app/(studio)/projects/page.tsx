@@ -17,6 +17,8 @@ import type { Metadata } from "next"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getProjects, countProjects } from "@/server/services/project.service"
 import { getProjectsMissingCollaborators } from "@/server/services/collaborator.service"
+import { listProjectsMissingQuinceName } from "@/server/services/quince-name.service"
+import { RequestQuinceNamesButton } from "@/components/projects/request-quince-names-button"
 import { getProjectStatuses } from "@/server/services/project-status.service"
 import { getServiceCategories } from "@/server/services/service-category.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
@@ -267,6 +269,12 @@ export default async function ProjectsPage({
     return `/projects?${params.toString()}`
   })()
 
+  // Sesiones de quinceañera sin el nombre de la niña registrado (con email de
+  // cliente) → banner para pedirlo por correo.
+  const quinceMissingCount = (
+    await listProjectsMissingQuinceName(session.studioId).catch(() => [])
+  ).length
+
   return (
     <>
       <AppTopbar
@@ -289,6 +297,8 @@ export default async function ProjectsPage({
       />
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
+        <RequestQuinceNamesButton count={quinceMissingCount} />
+
         {/* Scope: Activos | Completados (vista aparte) */}
         <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
           <Link

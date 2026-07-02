@@ -17,6 +17,7 @@ export type TemplateSlug =
   // Cliente
   | "client_registered"
   | "client_portal_access"
+  | "quince_name_request"
   // Reservas
   | "booking_confirmed"
   | "booking_reminder"
@@ -97,6 +98,26 @@ export const TEMPLATE_CATALOG: Record<
       { key: "access_code", label: "Código de acceso", example: "ABCD2345" },
       { key: "portal_url", label: "URL del portal", example: "https://app.studioflow.com/portal/login" },
       { key: "client_email", label: "Email del cliente", example: "cliente@email.com" },
+    ],
+  },
+  quince_name_request: {
+    label: "Pedir nombre de la quinceañera",
+    description:
+      "Se envía al cliente para que registre el nombre de la quinceañera mediante un enlace.",
+    category: "client",
+    defaultSubject: "¿Cómo se llama la quinceañera? — {{studio_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{client_name}},</p>` +
+      `<p>Para preparar tu sesión <strong>{{session_name}}</strong> y nombrar tus galerías correctamente, necesitamos el <strong>nombre de la quinceañera</strong>.</p>` +
+      `<p>Solo toma un momento:</p>` +
+      `<p><a href="{{link}}" class="btn">Registrar el nombre</a></p>` +
+      `<p style="font-size:13px;color:#8a8a8a">Si el botón no funciona, copia y pega este enlace:<br>{{link}}</p>` +
+      `<p>¡Gracias! 💛<br>— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Nombre del cliente", example: "Joselin" },
+      { key: "session_name", label: "Nombre de la sesión", example: "Elianny — Experiencia Editorial" },
+      { key: "link", label: "Enlace para registrar el nombre", example: "https://my.abbypixel.com/q/xxxx" },
+      { key: "studio_name", label: "Nombre del estudio", example: "Abby Pixel" },
     ],
   },
   booking_confirmed: {

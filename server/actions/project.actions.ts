@@ -153,6 +153,29 @@ export async function changeSessionTimeAction(
   }
 }
 
+/**
+ * Envía (encola) un correo a los clientes de sesiones de quinceañera que aún NO
+ * tienen el nombre registrado, con un link público para que lo inscriban.
+ */
+export async function sendQuinceNameRequestsAction(): Promise<{
+  ok: boolean
+  sent?: number
+  total?: number
+  error?: string
+}> {
+  const session = await requireStudioAuth()
+  try {
+    const { sendQuinceNameRequests } = await import(
+      "@/server/services/quince-name.service"
+    )
+    const { sent, total } = await sendQuinceNameRequests(session.studioId)
+    revalidatePath("/projects")
+    return { ok: true, sent, total }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
 export async function updateProjectAction(projectId: string, formData: FormData) {
   const session = await requireStudioAuth()
 
