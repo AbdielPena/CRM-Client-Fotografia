@@ -42,23 +42,64 @@ type Sb = ReturnType<typeof untypedService>
  * corazón y otros arman una lista; antes la 2da selección solo miraba ♥ y
  * fallaba ("el cliente aún no ha marcado fotos") cuando la selección era una lista.
  */
-async function getSelectedAssetIds(sb: Sb, galleryId: string): Promise<string[]> {
+/**
+ * Filtro opcional para elegir DE QUÉ selecciones se arma la 2da galería. Sin
+ * filtro (undefined) = todo (♥ generales + todas las listas), como siempre. Con
+ * filtro, el fotógrafo elige: incluir o no los ♥ y qué listas (`collectionIds`).
+ */
+export type SelectionFilter = {
+  /** IDs de listas (`gallery_collections`) a incluir. `undefined` = todas. */
+  collectionIds?: string[]
+  /** Incluir los ♥ generales (`gallery_favorites`). `undefined` = sí. */
+  includeFavorites?: boolean
+}
+
+async function getSelectedAssetIds(
+  sb: Sb,
+  galleryId: string,
+  filter?: SelectionFilter,
+): Promise<string[]> {
   const ids = new Set<string>()
 
-  const { data: favs } = await sb
-    .from("gallery_favorites")
-    .select("asset_id")
-    .eq("gallery_id", galleryId)
-  for (const f of (favs ?? []) as Array<{ asset_id: string | null }>) {
-    if (f.asset_id) ids.add(f.asset_id)
+  // ♥ generales: incluir siempre salvo que el filtro los excluya explícitamente.
+  const wantFavorites = filter ? filter.includeFavorites === true : true
+  if (wantFavorites) {
+    const { data: favs } = await sb
+      .from("gallery_favorites")
+      .select("asset_id")
+      .eq("gallery_id", galleryId)
+    for (const f of (favs ?? []) as Array<{ asset_id: string | null }>) {
+      if (f.asset_id) ids.add(f.asset_id)
+    }
   }
 
-  const { data: colls } = await sb
-    .from("gallery_collections")
-    .select("id")
-    .eq("gallery_id", galleryId)
-    .is("deleted_at", null)
-  const collIds = ((colls ?? []) as Array<{ id: string }>).map((c) => c.id)
+  // Listas: sin filtro = todas; con filtro = solo las pedidas (validando que
+  // pertenezcan a ESTA galería, para no colar IDs de otra).
+  let collIds: string[]
+  if (filter && filter.collectionIds) {
+    if (filter.collectionIds.length > 0) {
+      const { data: colls } = await sb
+        .from("gallery_collections")
+        .select("id")
+        .eq("gallery_id", galleryId)
+        .is("deleted_at", null)
+        .in("id", filter.collectionIds)
+      collIds = ((colls ?? []) as Array<{ id: string }>).map((c) => c.id)
+    } else {
+      collIds = []
+    }
+  } else if (filter) {
+    // Filtro dado sin `collectionIds` → no incluir listas (solo lo que pida ♥).
+    collIds = []
+  } else {
+    const { data: colls } = await sb
+      .from("gallery_collections")
+      .select("id")
+      .eq("gallery_id", galleryId)
+      .is("deleted_at", null)
+    collIds = ((colls ?? []) as Array<{ id: string }>).map((c) => c.id)
+  }
+
   if (collIds.length > 0) {
     const { data: items } = await sb
       .from("gallery_collection_items")
@@ -128,6 +169,7 @@ export async function getReselectionForGallery(
 export async function createReselectionGallery(
   studioId: string,
   parentGalleryId: string,
+  filter?: SelectionFilter,
 ): Promise<ReselectionInfo> {
   const sb = untypedService()
 
@@ -153,10 +195,11 @@ export async function createReselectionGallery(
   }
 
   // Fotos que el cliente eligió: ♥ generales + ítems de sus listas (un cliente
-  // puede usar cualquiera de las dos formas).
-  const favIds = await getSelectedAssetIds(sb, parentGalleryId)
+  // puede usar cualquiera de las dos formas). Con `filter`, el fotógrafo elige
+  // de qué selecciones (listas / ♥) se arma esta 2da ronda.
+  const favIds = await getSelectedAssetIds(sb, parentGalleryId, filter)
   if (favIds.length === 0) {
-    throw new Error("El cliente aún no ha marcado fotos para crear una segunda selección")
+    throw new Error("No hay fotos en las selecciones elegidas para crear la segunda ronda")
   }
 
   const { data: assetRows } = await sb
@@ -231,4 +274,35 @@ export async function createReselectionGallery(
     selectedCount: 0,
     status: "published",
   }
+}
+
+/**
+ * Elimina la 2da selección (galería hija) para poder rehacerla con OTRAS
+ * selecciones. Soft-delete de la hija + sus filas clon de assets + revoca sus
+ * tokens. Los archivos en storage NO se tocan (las clones comparten los keys
+ * del padre; solo se marcan como borradas las filas de la hija).
+ */
+export async function deleteReselectionGallery(
+  studioId: string,
+  parentGalleryId: string,
+): Promise<void> {
+  const sb = untypedService()
+  const { data: child } = await sb
+    .from("galleries")
+    .select("id")
+    .eq("parent_gallery_id", parentGalleryId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (!child) return
+  const childId = (child as { id: string }).id
+  const now = new Date().toISOString()
+
+  await sb.from("gallery_assets").update({ deleted_at: now }).eq("gallery_id", childId)
+  await sb
+    .from("gallery_share_tokens")
+    .update({ revoked_at: now })
+    .eq("gallery_id", childId)
+    .is("revoked_at", null)
+  await sb.from("galleries").update({ deleted_at: now }).eq("id", childId)
 }

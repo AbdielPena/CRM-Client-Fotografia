@@ -78,7 +78,7 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
   const { data: studioJoin } = await supabase
     .from("galleries")
     .select(
-      "studios(name, logo_url), download_pin_required, selection_submitted, selection_locked",
+      "studios(name, logo_url), download_pin_required, selection_submitted, selection_locked, project_id",
     )
     .eq("id", view.gallery.id)
     .maybeSingle()
@@ -88,8 +88,23 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
       download_pin_required?: boolean
       selection_submitted?: boolean
       selection_locked?: boolean
+      project_id?: string | null
     } | null
   ) ?? null
+
+  // Nombre de la quinceañera (del proyecto) para prellenar el nombre de la lista
+  // al hacer la selección. Solo se usa en la vista de selección (no en ?entrega=1).
+  let suggestedSelectionName: string | null = null
+  if (!deliveryOnly && studioInfo?.project_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: projRow } = await (supabase as any)
+      .from("projects")
+      .select("quinceanera_name")
+      .eq("id", studioInfo.project_id)
+      .maybeSingle()
+    suggestedSelectionName =
+      (projRow as { quinceanera_name: string | null } | null)?.quinceanera_name ?? null
+  }
 
   // Branding del estudio (white-label): logo, color, footer.
   const branding = await getPublicBrandingByStudioId(view.gallery.studioId)
@@ -200,6 +215,7 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
         deliveryReady={deliveryReady}
         finalDeliveryDriveLink={driveLink}
         deliveryOnly={deliveryOnly}
+        suggestedSelectionName={suggestedSelectionName}
       />
       {hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "both" && (
         <BookLauncher

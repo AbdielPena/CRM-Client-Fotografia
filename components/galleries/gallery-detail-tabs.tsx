@@ -33,7 +33,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
 import { renderWaMessage } from "@/lib/share/wa-message"
 import type { ReselectionInfo } from "@/server/services/reselection.service"
-import { createReselectionAction } from "@/server/actions/reselection.actions"
+import {
+  createReselectionAction,
+  deleteReselectionAction,
+} from "@/server/actions/reselection.actions"
 import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
 import { DeliverToClientButton } from "@/components/galleries/deliver-to-client-modal"
@@ -202,6 +205,19 @@ export function GalleryDetailTabs({
     (a) => a.delivery_track === "social" || a.delivery_track === "high_quality",
   )
 
+  // Fuentes de selección para armar la 2da ronda: ♥ generales (favoritos únicos)
+  // + cada lista con su conteo. El fotógrafo elige de cuáles se arma la galería.
+  const favAssetIds = new Set<string>()
+  for (const f of favoriteSelections) for (const id of f.assetIds) favAssetIds.add(id)
+  const selectionSources = {
+    favoritesCount: favAssetIds.size,
+    collections: collections.map((c) => ({
+      id: c.id,
+      name: c.name,
+      count: c.asset_count,
+    })),
+  }
+
   return (
     <div className="px-6 pb-12 pt-6 lg:px-8">
       <Tabs defaultValue="photos">
@@ -322,6 +338,7 @@ export function GalleryDetailTabs({
             waSelectionTemplate={waSelectionTemplate}
             favoritesCount={favoritesCount}
             reselection={reselection}
+            selectionSources={selectionSources}
           />
         </TabsContent>
 
@@ -1745,6 +1762,7 @@ function ShareTab({
   waSelectionTemplate,
   favoritesCount = 0,
   reselection = null,
+  selectionSources = { favoritesCount: 0, collections: [] },
 }: {
   gallery: Gallery
   publicToken: string | null
@@ -1754,6 +1772,11 @@ function ShareTab({
   waSelectionTemplate?: string
   favoritesCount?: number
   reselection?: ReselectionInfo | null
+  /** Fuentes elegibles para armar la 2da selección: ♥ generales + cada lista. */
+  selectionSources?: {
+    favoritesCount: number
+    collections: Array<{ id: string; name: string; count: number }>
+  }
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -1766,6 +1789,13 @@ function ShareTab({
   const [resel, setResel] = React.useState<ReselectionInfo | null>(reselection)
   const [reselCopied, setReselCopied] = React.useState(false)
   const [creatingResel, startReselTransition] = useTransition()
+  // Selector de fuentes para la 2da selección (Favoritas ♥ + listas). Por
+  // defecto TODO marcado = comportamiento de siempre (unión de todo).
+  const [pickFav, setPickFav] = React.useState(true)
+  const [pickColls, setPickColls] = React.useState<Set<string>>(
+    () => new Set(selectionSources.collections.map((c) => c.id)),
+  )
+  const [deletingResel, startDeleteReselTransition] = useTransition()
   const [locked, setLocked] = React.useState(!!gallery.selection_locked)
   const [lockBusy, startLockTransition] = useTransition()
 
@@ -1890,12 +1920,41 @@ function ShareTab({
   }
 
   // ── Segunda selección (re-selección sobre las fotos ya elegidas) ──
+  const srcFavCount = selectionSources.favoritesCount
+  const srcColls = selectionSources.collections
+  const sourceCount = (srcFavCount > 0 ? 1 : 0) + srcColls.length
+  const hasAnySelection = sourceCount > 0 || favoritesCount > 0
+  // Total aproximado de lo marcado (el backend deduplica solapes ♥/lista).
+  const pickedCount =
+    (pickFav ? srcFavCount : 0) +
+    srcColls.filter((c) => pickColls.has(c.id)).reduce((s, c) => s + c.count, 0)
+
   const handleCreateResel = () => {
     startReselTransition(async () => {
       try {
-        const info = await createReselectionAction(gallery.id)
+        const info = await createReselectionAction(gallery.id, {
+          includeFavorites: pickFav,
+          collectionIds: [...pickColls],
+        })
         setResel(info)
         toast.success("Segunda selección creada")
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+  const handleDeleteResel = () => {
+    if (
+      !confirm(
+        "¿Eliminar la 2da selección? El link dejará de funcionar y podrás crear otra con distintas selecciones.",
+      )
+    )
+      return
+    startDeleteReselTransition(async () => {
+      try {
+        await deleteReselectionAction(gallery.id)
+        setResel(null)
+        toast.success("2da selección eliminada — puedes crear otra")
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error")
       }
@@ -2114,20 +2173,69 @@ function ShareTab({
                 </Link>
               </>
             )}
+            <button
+              type="button"
+              onClick={handleDeleteResel}
+              disabled={deletingResel}
+              className="mt-1 inline-flex items-center gap-1 text-[11.5px] font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+            >
+              {deletingResel ? "Eliminando…" : "Eliminar y rehacer con otras selecciones"}
+            </button>
           </div>
         ) : (
-          <div className="mt-2">
+          <div className="mt-2 space-y-3">
             <p className="text-[12px] text-muted-foreground">
-              {favoritesCount > 0
-                ? `El cliente eligió ${favoritesCount} fotos. Crea una segunda ronda con SOLO esas fotos para que afine y baje al número de su plan (lo que pase cuenta como extra).`
+              {hasAnySelection
+                ? "Elige de cuáles selecciones armar la 2da ronda (una galería aparte con SOLO esas fotos) para que el cliente afine y baje al número de su plan. Lo que pase cuenta como extra."
                 : "Cuando el cliente marque sus fotos, podrás crear una segunda ronda para que afine su selección."}
             </p>
+            {sourceCount > 1 && (
+              <div className="space-y-1.5 rounded-lg border border-border bg-muted/30 p-3">
+                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Incluir en la 2da selección
+                </p>
+                {srcFavCount > 0 && (
+                  <label className="flex cursor-pointer items-center gap-2 text-[12.5px] text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={pickFav}
+                      onChange={(e) => setPickFav(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-brand"
+                    />
+                    <span className="flex-1">Favoritas ♥</span>
+                    <span className="tabular-nums text-muted-foreground">{srcFavCount}</span>
+                  </label>
+                )}
+                {srcColls.map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex cursor-pointer items-center gap-2 text-[12.5px] text-foreground"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={pickColls.has(c.id)}
+                      onChange={(e) =>
+                        setPickColls((prev) => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(c.id)
+                          else next.delete(c.id)
+                          return next
+                        })
+                      }
+                      className="h-3.5 w-3.5 accent-brand"
+                    />
+                    <span className="flex-1 truncate">{c.name}</span>
+                    <span className="tabular-nums text-muted-foreground">{c.count}</span>
+                  </label>
+                ))}
+              </div>
+            )}
             <button
               onClick={handleCreateResel}
-              disabled={creatingResel || favoritesCount === 0}
-              className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
+              disabled={creatingResel || pickedCount === 0}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-4 text-sm font-medium text-brand-foreground hover:bg-brand/90 disabled:opacity-50"
             >
-              {creatingResel ? "Creando…" : `Crear 2da selección (${favoritesCount})`}
+              {creatingResel ? "Creando…" : `Crear 2da selección (${pickedCount})`}
             </button>
           </div>
         )}

@@ -290,6 +290,7 @@ export function PublicGalleryView({
   deliveryReady = false,
   finalDeliveryDriveLink = null,
   deliveryOnly = false,
+  suggestedSelectionName = null,
 }: {
   token: string
   gallery: Gallery
@@ -300,6 +301,8 @@ export function PublicGalleryView({
   finalDeliveryDriveLink?: string | null
   /** Vista de SOLO entrega final (link de descarga): oculta toda la selección. */
   deliveryOnly?: boolean
+  /** Nombre de la quinceañera (del proyecto) para prellenar el nombre de la lista. */
+  suggestedSelectionName?: string | null
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
   // Assets que el usuario tocó localmente — `loadFavs` no debe pisarlos con
@@ -546,6 +549,9 @@ export function PublicGalleryView({
         body: JSON.stringify({
           name: newCollName.trim(),
           clientEmail: email,
+          // Rotula la selección con el nombre (de la quinceañera) para que el
+          // fotógrafo distinga cada selección cuando el cliente hace varias.
+          clientName: newCollName.trim(),
         }),
       })
       const data = (await res.json()) as { id?: string; error?: string }
@@ -1024,7 +1030,7 @@ export function PublicGalleryView({
         <div style={{ borderBottom: `1px solid ${ED.line}`, background: "#fff" }}>
           <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-2 px-6 py-3.5">
             <p className="mr-2 font-semibold uppercase" style={{ color: ED.muted, fontSize: "0.66rem", letterSpacing: "0.2em" }}>
-              Tus listas
+              Selecciones
             </p>
 
             <button
@@ -1069,7 +1075,7 @@ export function PublicGalleryView({
                       setNewCollName("")
                     }
                   }}
-                  placeholder="Nombre (ej: Para imprimir)"
+                  placeholder="Nombre de la quinceañera"
                   className="h-8 rounded-full px-3 text-[12px] focus:outline-none"
                   style={{ border: `1px solid ${ED.line}`, background: "#fff", color: ED.ink }}
                 />
@@ -1097,12 +1103,19 @@ export function PublicGalleryView({
             ) : (
               <button
                 type="button"
-                onClick={() => setCreatingColl(true)}
+                onClick={() => {
+                  // Prellenar con el nombre de la quinceañera (si el proyecto lo
+                  // tiene) para que la selección quede rotulada con su nombre.
+                  if (!newCollName && suggestedSelectionName) {
+                    setNewCollName(suggestedSelectionName)
+                  }
+                  setCreatingColl(true)
+                }}
                 className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors"
                 style={{ border: `1px dashed ${ED.line}`, color: ED.muted }}
               >
                 <Plus className="h-3 w-3" />
-                Nueva lista
+                Nueva selección
               </button>
             )}
           </div>
