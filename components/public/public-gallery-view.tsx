@@ -89,22 +89,48 @@ function formatEventDate(d: string): string | null {
   }
 }
 
-/** Portada hero full-bleed (flat, amplia) que aparece arriba de la galería. */
-function GalleryHero({
+// ── Paleta editorial (aprobada por el cliente) ──────────────────────────────
+const ED = {
+  paper: "#FAF8F4", // porcelana cálida
+  paper2: "#F3EFE7",
+  ink: "#1D1A16", // casi negro cálido
+  muted: "#8C8478",
+  line: "#E6E0D3",
+  gold: "#A9884E",
+}
+const SERIF = "var(--font-serif), 'Playfair Display', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif"
+
+/** Cadencia editorial tipo revista: pares, tríos y una foto sola de vez en cuando. */
+const EDITORIAL_CADENCE = [2, 3, 2, 1]
+function chunkEditorial<T>(items: T[]): { n: number; items: T[] }[] {
+  const rows: { n: number; items: T[] }[] = []
+  let i = 0
+  let c = 0
+  while (i < items.length) {
+    const n = EDITORIAL_CADENCE[c % EDITORIAL_CADENCE.length]!
+    rows.push({ n, items: items.slice(i, i + n) })
+    i += n
+    c++
+  }
+  return rows
+}
+
+/** Portada editorial (revista): imagen de estudio + overline + título serif grande. */
+function EditorialCover({
   gallery,
   cover,
-  accent,
+  studio,
+  label,
+  ctaLabel,
   photoCount,
 }: {
   gallery: Gallery
   cover: ReturnType<typeof resolveCoverConfig>
-  accent: string
+  studio: Studio
+  label: string
+  ctaLabel: string
   photoCount: number
 }) {
-  // Candidatos de portada en orden de prioridad:
-  // 1) imagen externa subida (cover_config.imageUrl) — full URL
-  // 2) web rendition (sin watermark si aplica)
-  // 3) thumb (siempre sin watermark) — último respaldo
   const candidates = [
     cover.imageUrl || null,
     gallery.coverWebUrl,
@@ -112,94 +138,128 @@ function GalleryHero({
   ].filter((u): u is string => !!u)
   const [imgIdx, setImgIdx] = useState(0)
   const bg = candidates[Math.min(imgIdx, candidates.length - 1)] ?? null
-  if (!bg) return null
+  const hasImg = !!bg
   const title = cover.title || gallery.name
-  const subtitle =
+  const dateLabel =
     cover.subtitle ||
     gallery.subtitle ||
     (gallery.eventDate ? formatEventDate(gallery.eventDate) : null)
-  const textLight = cover.textColor !== "dark"
-  const fg = textLight ? "#ffffff" : "#111111"
-  const align =
-    cover.textAlign === "left"
-      ? "items-start text-left"
-      : cover.textAlign === "right"
-        ? "items-end text-right"
-        : "items-center text-center"
   const fx = (cover.focalX ?? 0.5) * 100
   const fy = (cover.focalY ?? 0.5) * 100
-  const zoom = cover.zoom ?? 1
+
   return (
-    <section
-      className="relative w-full overflow-hidden"
-      style={{ aspectRatio: "16/9", minHeight: "440px", maxHeight: "840px" }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={bg}
-        alt=""
-        className="absolute inset-0 h-full w-full object-cover"
-        style={{
-          objectPosition: `${fx}% ${fy}%`,
-          transform: zoom !== 1 ? `scale(${zoom})` : undefined,
-          transformOrigin: `${fx}% ${fy}%`,
-        }}
-        onError={() => setImgIdx((i) => (i < candidates.length - 1 ? i + 1 : i))}
-      />
-      {cover.overlay !== "none" && (
-        <div
-          className="absolute inset-0"
-          style={{
-            background: cover.overlay === "light" ? "#ffffff" : "#000000",
-            opacity: cover.overlayIntensity ?? 0.35,
-          }}
-        />
+    <header
+      className={cn(
+        "relative flex min-h-[86svh] flex-col items-center justify-center overflow-hidden px-6 text-center",
+        hasImg ? "text-white" : "",
       )}
-      <div
-        className={cn(
-          "relative z-10 mx-auto flex h-full max-w-5xl flex-col justify-end gap-2 px-6 pb-8",
-          align,
+      style={hasImg ? undefined : { background: ED.paper, color: ED.ink }}
+    >
+      {hasImg && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={bg!}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: `${fx}% ${fy}%` }}
+            onError={() => setImgIdx((i) => (i < candidates.length - 1 ? i + 1 : i))}
+          />
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(180deg, rgba(15,13,11,.24), rgba(15,13,11,.5))" }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "radial-gradient(120% 92% at 50% 42%, transparent 50%, rgba(12,10,8,.55))" }}
+          />
+        </>
+      )}
+
+      {/* Wordmark del estudio */}
+      <div className="absolute left-0 right-0 top-7 z-10 flex items-center justify-center">
+        {studio.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={studio.logoUrl}
+            alt={studio.name}
+            className="h-7 w-auto opacity-90"
+            style={hasImg ? { filter: "brightness(0) invert(1)" } : undefined}
+          />
+        ) : (
+          <span
+            className="uppercase"
+            style={{ fontFamily: SERIF, letterSpacing: "0.36em", fontSize: "0.72rem" }}
+          >
+            {studio.name}
+          </span>
         )}
-      >
-        <h1 className="text-3xl font-bold leading-tight tracking-tight sm:text-5xl" style={{ color: fg }}>
+      </div>
+
+      <div className="animate-fade-in-up relative z-10 max-w-3xl">
+        <p
+          className="mb-4 font-semibold uppercase"
+          style={{
+            letterSpacing: "0.34em",
+            fontSize: "0.7rem",
+            color: hasImg ? "rgba(255,255,255,.82)" : ED.gold,
+          }}
+        >
+          {label}
+        </p>
+        <h1
+          className="text-balance"
+          style={{
+            fontFamily: SERIF,
+            fontWeight: 500,
+            lineHeight: 0.98,
+            letterSpacing: "0.01em",
+            fontSize: "clamp(3.2rem, 10vw, 7.5rem)",
+            textShadow: hasImg ? "0 2px 30px rgba(0,0,0,.28)" : "none",
+          }}
+        >
           {title}
         </h1>
-        {subtitle && (
-          <p
-            className="text-sm font-medium sm:text-base"
-            style={{ color: textLight ? "rgba(255,255,255,.85)" : "rgba(0,0,0,.7)" }}
-          >
-            {subtitle}
-          </p>
-        )}
-        {gallery.welcomeText && (
-          <p
-            className="max-w-lg text-xs sm:text-sm"
-            style={{ color: textLight ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.55)" }}
-          >
-            {gallery.welcomeText}
-          </p>
-        )}
-        <div className="mt-2 flex items-center gap-3">
-          {cover.showButton && (
-            <a
-              href="#fotos"
-              className="inline-block rounded-full px-5 py-2 text-sm font-semibold text-white shadow transition-transform hover:scale-105"
-              style={{ background: accent }}
-            >
-              {cover.buttonLabel ||
-                (gallery.galleryType === "final_delivery" ? "Ver mis fotos" : "Ver fotos")}
-            </a>
+        <div
+          className="mt-6 flex items-center justify-center gap-3 uppercase"
+          style={{
+            letterSpacing: "0.16em",
+            fontSize: "0.78rem",
+            color: hasImg ? "rgba(255,255,255,.82)" : ED.muted,
+          }}
+        >
+          {dateLabel && (
+            <>
+              <span>{dateLabel}</span>
+              <span className="opacity-40">—</span>
+            </>
           )}
-          <span
-            className="text-xs font-medium"
-            style={{ color: textLight ? "rgba(255,255,255,.7)" : "rgba(0,0,0,.55)" }}
-          >
-            {photoCount} fotos
+          <span>
+            {photoCount} {photoCount === 1 ? "imagen" : "imágenes"}
           </span>
         </div>
       </div>
-    </section>
+
+      <a
+        href="#fotos"
+        className="absolute bottom-8 left-0 right-0 z-10 mx-auto flex w-fit flex-col items-center gap-3 uppercase"
+        style={{
+          letterSpacing: "0.3em",
+          fontSize: "0.62rem",
+          color: hasImg ? "rgba(255,255,255,.72)" : ED.muted,
+        }}
+      >
+        <span>{ctaLabel}</span>
+        <span
+          className="h-10 w-px"
+          style={{
+            background: hasImg
+              ? "linear-gradient(rgba(255,255,255,.72), transparent)"
+              : "linear-gradient(#8C8478, transparent)",
+          }}
+        />
+      </a>
+    </header>
   )
 }
 
@@ -229,6 +289,7 @@ export function PublicGalleryView({
   printState = null,
   deliveryReady = false,
   finalDeliveryDriveLink = null,
+  deliveryOnly = false,
 }: {
   token: string
   gallery: Gallery
@@ -237,6 +298,8 @@ export function PublicGalleryView({
   printState?: GalleryPrintState | null
   deliveryReady?: boolean
   finalDeliveryDriveLink?: string | null
+  /** Vista de SOLO entrega final (link de descarga): oculta toda la selección. */
+  deliveryOnly?: boolean
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
   // Assets que el usuario tocó localmente — `loadFavs` no debe pisarlos con
@@ -595,15 +658,24 @@ export function PublicGalleryView({
   }, [deliveryAssets])
   const hasTracks = deliveryAssets.length > 0
   const hasSelection = selectionAssets.length > 0
-  const showBothSections = hasSelection && hasTracks && deliveryReady
+  // En modo "solo entrega" NO se muestra el toggle ni nada de selección.
+  const showBothSections = !deliveryOnly && hasSelection && hasTracks && deliveryReady
   // Default SIEMPRE en "selección": aunque la entrega esté lista, el cliente
   // debe poder seguir viendo todas sus fotos y re-seleccionar. El toggle da
   // acceso a la entrega final cuando existe.
   const [activeSection, setActiveSection] = useState<"selection" | "delivery">(
     "selection",
   )
-  const isShowingDelivery = activeSection === "delivery" && hasTracks && deliveryReady
-  const visibleAssets = isShowingDelivery ? deliveryAssets : selectionAssets.length > 0 ? selectionAssets : assets
+  const isShowingDelivery = deliveryOnly
+    ? hasTracks
+    : activeSection === "delivery" && hasTracks && deliveryReady
+  const visibleAssets = isShowingDelivery
+    ? deliveryAssets.length > 0
+      ? deliveryAssets
+      : assets
+    : selectionAssets.length > 0
+      ? selectionAssets
+      : assets
 
   const requestZip = useCallback(
     async (key: string, assetIds: string[], resolution: "web" | "original") => {
@@ -685,48 +757,102 @@ export function PublicGalleryView({
   const selectionCount = activeColl ? activeColl.asset_count : favs.size
   const canSubmit = selectionCount > 0
 
-  return (
-    <div
-      className={cn(
-        "min-h-screen pb-24",
-        tokens.mode === "dark" ? "dark bg-zinc-950" : "bg-zinc-50",
-      )}
-      style={{ fontFamily: tokens.fontStack }}
-    >
-      <GalleryHero gallery={gallery} cover={cover} accent={tokens.accent} photoCount={assets.length} />
+  // Tile de foto (respeta la forma real, sin recorte cuadrado). Mantiene el
+  // corazón de selección y abre el lightbox.
+  const renderTile = (a: Asset, i: number) => {
+    const marked = !isShowingDelivery && !deliveryOnly && isMarked(a.id)
+    const ar = a.width && a.height ? `${a.width}/${a.height}` : "4/5"
+    return (
+      <figure
+        key={a.id}
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(i)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            setOpen(i)
+          }
+        }}
+        className="group relative m-0 cursor-pointer overflow-hidden"
+        style={{
+          aspectRatio: ar,
+          background: a.lqip ? undefined : "#efeae1",
+          backgroundImage: a.lqip ? `url(${a.lqip})` : undefined,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          boxShadow: marked ? `0 0 0 2px ${ED.gold}` : "0 24px 46px -30px rgba(40,34,24,.34)",
+        }}
+      >
+        {a.thumbUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={a.thumbUrl}
+            alt=""
+            loading="lazy"
+            draggable={false}
+            className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
+          />
+        )}
+        {!isShowingDelivery && !deliveryOnly && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              void toggleHeart(a.id)
+            }}
+            className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full backdrop-blur transition-all active:scale-90"
+            style={marked ? { background: ED.gold, color: "#fff" } : { background: "rgba(255,255,255,.92)", color: ED.ink }}
+            aria-label={marked ? "Quitar de selección" : "Agregar a selección"}
+          >
+            <Heart className="h-[18px] w-[18px]" fill={marked ? "currentColor" : "none"} />
+          </button>
+        )}
+      </figure>
+    )
+  }
 
-      <header className="sticky top-0 z-20 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+  return (
+    <div className="min-h-screen pb-28" style={{ background: ED.paper, color: ED.ink, fontFamily: tokens.fontStack }}>
+      <EditorialCover
+        gallery={gallery}
+        cover={cover}
+        studio={studio}
+        label={isShowingDelivery ? "Entrega final" : "Galería"}
+        ctaLabel={isShowingDelivery ? "Ver y descargar" : "Ver fotos"}
+        photoCount={visibleAssets.length}
+      />
+
+      {/* Barra fina superior: estudio + controles (sin selección en modo entrega) */}
+      <header
+        className="sticky top-0 z-20 backdrop-blur"
+        style={{ background: "rgba(250,248,244,.86)", borderBottom: `1px solid ${ED.line}` }}
+      >
+        <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-4 px-6 py-3.5">
           <div className="flex min-w-0 items-center gap-3">
             {studio.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={studio.logoUrl} alt={studio.name} className="h-7 w-7 rounded" />
+              <img src={studio.logoUrl} alt={studio.name} className="h-6 w-auto" />
             ) : (
-              <div className="grid h-7 w-7 place-items-center rounded bg-zinc-900 text-xs font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
-                {studio.name.slice(0, 1).toUpperCase()}
-              </div>
+              <span className="uppercase" style={{ fontFamily: SERIF, letterSpacing: "0.3em", fontSize: "0.72rem", color: ED.ink }}>
+                {studio.name}
+              </span>
             )}
-            <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                {gallery.name}
-              </h1>
-              <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                {studio.name} · {visibleAssets.length} fotos
-              </p>
-            </div>
+            <span
+              className="hidden truncate uppercase sm:inline"
+              style={{ color: ED.muted, fontSize: "0.74rem", letterSpacing: "0.14em" }}
+            >
+              {gallery.name}
+            </span>
           </div>
 
           {showBothSections ? (
-            <div className="flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-100 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
+            <div className="flex items-center gap-1 rounded-full p-0.5" style={{ border: `1px solid ${ED.line}`, background: "#fff" }}>
               <button
                 type="button"
                 onClick={() => { setActiveSection("selection"); setOpen(null) }}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
-                  activeSection === "selection"
-                    ? "bg-white text-gold-700 shadow-sm dark:bg-zinc-700 dark:text-gold-300"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-                )}
+                className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-colors"
+                style={activeSection === "selection" ? { background: ED.ink, color: "#F7F3EC" } : { color: ED.muted }}
               >
                 <Heart className="h-3 w-3" fill={activeSection === "selection" ? "currentColor" : "none"} />
                 Selección
@@ -734,53 +860,43 @@ export function PublicGalleryView({
               <button
                 type="button"
                 onClick={() => { setActiveSection("delivery"); setOpen(null) }}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-colors",
-                  activeSection === "delivery"
-                    ? "bg-white text-emerald-700 shadow-sm dark:bg-zinc-700 dark:text-emerald-300"
-                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200",
-                )}
+                className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-colors"
+                style={activeSection === "delivery" ? { background: ED.ink, color: "#F7F3EC" } : { color: ED.muted }}
               >
                 <Download className="h-3 w-3" />
-                Entrega final
+                Entrega
               </button>
             </div>
           ) : isShowingDelivery ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[12.5px] font-medium text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1.5 uppercase" style={{ color: ED.gold, fontSize: "0.7rem", letterSpacing: "0.2em" }}>
               <Download className="h-3.5 w-3.5" />
               Entrega final
             </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-50 px-3 py-1 text-[12.5px] font-medium text-gold-700 dark:bg-gold-500/15 dark:text-gold-300">
+          ) : !deliveryOnly ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium"
+              style={{ background: "#fff", border: `1px solid ${ED.line}`, color: ED.gold }}
+            >
               <Heart className="h-3.5 w-3.5" fill="currentColor" />
               {selectionCount}
             </span>
-          )}
+          ) : null}
         </div>
       </header>
 
-      {/* Banner de cuota — solo en galerías de SELECCIÓN */}
-      {!isShowingDelivery && quota && quota.included !== null && (
-        <div
-          className={`border-b ${
-            quota.extras > 0
-              ? "border-amber-300 bg-amber-50 dark:border-amber-500/40 dark:bg-amber-500/10"
-              : "border-gold-200 bg-gold-50 dark:border-gold-500/30 dark:bg-gold-500/10"
-          }`}
-        >
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-2.5">
+      {/* Cuota — solo en galerías de SELECCIÓN */}
+      {!isShowingDelivery && !deliveryOnly && quota && quota.included !== null && (
+        <div style={{ borderBottom: `1px solid ${ED.line}`, background: quota.extras > 0 ? "#FBF3E6" : ED.paper2 }}>
+          <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-3 px-6 py-3">
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold ${
-                quota.extras > 0
-                  ? "bg-amber-200 text-amber-900 dark:bg-amber-500/30 dark:text-amber-200"
-                  : "bg-gold-100 text-gold-800 dark:bg-gold-500/30 dark:text-gold-200"
-              }`}
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold"
+              style={{ background: "#fff", border: `1px solid ${ED.line}`, color: ED.ink }}
             >
               {quota.selected} / {quota.included}{" "}
               {quota.packageName ? `· ${quota.packageName}` : "incluidas"}
             </span>
             {quota.extras > 0 ? (
-              <p className="text-[12.5px] text-amber-900 dark:text-amber-200">
+              <p className="text-[12.5px]" style={{ color: "#8a6d2f" }}>
                 Llevás <strong>{quota.extras}</strong> foto
                 {quota.extras === 1 ? "" : "s"} extra
                 {quota.extras === 1 ? "" : "s"}
@@ -798,7 +914,7 @@ export function PublicGalleryView({
                 . Tu fotógrafo te confirmará el detalle.
               </p>
             ) : (
-              <p className="text-[12.5px] text-gold-800 dark:text-gold-200">
+              <p className="text-[12.5px]" style={{ color: ED.muted }}>
                 Te quedan <strong>{quota.remaining}</strong> dentro de tu paquete.
                 Si eliges más, contarán como extras.
               </p>
@@ -807,95 +923,63 @@ export function PublicGalleryView({
         </div>
       )}
 
-      {/* Entrega final: seguir eligiendo con ♥ + descargar desde la web (ZIP) y/o Drive */}
+      {/* Descargas de entrega final */}
       {((isShowingDelivery && gallery.allow_download) || !!finalDeliveryDriveLink) && (
-        <div className="border-b border-gold-200 bg-gold-50 dark:border-gold-500/30 dark:bg-gold-500/10">
-          <div className="mx-auto max-w-7xl px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="mr-1 text-[12.5px] font-medium text-gold-900 dark:text-gold-100">
-                🎉 Tus fotografías finales ya están listas. Podés verlas y descargarlas aquí:
-              </p>
-
-              {/* Descargas web por ZIP */}
+        <div style={{ borderBottom: `1px solid ${ED.line}`, background: "#fff" }}>
+          <div className="mx-auto max-w-[1240px] px-6 py-6">
+            <p className="mb-3 font-semibold uppercase" style={{ color: ED.gold, fontSize: "0.68rem", letterSpacing: "0.28em" }}>
+              Descarga tus fotos
+            </p>
+            <div className="flex flex-wrap items-center gap-2.5">
               {isShowingDelivery && gallery.allow_download && (
-                <>
-                  {/* Entrega final completa: por pista de calidad o todo */}
-                  {hasTracks ? (
-                    <>
-                      {byTrack.high_quality.length > 0 && (
-                        <button
-                          type="button"
-                          disabled={zipBusy !== null}
-                          onClick={() =>
-                            requestZip(
-                              "hq",
-                              byTrack.high_quality.map((a) => a.id),
-                              "original",
-                            )
-                          }
-                          className="inline-flex items-center gap-1.5 rounded-full border border-gold-300 bg-white px-4 py-1.5 text-xs font-semibold text-gold-800 hover:border-gold-400 disabled:opacity-50 dark:bg-transparent dark:text-gold-200"
-                        >
-                          {zipBusy === "hq" ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
-                          Máxima calidad ({byTrack.high_quality.length})
-                        </button>
-                      )}
-                      {byTrack.social.length > 0 && (
-                        <button
-                          type="button"
-                          disabled={zipBusy !== null}
-                          onClick={() =>
-                            requestZip(
-                              "social",
-                              byTrack.social.map((a) => a.id),
-                              "web",
-                            )
-                          }
-                          className="inline-flex items-center gap-1.5 rounded-full border border-gold-300 bg-white px-4 py-1.5 text-xs font-semibold text-gold-800 hover:border-gold-400 disabled:opacity-50 dark:bg-transparent dark:text-gold-200"
-                        >
-                          {zipBusy === "social" ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Download className="h-3.5 w-3.5" />
-                          )}
-                          Redes sociales ({byTrack.social.length})
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={zipBusy !== null}
-                      onClick={() =>
-                        requestZip(
-                          "todo",
-                          visibleAssets.map((a) => a.id),
-                          "original",
-                        )
-                      }
-                      className="inline-flex items-center gap-1.5 rounded-full border border-gold-300 bg-white px-4 py-1.5 text-xs font-semibold text-gold-800 hover:border-gold-400 disabled:opacity-50 dark:bg-transparent dark:text-gold-200"
-                    >
-                      {zipBusy === "todo" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Download className="h-3.5 w-3.5" />
-                      )}
-                      Descargar todas ({assets.length})
-                    </button>
-                  )}
-                </>
+                hasTracks ? (
+                  <>
+                    {byTrack.high_quality.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={zipBusy !== null}
+                        onClick={() => requestZip("hq", byTrack.high_quality.map((a) => a.id), "original")}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
+                        style={{ background: ED.ink, color: "#F7F3EC", border: `1px solid ${ED.ink}` }}
+                      >
+                        {zipBusy === "hq" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                        Máxima calidad ({byTrack.high_quality.length})
+                      </button>
+                    )}
+                    {byTrack.social.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={zipBusy !== null}
+                        onClick={() => requestZip("social", byTrack.social.map((a) => a.id), "web")}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-colors disabled:opacity-50"
+                        style={{ background: "#fff", color: ED.ink, border: `1px solid ${ED.ink}` }}
+                      >
+                        {zipBusy === "social" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                        Redes sociales ({byTrack.social.length})
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={zipBusy !== null}
+                    onClick={() => requestZip("todo", visibleAssets.map((a) => a.id), "original")}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
+                    style={{ background: ED.ink, color: "#F7F3EC", border: `1px solid ${ED.ink}` }}
+                  >
+                    {zipBusy === "todo" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                    Descargar todas ({visibleAssets.length})
+                  </button>
+                )
               )}
 
-              {/* Google Drive */}
               {finalDeliveryDriveLink && (
                 <a
                   href={finalDeliveryDriveLink}
                   target="_blank"
                   rel="noopener"
-                  className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-gold-300 bg-white px-4 py-1.5 text-xs font-semibold text-gold-800 hover:border-gold-400 dark:bg-transparent dark:text-gold-200"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-colors"
+                  style={{ background: "#fff", color: ED.ink, border: `1px solid ${ED.ink}` }}
                 >
                   <Download className="h-3.5 w-3.5" />
                   Google Drive
@@ -904,31 +988,31 @@ export function PublicGalleryView({
             </div>
 
             {isShowingDelivery && gallery.allow_download && (
-              <p className="mt-1.5 text-[11px] text-gold-800/80 dark:text-gold-200/70">
-                La descarga se prepara en un ZIP y puede tardar un momento según la cantidad de fotos.
+              <p className="mt-3 text-[11.5px]" style={{ color: ED.muted }}>
+                Se guardan directamente en tu teléfono. El ZIP puede tardar un momento según la cantidad de fotos.
               </p>
             )}
           </div>
         </div>
       )}
 
-      {/* Banner: selección bloqueada por el fotógrafo (ya empezó a editar) */}
-      {!isShowingDelivery && gallery.selection_locked && (
-        <div className="border-b border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10">
-          <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
-            <p className="text-[12.5px] text-amber-900 dark:text-amber-200">
+      {/* Selección bloqueada por el fotógrafo */}
+      {!isShowingDelivery && !deliveryOnly && gallery.selection_locked && (
+        <div style={{ borderBottom: `1px solid ${ED.line}`, background: "#FBF3E6" }}>
+          <div className="mx-auto flex max-w-[1240px] items-center gap-3 px-6 py-3">
+            <p className="text-[12.5px]" style={{ color: "#8a6d2f" }}>
               🔒 El fotógrafo ya comenzó a editar tu selección, por eso está bloqueada por ahora. Si necesitas un cambio, escríbele.
             </p>
           </div>
         </div>
       )}
 
-      {/* Banner informativo — solo en galerías de selección */}
-      {!isShowingDelivery && gallery.selection_submitted && !gallery.selection_locked && (
-        <div className="border-b border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-          <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
-            <Send className="h-4 w-4 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />
-            <p className="text-[12.5px] text-emerald-900 dark:text-emerald-200">
+      {/* Selección enviada */}
+      {!isShowingDelivery && !deliveryOnly && gallery.selection_submitted && !gallery.selection_locked && (
+        <div style={{ borderBottom: `1px solid ${ED.line}`, background: ED.paper2 }}>
+          <div className="mx-auto flex max-w-[1240px] items-center gap-3 px-6 py-3">
+            <Send className="h-4 w-4 flex-shrink-0" style={{ color: ED.gold }} />
+            <p className="text-[12.5px]" style={{ color: ED.ink }}>
               Tu selección fue enviada al fotógrafo. Podés seguir agregando o quitando fotos y volver a enviar cuando quieras.
             </p>
           </div>
@@ -936,27 +1020,22 @@ export function PublicGalleryView({
       )}
 
       {/* Panel de listas — solo en galerías de selección */}
-      {!isShowingDelivery && (
-        <div className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3">
-            <p className="mr-2 text-[12px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Tus listas:
+      {!isShowingDelivery && !deliveryOnly && (
+        <div style={{ borderBottom: `1px solid ${ED.line}`, background: "#fff" }}>
+          <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-2 px-6 py-3.5">
+            <p className="mr-2 font-semibold uppercase" style={{ color: ED.muted, fontSize: "0.66rem", letterSpacing: "0.2em" }}>
+              Tus listas
             </p>
 
-            {/* Botón "Sin lista" — favoritos generales */}
             <button
               type="button"
               onClick={() => setActiveCollId(null)}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors",
-                activeCollId === null
-                  ? "border-gold-500 bg-gold-50 text-gold-700 dark:border-gold-400 dark:bg-gold-500/15 dark:text-gold-300"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
-              )}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors"
+              style={activeCollId === null ? { background: ED.paper2, border: `1px solid ${ED.gold}`, color: ED.gold } : { background: "#fff", border: `1px solid ${ED.line}`, color: ED.ink }}
             >
               <Heart className="h-3 w-3" fill={activeCollId === null ? "currentColor" : "none"} />
               Favoritas
-              <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold tabular-nums text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+              <span className="rounded-full px-1.5 text-[10px] font-semibold tabular-nums" style={{ background: ED.paper2, color: ED.muted }}>
                 {favs.size}
               </span>
             </button>
@@ -966,16 +1045,12 @@ export function PublicGalleryView({
                 key={c.id}
                 type="button"
                 onClick={() => setActiveCollId(c.id)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors",
-                  c.id === activeCollId
-                    ? "border-gold-600 bg-gold-50 text-gold-700 dark:border-gold-500 dark:bg-gold-500/15 dark:text-gold-300"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
-                )}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors"
+                style={c.id === activeCollId ? { background: ED.paper2, border: `1px solid ${ED.gold}`, color: ED.gold } : { background: "#fff", border: `1px solid ${ED.line}`, color: ED.ink }}
               >
-                {c.submitted_at && <Send className="h-3 w-3 text-emerald-500" />}
+                {c.submitted_at && <Send className="h-3 w-3" style={{ color: ED.gold }} />}
                 {c.name}
-                <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] font-semibold tabular-nums text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                <span className="rounded-full px-1.5 text-[10px] font-semibold tabular-nums" style={{ background: ED.paper2, color: ED.muted }}>
                   {c.asset_count}
                 </span>
               </button>
@@ -995,13 +1070,15 @@ export function PublicGalleryView({
                     }
                   }}
                   placeholder="Nombre (ej: Para imprimir)"
-                  className="h-7 rounded-full border border-zinc-300 bg-white px-3 text-[12px] text-zinc-900 placeholder:text-zinc-400 focus:border-gold-500 focus:outline-none focus:ring-2 focus:ring-gold-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+                  className="h-8 rounded-full px-3 text-[12px] focus:outline-none"
+                  style={{ border: `1px solid ${ED.line}`, background: "#fff", color: ED.ink }}
                 />
                 <button
                   type="button"
                   onClick={() => void createCollection()}
                   disabled={!newCollName.trim()}
-                  className="rounded-full bg-gold-600 px-3 py-1 text-[11px] font-medium text-white hover:bg-gold-700 disabled:opacity-50"
+                  className="rounded-full px-3 py-1 text-[11px] font-medium disabled:opacity-50"
+                  style={{ background: ED.ink, color: "#F7F3EC" }}
                 >
                   Crear
                 </button>
@@ -1011,7 +1088,8 @@ export function PublicGalleryView({
                     setCreatingColl(false)
                     setNewCollName("")
                   }}
-                  className="rounded-full bg-zinc-200 p-1 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300"
+                  className="rounded-full p-1"
+                  style={{ background: ED.paper2, color: ED.muted }}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -1020,7 +1098,8 @@ export function PublicGalleryView({
               <button
                 type="button"
                 onClick={() => setCreatingColl(true)}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-3 py-1 text-[12.5px] font-medium text-zinc-600 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12.5px] font-medium transition-colors"
+                style={{ border: `1px dashed ${ED.line}`, color: ED.muted }}
               >
                 <Plus className="h-3 w-3" />
                 Nueva lista
@@ -1031,79 +1110,43 @@ export function PublicGalleryView({
       )}
 
       {gallery.description && (
-        <div className="mx-auto max-w-7xl px-4 pt-6">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <div className="mx-auto max-w-2xl px-6 pt-16 text-center">
+          <p
+            className="text-balance"
+            style={{ fontFamily: SERIF, fontSize: "clamp(1.2rem,2.4vw,1.6rem)", lineHeight: 1.5, color: "#413b32" }}
+          >
             {gallery.description}
           </p>
         </div>
       )}
 
-      <main id="fotos" className="mx-auto max-w-7xl px-4 py-6">
+      {/* Flujo editorial: pares, tríos y una foto sola de vez en cuando.
+          En móvil, 1 foto grande por fila. Respeta la forma real de la foto. */}
+      <main id="fotos" className="mx-auto max-w-[1240px] px-4 py-14 sm:px-6 sm:py-20">
         {visibleAssets.length === 0 ? (
-          <p className="py-12 text-center text-sm text-zinc-500">
+          <p className="py-16 text-center text-sm" style={{ color: ED.muted }}>
             Aún no hay fotos en esta galería.
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {visibleAssets.map((a, i) => {
-              const marked = isMarked(a.id)
+          <div className="flex flex-col gap-6 sm:gap-9">
+            {chunkEditorial(visibleAssets.map((a, i) => ({ a, i }))).map((row, r) => {
+              if (row.n === 1) {
+                const first = row.items[0]!
+                return (
+                  <div key={r} className="mx-auto w-full max-w-[540px] py-2 sm:py-6">
+                    {renderTile(first.a, first.i)}
+                  </div>
+                )
+              }
               return (
                 <div
-                  key={a.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setOpen(i)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      setOpen(i)
-                    }
-                  }}
-                  style={
-                    a.lqip
-                      ? {
-                          backgroundImage: `url(${a.lqip})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                        }
-                      : undefined
-                  }
+                  key={r}
                   className={cn(
-                    "group relative aspect-[4/5] cursor-pointer overflow-hidden rounded-xl bg-zinc-100 shadow-sm transition-all hover:shadow-md dark:bg-zinc-800",
-                    !isShowingDelivery && marked && "ring-2 ring-gold-500 ring-offset-2 ring-offset-zinc-50 dark:ring-offset-zinc-950",
+                    "grid grid-cols-1 items-start gap-4 sm:gap-6",
+                    row.n === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2",
                   )}
                 >
-                  {a.thumbUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={a.thumbUrl}
-                      alt={`Foto ${i + 1}`}
-                      loading="lazy"
-                      draggable={false}
-                      className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
-                    />
-                  ) : null}
-
-                  {/* Corazón de selección — solo en galerías de selección.
-                      Siempre visible y clickeable (incl. móvil/touch). */}
-                  {!isShowingDelivery && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        void toggleHeart(a.id)
-                      }}
-                      className={cn(
-                        "absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full shadow-md backdrop-blur transition-all active:scale-90",
-                        marked
-                          ? "bg-gold-500 text-white hover:bg-gold-600"
-                          : "bg-white/90 text-zinc-700 hover:bg-white hover:text-gold-600",
-                      )}
-                      aria-label={marked ? "Quitar de selección" : "Agregar a selección"}
-                    >
-                      <Heart className="h-[18px] w-[18px]" fill={marked ? "currentColor" : "none"} />
-                    </button>
-                  )}
+                  {row.items.map(({ a, i }) => renderTile(a, i))}
                 </div>
               )
             })}
@@ -1111,24 +1154,24 @@ export function PublicGalleryView({
         )}
       </main>
 
-      {/* Barra fija inferior: estado + opción de notificar al fotógrafo — solo selección */}
-      {!isShowingDelivery && canSubmit && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
+      {/* Barra fija: estado + avisar al fotógrafo — solo selección */}
+      {!isShowingDelivery && !deliveryOnly && canSubmit && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 backdrop-blur" style={{ background: "rgba(255,255,255,.96)", borderTop: `1px solid ${ED.line}` }}>
+          <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-3 px-6 py-3.5">
             <div className="flex items-center gap-3">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold-100 text-gold-600 dark:bg-gold-500/20 dark:text-gold-300">
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-full" style={{ background: ED.paper2, color: ED.gold }}>
                 <Heart className="h-4 w-4" fill="currentColor" />
               </span>
               <div>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                <p className="text-sm font-semibold" style={{ color: ED.ink }}>
                   {selectionCount} foto{selectionCount === 1 ? "" : "s"}{" "}
                   {activeColl ? `en "${activeColl.name}"` : "favoritas"}
-                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300">
+                  <span className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: ED.paper2, color: ED.gold }}>
                     <Check className="h-3 w-3" />
                     Guardado
                   </span>
                 </p>
-                <p className="text-[11.5px] text-zinc-500 dark:text-zinc-400">
+                <p className="text-[11.5px]" style={{ color: ED.muted }}>
                   Cada cambio se guarda automáticamente. Avisá al fotógrafo cuando termines.
                 </p>
               </div>
@@ -1137,7 +1180,8 @@ export function PublicGalleryView({
               type="button"
               onClick={() => void submitActive()}
               disabled={submitting}
-              className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-br from-gold-500 to-gold-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:brightness-105 disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold transition-opacity disabled:opacity-60"
+              style={{ background: ED.ink, color: "#F7F3EC" }}
             >
               {submitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1202,17 +1246,27 @@ export function PublicGalleryView({
         />
       )}
 
-      <footer className="mx-auto max-w-7xl px-4 py-8 text-center">
+      <footer className="mx-auto max-w-[1240px] px-6 pb-24 pt-6 text-center">
+        <div className="mx-auto mb-7 h-px w-14" style={{ background: ED.gold }} />
+        {studio.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={studio.logoUrl} alt={studio.name} className="mx-auto mb-3 h-7 w-auto" />
+        ) : (
+          <p className="uppercase" style={{ fontFamily: SERIF, letterSpacing: "0.4em", fontSize: "0.82rem", color: ED.ink }}>
+            {studio.name}
+          </p>
+        )}
         {studio.footerHtml && (
           <div
-            className="mx-auto mb-2 text-xs text-zinc-500 dark:text-zinc-400"
+            className="mx-auto mb-2 mt-1 text-xs"
+            style={{ color: ED.muted }}
             // El estudio controla este HTML desde su configuración de branding.
             dangerouslySetInnerHTML={{ __html: studio.footerHtml }}
           />
         )}
         {!studio.hideBranding && (
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-600">
-            Hecho con <span className="font-medium">PixelOS</span>
+          <p className="mt-3 uppercase" style={{ fontSize: "0.64rem", letterSpacing: "0.22em", color: ED.muted }}>
+            Hecho con PixelOS
           </p>
         )}
       </footer>
@@ -1296,25 +1350,23 @@ function Lightbox({
   onNext: () => void
   onDownload: () => void
 }) {
+  const touchX = useRef<number | null>(null)
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-black/90 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex flex-col backdrop-blur-sm"
+      style={{ background: "rgba(18,15,12,.94)" }}
       onClick={onClose}
     >
-      <div className="flex items-center justify-between p-4 text-sm text-white">
-        <span className="tabular-nums opacity-70">
+      <div className="flex items-center justify-between px-4 py-4 text-white" onClick={(e) => e.stopPropagation()}>
+        <span className="tabular-nums uppercase" style={{ letterSpacing: "0.14em", fontSize: "0.72rem", color: "rgba(255,255,255,.66)" }}>
           {index + 1} / {total}
         </span>
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5">
           {!locked && onMark && (
             <button
               onClick={onMark}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                isMarked
-                  ? "bg-gold-500 text-white hover:bg-gold-600"
-                  : "bg-white/15 text-white hover:bg-white/25",
-              )}
+              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors"
+              style={isMarked ? { background: ED.gold, color: "#fff" } : { background: "rgba(255,255,255,.14)", color: "#fff" }}
               title={`${isMarked ? "Quitar de" : "Agregar a"} ${contextLabel}`}
             >
               <Heart className="h-4 w-4" fill={isMarked ? "currentColor" : "none"} />
@@ -1322,34 +1374,42 @@ function Lightbox({
             </button>
           )}
           {allowDownload && (
-            <button
-              onClick={onDownload}
-              className="rounded-md p-2 hover:bg-white/15"
-              aria-label="Descargar"
-            >
+            <button onClick={onDownload} className="rounded-full p-2 hover:bg-white/15" aria-label="Descargar">
               <Download className="h-4 w-4" />
             </button>
           )}
-          <button
-            onClick={onClose}
-            className="rounded-md p-2 hover:bg-white/15"
-            aria-label="Cerrar"
-          >
+          <button onClick={onClose} className="rounded-full p-2 hover:bg-white/15" aria-label="Cerrar">
             <X className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      <div className="relative flex flex-1 items-center justify-center px-4 pb-4">
+      <div
+        className="relative flex flex-1 items-center justify-center px-2 pb-4 sm:px-4"
+        onTouchStart={(e) => {
+          touchX.current = e.touches[0]?.clientX ?? null
+        }}
+        onTouchEnd={(e) => {
+          const start = touchX.current
+          touchX.current = null
+          if (start == null) return
+          const end = e.changedTouches[0]?.clientX ?? start
+          const dx = end - start
+          if (Math.abs(dx) > 45) {
+            if (dx < 0) onNext()
+            else onPrev()
+          }
+        }}
+      >
         <button
           onClick={(e) => {
             e.stopPropagation()
             onPrev()
           }}
-          className="absolute left-4 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          className="absolute left-2 z-10 rounded-full p-2.5 text-white transition-colors hover:bg-white/15 sm:left-5"
           aria-label="Anterior"
         >
-          <ChevronLeft className="h-5 w-5" />
+          <ChevronLeft className="h-6 w-6" />
         </button>
         {asset.webUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -1358,7 +1418,7 @@ function Lightbox({
             alt=""
             draggable={false}
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[80vh] max-w-[60vw] w-auto h-auto object-contain rounded-lg shadow-2xl"
+            className="h-auto max-h-[84vh] w-auto max-w-[94vw] object-contain shadow-2xl sm:max-w-[80vw]"
           />
         )}
         <button
@@ -1366,10 +1426,10 @@ function Lightbox({
             e.stopPropagation()
             onNext()
           }}
-          className="absolute right-4 z-10 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          className="absolute right-2 z-10 rounded-full p-2.5 text-white transition-colors hover:bg-white/15 sm:right-5"
           aria-label="Siguiente"
         >
-          <ChevronRight className="h-5 w-5" />
+          <ChevronRight className="h-6 w-6" />
         </button>
       </div>
     </div>

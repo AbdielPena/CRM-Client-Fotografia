@@ -29,7 +29,10 @@ export async function GET(
 
   const wantDownload = req.nextUrl.searchParams.get("download") === "1"
   if (wantDownload) {
-    const url = await getZipDownloadUrl(params.exportId)
+    const safeName =
+      (view.gallery.name || "fotos").replace(/[^\p{L}\p{N} _.-]/gu, "").trim().slice(0, 60) ||
+      "fotos"
+    const url = await getZipDownloadUrl(params.exportId, `${safeName}.zip`)
     if (!url) {
       return NextResponse.json({ error: "ZIP no listo o expirado" }, { status: 425 })
     }

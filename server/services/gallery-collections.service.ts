@@ -464,6 +464,7 @@ export async function getZipExportStatus(
 
 export async function getZipDownloadUrl(
   exportId: string,
+  filename?: string,
 ): Promise<string | null> {
   const supabase = createSupabaseServiceClient()
   const { data: exportRow } = await supabase
@@ -481,8 +482,12 @@ export async function getZipDownloadUrl(
     return null
   }
 
+  // `download` fuerza Content-Disposition: attachment en el Storage → el móvil
+  // guarda el ZIP en el teléfono (con nombre legible) en vez de abrirlo.
   const { data: signed } = await supabase.storage
     .from(ZIPS_BUCKET)
-    .createSignedUrl(exportRow.zip_key, SIGNED_DOWNLOAD_TTL)
+    .createSignedUrl(exportRow.zip_key, SIGNED_DOWNLOAD_TTL, {
+      download: filename && filename.trim() ? filename.trim() : true,
+    })
   return signed?.signedUrl ?? null
 }

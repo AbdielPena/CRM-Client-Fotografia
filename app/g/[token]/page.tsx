@@ -23,7 +23,10 @@ export const dynamic = "force-dynamic"
 // aunque el estudio ya los haya cambiado. force-no-store = siempre datos frescos.
 export const fetchCache = "force-no-store"
 
-type PageProps = { params: { token: string } }
+type PageProps = {
+  params: { token: string }
+  searchParams?: { entrega?: string; descarga?: string }
+}
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const view = await validateGalleryToken(params.token)
@@ -52,9 +55,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   }
 }
 
-export default async function PublicGalleryPage({ params }: PageProps) {
+export default async function PublicGalleryPage({ params, searchParams }: PageProps) {
   const view = await validateGalleryToken(params.token)
   if (!view) notFound()
+
+  // Link de descarga (?entrega=1): muestra SOLO la entrega final, sin selección.
+  const deliveryOnly =
+    searchParams?.entrega === "1" || searchParams?.descarga === "1"
 
   if (view.gallery.visibility === "password") {
     const unlocked = cookies().get(`gallery_unlock_${params.token}`)?.value === "1"
@@ -141,8 +148,8 @@ export default async function PublicGalleryPage({ params }: PageProps) {
     driveLink = (driveRow as { web_view_link: string | null } | null)?.web_view_link ?? null
   }
 
-  // Luxury Book: modo solo-libro reemplaza toda la vista
-  if (hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "book") {
+  // Luxury Book: modo solo-libro reemplaza toda la vista (salvo el link de descarga).
+  if (!deliveryOnly && hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "book") {
     const deliveryAssets = view.assets.filter(
       (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
     )
@@ -192,6 +199,7 @@ export default async function PublicGalleryPage({ params }: PageProps) {
         printState={printState}
         deliveryReady={deliveryReady}
         finalDeliveryDriveLink={driveLink}
+        deliveryOnly={deliveryOnly}
       />
       {hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "both" && (
         <BookLauncher
