@@ -78,6 +78,7 @@ export type QuinceNameContext = {
   projectId: string
   sessionName: string
   currentName: string | null
+  currentBirthday: string | null
   studioName: string
   studioLogo: string | null
   accent: string | null
@@ -90,7 +91,7 @@ export async function getQuinceNameContext(token: string): Promise<QuinceNameCon
   const sb = untypedService()
   const { data } = await sb
     .from("projects")
-    .select("id, name, event_type, quinceanera_name, studio_id, deleted_at")
+    .select("id, name, event_type, quinceanera_name, quinceanera_birthday, studio_id, deleted_at")
     .eq("id", v.projectId)
     .maybeSingle()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -110,21 +111,30 @@ export async function getQuinceNameContext(token: string): Promise<QuinceNameCon
     projectId: p.id,
     sessionName: p.name ?? "tu sesión",
     currentName: p.quinceanera_name ?? null,
+    currentBirthday: p.quinceanera_birthday ? String(p.quinceanera_birthday).slice(0, 10) : null,
     studioName: s?.name ?? "El estudio",
     studioLogo: s?.logo_url ?? null,
     accent: s?.primary_color ?? null,
   }
 }
 
-/** Guarda el nombre desde la página pública (valida el token). */
+/**
+ * Guarda el nombre + cumpleaños desde la página pública (valida el token) y
+ * recalcula la entrega pautada. El nombre es obligatorio; el cumpleaños opcional
+ * pero recomendado (define la fecha de entrega).
+ */
 export async function submitQuinceName(
   token: string,
-  name: string,
+  input: { name: string; birthday?: string },
 ): Promise<{ ok: boolean; error?: string }> {
   const v = verifyQuinceToken(token)
   if (!v) return { ok: false, error: "El enlace no es válido o venció." }
-  const clean = (name ?? "").trim().slice(0, 120)
-  if (clean.length < 2) return { ok: false, error: "Escribe el nombre completo." }
+  const name = (input.name ?? "").trim().slice(0, 120)
+  const birthday = (input.birthday ?? "").trim()
+  if (name.length < 2) return { ok: false, error: "Escribe el nombre completo." }
+  if (birthday && !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) {
+    return { ok: false, error: "La fecha de cumpleaños no es válida." }
+  }
 
   const sb = untypedService()
   // Confirmar que es una sesión de quinceañera válida antes de escribir.
@@ -139,11 +149,24 @@ export async function submitQuinceName(
     return { ok: false, error: "No encontramos la sesión." }
   }
 
-  const { error } = await sb
-    .from("projects")
-    .update({ quinceanera_name: clean, updated_at: new Date().toISOString() })
-    .eq("id", v.projectId)
+  const patch: Record<string, unknown> = {
+    quinceanera_name: name,
+    updated_at: new Date().toISOString(),
+  }
+  if (birthday) patch.quinceanera_birthday = birthday
+
+  const { error } = await sb.from("projects").update(patch).eq("id", v.projectId)
   if (error) return { ok: false, error: "No se pudo guardar. Intenta de nuevo." }
+
+  // Recalcular la entrega pautada (usa el cumpleaños). Best-effort.
+  if (birthday) {
+    try {
+      const { recomputeProjectDelivery } = await import("./delivery.service")
+      await recomputeProjectDelivery(p.studio_id, v.projectId)
+    } catch (e) {
+      console.error("[quince-name] recompute delivery", e instanceof Error ? e.message : e)
+    }
+  }
   return { ok: true }
 }
 
@@ -152,33 +175,54 @@ export type MissingQuinceRow = {
   projectName: string
   clientName: string
   clientEmail: string
+  clientWhatsapp: string | null
+  url: string
+  missingName: boolean
+  missingBirthday: boolean
 }
 
-/** Sesiones de quinceañera del estudio sin nombre registrado y con email de cliente. */
+/**
+ * Sesiones de quinceañera del estudio a las que les falta el nombre O el
+ * cumpleaños. Incluye el link público /q/[token] listo para compartir y el
+ * WhatsApp del cliente (si existe). `requireEmail` filtra a las que tienen
+ * correo (para el envío masivo por email).
+ */
 export async function listProjectsMissingQuinceName(
   studioId: string,
+  opts: { requireEmail?: boolean } = {},
 ): Promise<MissingQuinceRow[]> {
   const sb = untypedService()
   const { data } = await sb
     .from("projects")
-    .select("id, name, event_type, quinceanera_name, client:clients(name, email)")
+    .select(
+      "id, name, event_type, quinceanera_name, quinceanera_birthday, created_at, client:clients(name, email, phone, whatsapp)",
+    )
     .eq("studio_id", studioId)
     .is("deleted_at", null)
+    .order("created_at", { ascending: false })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = (data ?? []) as any[]
   const pickOne = (x: unknown) => (Array.isArray(x) ? x[0] : x)
   const out: MissingQuinceRow[] = []
   for (const r of rows) {
     if (!isQuince(r.event_type)) continue
-    if (String(r.quinceanera_name ?? "").trim()) continue
-    const c = pickOne(r.client) as { name?: string; email?: string } | null
+    const missingName = !String(r.quinceanera_name ?? "").trim()
+    const missingBirthday = !String(r.quinceanera_birthday ?? "").trim()
+    if (!missingName && !missingBirthday) continue
+    const c = pickOne(r.client) as
+      | { name?: string; email?: string; phone?: string; whatsapp?: string }
+      | null
     const email = (c?.email ?? "").trim()
-    if (!email) continue
+    if (opts.requireEmail && !email) continue
     out.push({
       projectId: r.id,
       projectName: r.name ?? "Sesión",
       clientName: c?.name ?? "",
       clientEmail: email,
+      clientWhatsapp: (c?.whatsapp ?? c?.phone ?? "").trim() || null,
+      url: quinceNameUrl(r.id),
+      missingName,
+      missingBirthday,
     })
   }
   return out
@@ -188,7 +232,7 @@ export async function listProjectsMissingQuinceName(
 export async function sendQuinceNameRequests(
   studioId: string,
 ): Promise<{ sent: number; total: number }> {
-  const rows = await listProjectsMissingQuinceName(studioId)
+  const rows = await listProjectsMissingQuinceName(studioId, { requireEmail: true })
   if (rows.length === 0) return { sent: 0, total: 0 }
 
   const { enqueueEmail } = await import("./email.service")

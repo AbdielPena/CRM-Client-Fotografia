@@ -269,11 +269,11 @@ export default async function ProjectsPage({
     return `/projects?${params.toString()}`
   })()
 
-  // Sesiones de quinceañera sin el nombre de la niña registrado (con email de
-  // cliente) → banner para pedirlo por correo.
-  const quinceMissingCount = (
-    await listProjectsMissingQuinceName(session.studioId).catch(() => [])
-  ).length
+  // Sesiones de quinceañera sin el nombre y/o cumpleaños de la niña → banner
+  // para pedirlo por correo o compartir el link directo por cliente.
+  const quinceMissingRows = await listProjectsMissingQuinceName(session.studioId).catch(
+    () => [],
+  )
 
   return (
     <>
@@ -297,7 +297,7 @@ export default async function ProjectsPage({
       />
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
-        <RequestQuinceNamesButton count={quinceMissingCount} />
+        <RequestQuinceNamesButton rows={quinceMissingRows} />
 
         {/* Scope: Activos | Completados (vista aparte) */}
         <div className="inline-flex rounded-lg border border-border bg-card p-0.5">

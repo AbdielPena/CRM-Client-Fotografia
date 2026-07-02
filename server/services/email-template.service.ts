@@ -105,12 +105,12 @@ export const TEMPLATE_CATALOG: Record<
     description:
       "Se envía al cliente para que registre el nombre de la quinceañera mediante un enlace.",
     category: "client",
-    defaultSubject: "¿Cómo se llama la quinceañera? — {{studio_name}}",
+    defaultSubject: "Datos de la quinceañera — {{studio_name}}",
     defaultBodyHtml:
       `<p>Hola {{client_name}},</p>` +
-      `<p>Para preparar tu sesión <strong>{{session_name}}</strong> y nombrar tus galerías correctamente, necesitamos el <strong>nombre de la quinceañera</strong>.</p>` +
+      `<p>Para preparar tu sesión <strong>{{session_name}}</strong> necesitamos el <strong>nombre de la quinceañera</strong> y su <strong>fecha de cumpleaños</strong> (con eso agendamos la entrega de las fotos).</p>` +
       `<p>Solo toma un momento:</p>` +
-      `<p><a href="{{link}}" class="btn">Registrar el nombre</a></p>` +
+      `<p><a href="{{link}}" class="btn">Registrar los datos</a></p>` +
       `<p style="font-size:13px;color:#8a8a8a">Si el botón no funciona, copia y pega este enlace:<br>{{link}}</p>` +
       `<p>¡Gracias! 💛<br>— {{studio_name}}</p>`,
     variables: [

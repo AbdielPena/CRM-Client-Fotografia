@@ -14,7 +14,8 @@ async function saveAction(formData: FormData) {
   "use server"
   const token = String(formData.get("token") ?? "")
   const name = String(formData.get("name") ?? "")
-  const res = await submitQuinceName(token, name)
+  const birthday = String(formData.get("birthday") ?? "")
+  const res = await submitQuinceName(token, { name, birthday })
   if (!res.ok) {
     redirect(`/q/${token}?error=${encodeURIComponent(res.error ?? "Error")}`)
   }
@@ -94,11 +95,11 @@ export default async function QuinceNamePage({
                 <Crown className="h-5 w-5" />
               </div>
               <h1 className="text-xl font-bold text-gray-900">
-                ¿Cómo se llama la quinceañera?
+                Datos de la quinceañera
               </h1>
               <p className="mt-1 text-sm text-gray-600 leading-relaxed">
                 Para preparar <strong>{ctx.sessionName}</strong> necesitamos el
-                nombre de la quinceañera.
+                nombre y la fecha de cumpleaños de la quinceañera.
               </p>
             </div>
 
@@ -108,28 +109,46 @@ export default async function QuinceNamePage({
               </div>
             )}
 
-            <label className="block">
-              <span className="text-xs font-medium text-gray-700 mb-1.5 block">
-                Nombre de la quinceañera <span className="text-red-500">*</span>
-              </span>
-              <input
-                name="name"
-                required
-                minLength={2}
-                maxLength={120}
-                autoFocus
-                defaultValue={ctx.currentName ?? ""}
-                placeholder="Ej: Elianny Martínez"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-1"
-              />
-            </label>
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-xs font-medium text-gray-700 mb-1.5 block">
+                  Nombre de la quinceañera <span className="text-red-500">*</span>
+                </span>
+                <input
+                  name="name"
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  autoFocus
+                  defaultValue={ctx.currentName ?? ""}
+                  placeholder="Ej: Elianny Martínez"
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-1"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-xs font-medium text-gray-700 mb-1.5 block">
+                  Fecha de cumpleaños <span className="text-red-500">*</span>
+                </span>
+                <input
+                  name="birthday"
+                  type="date"
+                  required
+                  defaultValue={ctx.currentBirthday ?? ""}
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-1"
+                />
+                <span className="mt-1 block text-[11px] text-gray-400">
+                  Con la fecha agendamos la entrega de las fotos.
+                </span>
+              </label>
+            </div>
 
             <button
               type="submit"
               className="mt-5 w-full py-3 rounded-xl font-semibold text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: accent }}
             >
-              {ctx.currentName ? "Actualizar nombre" : "Guardar nombre"}
+              Guardar datos
             </button>
           </form>
         )}
