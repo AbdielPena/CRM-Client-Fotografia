@@ -39,7 +39,7 @@ function getSystemTheme(): ResolvedTheme {
 // registro): SIEMPRE en claro. Un visitante con el celular en modo oscuro NO
 // debe ver el formulario negro. NO incluye /g (galería, tiene su propio tema)
 // ni el CRM (respeta la preferencia del fotógrafo).
-const FORCE_LIGHT_RE = /^\/(f|r|fb|sign|p|b|booking|i)(\/|$)/
+const FORCE_LIGHT_RE = /^\/(f|r|fb|sign|p|b|booking|i|q|colab|vestidos)(\/|$)/
 
 function isForcedLightPath(): boolean {
   return typeof window !== "undefined" && FORCE_LIGHT_RE.test(window.location.pathname)
@@ -64,7 +64,7 @@ function applyThemeClass(resolved: ResolvedTheme) {
 export const themeScript = `
 (function() {
   try {
-    var forceLight = /^\\/(f|r|fb|sign|p|b|booking|i)(\\/|$)/.test(location.pathname);
+    var forceLight = /^\\/(f|r|fb|sign|p|b|booking|i|q|colab|vestidos)(\\/|$)/.test(location.pathname);
     var stored = localStorage.getItem('${STORAGE_KEY}') || 'system';
     var resolved = stored === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
