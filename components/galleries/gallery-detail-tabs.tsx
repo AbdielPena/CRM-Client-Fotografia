@@ -26,12 +26,14 @@ import {
   ArrowDownAZ,
   CheckCircle2,
   Ban,
+  Download,
+  Pencil,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
-import { renderWaMessage } from "@/lib/share/wa-message"
+import { renderWaMessage, DEFAULT_DELIVERY_WA_MESSAGE } from "@/lib/share/wa-message"
 import type { ReselectionInfo } from "@/server/services/reselection.service"
 import {
   createReselectionAction,
@@ -175,6 +177,8 @@ interface Props {
   driveLink?: string | null
   /** Mensaje de WhatsApp de selección (editable en Ajustes → WhatsApp). */
   waSelectionTemplate?: string
+  /** Mensaje de WhatsApp de la entrega final (editable en Ajustes → WhatsApp). */
+  waDeliveryTemplate?: string
   /** Cuántas fotos eligió el cliente (favoritos únicos) — para la 2da selección. */
   favoritesCount?: number
   /** Segunda selección existente (galería hija) si ya se creó. */
@@ -197,6 +201,7 @@ export function GalleryDetailTabs({
   client,
   driveLink = null,
   waSelectionTemplate,
+  waDeliveryTemplate,
   favoritesCount = 0,
   reselection = null,
 }: Props) {
@@ -336,6 +341,7 @@ export function GalleryDetailTabs({
             client={client}
             hasDeliveryAssets={hasDelivery}
             waSelectionTemplate={waSelectionTemplate}
+            waDeliveryTemplate={waDeliveryTemplate}
             favoritesCount={favoritesCount}
             reselection={reselection}
             selectionSources={selectionSources}
@@ -1760,6 +1766,7 @@ function ShareTab({
   client = null,
   hasDeliveryAssets = false,
   waSelectionTemplate,
+  waDeliveryTemplate,
   favoritesCount = 0,
   reselection = null,
   selectionSources = { favoritesCount: 0, collections: [] },
@@ -1770,6 +1777,7 @@ function ShareTab({
   client?: { name: string | null; email: string | null; phone: string | null } | null
   hasDeliveryAssets?: boolean
   waSelectionTemplate?: string
+  waDeliveryTemplate?: string
   favoritesCount?: number
   reselection?: ReselectionInfo | null
   /** Fuentes elegibles para armar la 2da selección: ♥ generales + cada lista. */
@@ -1786,6 +1794,8 @@ function ShareTab({
   const [selToken, setSelToken] = React.useState<string | null>(null)
   const [selCopied, setSelCopied] = React.useState(false)
   const [msgCopied, setMsgCopied] = React.useState(false)
+  const [webCopied, setWebCopied] = React.useState(false)
+  const [delivMsgCopied, setDelivMsgCopied] = React.useState(false)
   const [resel, setResel] = React.useState<ReselectionInfo | null>(reselection)
   const [reselCopied, setReselCopied] = React.useState(false)
   const [creatingResel, startReselTransition] = useTransition()
@@ -1834,12 +1844,18 @@ function ShareTab({
         link: publicUrl,
       })
     : ""
-  const msgEntrega = publicUrl
-    ? `${greet}🎉 ¡Tu entrega final ya está lista! Puedes verla, seguir eligiendo fotos y descargarlas aquí: ${publicUrl}`
-    : ""
-  const msgDrive = driveLink
-    ? `${greet}📁 Aquí puedes descargar tus fotos desde Google Drive: ${driveLink}`
-    : ""
+  // ── Entrega final: link de descarga web (?entrega=1) + Drive + mensaje editable ──
+  // Separado de la selección: este link muestra SOLO la entrega (sin selección).
+  const deliveryWebUrl = publicUrl ? `${publicUrl}?entrega=1` : null
+  const msgEntregaFinal = renderWaMessage(
+    waDeliveryTemplate || DEFAULT_DELIVERY_WA_MESSAGE,
+    {
+      cliente: firstName,
+      galeria: gallery.name,
+      link_web: deliveryWebUrl ?? "",
+      link_drive: driveLink ?? "",
+    },
+  )
 
   const handleCopyDrive = () => {
     if (!driveLink) return
@@ -1847,6 +1863,19 @@ function ShareTab({
     setDriveCopied(true)
     toast.success("Link de Drive copiado")
     setTimeout(() => setDriveCopied(false), 2000)
+  }
+  const handleCopyWeb = () => {
+    if (!deliveryWebUrl) return
+    navigator.clipboard.writeText(deliveryWebUrl)
+    setWebCopied(true)
+    toast.success("Link de descarga copiado")
+    setTimeout(() => setWebCopied(false), 2000)
+  }
+  const handleCopyDelivMsg = () => {
+    navigator.clipboard.writeText(msgEntregaFinal)
+    setDelivMsgCopied(true)
+    toast.success("Mensaje copiado")
+    setTimeout(() => setDelivMsgCopied(false), 2000)
   }
 
   const handleGenerate = () => {
@@ -1911,9 +1940,8 @@ function ShareTab({
   }
 
   const handleCopyMsg = () => {
-    const m = hasDeliveryAssets ? msgEntrega : msgSeleccion
-    if (!m) return
-    navigator.clipboard.writeText(m)
+    if (!msgSeleccion) return
+    navigator.clipboard.writeText(msgSeleccion)
     setMsgCopied(true)
     toast.success("Mensaje copiado")
     setTimeout(() => setMsgCopied(false), 2000)
@@ -1997,6 +2025,14 @@ function ShareTab({
         </div>
       )}
 
+      {/* ═══ Bloque SELECCIÓN ═══ */}
+      <div className="flex items-center gap-3 pt-1">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          Selección
+        </span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
       {/* Estado de la selección: bloquear al empezar a editar / reabrir */}
       <div
         className={cn(
@@ -2036,7 +2072,7 @@ function ShareTab({
 
       <div className="rounded-xl border border-border bg-card p-5">
         <h3 className="text-[14px] font-semibold text-foreground">
-          Link público para el cliente
+          Link de selección para el cliente
         </h3>
 
         {publicUrl ? (
@@ -2061,17 +2097,13 @@ function ShareTab({
             </div>
             <div className="mt-3">
               <a
-                href={waLink(
-                  hasDeliveryAssets ? msgEntrega : msgSeleccion,
-                )}
+                href={waLink(msgSeleccion)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
-                {hasDeliveryAssets
-                  ? "Compartir galería por WhatsApp"
-                  : "Compartir selección por WhatsApp"}
+                Compartir selección por WhatsApp
               </a>
             </div>
 
@@ -2090,19 +2122,15 @@ function ShareTab({
                 </button>
               </div>
               <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground">
-                {hasDeliveryAssets ? msgEntrega : msgSeleccion}
+                {msgSeleccion}
               </p>
-              {!hasDeliveryAssets && (
-                <p className="mt-1.5 text-[10.5px] text-muted-foreground">
-                  Se edita en Ajustes → WhatsApp y se actualiza en todas las galerías.
-                </p>
-              )}
+              <p className="mt-1.5 text-[10.5px] text-muted-foreground">
+                Se edita en Ajustes → WhatsApp y se actualiza en todas las galerías.
+              </p>
             </div>
 
             <p className="mt-2 text-[11.5px] text-muted-foreground">
-              {hasDeliveryAssets
-                ? "El cliente ve su selección y la entrega final en la misma galería con un toggle."
-                : "Link de selección: el cliente favoritea con ♥ y elige sus fotos."}
+              El cliente favoritea con ♥ y elige sus fotos en esta galería.
               {!waPhone && " (Agrega el teléfono del cliente para enviar directo por WhatsApp.)"}
             </p>
           </div>
@@ -2290,62 +2318,138 @@ function ShareTab({
         )}
       </div>
 
-      {/* Google Drive — si tiene entrega habilitada o link de Drive */}
+      {/* ═══ Bloque ENTREGA FINAL (aparte de la selección) ═══ */}
       {(hasDeliveryAssets || !!driveLink) && (
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
-          <ExternalLink className="h-4 w-4 text-muted-foreground" /> Google Drive
-        </h3>
-        {driveLink ? (
-          <div className="mt-3">
-            <div className="flex gap-2">
-              <input
-                readOnly
-                value={driveLink}
-                className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
-              />
-              <button
-                onClick={handleCopyDrive}
-                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
-              >
-                {driveCopied ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-                {driveCopied ? "Copiado" : "Copiar"}
-              </button>
-            </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <a
-                href={driveLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"
-              >
-                <ExternalLink className="h-3.5 w-3.5" /> Abrir carpeta
-              </a>
-              <a
-                href={waLink(msgDrive)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
-              >
-                <MessageCircle className="h-3.5 w-3.5" /> Compartir Drive
-              </a>
-            </div>
-            <p className="mt-2 text-[11.5px] text-muted-foreground">
-              Carpeta con las fotos en alta. El cliente también ve este botón de
-              descarga dentro de la galería de entrega.
-            </p>
+        <>
+          <div className="flex items-center gap-3 pt-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Entrega final
+            </span>
+            <div className="h-px flex-1 bg-border" />
           </div>
-        ) : (
-          <p className="mt-3 text-[12.5px] text-muted-foreground">
-            Aún no hay carpeta de Drive. Se genera automáticamente al respaldar la
-            entrega final en Google Drive.
-          </p>
-        )}
-      </div>
+
+          <div className="space-y-4 rounded-xl border border-border bg-card p-5">
+            <div>
+              <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
+                <Download className="h-4 w-4 text-brand" /> Descarga de la entrega
+              </h3>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                Link <strong>aparte</strong> para que el cliente SOLO vea y descargue sus
+                fotos editadas (sin la selección). Se guardan en su teléfono como ZIP.
+              </p>
+            </div>
+
+            {/* Link de descarga desde la web (?entrega=1) */}
+            {deliveryWebUrl && (
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-foreground">
+                  Link de descarga (desde la web)
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={deliveryWebUrl}
+                    className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
+                  />
+                  <button
+                    onClick={handleCopyWeb}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
+                  >
+                    {webCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {webCopied ? "Copiado" : "Copiar"}
+                  </button>
+                  <a
+                    href={deliveryWebUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Link de Google Drive */}
+            <div>
+              <p className="mb-1 text-[11px] font-medium text-foreground">Google Drive</p>
+              {driveLink ? (
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={driveLink}
+                    className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
+                  />
+                  <button
+                    onClick={handleCopyDrive}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
+                  >
+                    {driveCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {driveCopied ? "Copiado" : "Copiar"}
+                  </button>
+                  <a
+                    href={driveLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                  </a>
+                </div>
+              ) : (
+                <p className="text-[12px] text-muted-foreground">
+                  Aún no hay carpeta de Drive. Se genera al respaldar la entrega final en
+                  Google Drive.
+                </p>
+              )}
+            </div>
+
+            {/* Mensaje editable con AMBOS links (descarga web + Drive) */}
+            {deliveryWebUrl && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                    Mensaje de entrega para el cliente
+                  </span>
+                  <button
+                    onClick={handleCopyDelivMsg}
+                    className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-emerald-800 hover:bg-white dark:border-emerald-500/40 dark:bg-transparent dark:text-emerald-300"
+                  >
+                    {delivMsgCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                    {delivMsgCopied ? "Copiado" : "Copiar mensaje"}
+                  </button>
+                </div>
+                <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground">
+                  {msgEntregaFinal}
+                </p>
+                <Link
+                  href="/settings/whatsapp"
+                  className="mt-2 inline-flex items-center gap-1 text-[10.5px] font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                >
+                  <Pencil className="h-3 w-3" /> Editar mensaje (con {"{{link_web}}"} y {"{{link_drive}}"})
+                </Link>
+              </div>
+            )}
+
+            {/* Enviar la entrega por WhatsApp */}
+            {waPhone && deliveryWebUrl ? (
+              <a
+                href={waLink(msgEntregaFinal)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> Enviar entrega por WhatsApp
+              </a>
+            ) : (
+              !waPhone && (
+                <p className="text-[11.5px] text-muted-foreground">
+                  Agrega el teléfono del cliente para enviar la entrega directo por WhatsApp.
+                </p>
+              )
+            )}
+          </div>
+        </>
       )}
     </div>
   )

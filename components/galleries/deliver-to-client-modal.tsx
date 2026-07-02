@@ -279,8 +279,9 @@ function ResultPanel({
       <div className="space-y-2">
         <CopyRow
           icon={<Link2 className="h-3.5 w-3.5" />}
-          label="Galería web"
-          value={result.url}
+          label="Descarga (web)"
+          value={`${result.url}?entrega=1`}
+          openHref={`${result.url}?entrega=1`}
         />
         {result.driveLink && (
           <CopyRow
