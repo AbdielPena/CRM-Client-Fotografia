@@ -591,6 +591,25 @@ export async function cancelDeliveryAction(input: {
   return { ok: true }
 }
 
+/** Guarda la "dedicatoria de la madre" desde el CRM (estudio). */
+export async function updateMotherDedicationAction(input: {
+  galleryId: string
+  message: string
+  from: string
+}): Promise<{ ok: true }> {
+  const ctx = await requireStudioAuth()
+  const galleryId = uuidSchema.parse(input.galleryId)
+  const { setMotherDedication } = await import("@/server/services/gallery.service")
+  await setMotherDedication(
+    galleryId,
+    input.message.trim() || null,
+    input.from.trim() || null,
+    ctx.studioId,
+  )
+  revalidatePath(`/galleries/${galleryId}`)
+  return { ok: true }
+}
+
 // ─── Galerías 2.0: apariencia / pistas / embed ──────────────────────────────
 
 const appearanceSchema = z.object({

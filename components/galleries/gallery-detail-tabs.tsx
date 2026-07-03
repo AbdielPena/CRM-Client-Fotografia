@@ -42,6 +42,7 @@ import {
 import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
 import { DeliverToClientButton } from "@/components/galleries/deliver-to-client-modal"
+import { MotherDedicationCard } from "@/components/galleries/mother-dedication-card"
 import { ValidateDeliveryTab } from "@/components/galleries/validate-delivery-tab"
 import { GalleryAppearanceTab } from "@/components/galleries/gallery-appearance-tab"
 import { GalleryActivityTab } from "@/components/galleries/gallery-activity-tab"
@@ -183,6 +184,9 @@ interface Props {
   favoritesCount?: number
   /** Segunda selección existente (galería hija) si ya se creó. */
   reselection?: ReselectionInfo | null
+  /** Dedicatoria de la madre (aparece en la entrega). */
+  motherMessage?: string | null
+  motherMessageFrom?: string | null
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -204,6 +208,8 @@ export function GalleryDetailTabs({
   waDeliveryTemplate,
   favoritesCount = 0,
   reselection = null,
+  motherMessage = null,
+  motherMessageFrom = null,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -345,6 +351,8 @@ export function GalleryDetailTabs({
             favoritesCount={favoritesCount}
             reselection={reselection}
             selectionSources={selectionSources}
+            motherMessage={motherMessage}
+            motherMessageFrom={motherMessageFrom}
           />
         </TabsContent>
 
@@ -1770,6 +1778,8 @@ function ShareTab({
   favoritesCount = 0,
   reselection = null,
   selectionSources = { favoritesCount: 0, collections: [] },
+  motherMessage = null,
+  motherMessageFrom = null,
 }: {
   gallery: Gallery
   publicToken: string | null
@@ -1785,6 +1795,8 @@ function ShareTab({
     favoritesCount: number
     collections: Array<{ id: string; name: string; count: number }>
   }
+  motherMessage?: string | null
+  motherMessageFrom?: string | null
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -2448,6 +2460,15 @@ function ShareTab({
                 </p>
               )
             )}
+
+            {/* Dedicatoria de la madre — aparece en la entrega (editable por el
+                estudio o por la mamá vía link) */}
+            <MotherDedicationCard
+              galleryId={gallery.id}
+              publicToken={token}
+              initialMessage={motherMessage ?? ""}
+              initialFrom={motherMessageFrom ?? ""}
+            />
           </div>
         </>
       )}

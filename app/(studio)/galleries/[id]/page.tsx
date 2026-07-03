@@ -368,6 +368,13 @@ export default async function GalleryDetailPage({
         waDeliveryTemplate={waDeliveryTemplate}
         favoritesCount={favoritesCount}
         reselection={reselection}
+        motherMessage={
+          (gallery as unknown as { mother_message: string | null }).mother_message ?? null
+        }
+        motherMessageFrom={
+          (gallery as unknown as { mother_message_from: string | null })
+            .mother_message_from ?? null
+        }
       />
     </>
   )

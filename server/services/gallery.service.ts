@@ -685,6 +685,27 @@ export async function setAssetsDeliveryTrack(
   if (track !== null) void markProjectDeliveredFromGallery(studioId, galleryId)
 }
 
+/**
+ * Guarda la "dedicatoria de la madre" (mensaje que aparece en la entrega).
+ * Editable por el estudio (pasar `studioId` para scopear) o por la madre vía
+ * link público (el token ya validó la galería, no hace falta studioId).
+ */
+export async function setMotherDedication(
+  galleryId: string,
+  message: string | null,
+  from: string | null,
+  studioId?: string,
+): Promise<void> {
+  const db = svc() as unknown as SupabaseClient
+  let q = db
+    .from("galleries")
+    .update({ mother_message: message, mother_message_from: from })
+    .eq("id", galleryId)
+  if (studioId) q = q.eq("studio_id", studioId)
+  const { error } = await q
+  if (error) throw new Error(`[setMotherDedication] ${error.message}`)
+}
+
 /** Activa/desactiva el embed; genera el token la primera vez y lo preserva. */
 export async function setGalleryEmbed(
   studioId: string,

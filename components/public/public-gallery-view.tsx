@@ -291,6 +291,8 @@ export function PublicGalleryView({
   finalDeliveryDriveLink = null,
   deliveryOnly = false,
   suggestedSelectionName = null,
+  motherMessage = null,
+  motherMessageFrom = null,
 }: {
   token: string
   gallery: Gallery
@@ -303,6 +305,9 @@ export function PublicGalleryView({
   deliveryOnly?: boolean
   /** Nombre de la quinceañera (del proyecto) para prellenar el nombre de la lista. */
   suggestedSelectionName?: string | null
+  /** Dedicatoria de la madre a la quinceañera (se muestra en la entrega). */
+  motherMessage?: string | null
+  motherMessageFrom?: string | null
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
   // Assets que el usuario tocó localmente — `loadFavs` no debe pisarlos con
@@ -1131,6 +1136,43 @@ export function PublicGalleryView({
             {gallery.description}
           </p>
         </div>
+      )}
+
+      {/* Dedicatoria de la madre a la quinceañera (mensaje editable). */}
+      {motherMessage && motherMessage.trim() && (
+        <figure className="mx-auto max-w-2xl px-6 pt-16 text-center">
+          <p
+            className="font-semibold uppercase"
+            style={{ color: ED.gold, fontSize: "0.66rem", letterSpacing: "0.24em" }}
+          >
+            Dedicatoria
+          </p>
+          <blockquote
+            className="mt-5 text-balance"
+            style={{
+              fontFamily: SERIF,
+              fontStyle: "italic",
+              fontSize: "clamp(1.35rem,3vw,2rem)",
+              lineHeight: 1.5,
+              color: "#3a332b",
+            }}
+          >
+            “{motherMessage.trim()}”
+          </blockquote>
+          {motherMessageFrom && motherMessageFrom.trim() && (
+            <figcaption
+              className="mt-5"
+              style={{ fontFamily: SERIF, fontSize: "1.05rem", color: ED.gold }}
+            >
+              — {motherMessageFrom.trim()}
+            </figcaption>
+          )}
+          <div
+            className="mx-auto mt-8 h-px w-16"
+            style={{ background: ED.line }}
+            aria-hidden
+          />
+        </figure>
       )}
 
       {/* Flujo editorial: pares, tríos y una foto sola de vez en cuando.
