@@ -47,6 +47,7 @@ export async function createTaskAction(
   const title = String(formData.get("title") ?? "").trim()
   if (!title) return { ok: false, message: "El título es requerido", values }
 
+  let newTaskId: string
   try {
     const task = await createTask(session.studioId, session.userId, {
       title,
@@ -73,8 +74,7 @@ export async function createTaskAction(
         : undefined,
       notes: (formData.get("notes") as string) || undefined,
     })
-    revalidatePath("/tasks")
-    redirect(`/tasks/${task.id}`)
+    newTaskId = task.id
   } catch (err) {
     return {
       ok: false,
@@ -82,6 +82,11 @@ export async function createTaskAction(
       values,
     }
   }
+
+  // OJO: redirect() lanza NEXT_REDIRECT a propósito. DEBE ir FUERA del try/catch
+  // — si no, el catch lo atrapa y lo muestra como error "NEXT_REDIRECT".
+  revalidatePath("/tasks")
+  redirect(`/tasks/${newTaskId}`)
 }
 
 export async function updateTaskAction(
