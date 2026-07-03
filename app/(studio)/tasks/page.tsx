@@ -8,14 +8,19 @@ import {
   PauseCircle,
   XCircle,
   User,
+  CalendarDays,
+  Sun,
+  CalendarClock,
+  ListChecks,
 } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
-import { getTasks } from "@/server/services/task.service"
+import { getTasks, getTodayTasks, type TaskRow } from "@/server/services/task.service"
 import { formatDate } from "@/lib/utils/currency"
 import { STAGE_LABELS, type StageKey } from "@/lib/workflow/types"
+import { cn } from "@/lib/utils/cn"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
@@ -42,6 +47,7 @@ export default async function TasksPage({
   searchParams,
 }: {
   searchParams?: {
+    view?: string
     status?: string
     assignee?: string
     overdue?: string
@@ -49,57 +55,21 @@ export default async function TasksPage({
   }
 }) {
   const session = await requireStudioAuth()
-  const validStatus = [
-    "pendiente",
-    "en_progreso",
-    "completada",
-    "cancelada",
-    "bloqueada",
-  ] as const
-  const status = validStatus.includes(searchParams?.status as (typeof validStatus)[number])
-    ? (searchParams!.status as (typeof validStatus)[number])
-    : undefined
+  const view: "today" | "all" = searchParams?.view === "all" ? "all" : "today"
 
-  const overdue = searchParams?.overdue === "1"
-  const assignedToMe = searchParams?.assignee === "me"
-
-  const [tasks, unread] = await Promise.all([
-    getTasks(session.studioId, {
-      status,
-      assignedToUserId: assignedToMe ? session.userId : undefined,
-      overdue,
-      search: searchParams?.q,
-      pageSize: 100,
-    }),
+  // "Mis tareas de hoy" (para la vista + el contador del toggle) y total global.
+  const [today, allCount, unread] = await Promise.all([
+    getTodayTasks(session.studioId, session.userId),
+    getTasks(session.studioId, { pageSize: 1 }),
     countUnreadNotifications(session.studioId),
   ])
-
-  // KPIs
-  const allTasksRes = await getTasks(session.studioId, { pageSize: 1 })
-  // Para los conteos hacemos 3 queries chicas
-  const [pendingRes, overdueRes, myTasksRes] = await Promise.all([
-    getTasks(session.studioId, { status: "pendiente", pageSize: 1 }),
-    getTasks(session.studioId, { overdue: true, pageSize: 1 }),
-    getTasks(session.studioId, {
-      assignedToUserId: session.userId,
-      pageSize: 1,
-    }),
-  ])
-
-  // El orden por fecha de entrega viene del servicio; aquí solo hundimos las
-  // completadas/canceladas al fondo (sort estable: conserva la fecha dentro de
-  // cada grupo). La página trae hasta 100 tareas = todas para este estudio.
-  const DONE = new Set(["completada", "cancelada"])
-  const sortedItems = [...tasks.items].sort(
-    (a, b) => (DONE.has(a.status) ? 1 : 0) - (DONE.has(b.status) ? 1 : 0),
-  )
 
   return (
     <>
       <AppTopbar
         eyebrow="Productividad"
         title="Tareas"
-        description="Asigna tareas a tu equipo, vincúlalas a clientes/proyectos, recibe recordatorios."
+        description="Tus tareas del día, personales y las vinculadas a clientes/proyectos. Recibe recordatorios."
         unreadNotifications={unread}
         actions={
           <Button asChild>
@@ -112,160 +82,328 @@ export default async function TasksPage({
       />
 
       <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        {/* KPIs */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Kpi
-            label="Total"
-            value={allTasksRes.total}
-            icon={<CheckSquare className="size-4" />}
-            tone="neutral"
+        {/* Toggle Hoy | Todas */}
+        <div className="inline-flex rounded-lg border border-border bg-card p-0.5">
+          <Link
             href="/tasks"
-            active={!status && !overdue && !assignedToMe}
-          />
-          <Kpi
-            label="Pendientes"
-            value={pendingRes.total}
-            icon={<Clock className="size-4" />}
-            tone="warning"
-            href="/tasks?status=pendiente"
-            active={status === "pendiente"}
-          />
-          <Kpi
-            label="Atrasadas"
-            value={overdueRes.total}
-            icon={<AlertCircle className="size-4" />}
-            tone="danger"
-            href="/tasks?overdue=1"
-            active={overdue}
-          />
-          <Kpi
-            label="Asignadas a mí"
-            value={myTasksRes.total}
-            icon={<CheckSquare className="size-4" />}
-            tone="neutral"
-            href="/tasks?assignee=me"
-            active={assignedToMe}
-          />
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+              view === "today"
+                ? "bg-brand text-brand-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Sun className="h-3.5 w-3.5" /> Mis tareas de hoy
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-[10.5px] tabular-nums",
+                view === "today" ? "bg-brand-foreground/20" : "bg-muted",
+              )}
+            >
+              {today.total}
+            </span>
+          </Link>
+          <Link
+            href="/tasks?view=all"
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+              view === "all"
+                ? "bg-brand text-brand-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <ListChecks className="h-3.5 w-3.5" /> Todas
+            <span
+              className={cn(
+                "rounded-full px-1.5 text-[10.5px] tabular-nums",
+                view === "all" ? "bg-brand-foreground/20" : "bg-muted",
+              )}
+            >
+              {allCount.total}
+            </span>
+          </Link>
         </div>
 
-        {/* Lista */}
-        {tasks.total === 0 ? (
-          <EmptyState
-            icon={<CheckSquare className="size-12 text-muted-foreground/60" />}
-            title="Sin tareas"
-            description="Crea tu primera tarea y asígnala a alguien del equipo. Recibirá notificación in-app."
-          >
-            <Button asChild>
-              <Link href="/tasks/new">
-                <Plus className="mr-1 size-4" />
-                Nueva tarea
-              </Link>
-            </Button>
-          </EmptyState>
+        {view === "today" ? (
+          <TodayView data={today} />
         ) : (
-          <ul className="space-y-2">
-            {sortedItems.map((t) => {
-              const StatusIcon = STATUS_ICONS[t.status] ?? Clock
-              const isOverdue =
-                t.due_date &&
-                ["pendiente", "en_progreso"].includes(t.status) &&
-                new Date(`${t.due_date}T${t.due_time ?? "23:59"}`) < new Date()
-              return (
-                <li key={t.id}>
-                  <Link
-                    href={`/tasks/${t.id}`}
-                    className="sf-card group block p-4 transition-colors hover:bg-accent/30"
-                  >
-                    <div className="flex items-start gap-3">
-                      <span
-                        className={
-                          "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full " +
-                          (t.status === "completada"
-                            ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
-                            : isOverdue
-                              ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
-                              : "bg-muted text-muted-foreground")
-                        }
-                      >
-                        <StatusIcon className="size-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3
-                            className={
-                              "text-sm font-semibold " +
-                              (t.status === "completada"
-                                ? "text-muted-foreground line-through"
-                                : "")
-                            }
-                          >
-                            {t.title}
-                          </h3>
-                          <span
-                            className={
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-medium " +
-                              (PRIORITY_CLS[t.priority] ?? PRIORITY_CLS.medium)
-                            }
-                          >
-                            {t.priority}
-                          </span>
-                          {t.workflow_stage && STAGE_LABELS[t.workflow_stage as StageKey] && (
-                            <span className="inline-flex items-center rounded-full bg-brand-soft px-2 py-0.5 text-[9px] font-medium text-brand">
-                              Pipeline · {STAGE_LABELS[t.workflow_stage as StageKey]}
-                            </span>
-                          )}
-                          {t.tags?.length > 0 && (
-                            <>
-                              {t.tags.slice(0, 2).map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground"
-                                >
-                                  #{tag}
-                                </span>
-                              ))}
-                            </>
-                          )}
-                        </div>
-                        {t.description && (
-                          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                            {t.description}
-                          </p>
-                        )}
-                        <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
-                          {t.due_date && (
-                            <span
-                              className={
-                                isOverdue
-                                  ? "font-semibold text-red-600"
-                                  : ""
-                              }
-                            >
-                              <Clock className="mr-0.5 inline size-2.5" />
-                              {formatDate(new Date(t.due_date))}
-                              {t.due_time && ` ${t.due_time}`}
-                              {isOverdue && " (atrasada)"}
-                            </span>
-                          )}
-                          {t.client_name ? (
-                            <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                              · <User className="inline size-2.5" /> {t.client_name}
-                            </span>
-                          ) : t.entity_type ? (
-                            <span>· Vinculada a {t.entity_type}</span>
-                          ) : null}
-                          {t.is_recurring && <span>· 🔁 Recurrente</span>}
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
+          <AllView studioId={session.studioId} userId={session.userId} searchParams={searchParams} />
         )}
       </main>
     </>
+  )
+}
+
+// ─── Vista "Mis tareas de hoy" (orden: vencidas → hoy → próximas → personales) ──
+function TodayView({ data }: { data: Awaited<ReturnType<typeof getTodayTasks>> }) {
+  if (data.total === 0) {
+    return (
+      <EmptyState
+        icon={<CheckCircle2 className="size-12 text-emerald-500/70" />}
+        title="¡Nada pendiente para hoy!"
+        description="No tienes tareas vencidas ni para hoy. Crea una tarea personal o añade una del CRM a tu día."
+      >
+        <Button asChild>
+          <Link href="/tasks/new">
+            <Plus className="mr-1 size-4" />
+            Nueva tarea
+          </Link>
+        </Button>
+      </EmptyState>
+    )
+  }
+  return (
+    <div className="space-y-6">
+      <Bucket
+        title="Vencidas"
+        icon={<AlertCircle className="size-4 text-red-600" />}
+        tone="danger"
+        tasks={data.overdue}
+      />
+      <Bucket
+        title="Hoy"
+        icon={<Sun className="size-4 text-amber-500" />}
+        tasks={data.today}
+      />
+      <Bucket
+        title="Próximas"
+        icon={<CalendarClock className="size-4 text-muted-foreground" />}
+        tasks={data.upcoming}
+      />
+      <Bucket
+        title="Personales"
+        icon={<CalendarDays className="size-4 text-muted-foreground" />}
+        tasks={data.personal}
+      />
+    </div>
+  )
+}
+
+function Bucket({
+  title,
+  icon,
+  tasks,
+  tone,
+}: {
+  title: string
+  icon: React.ReactNode
+  tasks: TaskRow[]
+  tone?: "danger"
+}) {
+  if (tasks.length === 0) return null
+  return (
+    <section>
+      <h2
+        className={cn(
+          "mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider",
+          tone === "danger" ? "text-red-600" : "text-muted-foreground",
+        )}
+      >
+        {icon}
+        {title}
+        <span className="tabular-nums opacity-70">· {tasks.length}</span>
+      </h2>
+      <ul className="space-y-2">
+        {tasks.map((t) => (
+          <TaskCard key={t.id} t={t} />
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+// ─── Vista "Todas" (lista + KPIs + filtros por URL, como antes) ──────────────
+async function AllView({
+  studioId,
+  userId,
+  searchParams,
+}: {
+  studioId: string
+  userId: string
+  searchParams?: { status?: string; assignee?: string; overdue?: string; q?: string }
+}) {
+  const validStatus = [
+    "pendiente",
+    "en_progreso",
+    "completada",
+    "cancelada",
+    "bloqueada",
+  ] as const
+  const status = validStatus.includes(searchParams?.status as (typeof validStatus)[number])
+    ? (searchParams!.status as (typeof validStatus)[number])
+    : undefined
+  const overdue = searchParams?.overdue === "1"
+  const assignedToMe = searchParams?.assignee === "me"
+
+  const [tasks, allTasksRes, pendingRes, overdueRes, myTasksRes] = await Promise.all([
+    getTasks(studioId, {
+      status,
+      assignedToUserId: assignedToMe ? userId : undefined,
+      overdue,
+      search: searchParams?.q,
+      pageSize: 100,
+    }),
+    getTasks(studioId, { pageSize: 1 }),
+    getTasks(studioId, { status: "pendiente", pageSize: 1 }),
+    getTasks(studioId, { overdue: true, pageSize: 1 }),
+    getTasks(studioId, { assignedToUserId: userId, pageSize: 1 }),
+  ])
+
+  const DONE = new Set(["completada", "cancelada"])
+  const sortedItems = [...tasks.items].sort(
+    (a, b) => (DONE.has(a.status) ? 1 : 0) - (DONE.has(b.status) ? 1 : 0),
+  )
+
+  const qs = (extra: Record<string, string>) =>
+    "/tasks?" + new URLSearchParams({ view: "all", ...extra }).toString()
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi
+          label="Total"
+          value={allTasksRes.total}
+          icon={<CheckSquare className="size-4" />}
+          tone="neutral"
+          href="/tasks?view=all"
+          active={!status && !overdue && !assignedToMe}
+        />
+        <Kpi
+          label="Pendientes"
+          value={pendingRes.total}
+          icon={<Clock className="size-4" />}
+          tone="warning"
+          href={qs({ status: "pendiente" })}
+          active={status === "pendiente"}
+        />
+        <Kpi
+          label="Atrasadas"
+          value={overdueRes.total}
+          icon={<AlertCircle className="size-4" />}
+          tone="danger"
+          href={qs({ overdue: "1" })}
+          active={overdue}
+        />
+        <Kpi
+          label="Asignadas a mí"
+          value={myTasksRes.total}
+          icon={<CheckSquare className="size-4" />}
+          tone="neutral"
+          href={qs({ assignee: "me" })}
+          active={assignedToMe}
+        />
+      </div>
+
+      {tasks.total === 0 ? (
+        <EmptyState
+          icon={<CheckSquare className="size-12 text-muted-foreground/60" />}
+          title="Sin tareas"
+          description="Crea tu primera tarea y asígnala a alguien del equipo. Recibirá notificación in-app."
+        >
+          <Button asChild>
+            <Link href="/tasks/new">
+              <Plus className="mr-1 size-4" />
+              Nueva tarea
+            </Link>
+          </Button>
+        </EmptyState>
+      ) : (
+        <ul className="space-y-2">
+          {sortedItems.map((t) => (
+            <TaskCard key={t.id} t={t} />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+// ─── Tarjeta de tarea (reusada en ambas vistas) ──────────────────────────────
+function TaskCard({ t }: { t: TaskRow }) {
+  const StatusIcon = STATUS_ICONS[t.status] ?? Clock
+  const isOverdue =
+    t.due_date &&
+    ["pendiente", "en_progreso"].includes(t.status) &&
+    new Date(`${t.due_date}T${t.due_time ?? "23:59"}`) < new Date()
+  return (
+    <li>
+      <Link
+        href={`/tasks/${t.id}`}
+        className="sf-card group block p-4 transition-colors hover:bg-accent/30"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className={
+              "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full " +
+              (t.status === "completada"
+                ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
+                : isOverdue
+                  ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
+                  : "bg-muted text-muted-foreground")
+            }
+          >
+            <StatusIcon className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3
+                className={
+                  "text-sm font-semibold " +
+                  (t.status === "completada" ? "text-muted-foreground line-through" : "")
+                }
+              >
+                {t.title}
+              </h3>
+              <span
+                className={
+                  "inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-medium " +
+                  (PRIORITY_CLS[t.priority] ?? PRIORITY_CLS.medium)
+                }
+              >
+                {t.priority}
+              </span>
+              {t.workflow_stage && STAGE_LABELS[t.workflow_stage as StageKey] && (
+                <span className="inline-flex items-center rounded-full bg-brand-soft px-2 py-0.5 text-[9px] font-medium text-brand">
+                  Pipeline · {STAGE_LABELS[t.workflow_stage as StageKey]}
+                </span>
+              )}
+              {t.tags?.length > 0 &&
+                t.tags.slice(0, 2).map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground"
+                  >
+                    #{tag}
+                  </span>
+                ))}
+            </div>
+            {t.description && (
+              <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+                {t.description}
+              </p>
+            )}
+            <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
+              {t.due_date && (
+                <span className={isOverdue ? "font-semibold text-red-600" : ""}>
+                  <Clock className="mr-0.5 inline size-2.5" />
+                  {formatDate(new Date(t.due_date))}
+                  {t.due_time && ` ${t.due_time}`}
+                  {isOverdue && " (atrasada)"}
+                </span>
+              )}
+              {t.client_name ? (
+                <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                  · <User className="inline size-2.5" /> {t.client_name}
+                </span>
+              ) : t.entity_type ? (
+                <span>· Vinculada a {t.entity_type}</span>
+              ) : null}
+              {t.is_recurring && <span>· 🔁 Recurrente</span>}
+            </div>
+          </div>
+        </div>
+      </Link>
+    </li>
   )
 }
 
@@ -294,10 +432,7 @@ function Kpi({
   return (
     <Link
       href={href}
-      className={
-        "block rounded-xl border p-3 text-center transition-colors hover:shadow-sm " +
-        cls
-      }
+      className={"block rounded-xl border p-3 text-center transition-colors hover:shadow-sm " + cls}
     >
       <p className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider opacity-80">
         {icon}

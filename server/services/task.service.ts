@@ -44,6 +44,11 @@ export type TaskRow = {
   is_recurring: boolean
   recurring_interval_days: number | null
   parent_task_id: string | null
+  /** "Mis tareas de hoy": día al que el usuario fijó la tarea (≠ due_date). */
+  daily_pin_date: string | null
+  daily_pin_user_id: string | null
+  /** Notas libres, aparte de description. */
+  notes: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -163,6 +168,120 @@ export async function getTasks(
     pageSize,
     totalPages: Math.ceil((count ?? 0) / pageSize) || 1,
   }
+}
+
+export type TodayTasks = {
+  overdue: TaskRow[]
+  today: TaskRow[]
+  upcoming: TaskRow[]
+  personal: TaskRow[]
+  total: number
+}
+
+const ACTIVE_TASK_STATUSES: TaskStatus[] = ["pendiente", "en_progreso", "bloqueada"]
+const PRIORITY_RANK: Record<TaskPriority, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
+
+function sortWithinBucket(a: TaskRow, b: TaskRow): number {
+  const p = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+  if (p !== 0) return p
+  const ak = `${a.due_date ?? "9999-99-99"}T${a.due_time ?? "99:99"}`
+  const bk = `${b.due_date ?? "9999-99-99"}T${b.due_time ?? "99:99"}`
+  return ak.localeCompare(bk)
+}
+
+/**
+ * "Mis tareas de hoy": tareas activas del usuario (asignadas a mí, creadas por
+ * mí, o que fijé a hoy) agrupadas con el orden inteligente
+ * VENCIDAS → HOY → PRÓXIMAS (7 días) → PERSONALES (sin fecha ni proyecto).
+ * "Vencida" es DERIVADA (due_date < hoy + activa), no un estado guardado.
+ */
+export async function getTodayTasks(
+  studioId: string,
+  userId: string,
+): Promise<TodayTasks> {
+  const sb = untypedServer()
+  const today = new Date().toISOString().slice(0, 10)
+  const in7 = new Date()
+  in7.setDate(in7.getDate() + 7)
+  const upcomingEnd = in7.toISOString().slice(0, 10)
+
+  const { data, error } = await sb
+    .from("tasks")
+    .select("*")
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .in("status", ACTIVE_TASK_STATUSES)
+    .or(
+      `assigned_to_user_id.eq.${userId},created_by.eq.${userId},daily_pin_user_id.eq.${userId}`,
+    )
+  if (error) throwServiceError("TASKS_TODAY_FAILED", error, { studioId })
+
+  const all = (data ?? []) as TaskRow[]
+  // Relevantes para "hoy": fijadas a hoy, con fecha dentro de los próximos 7
+  // días (incluye vencidas), o personales sin fecha ni entidad.
+  const relevant = all.filter((t) => {
+    const pinnedToday = t.daily_pin_date === today && t.daily_pin_user_id === userId
+    if (pinnedToday) return true
+    if (t.due_date && t.due_date <= upcomingEnd) return true
+    if (!t.due_date && !t.entity_id) return true
+    return false
+  })
+  const rows = await attachClientNames(sb, studioId, relevant)
+
+  const overdue: TaskRow[] = []
+  const todayB: TaskRow[] = []
+  const upcoming: TaskRow[] = []
+  const personal: TaskRow[] = []
+  for (const t of rows) {
+    const pinnedToday = t.daily_pin_date === today && t.daily_pin_user_id === userId
+    if (t.due_date && t.due_date < today) overdue.push(t)
+    else if ((t.due_date && t.due_date === today) || pinnedToday) todayB.push(t)
+    else if (t.due_date && t.due_date > today && t.due_date <= upcomingEnd) upcoming.push(t)
+    else personal.push(t)
+  }
+  overdue.sort(sortWithinBucket)
+  todayB.sort(sortWithinBucket)
+  upcoming.sort(sortWithinBucket)
+  personal.sort(sortWithinBucket)
+
+  return {
+    overdue,
+    today: todayB,
+    upcoming,
+    personal,
+    total: rows.length,
+  }
+}
+
+/** Fija una tarea a "Mis tareas de hoy" del usuario (sin tocar su due_date). */
+export async function pinTaskToToday(
+  studioId: string,
+  userId: string,
+  taskId: string,
+): Promise<void> {
+  const sb = untypedService()
+  const today = new Date().toISOString().slice(0, 10)
+  const { error } = await sb
+    .from("tasks")
+    .update({ daily_pin_date: today, daily_pin_user_id: userId })
+    .eq("id", taskId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+  if (error) throwServiceError("TASK_PIN_FAILED", error, { studioId, taskId })
+}
+
+/** Quita una tarea de "Mis tareas de hoy". */
+export async function unpinTaskFromToday(
+  studioId: string,
+  taskId: string,
+): Promise<void> {
+  const sb = untypedService()
+  const { error } = await sb
+    .from("tasks")
+    .update({ daily_pin_date: null, daily_pin_user_id: null })
+    .eq("id", taskId)
+    .eq("studio_id", studioId)
+  if (error) throwServiceError("TASK_UNPIN_FAILED", error, { studioId, taskId })
 }
 
 export async function getTaskById(studioId: string, taskId: string) {

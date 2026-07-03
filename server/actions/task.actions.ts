@@ -8,6 +8,8 @@ import {
   changeTaskStatus,
   createTask,
   deleteTask,
+  pinTaskToToday,
+  unpinTaskFromToday,
   updateTask,
   type TaskPriority,
   type TaskStatus,
@@ -152,6 +154,36 @@ export async function deleteTaskAction(
     await deleteTask(session.studioId, session.userId, taskId)
     revalidatePath("/tasks")
     return { ok: true, message: "Tarea eliminada" }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Error desconocido",
+    }
+  }
+}
+
+/** "Añadir a mis tareas diarias" — fija/quita la tarea de "Mis tareas de hoy". */
+export async function pinTaskToDailyAction(
+  taskId: string,
+  pinned: boolean,
+): Promise<{ ok: boolean; message?: string }> {
+  let session
+  try {
+    session = await requireStudioAuth()
+  } catch {
+    return { ok: false, message: "Tu sesión expiró." }
+  }
+  try {
+    if (pinned) {
+      await pinTaskToToday(session.studioId, session.userId, taskId)
+    } else {
+      await unpinTaskFromToday(session.studioId, taskId)
+    }
+    revalidatePath("/tasks")
+    return {
+      ok: true,
+      message: pinned ? "Añadida a tus tareas de hoy" : "Quitada de hoy",
+    }
   } catch (err) {
     return {
       ok: false,
