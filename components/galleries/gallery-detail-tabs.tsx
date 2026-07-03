@@ -187,6 +187,7 @@ interface Props {
   /** Dedicatoria de la madre (aparece en la entrega). */
   motherMessage?: string | null
   motherMessageFrom?: string | null
+  motherMessageEnabled?: boolean
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -210,6 +211,7 @@ export function GalleryDetailTabs({
   reselection = null,
   motherMessage = null,
   motherMessageFrom = null,
+  motherMessageEnabled = false,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -353,6 +355,7 @@ export function GalleryDetailTabs({
             selectionSources={selectionSources}
             motherMessage={motherMessage}
             motherMessageFrom={motherMessageFrom}
+            motherMessageEnabled={motherMessageEnabled}
           />
         </TabsContent>
 
@@ -1780,6 +1783,7 @@ function ShareTab({
   selectionSources = { favoritesCount: 0, collections: [] },
   motherMessage = null,
   motherMessageFrom = null,
+  motherMessageEnabled = false,
 }: {
   gallery: Gallery
   publicToken: string | null
@@ -1797,6 +1801,7 @@ function ShareTab({
   }
   motherMessage?: string | null
   motherMessageFrom?: string | null
+  motherMessageEnabled?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -2468,6 +2473,7 @@ function ShareTab({
               publicToken={token}
               initialMessage={motherMessage ?? ""}
               initialFrom={motherMessageFrom ?? ""}
+              initialEnabled={motherMessageEnabled}
             />
           </div>
         </>

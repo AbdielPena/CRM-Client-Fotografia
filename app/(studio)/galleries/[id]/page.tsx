@@ -375,6 +375,10 @@ export default async function GalleryDetailPage({
           (gallery as unknown as { mother_message_from: string | null })
             .mother_message_from ?? null
         }
+        motherMessageEnabled={
+          (gallery as unknown as { mother_message_enabled?: boolean })
+            .mother_message_enabled ?? false
+        }
       />
     </>
   )

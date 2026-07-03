@@ -706,6 +706,26 @@ export async function setMotherDedication(
   if (error) throw new Error(`[setMotherDedication] ${error.message}`)
 }
 
+/**
+ * Habilita/deshabilita el bloque de dedicatoria en la entrega. Cuando está
+ * habilitado pero la madre no escribió texto, la vista pública muestra un
+ * mensaje de agradecimiento del estudio.
+ */
+export async function setMotherDedicationEnabled(
+  galleryId: string,
+  enabled: boolean,
+  studioId?: string,
+): Promise<void> {
+  const db = svc() as unknown as SupabaseClient
+  let q = db
+    .from("galleries")
+    .update({ mother_message_enabled: enabled })
+    .eq("id", galleryId)
+  if (studioId) q = q.eq("studio_id", studioId)
+  const { error } = await q
+  if (error) throw new Error(`[setMotherDedicationEnabled] ${error.message}`)
+}
+
 /** Activa/desactiva el embed; genera el token la primera vez y lo preserva. */
 export async function setGalleryEmbed(
   studioId: string,

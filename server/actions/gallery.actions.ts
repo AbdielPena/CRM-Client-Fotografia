@@ -610,6 +610,18 @@ export async function updateMotherDedicationAction(input: {
   return { ok: true }
 }
 
+export async function toggleMotherDedicationAction(input: {
+  galleryId: string
+  enabled: boolean
+}): Promise<{ ok: true }> {
+  const ctx = await requireStudioAuth()
+  const galleryId = uuidSchema.parse(input.galleryId)
+  const { setMotherDedicationEnabled } = await import("@/server/services/gallery.service")
+  await setMotherDedicationEnabled(galleryId, !!input.enabled, ctx.studioId)
+  revalidatePath(`/galleries/${galleryId}`)
+  return { ok: true }
+}
+
 // ─── Galerías 2.0: apariencia / pistas / embed ──────────────────────────────
 
 const appearanceSchema = z.object({

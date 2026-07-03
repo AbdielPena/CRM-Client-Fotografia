@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import {
   validateGalleryToken,
   setMotherDedication,
+  setMotherDedicationEnabled,
 } from "@/server/services/gallery.service"
 
 /**
@@ -29,6 +30,8 @@ export async function POST(
 
   try {
     await setMotherDedication(view.gallery.id, message, from || null)
+    // La madre escribió desde el link que compartió el estudio → mostrarlo.
+    await setMotherDedicationEnabled(view.gallery.id, true)
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "save_failed" }, { status: 500 })

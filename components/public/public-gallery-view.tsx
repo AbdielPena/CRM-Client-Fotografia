@@ -100,6 +100,11 @@ const ED = {
 }
 const SERIF = "var(--font-serif), 'Playfair Display', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif"
 
+/** Mensaje de agradecimiento del estudio — se muestra cuando la dedicatoria
+ *  está habilitada pero la madre no escribió su texto. */
+const DEFAULT_THANKYOU =
+  "Gracias por confiar en nosotros para capturar este momento tan especial. Fue un privilegio ser parte de tu historia, y esperamos que estas fotografías guarden para siempre la alegría de este día."
+
 /** Cadencia editorial tipo revista: pares, tríos y una foto sola de vez en cuando. */
 const EDITORIAL_CADENCE = [2, 3, 2, 1]
 function chunkEditorial<T>(items: T[]): { n: number; items: T[] }[] {
@@ -293,6 +298,7 @@ export function PublicGalleryView({
   suggestedSelectionName = null,
   motherMessage = null,
   motherMessageFrom = null,
+  motherMessageEnabled = false,
 }: {
   token: string
   gallery: Gallery
@@ -308,6 +314,8 @@ export function PublicGalleryView({
   /** Dedicatoria de la madre a la quinceañera (se muestra en la entrega). */
   motherMessage?: string | null
   motherMessageFrom?: string | null
+  /** Si el estudio habilitó el bloque de dedicatoria/agradecimiento. */
+  motherMessageEnabled?: boolean
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
   // Assets que el usuario tocó localmente — `loadFavs` no debe pisarlos con
@@ -1138,42 +1146,50 @@ export function PublicGalleryView({
         </div>
       )}
 
-      {/* Dedicatoria de la madre a la quinceañera (mensaje editable). */}
-      {motherMessage && motherMessage.trim() && (
-        <figure className="mx-auto max-w-2xl px-6 pt-16 text-center">
-          <p
-            className="font-semibold uppercase"
-            style={{ color: ED.gold, fontSize: "0.66rem", letterSpacing: "0.24em" }}
-          >
-            Dedicatoria
-          </p>
-          <blockquote
-            className="mt-5 text-balance"
-            style={{
-              fontFamily: SERIF,
-              fontStyle: "italic",
-              fontSize: "clamp(1.35rem,3vw,2rem)",
-              lineHeight: 1.5,
-              color: "#3a332b",
-            }}
-          >
-            “{motherMessage.trim()}”
-          </blockquote>
-          {motherMessageFrom && motherMessageFrom.trim() && (
-            <figcaption
-              className="mt-5"
-              style={{ fontFamily: SERIF, fontSize: "1.05rem", color: ED.gold }}
-            >
-              — {motherMessageFrom.trim()}
-            </figcaption>
-          )}
-          <div
-            className="mx-auto mt-8 h-px w-16"
-            style={{ background: ED.line }}
-            aria-hidden
-          />
-        </figure>
-      )}
+      {/* Dedicatoria de la madre (si escribió) o agradecimiento del estudio —
+          se muestra solo si el estudio habilitó el bloque. */}
+      {motherMessageEnabled &&
+        (() => {
+          const msg = motherMessage?.trim() ?? ""
+          const isDedication = msg.length > 0
+          const text = isDedication ? msg : DEFAULT_THANKYOU
+          const sign = isDedication ? motherMessageFrom?.trim() ?? "" : studio.name
+          return (
+            <figure className="mx-auto max-w-2xl px-6 pt-16 text-center">
+              <p
+                className="font-semibold uppercase"
+                style={{ color: ED.gold, fontSize: "0.66rem", letterSpacing: "0.24em" }}
+              >
+                {isDedication ? "Dedicatoria" : "Gracias"}
+              </p>
+              <blockquote
+                className="mt-5 text-balance"
+                style={{
+                  fontFamily: SERIF,
+                  fontStyle: "italic",
+                  fontSize: "clamp(1.35rem,3vw,2rem)",
+                  lineHeight: 1.5,
+                  color: "#3a332b",
+                }}
+              >
+                “{text}”
+              </blockquote>
+              {sign && (
+                <figcaption
+                  className="mt-5"
+                  style={{ fontFamily: SERIF, fontSize: "1.05rem", color: ED.gold }}
+                >
+                  — {sign}
+                </figcaption>
+              )}
+              <div
+                className="mx-auto mt-8 h-px w-16"
+                style={{ background: ED.line }}
+                aria-hidden
+              />
+            </figure>
+          )
+        })()}
 
       {/* Flujo editorial: pares, tríos y una foto sola de vez en cuando.
           En móvil, 1 foto grande por fila. Respeta la forma real de la foto. */}
