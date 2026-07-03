@@ -23,6 +23,7 @@ export interface ServiceCategoryView {
   isActive: boolean
   sortOrder: number
   packageCount: number
+  thankyouMessage: string | null
 }
 
 type FormMode = "create" | "edit" | null
@@ -275,6 +276,25 @@ function CategoryForm({
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">Ícono</label>
           <IconSelector value={defaults?.icon} />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Mensaje de agradecimiento{" "}
+            <span className="font-normal text-muted-foreground">(entrega)</span>
+          </label>
+          <textarea
+            name="thankyouMessage"
+            defaultValue={defaults?.thankyouMessage ?? ""}
+            rows={3}
+            maxLength={2000}
+            className={inputCls}
+            placeholder="Ej. Gracias por dejarnos ser parte de este día tan especial…"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Aparece en la galería de entrega de las sesiones de esta categoría,
+            cuando la sesión no lleva dedicatoria de la madre (o la madre no la
+            escribió). Deja vacío para usar el agradecimiento genérico.
+          </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-foreground">
           <input

@@ -95,18 +95,40 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
     } | null
   ) ?? null
 
-  // Nombre de la quinceañera (del proyecto) para prellenar el nombre de la lista
-  // al hacer la selección. Solo se usa en la vista de selección (no en ?entrega=1).
+  // Del proyecto: (a) nombre de la quinceañera para prellenar el nombre de la
+  // lista (solo en la vista de selección) y (b) el mensaje de agradecimiento de
+  // la CATEGORÍA de la sesión — fallback de la dedicatoria cuando está habilitada
+  // pero la madre no escribió.
   let suggestedSelectionName: string | null = null
-  if (!deliveryOnly && studioInfo?.project_id) {
+  let thankyouMessage: string | null = null
+  if (studioInfo?.project_id) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: projRow } = await (supabase as any)
       .from("projects")
-      .select("quinceanera_name")
+      .select("quinceanera_name, service_category_id")
       .eq("id", studioInfo.project_id)
       .maybeSingle()
-    suggestedSelectionName =
-      (projRow as { quinceanera_name: string | null } | null)?.quinceanera_name ?? null
+    if (!deliveryOnly) {
+      suggestedSelectionName =
+        (projRow as { quinceanera_name: string | null } | null)?.quinceanera_name ?? null
+    }
+    // Solo resolver el agradecimiento si hace falta: bloque habilitado y sin
+    // dedicatoria de la madre (si escribió, se muestra su texto, no este).
+    const needThankyou =
+      (studioInfo?.mother_message_enabled ?? false) &&
+      !(studioInfo?.mother_message ?? "").trim()
+    const catId =
+      (projRow as { service_category_id: string | null } | null)?.service_category_id ?? null
+    if (needThankyou && catId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: catRow } = await (supabase as any)
+        .from("service_categories")
+        .select("thankyou_message")
+        .eq("id", catId)
+        .maybeSingle()
+      thankyouMessage =
+        (catRow as { thankyou_message: string | null } | null)?.thankyou_message ?? null
+    }
   }
 
   // Branding del estudio (white-label): logo, color, footer.
@@ -222,6 +244,7 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
         motherMessage={studioInfo?.mother_message ?? null}
         motherMessageFrom={studioInfo?.mother_message_from ?? null}
         motherMessageEnabled={studioInfo?.mother_message_enabled ?? false}
+        thankyouMessage={thankyouMessage}
       />
       {hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "both" && (
         <BookLauncher

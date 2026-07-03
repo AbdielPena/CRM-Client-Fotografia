@@ -10,6 +10,9 @@ export const createServiceCategorySchema = z.object({
   description: z.string().max(300).optional().or(z.literal("")),
   isActive: z.boolean().default(true),
   sortOrder: z.coerce.number().int().min(0).optional(),
+  // Mensaje de agradecimiento que aparece en la galería de entrega para sesiones
+  // de esta categoría (fallback cuando no hay dedicatoria de la madre).
+  thankyouMessage: z.string().max(2000).optional().or(z.literal("")),
 })
 
 export const updateServiceCategorySchema = createServiceCategorySchema.partial()

@@ -22,6 +22,7 @@ export interface ServiceCategory {
   driveFolderName: string | null
   isActive: boolean
   sortOrder: number
+  thankyouMessage: string | null
 }
 
 function sanitizeFolder(s: string): string {
@@ -68,7 +69,9 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
   const sb = untypedService()
   const { data } = await sb
     .from("service_categories")
-    .select("id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order")
+    .select(
+      "id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order, thankyou_message",
+    )
     .eq("studio_id", studioId)
     .is("deleted_at", null)
     .order("sort_order", { ascending: true })
@@ -84,6 +87,7 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
     driveFolderName: r.drive_folder_name ?? null,
     isActive: r.is_active,
     sortOrder: r.sort_order,
+    thankyouMessage: r.thankyou_message ?? null,
   }))
 }
 
@@ -135,6 +139,7 @@ export async function createServiceCategory(
       drive_folder_name: sanitizeFolder(input.name),
       is_active: input.isActive ?? true,
       sort_order: input.sortOrder ?? nextOrder,
+      thankyou_message: input.thankyouMessage || null,
     })
     .select("id")
     .single()
@@ -164,6 +169,7 @@ export async function updateServiceCategory(
   if (input.description !== undefined) patch.description = input.description || null
   if (input.isActive !== undefined) patch.is_active = input.isActive
   if (input.sortOrder !== undefined) patch.sort_order = input.sortOrder
+  if (input.thankyouMessage !== undefined) patch.thankyou_message = input.thankyouMessage || null
   const { error } = await sb
     .from("service_categories")
     .update(patch)

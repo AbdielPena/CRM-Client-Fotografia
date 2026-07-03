@@ -40,6 +40,7 @@ export default async function ServiceCategoriesSettingsPage() {
             isActive: c.isActive,
             sortOrder: c.sortOrder,
             packageCount: packageCounts[c.id] ?? 0,
+            thankyouMessage: c.thankyouMessage,
           }))}
         />
       </div>

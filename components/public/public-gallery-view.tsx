@@ -100,10 +100,11 @@ const ED = {
 }
 const SERIF = "var(--font-serif), 'Playfair Display', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif"
 
-/** Mensaje de agradecimiento del estudio — se muestra cuando la dedicatoria
- *  está habilitada pero la madre no escribió su texto. */
+/** Agradecimiento genérico por defecto — se usa cuando la dedicatoria está
+ *  habilitada, la madre no escribió, y la categoría de la sesión no tiene un
+ *  mensaje propio. Neutral: sirve para cualquier tipo de sesión. */
 const DEFAULT_THANKYOU =
-  "Gracias por confiar en nosotros para capturar este momento tan especial. Fue un privilegio ser parte de tu historia, y esperamos que estas fotografías guarden para siempre la alegría de este día."
+  "Gracias por confiar en nosotros para capturar este momento. Fue un privilegio ser parte de él, y esperamos que estas fotografías te acompañen por siempre."
 
 /** Cadencia editorial tipo revista: pares, tríos y una foto sola de vez en cuando. */
 const EDITORIAL_CADENCE = [2, 3, 2, 1]
@@ -299,6 +300,7 @@ export function PublicGalleryView({
   motherMessage = null,
   motherMessageFrom = null,
   motherMessageEnabled = false,
+  thankyouMessage = null,
 }: {
   token: string
   gallery: Gallery
@@ -316,6 +318,8 @@ export function PublicGalleryView({
   motherMessageFrom?: string | null
   /** Si el estudio habilitó el bloque de dedicatoria/agradecimiento. */
   motherMessageEnabled?: boolean
+  /** Agradecimiento de la categoría de la sesión (fallback si no hay dedicatoria). */
+  thankyouMessage?: string | null
 }) {
   const [favs, setFavs] = useState<Set<string>>(new Set())
   // Assets que el usuario tocó localmente — `loadFavs` no debe pisarlos con
@@ -1152,7 +1156,10 @@ export function PublicGalleryView({
         (() => {
           const msg = motherMessage?.trim() ?? ""
           const isDedication = msg.length > 0
-          const text = isDedication ? msg : DEFAULT_THANKYOU
+          // Sin dedicatoria: agradecimiento de la categoría, o el genérico.
+          const text = isDedication
+            ? msg
+            : thankyouMessage?.trim() || DEFAULT_THANKYOU
           const sign = isDedication ? motherMessageFrom?.trim() ?? "" : studio.name
           return (
             <figure className="mx-auto max-w-2xl px-6 pt-16 text-center">
