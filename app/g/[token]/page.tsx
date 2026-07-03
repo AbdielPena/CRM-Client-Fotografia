@@ -78,7 +78,7 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
   const { data: studioJoin } = await supabase
     .from("galleries")
     .select(
-      "studios(name, logo_url), download_pin_required, selection_submitted, selection_locked, project_id",
+      "studios(name, logo_url), download_pin_required, selection_submitted, selection_locked, project_id, mother_message, mother_message_from",
     )
     .eq("id", view.gallery.id)
     .maybeSingle()
@@ -89,6 +89,8 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
       selection_submitted?: boolean
       selection_locked?: boolean
       project_id?: string | null
+      mother_message?: string | null
+      mother_message_from?: string | null
     } | null
   ) ?? null
 
@@ -216,6 +218,8 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
         finalDeliveryDriveLink={driveLink}
         deliveryOnly={deliveryOnly}
         suggestedSelectionName={suggestedSelectionName}
+        motherMessage={studioInfo?.mother_message ?? null}
+        motherMessageFrom={studioInfo?.mother_message_from ?? null}
       />
       {hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "both" && (
         <BookLauncher
