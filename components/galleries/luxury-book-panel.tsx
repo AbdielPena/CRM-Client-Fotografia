@@ -209,7 +209,7 @@ export function LuxuryBookPanel({
         {publicToken && enabled && displayMode !== "classic" ? (
           <div className="flex flex-col gap-0.5">
             <a
-              href={`/g/${publicToken}`}
+              href={`/g/${publicToken}?libro=1`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-brand"

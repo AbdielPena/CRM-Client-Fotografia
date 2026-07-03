@@ -25,7 +25,7 @@ export const fetchCache = "force-no-store"
 
 type PageProps = {
   params: { token: string }
-  searchParams?: { entrega?: string; descarga?: string }
+  searchParams?: { entrega?: string; descarga?: string; libro?: string; book?: string }
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -62,6 +62,11 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
   // Link de descarga (?entrega=1): muestra SOLO la entrega final, sin selección.
   const deliveryOnly =
     searchParams?.entrega === "1" || searchParams?.descarga === "1"
+
+  // ?libro=1 fuerza la vista del LIBRO (aunque el modo sea "both"): lo usa el
+  // botón "Ver libro" del panel y sirve para compartir directo al álbum.
+  const bookRequested =
+    searchParams?.libro === "1" || searchParams?.book === "1"
 
   if (view.gallery.visibility === "password") {
     const unlocked = cookies().get(`gallery_unlock_${params.token}`)?.value === "1"
@@ -189,7 +194,7 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
   }
 
   // Luxury Book: modo solo-libro reemplaza toda la vista (salvo el link de descarga).
-  if (!deliveryOnly && hasDeliveryTracks && view.gallery.bookEnabled && view.gallery.bookDisplayMode === "book") {
+  if (!deliveryOnly && hasDeliveryTracks && view.gallery.bookEnabled && (view.gallery.bookDisplayMode === "book" || bookRequested)) {
     const deliveryAssets = view.assets.filter(
       (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
     )
