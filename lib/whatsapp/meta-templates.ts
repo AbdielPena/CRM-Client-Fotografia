@@ -70,6 +70,16 @@ export const WHATSAPP_TEMPLATE_CATALOG: WhatsAppTemplateDef[] = [
     emailSlug: "booking_reminder",
   },
   {
+    // Interno: recordatorio de tarea al número del propio estudio (no al cliente).
+    name: "recordatorio_tarea",
+    label: "Recordatorio de tarea (interno)",
+    category: "UTILITY",
+    language: "es",
+    body: "🔔 Recordatorio de tarea: {{1}}. Vence {{2}}.",
+    example: ["Enviar contrato a María", "hoy 5:00 PM"],
+    emailSlug: "task_reminder",
+  },
+  {
     name: "contrato_por_firmar",
     label: "Contrato por firmar",
     category: "UTILITY",

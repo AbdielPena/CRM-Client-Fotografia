@@ -699,6 +699,7 @@ export async function processTaskReminders(): Promise<{
 
   let reminded = 0
   let errors = 0
+  const phoneCache = new Map<string, string | null>()
 
   for (const task of (tasks ?? []) as TaskRow[]) {
     try {
@@ -709,17 +710,45 @@ export async function processTaskReminders(): Promise<{
       )
       if (reminderDt > now) continue // todavía no toca
 
+      const dueInfo = `${task.due_date}${task.due_time ? ` a las ${task.due_time}` : ""}`
+
+      // 1) Aviso in-app (campanita) al asignado.
       if (task.assigned_to_user_id && task.notify_assignee) {
         await sb.from("notifications").insert({
           studio_id: task.studio_id,
           user_id: task.assigned_to_user_id,
           type: "task.reminder",
           title: `Recordatorio: ${task.title}`,
-          body: `Vence ${task.due_date}${task.due_time ? ` a las ${task.due_time}` : ""}`,
+          body: `Vence ${dueInfo}`,
           entity_type: "task",
           entity_id: task.id,
           severity: task.priority === "urgent" ? "warning" : "info",
         })
+      }
+
+      // 2) WhatsApp al número del estudio (best-effort). Requiere la plantilla
+      // `recordatorio_tarea` aprobada en Meta; si no está aprobada o no hay
+      // número/conexión, falla en silencio y el aviso in-app ya cubrió.
+      try {
+        let phone = phoneCache.get(task.studio_id)
+        if (phone === undefined) {
+          const { data: br } = await sb
+            .from("studio_branding")
+            .select("whatsapp_phone")
+            .eq("studio_id", task.studio_id)
+            .maybeSingle()
+          phone = (br as { whatsapp_phone: string | null } | null)?.whatsapp_phone ?? null
+          phoneCache.set(task.studio_id, phone)
+        }
+        if (phone) {
+          const { sendTemplateMessage } = await import("./whatsapp/cloud-api.service")
+          await sendTemplateMessage(task.studio_id, phone, "recordatorio_tarea", "es", [
+            task.title,
+            dueInfo,
+          ])
+        }
+      } catch (err) {
+        console.error("[task-reminders] whatsapp best-effort failed:", err)
       }
 
       await sb
