@@ -69,7 +69,15 @@ async function attachClientNames(
   rows: TaskRow[],
 ): Promise<TaskRow[]> {
   const projectIds = [
-    ...new Set(rows.filter((t) => t.entity_type === "project" && t.entity_id).map((t) => t.entity_id!)),
+    ...new Set(
+      rows
+        .filter(
+          (t) =>
+            (t.entity_type === "project" || t.entity_type === "session") &&
+            t.entity_id,
+        )
+        .map((t) => t.entity_id!),
+    ),
   ]
   const directClientIds = [
     ...new Set(rows.filter((t) => t.entity_type === "client" && t.entity_id).map((t) => t.entity_id!)),
@@ -106,7 +114,11 @@ async function attachClientNames(
   return rows.map((t) => {
     let cid: string | null = null
     if (t.entity_type === "client") cid = t.entity_id
-    else if (t.entity_type === "project" && t.entity_id) cid = projectClient[t.entity_id] ?? null
+    else if (
+      (t.entity_type === "project" || t.entity_type === "session") &&
+      t.entity_id
+    )
+      cid = projectClient[t.entity_id] ?? null
     return { ...t, client_name: cid ? (clientName[cid] ?? null) : null }
   })
 }
@@ -118,6 +130,9 @@ export async function getTasks(
     assignedToUserId?: string
     entityType?: string
     entityId?: string
+    priority?: TaskPriority
+    /** true = solo tareas sin entidad vinculada (personales). */
+    noEntity?: boolean
     overdue?: boolean
     search?: string
     page?: number
@@ -145,6 +160,8 @@ export async function getTasks(
     query = query.eq("assigned_to_user_id", opts.assignedToUserId)
   if (opts.entityType) query = query.eq("entity_type", opts.entityType)
   if (opts.entityId) query = query.eq("entity_id", opts.entityId)
+  if (opts.priority) query = query.eq("priority", opts.priority)
+  if (opts.noEntity) query = query.is("entity_id", null)
   if (opts.overdue) {
     const today = new Date().toISOString().slice(0, 10)
     query = query
@@ -315,6 +332,7 @@ export async function createTask(
     notifyAssignee?: boolean
     isRecurring?: boolean
     recurringIntervalDays?: number
+    notes?: string | null
   },
 ): Promise<TaskRow> {
   const sb = untypedService()
@@ -338,6 +356,7 @@ export async function createTask(
     notify_assignee: data.notifyAssignee ?? true,
     is_recurring: data.isRecurring ?? false,
     recurring_interval_days: data.recurringIntervalDays ?? null,
+    notes: data.notes ?? null,
     created_by: actorId,
   }
 
@@ -409,6 +428,9 @@ export async function updateTask(
     priority: TaskPriority
     tags: string[]
     notifyAssignee: boolean
+    notes: string | null
+    entityType: string | null
+    entityId: string | null
   }>,
 ): Promise<TaskRow> {
   const sb = untypedService()
@@ -436,6 +458,9 @@ export async function updateTask(
   if (data.tags !== undefined) patch.tags = data.tags
   if (data.notifyAssignee !== undefined)
     patch.notify_assignee = data.notifyAssignee
+  if (data.notes !== undefined) patch.notes = data.notes
+  if (data.entityType !== undefined) patch.entity_type = data.entityType
+  if (data.entityId !== undefined) patch.entity_id = data.entityId
 
   const { data: row, error } = await sb
     .from("tasks")
@@ -484,6 +509,10 @@ export async function changeTaskStatus(
   if (status === "completada") {
     patch.completed_at = new Date().toISOString()
     patch.completed_by = actorId
+  } else {
+    // Reabrir / mover a un estado no-completado limpia la marca de completada.
+    patch.completed_at = null
+    patch.completed_by = null
   }
 
   const { data: row, error } = await sb
@@ -552,6 +581,47 @@ export async function changeTaskStatus(
   }
 
   return task
+}
+
+/** Duplica una tarea (nueva "(copia)", pendiente, sin notificar). */
+export async function duplicateTask(
+  studioId: string,
+  actorId: string,
+  taskId: string,
+): Promise<TaskRow> {
+  const t = await getTaskById(studioId, taskId)
+  if (!t) throw new Error("TASK_NOT_FOUND")
+  return createTask(studioId, actorId, {
+    title: `${t.title} (copia)`,
+    description: t.description ?? undefined,
+    assignedToUserId: t.assigned_to_user_id ?? undefined,
+    dueDate: t.due_date ?? undefined,
+    dueTime: t.due_time ?? undefined,
+    reminderMinutesBefore: t.reminder_minutes_before ?? undefined,
+    priority: t.priority,
+    tags: t.tags,
+    entityType: t.entity_type ?? undefined,
+    entityId: t.entity_id ?? undefined,
+    notes: t.notes ?? undefined,
+    notifyAssignee: false,
+    isRecurring: false,
+  })
+}
+
+/** Pospone una tarea `days` días (desde su fecha o desde hoy si no tiene). */
+export async function postponeTask(
+  studioId: string,
+  actorId: string,
+  taskId: string,
+  days: number,
+): Promise<TaskRow> {
+  const t = await getTaskById(studioId, taskId)
+  if (!t) throw new Error("TASK_NOT_FOUND")
+  const base = t.due_date ? new Date(`${t.due_date}T00:00:00Z`) : new Date()
+  base.setUTCDate(base.getUTCDate() + days)
+  return updateTask(studioId, actorId, taskId, {
+    dueDate: base.toISOString().slice(0, 10),
+  })
 }
 
 export async function deleteTask(

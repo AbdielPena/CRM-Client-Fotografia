@@ -5,11 +5,8 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
-  PauseCircle,
-  XCircle,
-  User,
-  CalendarDays,
   Sun,
+  CalendarDays,
   CalendarClock,
   ListChecks,
 } from "lucide-react"
@@ -17,30 +14,25 @@ import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
-import { getTasks, getTodayTasks, type TaskRow } from "@/server/services/task.service"
-import { formatDate } from "@/lib/utils/currency"
-import { STAGE_LABELS, type StageKey } from "@/lib/workflow/types"
+import {
+  getTasks,
+  getTodayTasks,
+  type TaskRow,
+  type TaskPriority,
+} from "@/server/services/task.service"
 import { cn } from "@/lib/utils/cn"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/shared/empty-state"
+import { TaskCard } from "@/components/tasks/task-card"
 
 export const metadata: Metadata = { title: "Tareas" }
 
-const PRIORITY_CLS: Record<string, string> = {
-  urgent: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
-  high: "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
-  medium: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  low: "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400",
-}
+const TODAY = () => new Date().toISOString().slice(0, 10)
 
-const STATUS_ICONS: Record<string, typeof CheckCircle2> = {
-  pendiente: Clock,
-  en_progreso: PauseCircle,
-  completada: CheckCircle2,
-  cancelada: XCircle,
-  bloqueada: AlertCircle,
+function isPinned(t: TaskRow, userId: string, today: string): boolean {
+  return t.daily_pin_date === today && t.daily_pin_user_id === userId
 }
 
 export default async function TasksPage({
@@ -51,14 +43,17 @@ export default async function TasksPage({
     status?: string
     assignee?: string
     overdue?: string
+    priority?: string
+    type?: string
+    personal?: string
     q?: string
   }
 }) {
   const session = await requireStudioAuth()
   const view: "today" | "all" = searchParams?.view === "all" ? "all" : "today"
+  const today = TODAY()
 
-  // "Mis tareas de hoy" (para la vista + el contador del toggle) y total global.
-  const [today, allCount, unread] = await Promise.all([
+  const [todayData, allCount, unread] = await Promise.all([
     getTodayTasks(session.studioId, session.userId),
     getTasks(session.studioId, { pageSize: 1 }),
     countUnreadNotifications(session.studioId),
@@ -100,7 +95,7 @@ export default async function TasksPage({
                 view === "today" ? "bg-brand-foreground/20" : "bg-muted",
               )}
             >
-              {today.total}
+              {todayData.total}
             </span>
           </Link>
           <Link
@@ -125,23 +120,36 @@ export default async function TasksPage({
         </div>
 
         {view === "today" ? (
-          <TodayView data={today} />
+          <TodayView data={todayData} userId={session.userId} today={today} />
         ) : (
-          <AllView studioId={session.studioId} userId={session.userId} searchParams={searchParams} />
+          <AllView
+            studioId={session.studioId}
+            userId={session.userId}
+            today={today}
+            searchParams={searchParams}
+          />
         )}
       </main>
     </>
   )
 }
 
-// ─── Vista "Mis tareas de hoy" (orden: vencidas → hoy → próximas → personales) ──
-function TodayView({ data }: { data: Awaited<ReturnType<typeof getTodayTasks>> }) {
+// ─── Vista "Mis tareas de hoy" ────────────────────────────────────────────────
+function TodayView({
+  data,
+  userId,
+  today,
+}: {
+  data: Awaited<ReturnType<typeof getTodayTasks>>
+  userId: string
+  today: string
+}) {
   if (data.total === 0) {
     return (
       <EmptyState
         icon={<CheckCircle2 className="size-12 text-emerald-500/70" />}
         title="¡Nada pendiente para hoy!"
-        description="No tienes tareas vencidas ni para hoy. Crea una tarea personal o añade una del CRM a tu día."
+        description="No tienes tareas vencidas ni para hoy. Crea una tarea personal o añade una del CRM a tu día con la ⭐."
       >
         <Button asChild>
           <Link href="/tasks/new">
@@ -154,27 +162,10 @@ function TodayView({ data }: { data: Awaited<ReturnType<typeof getTodayTasks>> }
   }
   return (
     <div className="space-y-6">
-      <Bucket
-        title="Vencidas"
-        icon={<AlertCircle className="size-4 text-red-600" />}
-        tone="danger"
-        tasks={data.overdue}
-      />
-      <Bucket
-        title="Hoy"
-        icon={<Sun className="size-4 text-amber-500" />}
-        tasks={data.today}
-      />
-      <Bucket
-        title="Próximas"
-        icon={<CalendarClock className="size-4 text-muted-foreground" />}
-        tasks={data.upcoming}
-      />
-      <Bucket
-        title="Personales"
-        icon={<CalendarDays className="size-4 text-muted-foreground" />}
-        tasks={data.personal}
-      />
+      <Bucket title="Vencidas" icon={<AlertCircle className="size-4 text-red-600" />} tone="danger" tasks={data.overdue} userId={userId} today={today} />
+      <Bucket title="Hoy" icon={<Sun className="size-4 text-amber-500" />} tasks={data.today} userId={userId} today={today} />
+      <Bucket title="Próximas" icon={<CalendarClock className="size-4 text-muted-foreground" />} tasks={data.upcoming} userId={userId} today={today} />
+      <Bucket title="Personales" icon={<CalendarDays className="size-4 text-muted-foreground" />} tasks={data.personal} userId={userId} today={today} />
     </div>
   )
 }
@@ -184,11 +175,15 @@ function Bucket({
   icon,
   tasks,
   tone,
+  userId,
+  today,
 }: {
   title: string
   icon: React.ReactNode
   tasks: TaskRow[]
   tone?: "danger"
+  userId: string
+  today: string
 }) {
   if (tasks.length === 0) return null
   return (
@@ -205,40 +200,53 @@ function Bucket({
       </h2>
       <ul className="space-y-2">
         {tasks.map((t) => (
-          <TaskCard key={t.id} t={t} />
+          <TaskCard key={t.id} task={t} pinnedToday={isPinned(t, userId, today)} />
         ))}
       </ul>
     </section>
   )
 }
 
-// ─── Vista "Todas" (lista + KPIs + filtros por URL, como antes) ──────────────
+// ─── Vista "Todas" (KPIs + chips de filtro + lista) ──────────────────────────
 async function AllView({
   studioId,
   userId,
+  today,
   searchParams,
 }: {
   studioId: string
   userId: string
-  searchParams?: { status?: string; assignee?: string; overdue?: string; q?: string }
+  today: string
+  searchParams?: {
+    status?: string
+    assignee?: string
+    overdue?: string
+    priority?: string
+    type?: string
+    personal?: string
+    q?: string
+  }
 }) {
-  const validStatus = [
-    "pendiente",
-    "en_progreso",
-    "completada",
-    "cancelada",
-    "bloqueada",
-  ] as const
+  const validStatus = ["pendiente", "en_progreso", "completada", "cancelada", "bloqueada"] as const
   const status = validStatus.includes(searchParams?.status as (typeof validStatus)[number])
     ? (searchParams!.status as (typeof validStatus)[number])
     : undefined
+  const validPriority = ["low", "medium", "high", "urgent"] as const
+  const priority = validPriority.includes(searchParams?.priority as TaskPriority)
+    ? (searchParams!.priority as TaskPriority)
+    : undefined
   const overdue = searchParams?.overdue === "1"
   const assignedToMe = searchParams?.assignee === "me"
+  const type = searchParams?.type // client | project | ...
+  const personal = searchParams?.personal === "1"
 
   const [tasks, allTasksRes, pendingRes, overdueRes, myTasksRes] = await Promise.all([
     getTasks(studioId, {
       status,
       assignedToUserId: assignedToMe ? userId : undefined,
+      priority,
+      entityType: type || undefined,
+      noEntity: personal || undefined,
       overdue,
       search: searchParams?.q,
       pageSize: 100,
@@ -254,63 +262,46 @@ async function AllView({
     (a, b) => (DONE.has(a.status) ? 1 : 0) - (DONE.has(b.status) ? 1 : 0),
   )
 
-  const qs = (extra: Record<string, string>) =>
+  const base = (extra: Record<string, string>) =>
     "/tasks?" + new URLSearchParams({ view: "all", ...extra }).toString()
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Kpi
-          label="Total"
-          value={allTasksRes.total}
-          icon={<CheckSquare className="size-4" />}
-          tone="neutral"
-          href="/tasks?view=all"
-          active={!status && !overdue && !assignedToMe}
-        />
-        <Kpi
-          label="Pendientes"
-          value={pendingRes.total}
-          icon={<Clock className="size-4" />}
-          tone="warning"
-          href={qs({ status: "pendiente" })}
-          active={status === "pendiente"}
-        />
-        <Kpi
-          label="Atrasadas"
-          value={overdueRes.total}
-          icon={<AlertCircle className="size-4" />}
-          tone="danger"
-          href={qs({ overdue: "1" })}
-          active={overdue}
-        />
-        <Kpi
-          label="Asignadas a mí"
-          value={myTasksRes.total}
-          icon={<CheckSquare className="size-4" />}
-          tone="neutral"
-          href={qs({ assignee: "me" })}
-          active={assignedToMe}
-        />
+        <Kpi label="Total" value={allTasksRes.total} icon={<CheckSquare className="size-4" />} tone="neutral" href="/tasks?view=all" active={!status && !overdue && !assignedToMe && !priority && !type && !personal} />
+        <Kpi label="Pendientes" value={pendingRes.total} icon={<Clock className="size-4" />} tone="warning" href={base({ status: "pendiente" })} active={status === "pendiente"} />
+        <Kpi label="Atrasadas" value={overdueRes.total} icon={<AlertCircle className="size-4" />} tone="danger" href={base({ overdue: "1" })} active={overdue} />
+        <Kpi label="Asignadas a mí" value={myTasksRes.total} icon={<CheckSquare className="size-4" />} tone="neutral" href={base({ assignee: "me" })} active={assignedToMe} />
+      </div>
+
+      {/* Chips de filtro */}
+      <div className="flex flex-wrap gap-1.5">
+        <Chip label="En proceso" href={base({ status: "en_progreso" })} active={status === "en_progreso"} />
+        <Chip label="Completadas" href={base({ status: "completada" })} active={status === "completada"} />
+        <Chip label="Canceladas" href={base({ status: "cancelada" })} active={status === "cancelada"} />
+        <span className="mx-1 self-center text-muted-foreground/40">|</span>
+        <Chip label="🔴 Urgente" href={base({ priority: "urgent" })} active={priority === "urgent"} />
+        <Chip label="🟠 Alta" href={base({ priority: "high" })} active={priority === "high"} />
+        <span className="mx-1 self-center text-muted-foreground/40">|</span>
+        <Chip label="Cliente" href={base({ type: "client" })} active={type === "client"} />
+        <Chip label="Proyecto" href={base({ type: "project" })} active={type === "project"} />
+        <Chip label="Personales" href={base({ personal: "1" })} active={personal} />
       </div>
 
       {tasks.total === 0 ? (
         <EmptyState
           icon={<CheckSquare className="size-12 text-muted-foreground/60" />}
           title="Sin tareas"
-          description="Crea tu primera tarea y asígnala a alguien del equipo. Recibirá notificación in-app."
+          description="No hay tareas con ese filtro. Crea una nueva o limpia los filtros."
         >
-          <Button asChild>
-            <Link href="/tasks/new">
-              <Plus className="mr-1 size-4" />
-              Nueva tarea
-            </Link>
+          <Button asChild variant="outline">
+            <Link href="/tasks?view=all">Limpiar filtros</Link>
           </Button>
         </EmptyState>
       ) : (
         <ul className="space-y-2">
           {sortedItems.map((t) => (
-            <TaskCard key={t.id} t={t} />
+            <TaskCard key={t.id} task={t} pinnedToday={isPinned(t, userId, today)} />
           ))}
         </ul>
       )}
@@ -318,92 +309,19 @@ async function AllView({
   )
 }
 
-// ─── Tarjeta de tarea (reusada en ambas vistas) ──────────────────────────────
-function TaskCard({ t }: { t: TaskRow }) {
-  const StatusIcon = STATUS_ICONS[t.status] ?? Clock
-  const isOverdue =
-    t.due_date &&
-    ["pendiente", "en_progreso"].includes(t.status) &&
-    new Date(`${t.due_date}T${t.due_time ?? "23:59"}`) < new Date()
+function Chip({ label, href, active }: { label: string; href: string; active: boolean }) {
   return (
-    <li>
-      <Link
-        href={`/tasks/${t.id}`}
-        className="sf-card group block p-4 transition-colors hover:bg-accent/30"
-      >
-        <div className="flex items-start gap-3">
-          <span
-            className={
-              "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-full " +
-              (t.status === "completada"
-                ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400"
-                : isOverdue
-                  ? "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
-                  : "bg-muted text-muted-foreground")
-            }
-          >
-            <StatusIcon className="size-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3
-                className={
-                  "text-sm font-semibold " +
-                  (t.status === "completada" ? "text-muted-foreground line-through" : "")
-                }
-              >
-                {t.title}
-              </h3>
-              <span
-                className={
-                  "inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-medium " +
-                  (PRIORITY_CLS[t.priority] ?? PRIORITY_CLS.medium)
-                }
-              >
-                {t.priority}
-              </span>
-              {t.workflow_stage && STAGE_LABELS[t.workflow_stage as StageKey] && (
-                <span className="inline-flex items-center rounded-full bg-brand-soft px-2 py-0.5 text-[9px] font-medium text-brand">
-                  Pipeline · {STAGE_LABELS[t.workflow_stage as StageKey]}
-                </span>
-              )}
-              {t.tags?.length > 0 &&
-                t.tags.slice(0, 2).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-            </div>
-            {t.description && (
-              <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-                {t.description}
-              </p>
-            )}
-            <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
-              {t.due_date && (
-                <span className={isOverdue ? "font-semibold text-red-600" : ""}>
-                  <Clock className="mr-0.5 inline size-2.5" />
-                  {formatDate(new Date(t.due_date))}
-                  {t.due_time && ` ${t.due_time}`}
-                  {isOverdue && " (atrasada)"}
-                </span>
-              )}
-              {t.client_name ? (
-                <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                  · <User className="inline size-2.5" /> {t.client_name}
-                </span>
-              ) : t.entity_type ? (
-                <span>· Vinculada a {t.entity_type}</span>
-              ) : null}
-              {t.is_recurring && <span>· 🔁 Recurrente</span>}
-            </div>
-          </div>
-        </div>
-      </Link>
-    </li>
+    <Link
+      href={active ? "/tasks?view=all" : href}
+      className={cn(
+        "inline-flex items-center rounded-full border px-3 py-1 text-[11.5px] font-medium transition-colors",
+        active
+          ? "border-brand bg-brand text-brand-foreground"
+          : "border-border bg-card text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {label}
+    </Link>
   )
 }
 

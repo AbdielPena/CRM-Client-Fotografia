@@ -258,11 +258,14 @@ export function NewTaskForm({
               onChange={(e) => setEntityType(e.target.value)}
               className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
             >
-              <option value="">— Ninguna —</option>
+              <option value="">— Ninguna (personal) —</option>
               <option value="client">Cliente</option>
               <option value="project">Proyecto</option>
+              <option value="session">Sesión</option>
               <option value="invoice">Factura</option>
               <option value="booking">Reserva</option>
+              <option value="contract">Contrato</option>
+              <option value="delivery">Entrega</option>
               <option value="custom">Otro (custom)</option>
             </select>
           </div>
@@ -285,10 +288,11 @@ export function NewTaskForm({
               </select>
             </div>
           )}
-          {entityType === "project" && projects.length > 0 && (
+          {(entityType === "project" || entityType === "session") &&
+            projects.length > 0 && (
             <div>
               <label className="mb-1.5 block text-xs font-medium">
-                Proyecto
+                {entityType === "session" ? "Sesión" : "Proyecto"}
               </label>
               <select
                 name="entityId"
@@ -304,7 +308,11 @@ export function NewTaskForm({
               </select>
             </div>
           )}
-          {(entityType === "invoice" || entityType === "booking" || entityType === "custom") && (
+          {(entityType === "invoice" ||
+            entityType === "booking" ||
+            entityType === "contract" ||
+            entityType === "delivery" ||
+            entityType === "custom") && (
             <div>
               <label className="mb-1.5 block text-xs font-medium">
                 UUID del entity (avanzado)
@@ -332,6 +340,20 @@ export function NewTaskForm({
           name="tags"
           defaultValue={state.values?.tags}
           placeholder="urgente, cliente_vip, esta_semana"
+          className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+        />
+      </section>
+
+      {/* Notas */}
+      <section className="sf-card p-5">
+        <label className="mb-1.5 block text-xs font-medium">
+          Notas (privadas)
+        </label>
+        <textarea
+          name="notes"
+          rows={2}
+          defaultValue={state.values?.notes}
+          placeholder="Notas para ti, aparte de la descripción…"
           className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
         />
       </section>

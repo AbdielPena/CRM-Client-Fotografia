@@ -55,6 +55,7 @@ export default async function TaskDetailPage({
 
   if (!task) notFound()
 
+  const today = new Date().toISOString().slice(0, 10)
   const isOverdue =
     task.due_date &&
     ["pendiente", "en_progreso"].includes(task.status) &&
@@ -220,10 +221,24 @@ export default async function TaskDetailPage({
           </section>
         )}
 
+        {/* Notas */}
+        {task.notes && (
+          <section className="sf-card p-5">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Notas
+            </h3>
+            <p className="whitespace-pre-line text-sm">{task.notes}</p>
+          </section>
+        )}
+
         {/* Actions */}
         <TaskActions
           taskId={task.id}
           currentStatus={task.status}
+          pinnedToday={
+            task.daily_pin_date === today &&
+            task.daily_pin_user_id === session.userId
+          }
         />
       </main>
     </>

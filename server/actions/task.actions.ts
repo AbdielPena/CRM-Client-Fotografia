@@ -8,7 +8,9 @@ import {
   changeTaskStatus,
   createTask,
   deleteTask,
+  duplicateTask,
   pinTaskToToday,
+  postponeTask,
   unpinTaskFromToday,
   updateTask,
   type TaskPriority,
@@ -69,6 +71,7 @@ export async function createTaskAction(
       recurringIntervalDays: formData.get("recurringIntervalDays")
         ? Number(formData.get("recurringIntervalDays"))
         : undefined,
+      notes: (formData.get("notes") as string) || undefined,
     })
     revalidatePath("/tasks")
     redirect(`/tasks/${task.id}`)
@@ -93,6 +96,9 @@ export async function updateTaskAction(
     priority?: TaskPriority
     tags?: string[]
     notifyAssignee?: boolean
+    notes?: string | null
+    entityType?: string | null
+    entityId?: string | null
   },
 ): Promise<{ ok: boolean; message?: string }> {
   let session
@@ -183,6 +189,55 @@ export async function pinTaskToDailyAction(
     return {
       ok: true,
       message: pinned ? "Añadida a tus tareas de hoy" : "Quitada de hoy",
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Error desconocido",
+    }
+  }
+}
+
+/** Duplica una tarea. */
+export async function duplicateTaskAction(
+  taskId: string,
+): Promise<{ ok: boolean; taskId?: string; message?: string }> {
+  let session
+  try {
+    session = await requireStudioAuth()
+  } catch {
+    return { ok: false, message: "Tu sesión expiró." }
+  }
+  try {
+    const t = await duplicateTask(session.studioId, session.userId, taskId)
+    revalidatePath("/tasks")
+    return { ok: true, taskId: t.id, message: "Tarea duplicada" }
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Error desconocido",
+    }
+  }
+}
+
+/** Pospone una tarea `days` días (mañana=1, próxima semana=7). */
+export async function postponeTaskAction(
+  taskId: string,
+  days: number,
+): Promise<{ ok: boolean; message?: string }> {
+  let session
+  try {
+    session = await requireStudioAuth()
+  } catch {
+    return { ok: false, message: "Tu sesión expiró." }
+  }
+  try {
+    await postponeTask(session.studioId, session.userId, taskId, days)
+    revalidatePath(`/tasks/${taskId}`)
+    revalidatePath("/tasks")
+    return {
+      ok: true,
+      message: days === 1 ? "Pospuesta a mañana" : `Pospuesta ${days} días`,
     }
   } catch (err) {
     return {

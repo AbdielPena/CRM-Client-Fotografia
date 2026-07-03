@@ -9,11 +9,18 @@ import {
   XCircle,
   Trash2,
   Loader2,
+  RotateCcw,
+  Star,
+  Copy,
+  CalendarClock,
 } from "lucide-react"
 
 import {
   changeTaskStatusAction,
   deleteTaskAction,
+  duplicateTaskAction,
+  pinTaskToDailyAction,
+  postponeTaskAction,
 } from "@/server/actions/task.actions"
 import type { TaskStatus } from "@/server/services/task.service"
 import { Button } from "@/components/ui/button"
@@ -21,31 +28,42 @@ import { Button } from "@/components/ui/button"
 export function TaskActions({
   taskId,
   currentStatus,
+  pinnedToday,
 }: {
   taskId: string
   currentStatus: TaskStatus
+  pinnedToday: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [feedback, setFeedback] = useState<{
-    type: "ok" | "err"
-    msg: string
-  } | null>(null)
+  const [feedback, setFeedback] = useState<{ type: "ok" | "err"; msg: string } | null>(null)
 
-  async function handleStatusChange(status: TaskStatus) {
+  const done = currentStatus === "completada" || currentStatus === "cancelada"
+
+  function run(fn: () => Promise<{ ok: boolean; message?: string }>, after?: () => void) {
     startTransition(async () => {
-      const res = await changeTaskStatusAction(taskId, status)
+      const res = await fn()
       setFeedback({ type: res.ok ? "ok" : "err", msg: res.message ?? "" })
-      if (res.ok) router.refresh()
+      if (res.ok) {
+        if (after) after()
+        else router.refresh()
+      }
     })
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!window.confirm("¿Eliminar esta tarea?")) return
+    run(
+      () => deleteTaskAction(taskId),
+      () => setTimeout(() => router.push("/tasks"), 400),
+    )
+  }
+
+  function handleDuplicate() {
     startTransition(async () => {
-      const res = await deleteTaskAction(taskId)
+      const res = await duplicateTaskAction(taskId)
       setFeedback({ type: res.ok ? "ok" : "err", msg: res.message ?? "" })
-      if (res.ok) setTimeout(() => router.push("/tasks"), 400)
+      if (res.ok && res.taskId) router.push(`/tasks/${res.taskId}`)
     })
   }
 
@@ -70,66 +88,62 @@ export function TaskActions({
 
       <div className="flex flex-wrap items-center gap-2">
         {currentStatus === "pendiente" && (
-          <Button
-            onClick={() => handleStatusChange("en_progreso")}
-            disabled={isPending}
-            size="sm"
-            variant="outline"
-          >
-            {isPending ? (
-              <Loader2 className="mr-1 size-3.5 animate-spin" />
-            ) : (
-              <PlayCircle className="mr-1 size-3.5" />
-            )}
-            Iniciar
+          <Button onClick={() => run(() => changeTaskStatusAction(taskId, "en_progreso"))} disabled={isPending} size="sm" variant="outline">
+            <PlayCircle className="mr-1 size-3.5" /> Iniciar
           </Button>
         )}
         {currentStatus === "en_progreso" && (
-          <Button
-            onClick={() => handleStatusChange("pendiente")}
-            disabled={isPending}
-            size="sm"
-            variant="outline"
-          >
-            <PauseCircle className="mr-1 size-3.5" />
-            Pausar
+          <Button onClick={() => run(() => changeTaskStatusAction(taskId, "pendiente"))} disabled={isPending} size="sm" variant="outline">
+            <PauseCircle className="mr-1 size-3.5" /> Pausar
           </Button>
         )}
         {(currentStatus === "pendiente" || currentStatus === "en_progreso") && (
-          <Button
-            onClick={() => handleStatusChange("completada")}
-            disabled={isPending}
-            size="sm"
-          >
-            {isPending ? (
-              <Loader2 className="mr-1 size-3.5 animate-spin" />
-            ) : (
-              <CheckCircle2 className="mr-1 size-3.5" />
-            )}
+          <Button onClick={() => run(() => changeTaskStatusAction(taskId, "completada"))} disabled={isPending} size="sm">
+            {isPending ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : <CheckCircle2 className="mr-1 size-3.5" />}
             Completar
           </Button>
         )}
-        {currentStatus !== "cancelada" && currentStatus !== "completada" && (
-          <Button
-            onClick={() => handleStatusChange("cancelada")}
-            disabled={isPending}
-            size="sm"
-            variant="outline"
-            className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-          >
-            <XCircle className="mr-1 size-3.5" />
-            Cancelar
+        {done && (
+          <Button onClick={() => run(() => changeTaskStatusAction(taskId, "pendiente"))} disabled={isPending} size="sm" variant="outline">
+            <RotateCcw className="mr-1 size-3.5" /> Reabrir
           </Button>
         )}
+
+        {/* Fijar a mis tareas de hoy */}
         <Button
-          onClick={handleDelete}
+          onClick={() => run(() => pinTaskToDailyAction(taskId, !pinnedToday))}
           disabled={isPending}
           size="sm"
           variant="outline"
-          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+          className={pinnedToday ? "border-amber-300 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950" : ""}
         >
-          <Trash2 className="mr-1 size-3.5" />
-          Eliminar
+          <Star className={"mr-1 size-3.5 " + (pinnedToday ? "fill-amber-500 text-amber-500" : "")} />
+          {pinnedToday ? "Quitar de hoy" : "Añadir a hoy"}
+        </Button>
+
+        {/* Posponer */}
+        {!done && (
+          <>
+            <Button onClick={() => run(() => postponeTaskAction(taskId, 1))} disabled={isPending} size="sm" variant="outline">
+              <CalendarClock className="mr-1 size-3.5" /> Mañana
+            </Button>
+            <Button onClick={() => run(() => postponeTaskAction(taskId, 7))} disabled={isPending} size="sm" variant="outline">
+              +1 semana
+            </Button>
+          </>
+        )}
+
+        <Button onClick={handleDuplicate} disabled={isPending} size="sm" variant="outline">
+          <Copy className="mr-1 size-3.5" /> Duplicar
+        </Button>
+
+        {currentStatus !== "cancelada" && currentStatus !== "completada" && (
+          <Button onClick={() => run(() => changeTaskStatusAction(taskId, "cancelada"))} disabled={isPending} size="sm" variant="outline" className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
+            <XCircle className="mr-1 size-3.5" /> Cancelar
+          </Button>
+        )}
+        <Button onClick={handleDelete} disabled={isPending} size="sm" variant="outline" className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
+          <Trash2 className="mr-1 size-3.5" /> Eliminar
         </Button>
       </div>
     </section>
