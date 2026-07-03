@@ -1,10 +1,25 @@
 import Link from "next/link"
-import { ImageIcon, Plus, Lock, Globe, KeyRound, Calendar, Cake } from "lucide-react"
+import {
+  ImageIcon,
+  Plus,
+  Lock,
+  Globe,
+  KeyRound,
+  Calendar,
+  Cake,
+  CheckCircle2,
+  CircleDot,
+} from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
-import { getGalleries, getAssetThumbUrl, getAssetWebUrl } from "@/server/services/gallery.service"
+import {
+  getGalleries,
+  countGalleries,
+  getAssetThumbUrl,
+  getAssetWebUrl,
+} from "@/server/services/gallery.service"
 import {
   deriveDeliveryComputed,
   type DeliveryStatus,
@@ -124,12 +139,25 @@ function fmtDateOnly(d: string): string {
   })
 }
 
-export default async function GalleriesPage() {
+export default async function GalleriesPage({
+  searchParams,
+}: {
+  searchParams?: { scope?: string }
+}) {
   const session = await requireStudioAuth()
-  const [{ rows, total }, unread] = await Promise.all([
-    getGalleries(session.studioId, { limit: 100 }),
+  // Scope: "Activas" (aún no entregadas) vs "Entregadas" (delivery_ready_at set).
+  const scope: "active" | "delivered" =
+    searchParams?.scope === "delivered" ? "delivered" : "active"
+  const [{ rows }, unread, activeCount, deliveredCount] = await Promise.all([
+    getGalleries(session.studioId, {
+      limit: 100,
+      delivered: scope === "delivered",
+    }),
     countUnreadNotifications(session.studioId),
+    countGalleries(session.studioId, { delivered: false }),
+    countGalleries(session.studioId, { delivered: true }),
   ])
+  const grandTotal = activeCount + deliveredCount
 
   const galleries = rows as unknown as GalleryListRow[]
 
@@ -254,7 +282,7 @@ export default async function GalleriesPage() {
     <>
       <AppTopbar
         title="Galerías"
-        description={`${total} galería${total === 1 ? "" : "s"} en total`}
+        description={`${grandTotal} galería${grandTotal === 1 ? "" : "s"} en total`}
         unreadNotifications={unread}
         actions={
           <Button asChild size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>
@@ -264,17 +292,77 @@ export default async function GalleriesPage() {
       />
 
       <div className="px-6 py-6 lg:px-8 lg:py-8">
+        {/* Toggle Activas | Entregadas (las entregadas viven aparte) */}
+        {grandTotal > 0 && (
+          <div className="mb-5 inline-flex rounded-lg border border-border bg-card p-0.5">
+            <Link
+              href="/galleries"
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+                scope === "active"
+                  ? "bg-brand text-brand-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <CircleDot className="h-3.5 w-3.5" /> Activas
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-[10.5px] tabular-nums",
+                  scope === "active" ? "bg-brand-foreground/20" : "bg-muted",
+                )}
+              >
+                {activeCount}
+              </span>
+            </Link>
+            <Link
+              href="/galleries?scope=delivered"
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+                scope === "delivered"
+                  ? "bg-emerald-500 text-white"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" /> Entregadas
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-[10.5px] tabular-nums",
+                  scope === "delivered" ? "bg-white/25" : "bg-muted",
+                )}
+              >
+                {deliveredCount}
+              </span>
+            </Link>
+          </div>
+        )}
+
         {rows.length === 0 ? (
           <div className="rounded-xl border border-border bg-card">
             <EmptyState
-              icon={<ImageIcon className="h-5 w-5" />}
-              title="Aún no tienes galerías"
-              description="Crea tu primera galería para entregar fotos a tus clientes con cover, favoritos y descargas."
+              icon={
+                scope === "delivered" ? (
+                  <CheckCircle2 className="h-5 w-5" />
+                ) : (
+                  <ImageIcon className="h-5 w-5" />
+                )
+              }
+              title={
+                scope === "delivered"
+                  ? "No hay galerías entregadas todavía"
+                  : "Aún no tienes galerías"
+              }
+              description={
+                scope === "delivered"
+                  ? 'Cuando marques una entrega final ("Enviar al cliente"), la galería se moverá aquí.'
+                  : "Crea tu primera galería para entregar fotos a tus clientes con cover, favoritos y descargas."
+              }
               accent
             >
-              <Button asChild size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>
-                <Link href="/galleries/new">Nueva galería</Link>
-              </Button>
+              {scope !== "delivered" && (
+                <Button asChild size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />}>
+                  <Link href="/galleries/new">Nueva galería</Link>
+                </Button>
+              )}
             </EmptyState>
           </div>
         ) : (
@@ -287,14 +375,14 @@ export default async function GalleriesPage() {
               const badge = g.project_id
                 ? badgeByProject.get(g.project_id)
                 : undefined
-              // Entregada si la fila de entrega lo dice o si la galería ya tiene
-              // la entrega final habilitada/enviada.
-              const prio = badge?.birthday
-                ? priorityChip(
-                    badge,
-                    badge.status === "entregada" || !!g.delivery_ready_at,
-                  )
-                : null
+              // Entregada si la galería tiene la entrega final marcada lista, o
+              // si la fila de entrega del proyecto lo dice.
+              const delivered =
+                !!g.delivery_ready_at || badge?.status === "entregada"
+              // El chip de prioridad / cuenta regresiva solo aplica a galerías
+              // NO entregadas (las entregadas muestran su badge "Entregada").
+              const prio =
+                badge?.birthday && !delivered ? priorityChip(badge, false) : null
 
               return (
                 <Link
@@ -324,11 +412,15 @@ export default async function GalleriesPage() {
                     >
                       {status.label}
                     </span>
-                    {g.selection_submitted && (
+                    {delivered ? (
+                      <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10.5px] font-semibold text-white shadow-sm">
+                        <CheckCircle2 className="h-3 w-3" /> Entregada
+                      </span>
+                    ) : g.selection_submitted ? (
                       <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-brand px-2 py-0.5 text-[10.5px] font-semibold text-brand-foreground">
                         Selección recibida
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Body */}

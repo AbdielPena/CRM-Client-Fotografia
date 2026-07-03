@@ -532,6 +532,9 @@ export async function notifyClientFinalDeliveryAction(input: {
   }
 
   // 7) Transición del proyecto → "Entregado" + tarea de impresiones (best-effort).
+  // Dispara SIEMPRE que se marca la entrega lista (aunque el fotógrafo solo
+  // genere los links sin enviar email/WhatsApp): `delivery_ready_at` ya quedó
+  // puesto arriba, así que la galería pasa a "Entregada" y el proyecto también.
   try {
     const { data: gProj } = await sb
       .from("galleries")
@@ -539,7 +542,7 @@ export async function notifyClientFinalDeliveryAction(input: {
       .eq("id", galleryId)
       .maybeSingle()
     const projectId = (gProj as { project_id: string | null } | null)?.project_id
-    if (projectId && (sentEmail || sentWhatsapp)) {
+    if (projectId) {
       const { onFinalDeliveryPublished } = await import(
         "@/server/services/project-automation.service"
       )
@@ -550,6 +553,7 @@ export async function notifyClientFinalDeliveryAction(input: {
   }
 
   revalidatePath(`/galleries/${galleryId}`)
+  revalidatePath("/galleries") // refresca badge "Entregada" + toggle de la lista
   return {
     url,
     driveLink,
@@ -583,6 +587,7 @@ export async function cancelDeliveryAction(input: {
     .eq("studio_id", ctx.studioId)
 
   revalidatePath(`/galleries/${galleryId}`)
+  revalidatePath("/galleries") // vuelve la galería a "Activas" (quita badge Entregada)
   return { ok: true }
 }
 

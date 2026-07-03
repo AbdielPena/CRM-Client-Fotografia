@@ -173,6 +173,9 @@ export type ListGalleryOptions = {
   search?: string
   limit?: number
   offset?: number
+  /** true = solo entregadas (delivery_ready_at NOT NULL); false = solo activas
+   * (delivery_ready_at NULL); undefined = todas (compat). */
+  delivered?: boolean
 }
 
 export async function getGalleries(
@@ -198,6 +201,8 @@ export async function getGalleries(
   if (opts.projectId) q = q.eq("project_id", opts.projectId)
   if (opts.clientId) q = q.eq("client_id", opts.clientId)
   if (opts.search) q = q.ilike("name", `%${opts.search}%`)
+  if (opts.delivered === true) q = q.not("delivery_ready_at", "is", null)
+  else if (opts.delivered === false) q = q.is("delivery_ready_at", null)
 
   const limit = Math.min(opts.limit ?? 50, 100)
   const offset = opts.offset ?? 0
@@ -206,6 +211,29 @@ export async function getGalleries(
   const { data, error, count } = await q
   if (error) throw error
   return { rows: (data ?? []) as unknown as GalleryRow[], total: count ?? 0 }
+}
+
+/**
+ * Cuenta galerías del estudio (mismo scope que getGalleries: sin borradas ni
+ * hijas). `delivered` filtra por entrega: true=entregadas, false=activas.
+ * Para los contadores del toggle Activas/Entregadas de la lista.
+ */
+export async function countGalleries(
+  studioId: string,
+  opts: { delivered?: boolean } = {},
+): Promise<number> {
+  const supabase = srvc()
+  let q = supabase
+    .from("galleries")
+    .select("id", { count: "exact", head: true })
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .is("parent_gallery_id", null)
+  if (opts.delivered === true) q = q.not("delivery_ready_at", "is", null)
+  else if (opts.delivered === false) q = q.is("delivery_ready_at", null)
+  const { count, error } = await q
+  if (error) throw error
+  return count ?? 0
 }
 
 export async function getGalleryById(
