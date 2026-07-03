@@ -173,9 +173,6 @@ export type ListGalleryOptions = {
   search?: string
   limit?: number
   offset?: number
-  /** true = solo entregadas (delivery_ready_at NOT NULL); false = solo activas
-   * (delivery_ready_at NULL); undefined = todas (compat). */
-  delivered?: boolean
 }
 
 export async function getGalleries(
@@ -201,8 +198,6 @@ export async function getGalleries(
   if (opts.projectId) q = q.eq("project_id", opts.projectId)
   if (opts.clientId) q = q.eq("client_id", opts.clientId)
   if (opts.search) q = q.ilike("name", `%${opts.search}%`)
-  if (opts.delivered === true) q = q.not("delivery_ready_at", "is", null)
-  else if (opts.delivered === false) q = q.is("delivery_ready_at", null)
 
   const limit = Math.min(opts.limit ?? 50, 100)
   const offset = opts.offset ?? 0
@@ -211,29 +206,6 @@ export async function getGalleries(
   const { data, error, count } = await q
   if (error) throw error
   return { rows: (data ?? []) as unknown as GalleryRow[], total: count ?? 0 }
-}
-
-/**
- * Cuenta galerías del estudio (mismo scope que getGalleries: sin borradas ni
- * hijas). `delivered` filtra por entrega: true=entregadas, false=activas.
- * Para los contadores del toggle Activas/Entregadas de la lista.
- */
-export async function countGalleries(
-  studioId: string,
-  opts: { delivered?: boolean } = {},
-): Promise<number> {
-  const supabase = srvc()
-  let q = supabase
-    .from("galleries")
-    .select("id", { count: "exact", head: true })
-    .eq("studio_id", studioId)
-    .is("deleted_at", null)
-    .is("parent_gallery_id", null)
-  if (opts.delivered === true) q = q.not("delivery_ready_at", "is", null)
-  else if (opts.delivered === false) q = q.is("delivery_ready_at", null)
-  const { count, error } = await q
-  if (error) throw error
-  return count ?? 0
 }
 
 export async function getGalleryById(
@@ -655,6 +627,44 @@ export async function publishGallery(
   return updated
 }
 
+/**
+ * Best-effort: cuando aparecen/asignan fotos de ENTREGA en una galería, mueve el
+ * proyecto vinculado a "Entregado" (idempotente). Solo cambia el estado del
+ * pipeline; la tarea "Enviar impresiones" se crea al ENVIAR la entrega
+ * (onFinalDeliveryPublished), no acá — así no se duplica por cada foto subida.
+ * No regresa proyectos ya cerrados/completados.
+ */
+async function markProjectDeliveredFromGallery(
+  studioId: string,
+  galleryId: string,
+): Promise<void> {
+  try {
+    const sb2 = svc()
+    const { data: g } = await sb2
+      .from("galleries")
+      .select("project_id")
+      .eq("id", galleryId)
+      .maybeSingle()
+    const projectId = (g as { project_id: string | null } | null)?.project_id
+    if (!projectId) return
+    const { data: p } = await sb2
+      .from("projects")
+      .select("status")
+      .eq("id", projectId)
+      .maybeSingle()
+    const { isCompletedProjectLabel } = await import("@/lib/projects/status")
+    if (
+      isCompletedProjectLabel((p as { status: string | null } | null)?.status)
+    ) {
+      return
+    }
+    const { transitionProjectStatus } = await import("./project-automation.service")
+    await transitionProjectStatus(studioId, projectId, "entregado")
+  } catch (err) {
+    console.error("[gallery] markProjectDeliveredFromGallery failed", err)
+  }
+}
+
 /** Asigna la pista de entrega (Redes / Máxima Calidad) a varios assets. */
 export async function setAssetsDeliveryTrack(
   studioId: string,
@@ -671,6 +681,8 @@ export async function setAssetsDeliveryTrack(
     .eq("gallery_id", galleryId)
     .in("id", assetIds)
   if (error) throw error
+  // Asignar a una pista de ENTREGA = "ya subí las finales" → proyecto a Entregado.
+  if (track !== null) void markProjectDeliveredFromGallery(studioId, galleryId)
 }
 
 /** Activa/desactiva el embed; genera el token la primera vez y lo preserva. */
@@ -858,6 +870,12 @@ export async function confirmAssetUpload(
   // Procesamiento inline. Si falla, actualizamos status='failed' pero no
   // lanzamos al caller — la UI puede reintentar.
   void processAssetSafely(assetId, studioId, galleryId)
+
+  // Si esta foto es de ENTREGA (delivery_track), la galería "ya tiene finales"
+  // → mueve el proyecto a "Entregado" (idempotente, best-effort).
+  if ((asset as { delivery_track?: string | null } | null)?.delivery_track) {
+    void markProjectDeliveredFromGallery(studioId, galleryId)
+  }
 
   return asset as unknown as GalleryAssetRow
 }

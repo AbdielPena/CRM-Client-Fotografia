@@ -16,7 +16,6 @@ import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import {
   getGalleries,
-  countGalleries,
   getAssetThumbUrl,
   getAssetWebUrl,
 } from "@/server/services/gallery.service"
@@ -145,26 +144,45 @@ export default async function GalleriesPage({
   searchParams?: { scope?: string }
 }) {
   const session = await requireStudioAuth()
-  // Scope: "Activas" (aún no entregadas) vs "Entregadas" (delivery_ready_at set).
+  // Scope: "Activas" (aún sin entrega) vs "Entregadas".
   const scope: "active" | "delivered" =
     searchParams?.scope === "delivered" ? "delivered" : "active"
-  const [{ rows }, unread, activeCount, deliveredCount] = await Promise.all([
-    getGalleries(session.studioId, {
-      limit: 100,
-      delivered: scope === "delivered",
-    }),
+  const [{ rows }, unread] = await Promise.all([
+    getGalleries(session.studioId, { limit: 100 }),
     countUnreadNotifications(session.studioId),
-    countGalleries(session.studioId, { delivered: false }),
-    countGalleries(session.studioId, { delivered: true }),
   ])
-  const grandTotal = activeCount + deliveredCount
-
-  const galleries = rows as unknown as GalleryListRow[]
+  const allGalleries = rows as unknown as GalleryListRow[]
 
   // Portada de cada tarjeta: cover_asset_id explícito → book_cover_image →
   // primer asset de la galería (igual que la vista pública). Resuelve a URL.
   const { createSupabaseServiceClient } = await import("@/server/supabase/service")
   const sb = createSupabaseServiceClient()
+
+  // "Entregada" = la galería ya tiene fotos de ENTREGA subidas (delivery_track)
+  // o se marcó la entrega lista (delivery_ready_at). Es la señal real de "ya
+  // subí las finales": muchas galerías tienen las finales cargadas pero siguen
+  // con gallery_type='selection' y sin delivery_ready_at.
+  const deliveredIds = new Set<string>()
+  const allIds = allGalleries.map((g) => g.id)
+  if (allIds.length > 0) {
+    const { data: dRows } = await sb
+      .from("gallery_assets")
+      .select("gallery_id")
+      .in("gallery_id", allIds)
+      .in("delivery_track", ["social", "high_quality"])
+      .is("deleted_at", null)
+    for (const r of (dRows ?? []) as Array<{ gallery_id: string }>) {
+      deliveredIds.add(r.gallery_id)
+    }
+  }
+  const isDelivered = (g: GalleryListRow) =>
+    deliveredIds.has(g.id) || !!g.delivery_ready_at
+  const deliveredCount = allGalleries.filter(isDelivered).length
+  const activeCount = allGalleries.length - deliveredCount
+  const grandTotal = allGalleries.length
+  const galleries = allGalleries.filter((g) =>
+    scope === "delivered" ? isDelivered(g) : !isDelivered(g),
+  )
 
   // 1) covers explícitos (cover_asset_id → thumb/web)
   const coverAssetIds = galleries
@@ -336,7 +354,7 @@ export default async function GalleriesPage({
           </div>
         )}
 
-        {rows.length === 0 ? (
+        {galleries.length === 0 ? (
           <div className="rounded-xl border border-border bg-card">
             <EmptyState
               icon={
@@ -375,10 +393,8 @@ export default async function GalleriesPage({
               const badge = g.project_id
                 ? badgeByProject.get(g.project_id)
                 : undefined
-              // Entregada si la galería tiene la entrega final marcada lista, o
-              // si la fila de entrega del proyecto lo dice.
-              const delivered =
-                !!g.delivery_ready_at || badge?.status === "entregada"
+              // Entregada = tiene fotos de entrega subidas o entrega marcada lista.
+              const delivered = isDelivered(g)
               // El chip de prioridad / cuenta regresiva solo aplica a galerías
               // NO entregadas (las entregadas muestran su badge "Entregada").
               const prio =
