@@ -23,6 +23,7 @@ import {
   listCollaborators,
 } from "@/server/services/collaborator.service"
 import { ProjectCollaboratorsCard } from "@/components/collaborators/project-collaborators-card"
+import { EntityTasks } from "@/components/tasks/entity-tasks"
 import {
   normalizeRequirements,
   evaluateRequirements,
@@ -473,6 +474,15 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               </div>
             )}
           </div>
+
+          {/* Tareas de la sesión */}
+          <EntityTasks
+            studioId={session.studioId}
+            userId={session.userId}
+            entityType="project"
+            entityId={project.id as string}
+            title="Tareas de la sesión"
+          />
 
           {/* Galerías del proyecto */}
           <div className="sf-card">

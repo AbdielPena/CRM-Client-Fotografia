@@ -10,6 +10,7 @@ import {
   Bell,
   Clock,
   Repeat,
+  ExternalLink,
 } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -56,6 +57,12 @@ export default async function TaskDetailPage({
   if (!task) notFound()
 
   const today = new Date().toISOString().slice(0, 10)
+  const entityHref =
+    task.entity_type === "client"
+      ? `/clients/${task.entity_id}`
+      : task.entity_type === "project" || task.entity_type === "session"
+        ? `/projects/${task.entity_id}`
+        : null
   const isOverdue =
     task.due_date &&
     ["pendiente", "en_progreso"].includes(task.status) &&
@@ -168,12 +175,20 @@ export default async function TaskDetailPage({
                 </>
               }
             >
-              <span className="text-xs">
-                {task.entity_type}:{" "}
-                <span className="font-mono">
-                  {task.entity_id?.slice(0, 8)}
+              {entityHref ? (
+                <Link
+                  href={entityHref}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                >
+                  Abrir {task.entity_type === "client" ? "cliente" : "sesión / proyecto"}
+                  <ExternalLink className="size-3" />
+                </Link>
+              ) : (
+                <span className="text-xs">
+                  {task.entity_type}:{" "}
+                  <span className="font-mono">{task.entity_id?.slice(0, 8)}</span>
                 </span>
-              </span>
+              )}
             </KV>
           )}
           {task.tags?.length > 0 && (

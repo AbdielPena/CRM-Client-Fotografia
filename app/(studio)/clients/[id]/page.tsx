@@ -33,6 +33,7 @@ import { ClientCreatedToast } from "@/components/clients/client-created-toast"
 import { DeleteClientButton } from "@/components/clients/delete-client-button"
 import { PortalAccessCard } from "@/components/clients/portal-access-card"
 import { DeliveriesPanel } from "@/components/clients/deliveries-panel"
+import { EntityTasks } from "@/components/tasks/entity-tasks"
 import {
   formatDate,
   formatDateShort,
@@ -229,6 +230,15 @@ export default async function ClientDetailPage({
                 </div>
               )}
             </SectionCard>
+
+            {/* Tareas del cliente */}
+            <EntityTasks
+              studioId={session.studioId}
+              userId={session.userId}
+              entityType="client"
+              entityId={client.id as string}
+              title="Tareas del cliente"
+            />
 
             {/* Galerías */}
             <SectionCard
