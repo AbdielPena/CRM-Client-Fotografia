@@ -79,7 +79,13 @@ export function LuxuryBookPanel({
           <input
             type="checkbox"
             checked={enabled}
-            onChange={(e) => setEnabled(e.target.checked)}
+            onChange={(e) => {
+              const on = e.target.checked
+              setEnabled(on)
+              // Habilitar dejando "Galería clásica" no muestra el libro; al
+              // encender, pasar a "Ambos" para que el libro aparezca de una vez.
+              if (on && displayMode === "classic") setDisplayMode("both")
+            }}
             className="size-4"
           />
           Habilitar
@@ -114,8 +120,15 @@ export function LuxuryBookPanel({
               ))}
             </div>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              &quot;Ambos&quot; muestra la galería clásica con un botón para abrir el libro.
+              &quot;Libro digital&quot; muestra solo el álbum; &quot;Ambos&quot; muestra la galería
+              con un botón para abrir el libro.
             </p>
+            {displayMode === "classic" && (
+              <p className="mt-1 text-[11px] font-medium text-amber-600">
+                En &quot;Galería clásica&quot; el libro NO se muestra. Elige &quot;Libro
+                digital&quot; o &quot;Ambos&quot;.
+              </p>
+            )}
           </div>
 
           {/* Template */}
@@ -194,14 +207,19 @@ export function LuxuryBookPanel({
 
       <div className="mt-5 flex items-center justify-between gap-3">
         {publicToken && enabled && displayMode !== "classic" ? (
-          <a
-            href={`/g/${publicToken}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ExternalLink className="size-3.5" /> Ver libro
-          </a>
+          <div className="flex flex-col gap-0.5">
+            <a
+              href={`/g/${publicToken}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground hover:text-brand"
+            >
+              <ExternalLink className="size-3.5" /> Ver el libro
+            </a>
+            <span className="text-[11px] text-muted-foreground">
+              Se comparte con el mismo link de la entrega (Compartir → Entrega final).
+            </span>
+          </div>
         ) : (
           <span />
         )}
