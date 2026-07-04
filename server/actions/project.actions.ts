@@ -79,22 +79,6 @@ export async function saveSessionDressAction(
   }
 }
 
-/** Marca el gasto del vestido de la sesión como pagado (o pendiente). */
-export async function markSessionDressPaidAction(
-  projectId: string,
-  paid: boolean,
-): Promise<{ ok: boolean; error?: string }> {
-  const session = await requireStudioAuth()
-  try {
-    const { setSessionDressPaid } = await import("@/server/services/session-dress.service")
-    await setSessionDressPaid(session.studioId, projectId, paid)
-    revalidatePath(`/projects/${projectId}`)
-    return { ok: true }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" }
-  }
-}
-
 /**
  * Guarda los datos de la quinceañera en la sesión: nombre (se usa como nombre
  * por defecto al crear galerías) y cumpleaños (define la entrega pautada: 2

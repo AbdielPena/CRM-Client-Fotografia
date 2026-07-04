@@ -552,7 +552,6 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               dressCost={dressCost > 0 ? dressCost : null}
               dressNotes={(project.dress_notes as string | null) ?? null}
               dressImageUrl={(project.dress_image_url as string | null) ?? null}
-              dressPayStatus={(project.dress_pay_status as string | null) ?? null}
             />
           )}
 

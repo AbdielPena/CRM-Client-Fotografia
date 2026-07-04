@@ -2,20 +2,16 @@
 
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Shirt, UploadCloud, Loader2, ImageIcon, Check } from "lucide-react"
+import { Shirt, UploadCloud, Loader2, ImageIcon } from "lucide-react"
 import { toast } from "sonner"
 
-import {
-  saveSessionDressAction,
-  markSessionDressPaidAction,
-} from "@/server/actions/project.actions"
+import { saveSessionDressAction } from "@/server/actions/project.actions"
 import { cn } from "@/lib/utils/cn"
 
 /**
  * Vestido de la sesión (planes Luxury que incluyen el vestido). Se registra a
  * mano: foto + nombre + proveedor + costo. El costo se resta de la ganancia
- * neta y se registra como gasto en Finanzas (FinanzApp). "Marcar pagado" salda
- * el gasto.
+ * neta del proyecto (cálculo interno del CRM). NO toca la app de Finanzas.
  */
 export function SessionDressCard({
   projectId,
@@ -24,7 +20,6 @@ export function SessionDressCard({
   dressCost,
   dressNotes,
   dressImageUrl,
-  dressPayStatus,
 }: {
   projectId: string
   dressName: string | null
@@ -32,7 +27,6 @@ export function SessionDressCard({
   dressCost: number | null
   dressNotes: string | null
   dressImageUrl: string | null
-  dressPayStatus: string | null
 }) {
   const router = useRouter()
   const [name, setName] = useState(dressName ?? "")
@@ -41,10 +35,6 @@ export function SessionDressCard({
   const [notes, setNotes] = useState(dressNotes ?? "")
   const [imageUrl, setImageUrl] = useState(dressImageUrl ?? "")
   const [busy, start] = useTransition()
-  const [payBusy, startPay] = useTransition()
-
-  const paid = dressPayStatus === "paid"
-  const hasCost = cost.trim() !== "" && Number(cost) > 0
 
   const save = () => {
     start(async () => {
@@ -61,18 +51,6 @@ export function SessionDressCard({
         return
       }
       toast.success("Vestido guardado")
-      router.refresh()
-    })
-  }
-
-  const togglePaid = () => {
-    startPay(async () => {
-      const r = await markSessionDressPaidAction(projectId, !paid)
-      if (!r.ok) {
-        toast.error(r.error ?? "Error")
-        return
-      }
-      toast.success(!paid ? "Gasto del vestido marcado como pagado" : "Marcado como pendiente")
       router.refresh()
     })
   }
@@ -105,7 +83,7 @@ export function SessionDressCard({
         </label>
         <label className="block">
           <span className="text-[11px] text-muted-foreground">
-            Costo del vestido (se resta de la ganancia + gasto en Finanzas)
+            Costo del vestido (se resta de la ganancia neta)
           </span>
           <input
             type="number"
@@ -138,26 +116,6 @@ export function SessionDressCard({
         >
           {busy ? "Guardando…" : "Guardar vestido"}
         </button>
-        {hasCost && (
-          <button
-            onClick={togglePaid}
-            disabled={payBusy}
-            className={cn(
-              "flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60",
-              paid
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
-                : "border-border text-foreground hover:bg-muted/50",
-            )}
-          >
-            {paid ? (
-              <>
-                <Check className="h-3.5 w-3.5" /> Pagado — marcar pendiente
-              </>
-            ) : (
-              "Marcar gasto como pagado"
-            )}
-          </button>
-        )}
       </div>
     </div>
   )
