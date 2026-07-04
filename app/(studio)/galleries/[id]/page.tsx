@@ -348,6 +348,11 @@ export default async function GalleryDetailPage({
           cover_config: gallery.cover_config ?? {},
           subtitle: gallery.subtitle ?? null,
           welcome_text: gallery.welcome_text ?? null,
+          book_enabled:
+            (gallery as unknown as { book_enabled?: boolean }).book_enabled ?? false,
+          book_display_mode:
+            (gallery as unknown as { book_display_mode?: string }).book_display_mode ??
+            "classic",
         }}
         assets={assetsWithUrls}
         sets={sets}

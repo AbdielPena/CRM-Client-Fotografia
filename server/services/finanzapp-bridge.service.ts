@@ -344,6 +344,77 @@ export async function cancelCollaboratorPayable(
   return { ok: true }
 }
 
+// ─── Vestido de la sesión (gasto en FinanzApp, como los colaboradores) ────────
+const dressRef = (projectId: string) => `crm-dress:${projectId}`
+
+/** Crea/actualiza el payable pendiente del costo del vestido de la sesión. */
+export async function recordDressPayable(
+  studioId: string,
+  input: {
+    projectId: string
+    acreedor: string
+    monto: number
+    /** vencimiento = fecha de la sesión. */
+    dueDate?: string | null
+    notas?: string | null
+  },
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_record_payable", {
+    p_workspace_id: workspaceId,
+    p_acreedor: input.acreedor || "Vestido",
+    p_monto: input.monto,
+    p_fecha_emision: new Date().toISOString().slice(0, 10),
+    p_fecha_venc: input.dueDate ? input.dueDate.slice(0, 10) : null,
+    p_external_reference: dressRef(input.projectId),
+    p_notas: input.notas ?? "Vestido de la sesión (CRM)",
+  })
+  if (error) throwServiceError("FINZ_RECORD_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
+/** Salda el payable del vestido: lo marca 'pagada' y registra el gasto real. */
+export async function settleDressPayable(
+  studioId: string,
+  input: {
+    projectId: string
+    accountId?: string | null
+    paidAt?: string
+    descripcion?: string | null
+  },
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_settle_payable", {
+    p_workspace_id: workspaceId,
+    p_external_reference: dressRef(input.projectId),
+    p_cuenta_id: input.accountId ?? null,
+    p_fecha_pago: (input.paidAt ?? new Date().toISOString()).slice(0, 10),
+    p_descripcion: input.descripcion ?? null,
+  })
+  if (error) throwServiceError("FINZ_SETTLE_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
+/** Cancela el payable del vestido (+ anula el gasto si existía). */
+export async function cancelDressPayable(
+  studioId: string,
+  projectId: string,
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_cancel_payable", {
+    p_workspace_id: workspaceId,
+    p_external_reference: dressRef(projectId),
+  })
+  if (error) throwServiceError("FINZ_CANCEL_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
 /** Reabre el payable (vuelve a pendiente; anula el gasto). */
 export async function reopenCollaboratorPayable(
   studioId: string,

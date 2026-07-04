@@ -45,6 +45,7 @@ interface Package {
   editedPhotos?: number
   deliveryDays?: number
   balanceDueOffsetDays?: number
+  includesDress?: boolean
   includes?: string
   isActive: boolean
   contractTemplateId?: string
@@ -781,6 +782,24 @@ function PackageForm({
             Cuándo vence la factura de saldo (el resto a pagar). Se calcula
             automáticamente a partir de la fecha de la sesión reservada. La
             reserva (1ra factura) usa sus propios días de vencimiento.
+          </p>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <input
+              type="checkbox"
+              name="includesDress"
+              value="true"
+              defaultChecked={defaultValues?.includesDress ?? false}
+              className="h-4 w-4 rounded border-border text-brand focus:ring-brand/30"
+            />
+            Este plan incluye el vestido
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            En los planes que incluyen el vestido (Luxury), el costo del vestido
+            de la sesión se resta de la ganancia neta y se registra como gasto en
+            Finanzas.
           </p>
         </div>
 

@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     "package-cover",
     "book-cover",
     "gallery-cover",
+    "dress",
   ].includes(variant)
     ? variant
     : "light"

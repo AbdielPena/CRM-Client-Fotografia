@@ -80,6 +80,8 @@ export default async function PackagesSettingsPage() {
             editedPhotos: p.edited_photos ?? undefined,
             deliveryDays: p.delivery_days ?? undefined,
             balanceDueOffsetDays: p.balance_due_offset_days ?? 0,
+            includesDress:
+              (p as unknown as { includes_dress?: boolean }).includes_dress ?? false,
             includes: p.includes ? p.includes.join("\n") : undefined,
             isActive: p.is_active,
             contractTemplateId: p.default_contract_template_id ?? undefined,

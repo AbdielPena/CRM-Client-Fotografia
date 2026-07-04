@@ -4,7 +4,6 @@ import { getProjectById } from "@/server/services/project.service"
 import { ChangeSessionTime } from "@/components/projects/change-session-time"
 import { QuinceDetails } from "@/components/projects/quince-details"
 import { SessionDressCard } from "@/components/projects/session-dress-card"
-import { getDressStores, getDressCatalog } from "@/server/services/dress-catalog.service"
 import { listFormResponsesForProject } from "@/server/services/form.service"
 import { getEntityActivity } from "@/server/services/activity.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
@@ -261,23 +260,27 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const totalAmount = project.total_amount as number | string | null
   const currency = (project.currency as string | null) ?? "DOP"
 
-  // Vestido seleccionado (quinceañera) y su costo → entra en la ganancia.
+  // Vestido de la sesión y su costo → entra en la ganancia SOLO si el plan
+  // incluye el vestido (planes Luxury). El flag vive en el paquete.
   const isQuince = /quince|xv/i.test(eventType ?? "")
+  const includesDress = !!(pkg as { includes_dress?: boolean } | null)?.includes_dress
   const dressCost =
     project.dress_cost != null && String(project.dress_cost) !== ""
       ? Number(project.dress_cost)
       : 0
   // Ganancia neta del proyecto = ingreso (precio del proyecto, o lo pagado si no
-  // hay precio) − costo de colaboradores (pagos acordados no cancelados) − vestido.
+  // hay precio) − costo de colaboradores (pagos acordados no cancelados) −
+  // vestido (solo si el plan lo incluye).
   const projectIncome = totalAmount != null ? Number(totalAmount) : totalPaid
-  const netProfit = projectIncome - collaboratorCost - dressCost
+  const netProfit =
+    projectIncome - collaboratorCost - (includesDress ? dressCost : 0)
 
   // Badges de "pendiente": la HORA en toda sesión (parte importante); los
   // COLABORADORES y el VESTIDO solo en sesiones de quinceañera.
   const missingTime = !eventTime
   const hasDress = !!((project.dress_name as string | null) || dressCost > 0)
   const missingCollaborators = isQuince && projectCollaborators.length === 0
-  const missingDress = isQuince && !hasDress
+  const missingDress = includesDress && !hasDress
   // Datos de la quinceañera: el NOMBRE se usa como nombre por defecto al crear
   // sus galerías; el CUMPLEAÑOS define la entrega pautada (2 días antes) y el
   // badge de prioridad en Galerías.
@@ -286,37 +289,6 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const missingQuinceName = isQuince && !quinceName
   const missingBirthday = isQuince && !quinceBirthday
 
-  // Catálogo de vestidos (solo quinceañera) para el selector, agrupado por tienda.
-  let dressCatalog: Array<{
-    storeId: string
-    storeName: string
-    dresses: Array<{ id: string; name: string; collection: string | null; rentalPrice: number | null }>
-  }> = []
-  if (isQuince) {
-    const [dStores, dDresses] = await Promise.all([
-      getDressStores(session.studioId).catch(() => []),
-      getDressCatalog(session.studioId).catch(() => []),
-    ])
-    const byStore = new Map<string, (typeof dressCatalog)[number]>()
-    for (const s of dStores) byStore.set(s.id, { storeId: s.id, storeName: s.name, dresses: [] })
-    for (const d of dDresses) {
-      if (!d.is_active) continue
-      const g =
-        byStore.get(d.store_id) ?? {
-          storeId: d.store_id,
-          storeName: d.store_name ?? "Vestidos",
-          dresses: [],
-        }
-      g.dresses.push({
-        id: d.id,
-        name: d.name,
-        collection: d.collection,
-        rentalPrice: d.rental_price,
-      })
-      byStore.set(d.store_id, g)
-    }
-    dressCatalog = [...byStore.values()].filter((s) => s.dresses.length > 0)
-  }
 
   const clientLabel = client ? (client.name as string) : ""
 
@@ -571,17 +543,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             eventDate={eventDate}
           />
 
-          {/* Vestido seleccionado (solo quinceañeras) */}
-          {isQuince && (
+          {/* Vestido de la sesión (planes que incluyen el vestido — Luxury) */}
+          {includesDress && (
             <SessionDressCard
               projectId={project.id as string}
-              dressCatalogId={(project.dress_catalog_id as string | null) ?? null}
               dressName={(project.dress_name as string | null) ?? null}
               dressProvider={(project.dress_provider as string | null) ?? null}
               dressCost={dressCost > 0 ? dressCost : null}
               dressNotes={(project.dress_notes as string | null) ?? null}
-              catalog={dressCatalog}
-              currency={currency}
+              dressImageUrl={(project.dress_image_url as string | null) ?? null}
+              dressPayStatus={(project.dress_pay_status as string | null) ?? null}
             />
           )}
 
@@ -816,7 +787,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           </div>
 
           {/* Ganancia neta (ingreso − vestido − colaboradores) */}
-          {(projectCollaborators.length > 0 || dressCost > 0) && (
+          {(projectCollaborators.length > 0 || (includesDress && dressCost > 0)) && (
             <div className="sf-card p-5">
               <div className="mb-3 flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -829,7 +800,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                     {formatCurrency(projectIncome, currency)}
                   </dd>
                 </div>
-                {dressCost > 0 && (
+                {includesDress && dressCost > 0 && (
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Costo del vestido</dt>
                     <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">

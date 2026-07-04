@@ -1,6 +1,11 @@
 import "server-only"
 
 import { untypedService } from "@/server/supabase/untyped"
+import {
+  recordDressPayable,
+  settleDressPayable,
+  cancelDressPayable,
+} from "@/server/services/finanzapp-bridge.service"
 
 /**
  * Vestido seleccionado para la sesión (quinceañera). Se puede elegir del
@@ -18,6 +23,7 @@ export async function setSessionDress(
     dressProvider: string
     dressCost: number | null
     dressNotes: string
+    dressImageUrl?: string | null
   },
 ): Promise<void> {
   const sb = untypedService()
@@ -28,12 +34,69 @@ export async function setSessionDress(
     dress_notes: data.dressNotes.trim() || null,
   }
   if (data.dressCatalogId !== undefined) patch.dress_catalog_id = data.dressCatalogId || null
+  if (data.dressImageUrl !== undefined) patch.dress_image_url = data.dressImageUrl || null
   const { error } = await sb
     .from("projects")
     .update(patch)
     .eq("id", projectId)
     .eq("studio_id", studioId)
   if (error) throw new Error(error.message)
+
+  // Gasto en FinanzApp SOLO si el plan incluye el vestido (planes Luxury) y hay
+  // costo. Best-effort (si no hay workspace mapeado → skip). Ver colaboradores.
+  try {
+    const { data: proj } = await sb
+      .from("projects")
+      .select("event_date, package_id")
+      .eq("id", projectId)
+      .maybeSingle()
+    const pkgId = (proj as { package_id?: string | null } | null)?.package_id ?? null
+    let includesDress = false
+    if (pkgId) {
+      const { data: pkg } = await sb
+        .from("packages")
+        .select("includes_dress")
+        .eq("id", pkgId)
+        .maybeSingle()
+      includesDress = !!(pkg as { includes_dress?: boolean } | null)?.includes_dress
+    }
+    const cost = data.dressCost
+    if (includesDress && cost != null && cost > 0) {
+      await recordDressPayable(studioId, {
+        projectId,
+        acreedor: data.dressProvider.trim() || "Vestido",
+        monto: cost,
+        dueDate: (proj as { event_date?: string | null } | null)?.event_date ?? null,
+        notas: `Vestido de la sesión${data.dressName.trim() ? `: ${data.dressName.trim()}` : ""}`,
+      })
+    } else {
+      // Sin costo o plan sin vestido → no debe quedar gasto.
+      await cancelDressPayable(studioId, projectId)
+    }
+  } catch {
+    /* best-effort: no bloquea el guardado del vestido */
+  }
+}
+
+/** Marca el gasto del vestido como pagado (settle en FinanzApp + estado). */
+export async function setSessionDressPaid(
+  studioId: string,
+  projectId: string,
+  paid: boolean,
+): Promise<void> {
+  const sb = untypedService()
+  const { error } = await sb
+    .from("projects")
+    .update({ dress_pay_status: paid ? "paid" : "pending" })
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+  if (error) throw new Error(error.message)
+  try {
+    if (paid) await settleDressPayable(studioId, { projectId })
+    // reabrir no es común; si se despaga, se deja el payable pendiente al re-guardar.
+  } catch {
+    /* best-effort */
+  }
 }
 
 /**

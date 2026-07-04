@@ -207,6 +207,10 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
           bookTemplateId: view.gallery.bookTemplateId,
           bookCoverImage: view.gallery.bookCoverImage,
           bookSettings: view.gallery.bookSettings,
+          motherMessage: studioInfo?.mother_message ?? null,
+          motherMessageFrom: studioInfo?.mother_message_from ?? null,
+          motherMessageEnabled: studioInfo?.mother_message_enabled ?? false,
+          thankyouMessage: thankyouMessage,
         }}
         assets={deliveryAssets.map((a) => ({
           id: a.id, webUrl: a.webUrl, thumbUrl: a.thumbUrl,
@@ -260,6 +264,10 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
             bookTemplateId: view.gallery.bookTemplateId,
             bookCoverImage: view.gallery.bookCoverImage,
             bookSettings: view.gallery.bookSettings,
+            motherMessage: studioInfo?.mother_message ?? null,
+            motherMessageFrom: studioInfo?.mother_message_from ?? null,
+            motherMessageEnabled: studioInfo?.mother_message_enabled ?? false,
+            thankyouMessage: thankyouMessage,
           }}
           assets={view.assets
             .filter((a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality")

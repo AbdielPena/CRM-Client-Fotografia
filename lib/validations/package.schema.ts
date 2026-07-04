@@ -27,6 +27,9 @@ export const createPackageSchema = z.object({
   // Vencimiento de la factura de SALDO (2da factura) relativo a la fecha de la
   // sesión: 0 = el día de la sesión, -1 = un día antes, +1 = un día después.
   balanceDueOffsetDays: z.coerce.number().int().min(-60).max(60).optional(),
+  // El plan incluye el vestido (planes Luxury): el costo del vestido se resta
+  // de la ganancia de la sesión y se registra como gasto en Finanzas.
+  includesDress: z.boolean().default(false),
   includes: z.string().max(2000).optional().or(z.literal("")),
   isActive: z.boolean().default(true),
   // Plantilla de contrato y formulario que se aplican por defecto cuando un

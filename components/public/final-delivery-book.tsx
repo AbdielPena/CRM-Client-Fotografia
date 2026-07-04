@@ -26,6 +26,11 @@ export type BookGallery = {
   bookTemplateId?: string | null
   bookCoverImage?: string | null
   bookSettings?: Record<string, unknown>
+  /** Dedicatoria de la madre / agradecimiento — página tras la portada. */
+  motherMessage?: string | null
+  motherMessageFrom?: string | null
+  motherMessageEnabled?: boolean
+  thankyouMessage?: string | null
 }
 
 export type BookStudio = {
@@ -473,6 +478,20 @@ export function FinalDeliveryBook({
   const eventDate = s(settings.eventDate)
   const showLogo = settings.showLogo !== false && !!studio.logoUrl
 
+  // Dedicatoria de la madre / agradecimiento (página tras la portada). Misma
+  // lógica de 3 estados que la galería pública.
+  const dedicationEnabled = !!gallery.motherMessageEnabled
+  const dedMother = (gallery.motherMessage ?? "").trim()
+  const dedicationText = dedicationEnabled
+    ? dedMother ||
+      (gallery.thankyouMessage ?? "").trim() ||
+      "Gracias por confiar en nosotros para capturar este momento. Fue un privilegio ser parte de él, y esperamos que estas fotografías te acompañen por siempre."
+    : ""
+  const dedicationIsMother = dedicationEnabled && dedMother.length > 0
+  const dedicationFrom = dedicationIsMother
+    ? (gallery.motherMessageFrom ?? "").trim()
+    : studio.name
+
   // En portrait (móvil/tablet) el flipbook muestra 1 sola hoja → sin lomos centrales.
   const isPortrait = dims.w < 520
 
@@ -537,7 +556,7 @@ export function FinalDeliveryBook({
   }
 
   // Página de portada (tapa dura).
-  const totalPages = photos.length + 2
+  const totalPages = photos.length + 2 + (dedicationText ? 1 : 0)
 
   // CSS vars de fallback inline (los tokens completos los pone .abby-book / [data-tpl]).
   const wrapVars = {
@@ -621,7 +640,6 @@ export function FinalDeliveryBook({
       ) : (
         <div className="pxbook-stage">
           <div className="pxbook-floor" aria-hidden />
-          {!isPortrait && <div className="pxbook-spine-center" aria-hidden />}
           <HTMLFlipBook
             key={`pf-${dims.w}x${dims.h}`}
             ref={bookRef}
@@ -674,6 +692,65 @@ export function FinalDeliveryBook({
                 <div className="pxbook-accentline" />
               </div>
             </div>
+
+            {/* DEDICATORIA / AGRADECIMIENTO (página tras la portada) */}
+            {dedicationText ? (
+              <div className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    padding: "11% 9%",
+                    boxSizing: "border-box",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    zIndex: 1,
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: "system-ui, sans-serif",
+                      fontSize: 11,
+                      letterSpacing: "0.34em",
+                      textTransform: "uppercase",
+                      color: accent,
+                      marginBottom: 20,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {dedicationIsMother ? "Dedicatoria" : "Gracias"}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: "var(--font-display), 'Cormorant Garamond', Georgia, serif",
+                      fontStyle: "italic",
+                      fontSize: "clamp(16px,3.6vw,24px)",
+                      lineHeight: 1.6,
+                      color: tpl.ink,
+                      maxWidth: "34ch",
+                    }}
+                  >
+                    “{dedicationText}”
+                  </p>
+                  {dedicationFrom && (
+                    <p
+                      style={{
+                        fontFamily: "var(--font-script), 'Pinyon Script', cursive",
+                        fontSize: "clamp(18px,3.4vw,26px)",
+                        color: accent,
+                        marginTop: 22,
+                      }}
+                    >
+                      {dedicationFrom}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             {/* PÁGINAS DE FOTOS */}
             {photos.map((a, i) => (

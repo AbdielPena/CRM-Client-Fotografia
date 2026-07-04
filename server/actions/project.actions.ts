@@ -53,6 +53,7 @@ export async function saveSessionDressAction(
     dressProvider: string
     dressCost: string
     dressNotes: string
+    dressImageUrl?: string | null
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const session = await requireStudioAuth()
@@ -69,7 +70,24 @@ export async function saveSessionDressAction(
       dressProvider: data.dressProvider ?? "",
       dressCost: cost,
       dressNotes: data.dressNotes ?? "",
+      dressImageUrl: data.dressImageUrl ?? null,
     })
+    revalidatePath(`/projects/${projectId}`)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
+/** Marca el gasto del vestido de la sesión como pagado (o pendiente). */
+export async function markSessionDressPaidAction(
+  projectId: string,
+  paid: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const { setSessionDressPaid } = await import("@/server/services/session-dress.service")
+    await setSessionDressPaid(session.studioId, projectId, paid)
     revalidatePath(`/projects/${projectId}`)
     return { ok: true }
   } catch (e) {

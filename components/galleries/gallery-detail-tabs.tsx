@@ -96,6 +96,8 @@ type Gallery = {
   cover_config: Record<string, unknown>
   subtitle: string | null
   welcome_text: string | null
+  book_enabled?: boolean
+  book_display_mode?: string
 }
 
 type Asset = {
@@ -1812,6 +1814,7 @@ function ShareTab({
   const [selCopied, setSelCopied] = React.useState(false)
   const [msgCopied, setMsgCopied] = React.useState(false)
   const [webCopied, setWebCopied] = React.useState(false)
+  const [bookCopied, setBookCopied] = React.useState(false)
   const [delivMsgCopied, setDelivMsgCopied] = React.useState(false)
   const [resel, setResel] = React.useState<ReselectionInfo | null>(reselection)
   const [reselCopied, setReselCopied] = React.useState(false)
@@ -1864,6 +1867,12 @@ function ShareTab({
   // ── Entrega final: link de descarga web (?entrega=1) + Drive + mensaje editable ──
   // Separado de la selección: este link muestra SOLO la entrega (sin selección).
   const deliveryWebUrl = publicUrl ? `${publicUrl}?entrega=1` : null
+  // Link directo al álbum digital (libro) — solo si el libro está habilitado
+  // y el modo no es "clásica". Sirve para enviar galería y libro.
+  const bookUrl =
+    publicUrl && gallery.book_enabled && gallery.book_display_mode !== "classic"
+      ? `${publicUrl}?libro=1`
+      : null
   const msgEntregaFinal = renderWaMessage(
     waDeliveryTemplate || DEFAULT_DELIVERY_WA_MESSAGE,
     {
@@ -1887,6 +1896,13 @@ function ShareTab({
     setWebCopied(true)
     toast.success("Link de descarga copiado")
     setTimeout(() => setWebCopied(false), 2000)
+  }
+  const handleCopyBook = () => {
+    if (!bookUrl) return
+    navigator.clipboard.writeText(bookUrl)
+    setBookCopied(true)
+    toast.success("Link del álbum copiado")
+    setTimeout(() => setBookCopied(false), 2000)
   }
   const handleCopyDelivMsg = () => {
     navigator.clipboard.writeText(msgEntregaFinal)
@@ -2377,6 +2393,37 @@ function ShareTab({
                   </button>
                   <a
                     href={deliveryWebUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {/* Link directo al álbum digital (libro) — si el libro está habilitado */}
+            {bookUrl && (
+              <div>
+                <p className="mb-1 text-[11px] font-medium text-foreground">
+                  Link del álbum (libro digital)
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    readOnly
+                    value={bookUrl}
+                    className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
+                  />
+                  <button
+                    onClick={handleCopyBook}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
+                  >
+                    {bookCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                    {bookCopied ? "Copiado" : "Copiar"}
+                  </button>
+                  <a
+                    href={bookUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"

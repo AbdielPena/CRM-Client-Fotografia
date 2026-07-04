@@ -1,81 +1,60 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Shirt } from "lucide-react"
+import { Shirt, UploadCloud, Loader2, ImageIcon, Check } from "lucide-react"
 import { toast } from "sonner"
 
-import { saveSessionDressAction } from "@/server/actions/project.actions"
+import {
+  saveSessionDressAction,
+  markSessionDressPaidAction,
+} from "@/server/actions/project.actions"
 import { cn } from "@/lib/utils/cn"
 
-export type CatalogDress = {
-  id: string
-  name: string
-  collection: string | null
-  rentalPrice: number | null
-}
-export type CatalogStore = {
-  storeId: string
-  storeName: string
-  dresses: CatalogDress[]
-}
-
 /**
- * Registro del vestido de la sesión (quinceañera). Se elige del catálogo
- * (agrupado por tienda; el costo se autocompleta del rental_price) o a mano.
- * El costo se descuenta en la "Ganancia neta".
+ * Vestido de la sesión (planes Luxury que incluyen el vestido). Se registra a
+ * mano: foto + nombre + proveedor + costo. El costo se resta de la ganancia
+ * neta y se registra como gasto en Finanzas (FinanzApp). "Marcar pagado" salda
+ * el gasto.
  */
 export function SessionDressCard({
   projectId,
-  dressCatalogId,
   dressName,
   dressProvider,
   dressCost,
   dressNotes,
-  catalog,
-  currency,
+  dressImageUrl,
+  dressPayStatus,
 }: {
   projectId: string
-  dressCatalogId: string | null
   dressName: string | null
   dressProvider: string | null
   dressCost: number | null
   dressNotes: string | null
-  catalog: CatalogStore[]
-  currency: string
+  dressImageUrl: string | null
+  dressPayStatus: string | null
 }) {
   const router = useRouter()
-  const [catalogId, setCatalogId] = useState(dressCatalogId ?? "")
   const [name, setName] = useState(dressName ?? "")
   const [provider, setProvider] = useState(dressProvider ?? "")
   const [cost, setCost] = useState(dressCost != null ? String(dressCost) : "")
   const [notes, setNotes] = useState(dressNotes ?? "")
+  const [imageUrl, setImageUrl] = useState(dressImageUrl ?? "")
   const [busy, start] = useTransition()
+  const [payBusy, startPay] = useTransition()
 
-  const hasCatalog = catalog.some((s) => s.dresses.length > 0)
-
-  const onPick = (id: string) => {
-    setCatalogId(id)
-    if (!id) return
-    for (const s of catalog) {
-      const d = s.dresses.find((x) => x.id === id)
-      if (d) {
-        setName(d.collection ? `${d.name} — ${d.collection}` : d.name)
-        setProvider(s.storeName)
-        if (d.rentalPrice != null) setCost(String(d.rentalPrice))
-        break
-      }
-    }
-  }
+  const paid = dressPayStatus === "paid"
+  const hasCost = cost.trim() !== "" && Number(cost) > 0
 
   const save = () => {
     start(async () => {
       const r = await saveSessionDressAction(projectId, {
-        dressCatalogId: catalogId || null,
+        dressCatalogId: null,
         dressName: name,
         dressProvider: provider,
         dressCost: cost,
         dressNotes: notes,
+        dressImageUrl: imageUrl || null,
       })
       if (!r.ok) {
         toast.error(r.error ?? "No se pudo guardar")
@@ -86,37 +65,26 @@ export function SessionDressCard({
     })
   }
 
+  const togglePaid = () => {
+    startPay(async () => {
+      const r = await markSessionDressPaidAction(projectId, !paid)
+      if (!r.ok) {
+        toast.error(r.error ?? "Error")
+        return
+      }
+      toast.success(!paid ? "Gasto del vestido marcado como pagado" : "Marcado como pendiente")
+      router.refresh()
+    })
+  }
+
   return (
     <div className="sf-card p-5">
       <div className="mb-3 flex items-center gap-2">
         <Shirt className="h-4 w-4 text-muted-foreground" />
-        <h2 className="text-sm font-semibold text-foreground">Vestido seleccionado</h2>
+        <h2 className="text-sm font-semibold text-foreground">Vestido de la sesión</h2>
       </div>
       <div className="space-y-2.5">
-        {hasCatalog && (
-          <label className="block">
-            <span className="text-[11px] text-muted-foreground">Elegir del catálogo (por tienda)</span>
-            <select
-              value={catalogId}
-              onChange={(e) => onPick(e.target.value)}
-              className="mt-0.5 block w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground"
-            >
-              <option value="">— Sin catálogo / a mano —</option>
-              {catalog
-                .filter((s) => s.dresses.length > 0)
-                .map((s) => (
-                  <optgroup key={s.storeId} label={s.storeName}>
-                    {s.dresses.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.collection ? `${d.name} — ${d.collection}` : d.name}
-                        {d.rentalPrice != null ? ` · ${currency} ${d.rentalPrice.toLocaleString("es-DO")}` : ""}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-            </select>
-          </label>
-        )}
+        <DressPhotoField value={imageUrl} onChange={setImageUrl} />
         <label className="block">
           <span className="text-[11px] text-muted-foreground">Nombre o código del vestido</span>
           <input
@@ -127,16 +95,18 @@ export function SessionDressCard({
           />
         </label>
         <label className="block">
-          <span className="text-[11px] text-muted-foreground">Proveedor / tienda (si aplica)</span>
+          <span className="text-[11px] text-muted-foreground">Proveedor / tienda</span>
           <input
             value={provider}
             onChange={(e) => setProvider(e.target.value)}
-            placeholder="Ej: Quinceañeras VIP RD"
+            placeholder="Ej: JOP Eventos"
             className="mt-0.5 block w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground"
           />
         </label>
         <label className="block">
-          <span className="text-[11px] text-muted-foreground">Costo del vestido</span>
+          <span className="text-[11px] text-muted-foreground">
+            Costo del vestido (se resta de la ganancia + gasto en Finanzas)
+          </span>
           <input
             type="number"
             min={0}
@@ -168,7 +138,99 @@ export function SessionDressCard({
         >
           {busy ? "Guardando…" : "Guardar vestido"}
         </button>
+        {hasCost && (
+          <button
+            onClick={togglePaid}
+            disabled={payBusy}
+            className={cn(
+              "flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60",
+              paid
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
+                : "border-border text-foreground hover:bg-muted/50",
+            )}
+          >
+            {paid ? (
+              <>
+                <Check className="h-3.5 w-3.5" /> Pagado — marcar pendiente
+              </>
+            ) : (
+              "Marcar gasto como pagado"
+            )}
+          </button>
+        )}
       </div>
+    </div>
+  )
+}
+
+function DressPhotoField({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (url: string) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    setBusy(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("variant", "dress")
+      const res = await fetch("/api/studio/branding/logo", { method: "POST", body: fd })
+      const json = (await res.json()) as { url?: string; error?: string }
+      if (!res.ok || !json.url) throw new Error(json.error || "Error al subir")
+      onChange(json.url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al subir")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="grid h-28 w-20 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-muted/30">
+        {value ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={value} alt="Vestido" className="h-full w-full object-cover" />
+        ) : (
+          <ImageIcon className="size-5 text-muted-foreground" />
+        )}
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="text-[11px] text-muted-foreground">Foto del vestido</span>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60"
+        >
+          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <UploadCloud className="size-3.5" />}
+          {value ? "Cambiar foto" : "Subir foto"}
+        </button>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            Quitar
+          </button>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={onPick}
+      />
     </div>
   )
 }

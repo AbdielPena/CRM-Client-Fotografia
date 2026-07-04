@@ -114,6 +114,8 @@ export async function createPackage(
   ;(insert as Record<string, unknown>).cover_image_url = data.coverImageUrl || null
   // balance_due_offset_days: vencimiento del saldo relativo a la sesión (0 = mismo día).
   ;(insert as Record<string, unknown>).balance_due_offset_days = data.balanceDueOffsetDays ?? 0
+  // includes_dress: el plan incluye el vestido (Luxury) → resta/gasto del vestido.
+  ;(insert as Record<string, unknown>).includes_dress = data.includesDress ?? false
   if (printEntitlements !== undefined) {
     ;(insert as Record<string, unknown>).print_entitlements = printEntitlements
   }
@@ -160,6 +162,7 @@ export async function updatePackage(
     patch.cover_image_url = data.coverImageUrl || null
   if (data.balanceDueOffsetDays !== undefined)
     patch.balance_due_offset_days = data.balanceDueOffsetDays ?? 0
+  if (data.includesDress !== undefined) patch.includes_dress = data.includesDress
 
   // Slug: si el user lo escribe explícito → usamos su valor (sanitizado).
   // Si cambia el nombre sin slug explícito → regeneramos para mantener SEO-friendly.
