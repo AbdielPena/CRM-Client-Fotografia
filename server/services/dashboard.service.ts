@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { createSupabaseServerClient } from '@/server/supabase/server'
+import { untypedServer } from '@/server/supabase/untyped'
 import { throwServiceError } from '@/lib/utils/api-error'
 
 /**
@@ -501,4 +502,181 @@ export async function getMonthPayments(
       href: inv ? `/invoices/${inv.id}` : null,
     }
   })
+}
+
+// ============================================================================
+// Tareas de la semana — próximas 7 días (activas, con fecha). Para el dashboard.
+// ============================================================================
+
+export type WeekTaskRow = {
+  id: string
+  title: string
+  dueDate: string | null
+  dueTime: string | null
+  priority: string
+  status: string
+  href: string | null
+  clientName: string | null
+  overdue: boolean
+}
+
+/**
+ * Tareas ACTIVAS (pendiente/en_progreso/bloqueada) con vencimiento entre hoy y
+ * hoy+`days` (incluye vencidas hasta hoy). Resuelve el nombre del cliente vía la
+ * entidad vinculada (proyecto → cliente, o cliente directo) y un href clickeable.
+ */
+export async function getTasksThisWeek(
+  studioId: string,
+  days: number = 7,
+): Promise<WeekTaskRow[]> {
+  const supabase = untypedServer()
+  const today = new Date().toISOString().slice(0, 10)
+  const end = new Date()
+  end.setDate(end.getDate() + days)
+  const endStr = end.toISOString().slice(0, 10)
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(
+      'id, title, due_date, due_time, priority, status, entity_type, entity_id',
+    )
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .in('status', ['pendiente', 'en_progreso', 'bloqueada'])
+    .not('due_date', 'is', null)
+    .lte('due_date', endStr)
+    .order('due_date', { ascending: true })
+    .order('due_time', { ascending: true, nullsFirst: true })
+    .limit(25)
+
+  if (error) throwServiceError('DASHBOARD_TASKS_WEEK_FAILED', error)
+
+  type Row = {
+    id: string
+    title: string
+    due_date: string | null
+    due_time: string | null
+    priority: string
+    status: string
+    entity_type: string | null
+    entity_id: string | null
+  }
+  const rows = (data as Row[] | null) ?? []
+
+  // Resolver nombre del cliente: proyecto → client_id → clients.name, o cliente directo.
+  const projectIds = [
+    ...new Set(
+      rows
+        .filter((t) => (t.entity_type === 'project' || t.entity_type === 'session') && t.entity_id)
+        .map((t) => t.entity_id as string),
+    ),
+  ]
+  const directClientIds = [
+    ...new Set(rows.filter((t) => t.entity_type === 'client' && t.entity_id).map((t) => t.entity_id as string)),
+  ]
+  const projectClient: Record<string, string> = {}
+  if (projectIds.length) {
+    const { data: projs } = await supabase
+      .from('projects')
+      .select('id, client_id')
+      .eq('studio_id', studioId)
+      .in('id', projectIds)
+    for (const p of (projs as Array<{ id: string; client_id: string | null }> | null) ?? []) {
+      if (p.client_id) projectClient[p.id] = p.client_id
+    }
+  }
+  const clientIds = [...new Set([...directClientIds, ...Object.values(projectClient)])]
+  const clientName: Record<string, string> = {}
+  if (clientIds.length) {
+    const { data: clients } = await supabase
+      .from('clients')
+      .select('id, name')
+      .eq('studio_id', studioId)
+      .in('id', clientIds)
+    for (const c of (clients as Array<{ id: string; name: string }> | null) ?? []) {
+      clientName[c.id] = c.name
+    }
+  }
+
+  return rows.map((r) => {
+    let cName: string | null = null
+    if (r.entity_type === 'client' && r.entity_id) cName = clientName[r.entity_id] ?? null
+    else if ((r.entity_type === 'project' || r.entity_type === 'session') && r.entity_id) {
+      const cid = projectClient[r.entity_id]
+      cName = cid ? clientName[cid] ?? null : null
+    }
+    const href =
+      (r.entity_type === 'project' || r.entity_type === 'session') && r.entity_id
+        ? `/projects/${r.entity_id}`
+        : r.entity_type === 'client' && r.entity_id
+          ? `/clients/${r.entity_id}`
+          : '/tasks'
+    return {
+      id: r.id,
+      title: r.title,
+      dueDate: r.due_date,
+      dueTime: r.due_time,
+      priority: r.priority,
+      status: r.status,
+      href,
+      clientName: cName,
+      overdue: !!r.due_date && r.due_date < today,
+    }
+  })
+}
+
+// ============================================================================
+// Stats financieras de sesión — deudas pendientes (colaboradores + vestidos).
+// ============================================================================
+
+export type SessionFinanceStats = {
+  collaboratorDebt: number
+  collaboratorDebtCount: number
+  dressDebt: number
+  dressDebtCount: number
+  currency: string
+}
+
+/**
+ * Deuda pendiente del estudio: pagos a colaboradores aún NO liquidados
+ * (pay_status = 'pending') + costo de vestidos aún NO pagados a la tienda
+ * (dress_pay_status ≠ 'paid'). Alimenta las stats financieras del dashboard.
+ */
+export async function getSessionFinanceStats(
+  studioId: string,
+): Promise<SessionFinanceStats> {
+  const supabase = untypedServer()
+
+  const [collab, dresses] = await Promise.all([
+    supabase
+      .from('project_collaborators')
+      .select('agreed_pay')
+      .eq('studio_id', studioId)
+      .eq('pay_status', 'pending')
+      .is('deleted_at', null),
+    supabase
+      .from('projects')
+      .select('dress_cost, dress_pay_status')
+      .eq('studio_id', studioId)
+      .is('deleted_at', null)
+      .not('dress_cost', 'is', null)
+      .gt('dress_cost', 0),
+  ])
+
+  const collabRows = (collab.data as Array<{ agreed_pay: number | string }> | null) ?? []
+  const collaboratorDebt = collabRows.reduce((s, r) => s + Number(r.agreed_pay ?? 0), 0)
+
+  const dressRows =
+    (dresses.data as Array<{ dress_cost: number | string; dress_pay_status: string | null }> | null) ??
+    []
+  const unpaidDresses = dressRows.filter((r) => (r.dress_pay_status ?? 'pending') !== 'paid')
+  const dressDebt = unpaidDresses.reduce((s, r) => s + Number(r.dress_cost ?? 0), 0)
+
+  return {
+    collaboratorDebt,
+    collaboratorDebtCount: collabRows.length,
+    dressDebt,
+    dressDebtCount: unpaidDresses.length,
+    currency: 'DOP',
+  }
 }

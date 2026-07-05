@@ -1,6 +1,12 @@
 import "server-only"
 
 import { untypedService } from "@/server/supabase/untyped"
+import {
+  recordDressPayable,
+  settleDressPayable,
+  cancelDressPayable,
+} from "@/server/services/finanzapp-bridge.service"
+import { notify } from "@/server/services/notification.service"
 
 /**
  * Vestido seleccionado para la sesión (quinceañera). Se puede elegir del
@@ -30,15 +36,108 @@ export async function setSessionDress(
   }
   if (data.dressCatalogId !== undefined) patch.dress_catalog_id = data.dressCatalogId || null
   if (data.dressImageUrl !== undefined) patch.dress_image_url = data.dressImageUrl || null
+
+  // Resolver includes_dress + monto incluido (plan → categoría) y datos del proyecto.
+  const { data: proj } = await sb
+    .from("projects")
+    .select("event_date, package_id, service_category_id, name, dress_extra_invoiced")
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const p = proj as {
+    event_date?: string | null
+    package_id?: string | null
+    service_category_id?: string | null
+    name?: string | null
+    dress_extra_invoiced?: boolean | null
+  } | null
+  let includesDress = false
+  let includedAmount = 0
+  if (p?.package_id) {
+    const { data: pkg } = await sb
+      .from("packages")
+      .select("includes_dress, dress_included_amount")
+      .eq("id", p.package_id)
+      .maybeSingle()
+    const pk = pkg as { includes_dress?: boolean; dress_included_amount?: number | null } | null
+    includesDress = !!pk?.includes_dress
+    includedAmount = Number(pk?.dress_included_amount ?? 0)
+  }
+  if (includesDress && !includedAmount && p?.service_category_id) {
+    const { data: cat } = await sb
+      .from("service_categories")
+      .select("dress_included_amount")
+      .eq("id", p.service_category_id)
+      .maybeSingle()
+    includedAmount = Number((cat as { dress_included_amount?: number | null } | null)?.dress_included_amount ?? 0)
+  }
+  const cost = data.dressCost
+  const extra =
+    includesDress && includedAmount > 0 && cost != null ? Math.max(0, cost - includedAmount) : 0
+  patch.dress_extra_cost = extra || null
+
   const { error } = await sb
     .from("projects")
     .update(patch)
     .eq("id", projectId)
     .eq("studio_id", studioId)
   if (error) throw new Error(error.message)
-  // Nota: el costo del vestido se resta de la ganancia neta del proyecto (cálculo
-  // interno del CRM). NO se registra en FinanzApp por ahora (el dueño organizará
-  // la app de Finanzas antes de conectar el gasto del vestido).
+
+  // Gasto del vestido en FinanzApp (payable = costo que paga el estudio a la
+  // tienda). Best-effort (sin workspace mapeado → skip). Ver colaboradores.
+  try {
+    if (includesDress && cost != null && cost > 0) {
+      await recordDressPayable(studioId, {
+        projectId,
+        acreedor: data.dressProvider.trim() || "Vestido",
+        monto: cost,
+        dueDate: p?.event_date ?? null,
+        notas: `Vestido de la sesión${data.dressName.trim() ? `: ${data.dressName.trim()}` : ""}`,
+      })
+    } else {
+      await cancelDressPayable(studioId, projectId)
+    }
+  } catch {
+    /* best-effort */
+  }
+
+  // Avisar al dueño si el vestido excede lo incluido y aún no se ha facturado.
+  try {
+    if (extra > 0 && !p?.dress_extra_invoiced) {
+      await notify({
+        studioId,
+        type: "system",
+        title: "Vestido excede lo incluido",
+        body: `${p?.name ?? "Sesión"}: el vestido cuesta más que lo incluido. Costo extra a facturar: RD$${extra.toLocaleString("es-DO")}.`,
+        actionUrl: `/projects/${projectId}`,
+        recipientRole: "owner",
+        relatedEntityType: "project",
+        relatedEntityId: projectId,
+      })
+    }
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Marca el gasto del vestido como pagado (settle en FinanzApp + estado). */
+export async function setSessionDressPaid(
+  studioId: string,
+  projectId: string,
+  paid: boolean,
+): Promise<void> {
+  const sb = untypedService()
+  const { error } = await sb
+    .from("projects")
+    .update({ dress_pay_status: paid ? "paid" : "pending" })
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+  if (error) throw new Error(error.message)
+  try {
+    if (paid) await settleDressPayable(studioId, { projectId })
+  } catch {
+    /* best-effort */
+  }
 }
 
 /**

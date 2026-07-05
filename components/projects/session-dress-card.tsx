@@ -2,16 +2,21 @@
 
 import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Shirt, UploadCloud, Loader2, ImageIcon } from "lucide-react"
+import { Shirt, UploadCloud, Loader2, ImageIcon, Check, Receipt } from "lucide-react"
 import { toast } from "sonner"
 
-import { saveSessionDressAction } from "@/server/actions/project.actions"
+import {
+  saveSessionDressAction,
+  markSessionDressPaidAction,
+  addDressExtraToInvoiceAction,
+} from "@/server/actions/project.actions"
 import { cn } from "@/lib/utils/cn"
 
 /**
- * Vestido de la sesión (planes Luxury que incluyen el vestido). Se registra a
- * mano: foto + nombre + proveedor + costo. El costo se resta de la ganancia
- * neta del proyecto (cálculo interno del CRM). NO toca la app de Finanzas.
+ * Vestido de la sesión (planes que incluyen el vestido). Manual: foto + nombre +
+ * proveedor + costo. El costo (hasta el monto incluido) se resta de la ganancia
+ * neta y se registra como gasto en Finanzas (FinanzApp). Si excede lo incluido,
+ * el excedente se puede agregar a la factura del cliente (con confirmación).
  */
 export function SessionDressCard({
   projectId,
@@ -20,6 +25,10 @@ export function SessionDressCard({
   dressCost,
   dressNotes,
   dressImageUrl,
+  dressPayStatus,
+  dressExtra,
+  dressExtraInvoiced,
+  currency,
 }: {
   projectId: string
   dressName: string | null
@@ -27,6 +36,10 @@ export function SessionDressCard({
   dressCost: number | null
   dressNotes: string | null
   dressImageUrl: string | null
+  dressPayStatus: string | null
+  dressExtra: number
+  dressExtraInvoiced: boolean
+  currency: string
 }) {
   const router = useRouter()
   const [name, setName] = useState(dressName ?? "")
@@ -34,9 +47,16 @@ export function SessionDressCard({
   const [cost, setCost] = useState(dressCost != null ? String(dressCost) : "")
   const [notes, setNotes] = useState(dressNotes ?? "")
   const [imageUrl, setImageUrl] = useState(dressImageUrl ?? "")
+  const [extraAmount, setExtraAmount] = useState(dressExtra > 0 ? String(dressExtra) : "")
   const [busy, start] = useTransition()
+  const [payBusy, startPay] = useTransition()
+  const [extraBusy, startExtra] = useTransition()
 
-  const save = () => {
+  const paid = dressPayStatus === "paid"
+  const hasCost = cost.trim() !== "" && Number(cost) > 0
+  const fmt = (n: number) => `${currency} ${n.toLocaleString("es-DO")}`
+
+  const save = () =>
     start(async () => {
       const r = await saveSessionDressAction(projectId, {
         dressCatalogId: null,
@@ -53,7 +73,33 @@ export function SessionDressCard({
       toast.success("Vestido guardado")
       router.refresh()
     })
-  }
+
+  const togglePaid = () =>
+    startPay(async () => {
+      const r = await markSessionDressPaidAction(projectId, !paid)
+      if (!r.ok) {
+        toast.error(r.error ?? "Error")
+        return
+      }
+      toast.success(!paid ? "Gasto del vestido marcado como pagado" : "Marcado como pendiente")
+      router.refresh()
+    })
+
+  const addExtra = () =>
+    startExtra(async () => {
+      const monto = Number(extraAmount)
+      if (!(monto > 0)) {
+        toast.error("Monto del costo extra inválido")
+        return
+      }
+      const r = await addDressExtraToInvoiceAction(projectId, monto)
+      if (!r.ok) {
+        toast.error(r.error ?? "Error")
+        return
+      }
+      toast.success("Costo extra agregado a la factura")
+      router.refresh()
+    })
 
   return (
     <div className="sf-card p-5">
@@ -83,7 +129,7 @@ export function SessionDressCard({
         </label>
         <label className="block">
           <span className="text-[11px] text-muted-foreground">
-            Costo del vestido (se resta de la ganancia neta)
+            Costo total del vestido (lo incluido se resta de la ganancia; el resto se factura)
           </span>
           <input
             type="number"
@@ -116,6 +162,61 @@ export function SessionDressCard({
         >
           {busy ? "Guardando…" : "Guardar vestido"}
         </button>
+
+        {hasCost && (
+          <button
+            onClick={togglePaid}
+            disabled={payBusy}
+            className={cn(
+              "flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-60",
+              paid
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-300"
+                : "border-border text-foreground hover:bg-muted/50",
+            )}
+          >
+            {paid ? (
+              <>
+                <Check className="h-3.5 w-3.5" /> Pagado (a la tienda) — marcar pendiente
+              </>
+            ) : (
+              "Marcar gasto del vestido como pagado"
+            )}
+          </button>
+        )}
+
+        {dressExtra > 0 && !dressExtraInvoiced && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50/70 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+            <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+              <Receipt className="h-3.5 w-3.5" /> Costo extra de vestido
+            </p>
+            <p className="mb-2 text-[11px] text-muted-foreground">
+              El vestido excede lo incluido en el plan por <b>{fmt(dressExtra)}</b>. Confirma el
+              monto y agrégalo a la factura del cliente.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={extraAmount}
+                onChange={(e) => setExtraAmount(e.target.value)}
+                className="flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm tabular-nums text-foreground"
+              />
+              <button
+                onClick={addExtra}
+                disabled={extraBusy}
+                className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+              >
+                {extraBusy ? "…" : "Agregar a la factura"}
+              </button>
+            </div>
+          </div>
+        )}
+        {dressExtra > 0 && dressExtraInvoiced && (
+          <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
+            ✓ Costo extra de vestido ({fmt(dressExtra)}) ya agregado a la factura.
+          </p>
+        )}
       </div>
     </div>
   )

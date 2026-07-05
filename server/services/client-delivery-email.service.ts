@@ -77,7 +77,8 @@ export async function onDeliveryDelivered(deliveryId: string): Promise<void> {
   ${r.description
     ? `<p style="margin:0 0 16px;padding:14px 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px;font-size:13px;color:#52525b">${escapeHtml(String(r.description))}</p>`
     : ""}
-  <p style="text-align:center;margin:28px 0 6px"><a class="btn" href="${portalUrl}">Ver mi entrega</a></p>`
+  <p style="text-align:center;margin:28px 0 6px"><a class="btn" href="${portalUrl}">Ver mi entrega</a></p>
+  <p style="margin:22px 0 0;font-size:12px;line-height:1.55;color:#A1A1A6;text-align:center">La entrega de impresiones se realiza directamente en el estudio. Si deseas envío, este tendrá un costo adicional y estará sujeto a disponibilidad, ubicación y tiempos de entrega.</p>`
 
   // Resolver plantilla del studio o usar default hardcoded
   const tpl = await resolveTemplate(

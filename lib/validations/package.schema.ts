@@ -30,6 +30,9 @@ export const createPackageSchema = z.object({
   // El plan incluye el vestido (planes Luxury): el costo del vestido se resta
   // de la ganancia de la sesión y se registra como gasto en Finanzas.
   includesDress: z.boolean().default(false),
+  // Monto de vestido incluido en el plan (ej. 17000). Si el vestido de la sesión
+  // cuesta más, el excedente se factura como costo extra.
+  dressIncludedAmount: z.coerce.number().min(0).optional(),
   includes: z.string().max(2000).optional().or(z.literal("")),
   isActive: z.boolean().default(true),
   // Plantilla de contrato y formulario que se aplican por defecto cuando un

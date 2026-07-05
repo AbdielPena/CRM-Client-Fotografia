@@ -7,6 +7,10 @@ import {
   Truck,
   Cake,
   AlertTriangle,
+  CheckSquare,
+  Clock,
+  Users,
+  Shirt,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -16,6 +20,8 @@ import {
   getMonthlyRevenue,
   getTopPackages,
   getRecentActivity,
+  getTasksThisWeek,
+  getSessionFinanceStats,
 } from "@/server/services/dashboard.service"
 import { getModulesOverview } from "@/server/services/modules-overview.service"
 import {
@@ -142,6 +148,8 @@ export default async function DashboardPage() {
     onboardingSteps,
     deliveries,
     deliveryStats,
+    weekTasks,
+    financeStats,
   ] = await Promise.all([
     getDashboardData(session.studioId),
     getMonthlyRevenue(session.studioId, 12),
@@ -159,6 +167,14 @@ export default async function DashboardPage() {
       birthdaysSoon: 0,
       lateRisks: 0,
       dueThisWeek: 0,
+    })),
+    getTasksThisWeek(session.studioId, 7).catch(() => []),
+    getSessionFinanceStats(session.studioId).catch(() => ({
+      collaboratorDebt: 0,
+      collaboratorDebtCount: 0,
+      dressDebt: 0,
+      dressDebtCount: 0,
+      currency: "DOP",
     })),
   ])
 
@@ -318,6 +334,118 @@ export default async function DashboardPage() {
               />
             </DashboardCard>
           </div>
+
+          {/* ─── Tareas de la semana + Finanzas por pagar ─────────── */}
+          {(weekTasks.length > 0 ||
+            financeStats.collaboratorDebt > 0 ||
+            financeStats.dressDebt > 0) && (
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <DashboardCard
+                  title="Tareas de la semana"
+                  href="/tasks"
+                  hrefLabel="Ver tareas"
+                  bodyClassName="px-0 pb-0"
+                  delay={0.36}
+                >
+                  {weekTasks.length === 0 ? (
+                    <p className="px-5 py-6 text-center text-[13px] text-muted-foreground">
+                      No tienes tareas con vencimiento esta semana.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-border/40">
+                      {weekTasks.slice(0, 7).map((t) => (
+                        <li key={t.id}>
+                          <Link
+                            href={t.href ?? "/tasks"}
+                            className="flex items-center justify-between gap-3 px-5 py-2.5 transition-colors hover:bg-muted/40"
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <CheckSquare
+                                className={`h-3.5 w-3.5 shrink-0 ${
+                                  t.overdue ? "text-red-500" : "text-muted-foreground"
+                                }`}
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate text-[13px] font-medium text-foreground">
+                                  {t.title}
+                                </p>
+                                {t.clientName && (
+                                  <p className="truncate text-[11px] text-muted-foreground">
+                                    {t.clientName}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <span
+                              className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${
+                                t.overdue ? "text-red-600" : "text-muted-foreground"
+                              }`}
+                            >
+                              <Clock className="h-3 w-3" />
+                              {t.overdue ? "Vencida · " : ""}
+                              {t.dueDate
+                                ? formatDateShort(new Date(t.dueDate + "T00:00:00"))
+                                : "—"}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </DashboardCard>
+              </div>
+
+              {(financeStats.collaboratorDebt > 0 || financeStats.dressDebt > 0) && (
+                <DashboardCard title="Por pagar" delay={0.37}>
+                  <div className="space-y-3">
+                    {financeStats.collaboratorDebt > 0 && (
+                      <Link
+                        href="/colaboradores"
+                        className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                      >
+                        <span className="flex items-center gap-2 text-[13px] text-foreground">
+                          <Users className="h-4 w-4 text-violet-500" />
+                          Colaboradores
+                          <span className="text-[11px] text-muted-foreground">
+                            ({financeStats.collaboratorDebtCount})
+                          </span>
+                        </span>
+                        <span className="text-[13px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                          {formatCurrency(financeStats.collaboratorDebt, financeStats.currency)}
+                        </span>
+                      </Link>
+                    )}
+                    {financeStats.dressDebt > 0 && (
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                        <span className="flex items-center gap-2 text-[13px] text-foreground">
+                          <Shirt className="h-4 w-4 text-pink-500" />
+                          Vestidos
+                          <span className="text-[11px] text-muted-foreground">
+                            ({financeStats.dressDebtCount})
+                          </span>
+                        </span>
+                        <span className="text-[13px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                          {formatCurrency(financeStats.dressDebt, financeStats.currency)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                      <span className="text-[13px] font-semibold text-foreground">
+                        Total por pagar
+                      </span>
+                      <span className="text-[14px] font-bold tabular-nums text-foreground">
+                        {formatCurrency(
+                          financeStats.collaboratorDebt + financeStats.dressDebt,
+                          financeStats.currency,
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </DashboardCard>
+              )}
+            </div>
+          )}
 
           {/* ─── Próximas entregas (sistema inteligente) ──────────── */}
           {deliveries.length > 0 && (

@@ -225,6 +225,13 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const collaboratorCost = projectCollaborators
     .filter((a) => a.payStatus !== "cancelled")
     .reduce((s, a) => s + a.agreedPay, 0)
+  // Desglose pagado vs deuda pendiente (para la tarjeta de finanzas de la sesión).
+  const collaboratorPaid = projectCollaborators
+    .filter((a) => a.payStatus === "paid")
+    .reduce((s, a) => s + a.agreedPay, 0)
+  const collaboratorPending = projectCollaborators
+    .filter((a) => a.payStatus !== "paid" && a.payStatus !== "cancelled")
+    .reduce((s, a) => s + a.agreedPay, 0)
 
   // Validación de requisitos del plan (Fase 2): el plan del proyecto puede
   // exigir N colaboradores de cierto tipo → avisar si faltan.
@@ -260,20 +267,36 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const totalAmount = project.total_amount as number | string | null
   const currency = (project.currency as string | null) ?? "DOP"
 
-  // Vestido de la sesión y su costo → entra en la ganancia SOLO si el plan
-  // incluye el vestido (planes Luxury). El flag vive en el paquete.
+  // Vestido de la sesión → entra en la ganancia SOLO si el plan incluye el
+  // vestido (planes Luxury). Monto incluido: plan → categoría (default) → 0.
   const isQuince = /quince|xv/i.test(eventType ?? "")
   const includesDress = !!(pkg as { includes_dress?: boolean } | null)?.includes_dress
+  const svcCat = pickFirst((project as { service_category?: unknown }).service_category)
+  const dressIncludedAmount = includesDress
+    ? Number(
+        (pkg as { dress_included_amount?: number | null } | null)?.dress_included_amount ??
+          (svcCat as { dress_included_amount?: number | null } | null)?.dress_included_amount ??
+          0,
+      )
+    : 0
   const dressCost =
     project.dress_cost != null && String(project.dress_cost) !== ""
       ? Number(project.dress_cost)
       : 0
-  // Ganancia neta del proyecto = ingreso (precio del proyecto, o lo pagado si no
-  // hay precio) − costo de colaboradores (pagos acordados no cancelados) −
-  // vestido (solo si el plan lo incluye).
+  // Absorbido por el plan (hasta el monto incluido); el excedente se factura aparte.
+  const dressAbsorbed = includesDress
+    ? dressIncludedAmount > 0
+      ? Math.min(dressCost, dressIncludedAmount)
+      : dressCost
+    : 0
+  const dressExtra =
+    includesDress && dressIncludedAmount > 0 ? Math.max(0, dressCost - dressIncludedAmount) : 0
+  const dressExtraInvoiced = !!(project.dress_extra_invoiced as boolean | null)
+  const dressPayStatus = (project.dress_pay_status as string | null) ?? "pending"
+  // Ganancia neta = ingreso − colaboradores − vestido absorbido por el plan.
+  // (El excedente lo paga el cliente vía factura, así que no afecta la ganancia.)
   const projectIncome = totalAmount != null ? Number(totalAmount) : totalPaid
-  const netProfit =
-    projectIncome - collaboratorCost - (includesDress ? dressCost : 0)
+  const netProfit = projectIncome - collaboratorCost - dressAbsorbed
 
   // Badges de "pendiente": la HORA en toda sesión (parte importante); los
   // COLABORADORES y el VESTIDO solo en sesiones de quinceañera.
@@ -552,6 +575,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               dressCost={dressCost > 0 ? dressCost : null}
               dressNotes={(project.dress_notes as string | null) ?? null}
               dressImageUrl={(project.dress_image_url as string | null) ?? null}
+              dressPayStatus={dressPayStatus}
+              dressExtra={dressExtra}
+              dressExtraInvoiced={dressExtraInvoiced}
+              currency={currency}
             />
           )}
 
@@ -800,20 +827,76 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </dd>
                 </div>
                 {includesDress && dressCost > 0 && (
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Costo del vestido</dt>
-                    <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">
-                      − {formatCurrency(dressCost, currency)}
-                    </dd>
-                  </div>
+                  <>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Vestido (costo total)</dt>
+                      <dd className="font-medium tabular-nums text-foreground">
+                        {formatCurrency(dressCost, currency)}
+                      </dd>
+                    </div>
+                    {dressIncludedAmount > 0 && (
+                      <div className="flex justify-between pl-3">
+                        <dt className="text-[11px] text-muted-foreground">Incluido en el plan</dt>
+                        <dd className="text-[11px] tabular-nums text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(dressIncludedAmount, currency)}
+                        </dd>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Vestido (a cargo del estudio)</dt>
+                      <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">
+                        − {formatCurrency(dressAbsorbed, currency)}
+                      </dd>
+                    </div>
+                    {dressExtra > 0 && (
+                      <div className="flex justify-between pl-3">
+                        <dt className="text-[11px] text-muted-foreground">
+                          Costo extra (lo paga el cliente){dressExtraInvoiced ? " · facturado" : ""}
+                        </dt>
+                        <dd className="text-[11px] tabular-nums text-amber-600 dark:text-amber-400">
+                          {formatCurrency(dressExtra, currency)}
+                        </dd>
+                      </div>
+                    )}
+                    <div className="flex justify-between pl-3">
+                      <dt className="text-[11px] text-muted-foreground">Pago del vestido</dt>
+                      <dd
+                        className={
+                          dressPayStatus === "paid"
+                            ? "text-[11px] text-emerald-600 dark:text-emerald-400"
+                            : "text-[11px] text-amber-600 dark:text-amber-400"
+                        }
+                      >
+                        {dressPayStatus === "paid" ? "Pagado" : "Pendiente (deuda)"}
+                      </dd>
+                    </div>
+                  </>
                 )}
                 {projectCollaborators.length > 0 && (
-                  <div className="flex justify-between">
-                    <dt className="text-muted-foreground">Pagos a colaboradores</dt>
-                    <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">
-                      − {formatCurrency(collaboratorCost, currency)}
-                    </dd>
-                  </div>
+                  <>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Colaboradores (total)</dt>
+                      <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">
+                        − {formatCurrency(collaboratorCost, currency)}
+                      </dd>
+                    </div>
+                    {collaboratorPaid > 0 && (
+                      <div className="flex justify-between pl-3">
+                        <dt className="text-[11px] text-muted-foreground">Pagado</dt>
+                        <dd className="text-[11px] tabular-nums text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(collaboratorPaid, currency)}
+                        </dd>
+                      </div>
+                    )}
+                    {collaboratorPending > 0 && (
+                      <div className="flex justify-between pl-3">
+                        <dt className="text-[11px] text-muted-foreground">Deuda pendiente</dt>
+                        <dd className="text-[11px] tabular-nums text-amber-600 dark:text-amber-400">
+                          {formatCurrency(collaboratorPending, currency)}
+                        </dd>
+                      </div>
+                    )}
+                  </>
                 )}
                 <div className="flex justify-between border-t border-border/60 pt-2">
                   <dt className="font-semibold text-foreground">Ganancia neta</dt>

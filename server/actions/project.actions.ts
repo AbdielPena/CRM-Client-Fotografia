@@ -79,6 +79,83 @@ export async function saveSessionDressAction(
   }
 }
 
+/** Marca el gasto del vestido de la sesión como pagado (o pendiente) — settle en FinanzApp. */
+export async function markSessionDressPaidAction(
+  projectId: string,
+  paid: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const { setSessionDressPaid } = await import("@/server/services/session-dress.service")
+    await setSessionDressPaid(session.studioId, projectId, paid)
+    revalidatePath(`/projects/${projectId}`)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
+/**
+ * Agrega el "costo extra de vestido" como una línea a la factura de la sesión
+ * (la más reciente no cancelada). El dueño confirma el monto. Recalcula el total
+ * y se espeja a Facturación (vía updateInvoice). Marca dress_extra_invoiced.
+ */
+export async function addDressExtraToInvoiceAction(
+  projectId: string,
+  amount: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const monto = Number(amount)
+    if (!(monto > 0)) return { ok: false, error: "El monto del costo extra no es válido" }
+    const { untypedService } = await import("@/server/supabase/untyped")
+    const sb = untypedService()
+    const { data: inv } = await sb
+      .from("invoices")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("studio_id", session.studioId)
+      .is("deleted_at", null)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (!inv) {
+      return { ok: false, error: "La sesión no tiene factura donde agregar el costo extra." }
+    }
+    const invoiceId = (inv as { id: string }).id
+    const { data: items } = await sb
+      .from("invoice_items")
+      .select("description, quantity, unit_price")
+      .eq("invoice_id", invoiceId)
+      .order("sort_order")
+    const existing = (
+      (items ?? []) as Array<{ description: string; quantity: number; unit_price: number }>
+    ).map((it) => ({
+      description: it.description,
+      quantity: Number(it.quantity),
+      unitPrice: Number(it.unit_price),
+      taxRate: 0,
+    }))
+    const { updateInvoice } = await import("@/server/services/invoice.service")
+    await updateInvoice(session.studioId, session.userId, invoiceId, {
+      items: [
+        ...existing,
+        { description: "Costo extra de vestido", quantity: 1, unitPrice: monto, taxRate: 0 },
+      ],
+    })
+    await sb
+      .from("projects")
+      .update({ dress_extra_invoiced: true })
+      .eq("id", projectId)
+      .eq("studio_id", session.studioId)
+    revalidatePath(`/projects/${projectId}`)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
 /**
  * Guarda los datos de la quinceañera en la sesión: nombre (se usa como nombre
  * por defecto al crear galerías) y cumpleaños (define la entrega pautada: 2

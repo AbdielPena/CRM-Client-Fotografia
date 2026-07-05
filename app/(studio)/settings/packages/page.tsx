@@ -82,6 +82,9 @@ export default async function PackagesSettingsPage() {
             balanceDueOffsetDays: p.balance_due_offset_days ?? 0,
             includesDress:
               (p as unknown as { includes_dress?: boolean }).includes_dress ?? false,
+            dressIncludedAmount:
+              (p as unknown as { dress_included_amount?: number | null })
+                .dress_included_amount ?? undefined,
             includes: p.includes ? p.includes.join("\n") : undefined,
             isActive: p.is_active,
             contractTemplateId: p.default_contract_template_id ?? undefined,

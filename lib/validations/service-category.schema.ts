@@ -13,6 +13,9 @@ export const createServiceCategorySchema = z.object({
   // Mensaje de agradecimiento que aparece en la galería de entrega para sesiones
   // de esta categoría (fallback cuando no hay dedicatoria de la madre).
   thankyouMessage: z.string().max(2000).optional().or(z.literal("")),
+  // Monto de vestido incluido por defecto para los planes de esta categoría
+  // (cada plan lo puede sobrescribir).
+  dressIncludedAmount: z.coerce.number().min(0).optional(),
 })
 
 export const updateServiceCategorySchema = createServiceCategorySchema.partial()

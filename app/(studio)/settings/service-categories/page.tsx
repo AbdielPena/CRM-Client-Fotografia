@@ -41,6 +41,7 @@ export default async function ServiceCategoriesSettingsPage() {
             sortOrder: c.sortOrder,
             packageCount: packageCounts[c.id] ?? 0,
             thankyouMessage: c.thankyouMessage,
+            dressIncludedAmount: c.dressIncludedAmount,
           }))}
         />
       </div>

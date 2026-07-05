@@ -116,6 +116,7 @@ export async function createPackage(
   ;(insert as Record<string, unknown>).balance_due_offset_days = data.balanceDueOffsetDays ?? 0
   // includes_dress: el plan incluye el vestido (Luxury) → resta/gasto del vestido.
   ;(insert as Record<string, unknown>).includes_dress = data.includesDress ?? false
+  ;(insert as Record<string, unknown>).dress_included_amount = data.dressIncludedAmount ?? null
   if (printEntitlements !== undefined) {
     ;(insert as Record<string, unknown>).print_entitlements = printEntitlements
   }
@@ -163,6 +164,8 @@ export async function updatePackage(
   if (data.balanceDueOffsetDays !== undefined)
     patch.balance_due_offset_days = data.balanceDueOffsetDays ?? 0
   if (data.includesDress !== undefined) patch.includes_dress = data.includesDress
+  if (data.dressIncludedAmount !== undefined)
+    patch.dress_included_amount = data.dressIncludedAmount ?? null
 
   // Slug: si el user lo escribe explícito → usamos su valor (sanitizado).
   // Si cambia el nombre sin slug explícito → regeneramos para mantener SEO-friendly.

@@ -24,6 +24,7 @@ export interface ServiceCategoryView {
   sortOrder: number
   packageCount: number
   thankyouMessage: string | null
+  dressIncludedAmount: number | null
 }
 
 type FormMode = "create" | "edit" | null
@@ -294,6 +295,24 @@ function CategoryForm({
             Aparece en la galería de entrega de las sesiones de esta categoría,
             cuando la sesión no lleva dedicatoria de la madre (o la madre no la
             escribió). Deja vacío para usar el agradecimiento genérico.
+          </p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Monto de vestido incluido (por defecto)
+          </label>
+          <input
+            name="dressIncludedAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={defaults?.dressIncludedAmount ?? ""}
+            className={inputCls}
+            placeholder="ej. 17000"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Monto de vestido incluido para los planes de esta categoría. Cada plan
+            lo puede sobrescribir. Vacío = sin monto por defecto.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-foreground">

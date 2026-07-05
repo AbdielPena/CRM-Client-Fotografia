@@ -93,7 +93,11 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
     <ul style="margin:0;padding-left:18px;font-size:14px;color:#52525b">${summaryLis}</ul>
   </div>` : ""}
   <p style="text-align:center;margin:26px 0 6px"><a class="btn" href="${galleryUrl}">Seleccionar mis impresiones</a></p>
-  <p style="margin:8px 0 0;font-size:12.5px;color:#A1A1A6;text-align:center">Puedes ajustar tu selección hasta enviarla.</p>`
+  <p style="margin:8px 0 0;font-size:12.5px;color:#A1A1A6;text-align:center">Puedes ajustar tu selección hasta enviarla.</p>
+  <div style="margin:20px 0 0;padding:14px 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px">
+    <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#3f3f46">Entrega de impresiones</p>
+    <p style="margin:0;font-size:12.5px;line-height:1.55;color:#52525b">La entrega de impresiones se realiza directamente en el estudio. Si deseas envío, este tendrá un costo adicional y estará sujeto a disponibilidad, ubicación y tiempos de entrega.</p>
+  </div>`
 
   const branding = await getEmailBranding(g.studio_id)
   const html = wrapLuxuryEmail(inner, {

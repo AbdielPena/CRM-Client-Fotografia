@@ -46,6 +46,7 @@ interface Package {
   deliveryDays?: number
   balanceDueOffsetDays?: number
   includesDress?: boolean
+  dressIncludedAmount?: number
   includes?: string
   isActive: boolean
   contractTemplateId?: string
@@ -800,6 +801,26 @@ function PackageForm({
             En los planes que incluyen el vestido (Luxury), el costo del vestido
             de la sesión se resta de la ganancia neta y se registra como gasto en
             Finanzas.
+          </p>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Monto de vestido incluido
+          </label>
+          <input
+            name="dressIncludedAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={defaultValues?.dressIncludedAmount ?? ""}
+            className={inputCls}
+            placeholder="ej. 17000"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Monto de vestido incluido en el plan (ej. RD$17,000). Si el vestido de
+            la sesión cuesta más, el excedente se factura como costo extra. Vacío =
+            usa el monto de la categoría.
           </p>
         </div>
 
