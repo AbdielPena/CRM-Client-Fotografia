@@ -217,6 +217,81 @@ export default async function DashboardPage() {
 
       <div className="px-6 pb-12 pt-4 lg:px-8">
         <div className="space-y-5">
+          {/* ─── Tareas pendientes + Próximas sesiones (arriba de todo) ── */}
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <DashboardCard
+                  title="Tareas pendientes"
+                  href="/tasks"
+                  hrefLabel="Ver tareas"
+                  bodyClassName="px-0 pb-0"
+                  delay={0.05}
+                >
+                  {weekTasks.length === 0 ? (
+                    <p className="px-5 py-6 text-center text-[13px] text-muted-foreground">
+                      No tienes tareas pendientes.
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-border/40">
+                      {weekTasks.slice(0, 7).map((t) => (
+                        <li key={t.id}>
+                          <Link
+                            href={t.href ?? "/tasks"}
+                            className="flex items-center justify-between gap-3 px-5 py-2.5 transition-colors hover:bg-muted/40"
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <CheckSquare
+                                className={`h-3.5 w-3.5 shrink-0 ${
+                                  t.overdue ? "text-red-500" : "text-muted-foreground"
+                                }`}
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate text-[13px] font-medium text-foreground">
+                                  {t.title}
+                                </p>
+                                {t.clientName && (
+                                  <p className="truncate text-[11px] text-muted-foreground">
+                                    {t.clientName}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <span
+                              className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${
+                                t.overdue ? "text-red-600" : "text-muted-foreground"
+                              }`}
+                            >
+                              <Clock className="h-3 w-3" />
+                              {t.overdue ? "Vencida · " : ""}
+                              {t.dueDate
+                                ? formatDateShort(new Date(t.dueDate + "T00:00:00"))
+                                : "—"}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </DashboardCard>
+              </div>
+
+              <DashboardCard
+                title="Próximas sesiones"
+                href="/calendar"
+                hrefLabel="Ver calendario"
+                bodyClassName="px-0 pb-0"
+                delay={0.1}
+              >
+                <UpcomingSessions
+                  projects={
+                    data.upcomingProjects as React.ComponentProps<
+                      typeof UpcomingSessions
+                    >["projects"]
+                  }
+                />
+              </DashboardCard>
+            </div>
+
           {/* ─── Onboarding banner (solo si <100%) ─────────────── */}
           {onboardingProgress.percentage < 100 && onboardingSteps.length > 0 && (
             <OnboardingBanner
@@ -300,81 +375,6 @@ export default async function DashboardPage() {
           <DashboardCard title="Tendencia de ingresos" delay={0.2}>
             <RevenueLineChart buckets={monthlyRevenue} currency="DOP" />
           </DashboardCard>
-
-          {/* ─── Tareas de la semana + Próximas sesiones ────────────── */}
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-              <div className="lg:col-span-2">
-                <DashboardCard
-                  title="Tareas de la semana"
-                  href="/tasks"
-                  hrefLabel="Ver tareas"
-                  bodyClassName="px-0 pb-0"
-                  delay={0.36}
-                >
-                  {weekTasks.length === 0 ? (
-                    <p className="px-5 py-6 text-center text-[13px] text-muted-foreground">
-                      No tienes tareas con vencimiento esta semana.
-                    </p>
-                  ) : (
-                    <ul className="divide-y divide-border/40">
-                      {weekTasks.slice(0, 7).map((t) => (
-                        <li key={t.id}>
-                          <Link
-                            href={t.href ?? "/tasks"}
-                            className="flex items-center justify-between gap-3 px-5 py-2.5 transition-colors hover:bg-muted/40"
-                          >
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <CheckSquare
-                                className={`h-3.5 w-3.5 shrink-0 ${
-                                  t.overdue ? "text-red-500" : "text-muted-foreground"
-                                }`}
-                              />
-                              <div className="min-w-0">
-                                <p className="truncate text-[13px] font-medium text-foreground">
-                                  {t.title}
-                                </p>
-                                {t.clientName && (
-                                  <p className="truncate text-[11px] text-muted-foreground">
-                                    {t.clientName}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <span
-                              className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${
-                                t.overdue ? "text-red-600" : "text-muted-foreground"
-                              }`}
-                            >
-                              <Clock className="h-3 w-3" />
-                              {t.overdue ? "Vencida · " : ""}
-                              {t.dueDate
-                                ? formatDateShort(new Date(t.dueDate + "T00:00:00"))
-                                : "—"}
-                            </span>
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </DashboardCard>
-              </div>
-
-              <DashboardCard
-                title="Próximas sesiones"
-                href="/calendar"
-                hrefLabel="Ver calendario"
-                bodyClassName="px-0 pb-0"
-                delay={0.35}
-              >
-                <UpcomingSessions
-                  projects={
-                    data.upcomingProjects as React.ComponentProps<
-                      typeof UpcomingSessions
-                    >["projects"]
-                  }
-                />
-              </DashboardCard>
-            </div>
 
           {/* ─── Por pagar (deudas: colaboradores + vestidos) ─────── */}
           {(financeStats.collaboratorDebt > 0 || financeStats.dressDebt > 0) && (
