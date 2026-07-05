@@ -782,7 +782,10 @@ export function PublicGalleryView({
 
   // Tile de foto (respeta la forma real, sin recorte cuadrado). Mantiene el
   // corazón de selección y abre el lightbox.
-  const renderTile = (a: Asset, i: number) => {
+  // `compact` = mosaico de miniaturas pequeñas (galería de SELECCIÓN): así la
+  // baja resolución de las previews no se nota. La entrega final NO usa compact
+  // (flujo editorial grande).
+  const renderTile = (a: Asset, i: number, compact = false) => {
     const marked = !isShowingDelivery && !deliveryOnly && isMarked(a.id)
     const ar = a.width && a.height ? `${a.width}/${a.height}` : "4/5"
     return (
@@ -797,14 +800,21 @@ export function PublicGalleryView({
             setOpen(i)
           }
         }}
-        className="group relative m-0 cursor-pointer overflow-hidden"
+        className={cn(
+          "group relative cursor-pointer overflow-hidden",
+          compact ? "mb-3 break-inside-avoid rounded-lg" : "m-0",
+        )}
         style={{
           aspectRatio: ar,
           background: a.lqip ? undefined : "#efeae1",
           backgroundImage: a.lqip ? `url(${a.lqip})` : undefined,
           backgroundSize: "cover",
           backgroundPosition: "center",
-          boxShadow: marked ? `0 0 0 2px ${ED.gold}` : "0 24px 46px -30px rgba(40,34,24,.34)",
+          boxShadow: marked
+            ? `0 0 0 2px ${ED.gold}`
+            : compact
+              ? "0 8px 20px -16px rgba(40,34,24,.45)"
+              : "0 24px 46px -30px rgba(40,34,24,.34)",
         }}
       >
         {a.thumbUrl && (
@@ -824,11 +834,14 @@ export function PublicGalleryView({
               e.stopPropagation()
               void toggleHeart(a.id)
             }}
-            className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full backdrop-blur transition-all active:scale-90"
+            className={cn(
+              "absolute inline-flex items-center justify-center rounded-full backdrop-blur transition-all active:scale-90",
+              compact ? "right-1.5 top-1.5 h-7 w-7" : "right-3 top-3 h-9 w-9",
+            )}
             style={marked ? { background: ED.gold, color: "#fff" } : { background: "rgba(255,255,255,.92)", color: ED.ink }}
             aria-label={marked ? "Quitar de selección" : "Agregar a selección"}
           >
-            <Heart className="h-[18px] w-[18px]" fill={marked ? "currentColor" : "none"} />
+            <Heart className={compact ? "h-4 w-4" : "h-[18px] w-[18px]"} fill={marked ? "currentColor" : "none"} />
           </button>
         )}
       </figure>
@@ -1198,14 +1211,16 @@ export function PublicGalleryView({
           )
         })()}
 
-      {/* Flujo editorial: pares, tríos y una foto sola de vez en cuando.
-          En móvil, 1 foto grande por fila. Respeta la forma real de la foto. */}
+      {/* Galería de fotos.
+          • Selección → mosaico compacto (miniaturas pequeñas) para no exagerar la
+            baja resolución de las previews.
+          • Entrega final → flujo editorial (pares/tríos/foto sola, grandes). */}
       <main id="fotos" className="mx-auto max-w-[1240px] px-4 py-14 sm:px-6 sm:py-20">
         {visibleAssets.length === 0 ? (
           <p className="py-16 text-center text-sm" style={{ color: ED.muted }}>
             Aún no hay fotos en esta galería.
           </p>
-        ) : (
+        ) : isShowingDelivery || deliveryOnly ? (
           <div className="flex flex-col gap-6 sm:gap-9">
             {chunkEditorial(visibleAssets.map((a, i) => ({ a, i }))).map((row, r) => {
               if (row.n === 1) {
@@ -1228,6 +1243,10 @@ export function PublicGalleryView({
                 </div>
               )
             })}
+          </div>
+        ) : (
+          <div className="columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6">
+            {visibleAssets.map((a, i) => renderTile(a, i, true))}
           </div>
         )}
       </main>
