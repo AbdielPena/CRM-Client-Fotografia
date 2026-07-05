@@ -1152,6 +1152,57 @@ export function PublicGalleryView({
         </div>
       )}
 
+      {/* Guía de selección — cómo elegir las fotos (solo en modo selección) */}
+      {!isShowingDelivery && !deliveryOnly && (
+        <div className="mx-auto max-w-2xl px-6 pt-14">
+          <div
+            className="rounded-2xl px-6 py-7 sm:px-8"
+            style={{
+              background: "#fff",
+              border: `1px solid ${ED.line}`,
+              boxShadow: "0 22px 44px -34px rgba(40,34,24,.42)",
+            }}
+          >
+            <p className="text-[15px] leading-relaxed" style={{ color: ED.ink }}>
+              🙌 ¡Fue un gusto realizar esta sesión contigo! En unos momentos
+              recibirás tu galería para que puedas seleccionar tus fotos favoritas. ✨
+            </p>
+            <p className="mt-4 text-[14px] leading-relaxed" style={{ color: "#4a4238" }}>
+              Antes de elegir, ten en cuenta que debes fijarte principalmente en{" "}
+              <strong>la expresión, la pose y el gesto</strong> de cada fotografía.
+              No te preocupes por detalles como el fondo, el color, la iluminación o
+              pequeñas imperfecciones de la piel, ya que todo eso se perfecciona
+              durante el proceso de edición. 😉
+            </p>
+            <div className="mt-6 rounded-xl px-4 py-4" style={{ background: ED.paper2 }}>
+              <p
+                className="font-semibold uppercase"
+                style={{ color: ED.gold, fontSize: "0.7rem", letterSpacing: "0.18em" }}
+              >
+                ¿Cómo seleccionar tus fotos?
+              </p>
+              <ul className="mt-3 space-y-2 text-[14px]" style={{ color: ED.ink }}>
+                <li>
+                  👉 Dale <strong>LIKE ❤️</strong> a todas las fotografías que más te gusten.
+                </li>
+                <li>
+                  👉 Al finalizar, escribe tu correo electrónico{" "}
+                  <strong>una sola vez</strong> para enviar tu selección.
+                </li>
+              </ul>
+            </div>
+            <p className="mt-5 text-[14px] leading-relaxed" style={{ color: ED.ink }}>
+              ¡Y listo! Así comenzaremos a preparar tus recuerdos con el cuidado que
+              merecen. 🪄
+            </p>
+            <p className="mt-3 text-[13px] leading-relaxed" style={{ color: ED.muted }}>
+              Si tienes cualquier duda durante el proceso, escríbeme con confianza.
+              Estaré encantado de ayudarte. 🤍
+            </p>
+          </div>
+        </div>
+      )}
+
       {gallery.description && (
         <div className="mx-auto max-w-2xl px-6 pt-16 text-center">
           <p
