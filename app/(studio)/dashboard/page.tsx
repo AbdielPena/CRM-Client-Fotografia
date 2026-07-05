@@ -19,7 +19,6 @@ import { createSupabaseServerClient } from "@/server/supabase/server"
 import {
   getMonthlyRevenue,
   getTopPackages,
-  getRecentActivity,
   getTasksThisWeek,
   getSessionFinanceStats,
 } from "@/server/services/dashboard.service"
@@ -38,7 +37,6 @@ import { Button } from "@/components/ui/button"
 import { StatCard } from "@/components/shared/stat-card"
 import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import { RevenueLineChart } from "@/components/dashboard/revenue-line-chart"
-import { RecentActivityRich } from "@/components/dashboard/recent-activity-rich"
 import { TopPackagesList } from "@/components/dashboard/top-packages-list"
 import { UpcomingSessions } from "@/components/dashboard/upcoming-sessions"
 import { ModulesOverview } from "@/components/dashboard/modules-overview"
@@ -143,7 +141,6 @@ export default async function DashboardPage() {
     monthlyRevenue,
     topPackages,
     unreadNotifications,
-    recentActivity,
     modulesOverview,
     onboardingSteps,
     deliveries,
@@ -155,7 +152,6 @@ export default async function DashboardPage() {
     getMonthlyRevenue(session.studioId, 12),
     getTopPackages(session.studioId, 5, 5),
     countUnreadNotifications(session.studioId),
-    getRecentActivity(session.studioId, 12).catch(() => []),
     getModulesOverview(session.studioId).catch(
       () => ({}) as Awaited<ReturnType<typeof getModulesOverview>>,
     ),
@@ -305,41 +301,8 @@ export default async function DashboardPage() {
             <RevenueLineChart buckets={monthlyRevenue} currency="DOP" />
           </DashboardCard>
 
-          {/* ─── Recent Activity + Upcoming sessions ────────────────── */}
+          {/* ─── Tareas de la semana + Próximas sesiones ────────────── */}
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <DashboardCard
-                title="Actividad reciente"
-                href="/notifications"
-                hrefLabel="Ver todo"
-                delay={0.3}
-              >
-                <RecentActivityRich items={recentActivity} />
-              </DashboardCard>
-            </div>
-
-            <DashboardCard
-              title="Próximas sesiones"
-              href="/calendar"
-              hrefLabel="Ver calendario"
-              bodyClassName="px-0 pb-0"
-              delay={0.35}
-            >
-              <UpcomingSessions
-                projects={
-                  data.upcomingProjects as React.ComponentProps<
-                    typeof UpcomingSessions
-                  >["projects"]
-                }
-              />
-            </DashboardCard>
-          </div>
-
-          {/* ─── Tareas de la semana + Finanzas por pagar ─────────── */}
-          {(weekTasks.length > 0 ||
-            financeStats.collaboratorDebt > 0 ||
-            financeStats.dressDebt > 0) && (
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
               <div className="lg:col-span-2">
                 <DashboardCard
                   title="Tareas de la semana"
@@ -396,54 +359,72 @@ export default async function DashboardPage() {
                 </DashboardCard>
               </div>
 
-              {(financeStats.collaboratorDebt > 0 || financeStats.dressDebt > 0) && (
-                <DashboardCard title="Por pagar" delay={0.37}>
-                  <div className="space-y-3">
-                    {financeStats.collaboratorDebt > 0 && (
-                      <Link
-                        href="/colaboradores"
-                        className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/40"
-                      >
-                        <span className="flex items-center gap-2 text-[13px] text-foreground">
-                          <Users className="h-4 w-4 text-violet-500" />
-                          Colaboradores
-                          <span className="text-[11px] text-muted-foreground">
-                            ({financeStats.collaboratorDebtCount})
-                          </span>
+              <DashboardCard
+                title="Próximas sesiones"
+                href="/calendar"
+                hrefLabel="Ver calendario"
+                bodyClassName="px-0 pb-0"
+                delay={0.35}
+              >
+                <UpcomingSessions
+                  projects={
+                    data.upcomingProjects as React.ComponentProps<
+                      typeof UpcomingSessions
+                    >["projects"]
+                  }
+                />
+              </DashboardCard>
+            </div>
+
+          {/* ─── Por pagar (deudas: colaboradores + vestidos) ─────── */}
+          {(financeStats.collaboratorDebt > 0 || financeStats.dressDebt > 0) && (
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+              <DashboardCard title="Por pagar" delay={0.37}>
+                <div className="space-y-3">
+                  {financeStats.collaboratorDebt > 0 && (
+                    <Link
+                      href="/colaboradores"
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                    >
+                      <span className="flex items-center gap-2 text-[13px] text-foreground">
+                        <Users className="h-4 w-4 text-violet-500" />
+                        Colaboradores
+                        <span className="text-[11px] text-muted-foreground">
+                          ({financeStats.collaboratorDebtCount})
                         </span>
-                        <span className="text-[13px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-                          {formatCurrency(financeStats.collaboratorDebt, financeStats.currency)}
-                        </span>
-                      </Link>
-                    )}
-                    {financeStats.dressDebt > 0 && (
-                      <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
-                        <span className="flex items-center gap-2 text-[13px] text-foreground">
-                          <Shirt className="h-4 w-4 text-pink-500" />
-                          Vestidos
-                          <span className="text-[11px] text-muted-foreground">
-                            ({financeStats.dressDebtCount})
-                          </span>
-                        </span>
-                        <span className="text-[13px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-                          {formatCurrency(financeStats.dressDebt, financeStats.currency)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-                      <span className="text-[13px] font-semibold text-foreground">
-                        Total por pagar
                       </span>
-                      <span className="text-[14px] font-bold tabular-nums text-foreground">
-                        {formatCurrency(
-                          financeStats.collaboratorDebt + financeStats.dressDebt,
-                          financeStats.currency,
-                        )}
+                      <span className="text-[13px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                        {formatCurrency(financeStats.collaboratorDebt, financeStats.currency)}
+                      </span>
+                    </Link>
+                  )}
+                  {financeStats.dressDebt > 0 && (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                      <span className="flex items-center gap-2 text-[13px] text-foreground">
+                        <Shirt className="h-4 w-4 text-pink-500" />
+                        Vestidos
+                        <span className="text-[11px] text-muted-foreground">
+                          ({financeStats.dressDebtCount})
+                        </span>
+                      </span>
+                      <span className="text-[13px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                        {formatCurrency(financeStats.dressDebt, financeStats.currency)}
                       </span>
                     </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                    <span className="text-[13px] font-semibold text-foreground">
+                      Total por pagar
+                    </span>
+                    <span className="text-[14px] font-bold tabular-nums text-foreground">
+                      {formatCurrency(
+                        financeStats.collaboratorDebt + financeStats.dressDebt,
+                        financeStats.currency,
+                      )}
+                    </span>
                   </div>
-                </DashboardCard>
-              )}
+                </div>
+              </DashboardCard>
             </div>
           )}
 
