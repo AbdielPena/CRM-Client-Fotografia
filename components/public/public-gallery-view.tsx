@@ -1152,55 +1152,82 @@ export function PublicGalleryView({
         </div>
       )}
 
-      {/* Guía de selección — cómo elegir las fotos (solo en modo selección) */}
+      {/* Guía de selección — editorial, integrada a la galería (solo selección) */}
       {!isShowingDelivery && !deliveryOnly && (
-        <div className="mx-auto max-w-2xl px-6 pt-14">
-          <div
-            className="rounded-2xl px-6 py-7 sm:px-8"
+        <section className="mx-auto max-w-2xl px-6 pt-20 text-center">
+          <p
+            className="font-semibold uppercase"
+            style={{ color: ED.gold, fontSize: "0.66rem", letterSpacing: "0.28em" }}
+          >
+            Tu selección
+          </p>
+          <p
+            className="mt-6 text-balance"
             style={{
-              background: "#fff",
-              border: `1px solid ${ED.line}`,
-              boxShadow: "0 22px 44px -34px rgba(40,34,24,.42)",
+              fontFamily: SERIF,
+              fontSize: "clamp(1.5rem,3.4vw,2.2rem)",
+              lineHeight: 1.35,
+              letterSpacing: "0.01em",
+              color: ED.ink,
             }}
           >
-            <p className="text-[15px] leading-relaxed" style={{ color: ED.ink }}>
-              🙌 ¡Fue un gusto realizar esta sesión contigo! En unos momentos
-              recibirás tu galería para que puedas seleccionar tus fotos favoritas. ✨
+            🙌 ¡Fue un gusto realizar esta sesión contigo! En unos momentos recibirás
+            tu galería para que puedas seleccionar tus fotos favoritas. ✨
+          </p>
+          <p
+            className="mx-auto mt-7 max-w-xl text-balance"
+            style={{ fontSize: "0.98rem", lineHeight: 1.75, color: "#4a4238" }}
+          >
+            Antes de elegir, fíjate principalmente en{" "}
+            <em style={{ fontFamily: SERIF, fontStyle: "italic", color: ED.ink }}>
+              la expresión, la pose y el gesto
+            </em>{" "}
+            de cada fotografía. No te preocupes por el fondo, el color, la iluminación
+            o pequeñas imperfecciones de la piel, ya que todo eso se perfecciona
+            durante el proceso de edición. 😉
+          </p>
+
+          <div className="mx-auto mt-10 h-px w-16" style={{ background: ED.gold }} aria-hidden />
+
+          <p
+            className="mt-9 font-semibold uppercase"
+            style={{ color: ED.gold, fontSize: "0.66rem", letterSpacing: "0.24em" }}
+          >
+            ¿Cómo seleccionar tus fotos?
+          </p>
+          <div
+            className="mx-auto mt-6 flex max-w-md flex-col gap-4"
+            style={{ fontSize: "0.98rem", lineHeight: 1.6, color: ED.ink }}
+          >
+            <p>
+              👉 Dale <strong>LIKE ❤️</strong> a todas las fotografías que más te gusten.
             </p>
-            <p className="mt-4 text-[14px] leading-relaxed" style={{ color: "#4a4238" }}>
-              Antes de elegir, ten en cuenta que debes fijarte principalmente en{" "}
-              <strong>la expresión, la pose y el gesto</strong> de cada fotografía.
-              No te preocupes por detalles como el fondo, el color, la iluminación o
-              pequeñas imperfecciones de la piel, ya que todo eso se perfecciona
-              durante el proceso de edición. 😉
-            </p>
-            <div className="mt-6 rounded-xl px-4 py-4" style={{ background: ED.paper2 }}>
-              <p
-                className="font-semibold uppercase"
-                style={{ color: ED.gold, fontSize: "0.7rem", letterSpacing: "0.18em" }}
-              >
-                ¿Cómo seleccionar tus fotos?
-              </p>
-              <ul className="mt-3 space-y-2 text-[14px]" style={{ color: ED.ink }}>
-                <li>
-                  👉 Dale <strong>LIKE ❤️</strong> a todas las fotografías que más te gusten.
-                </li>
-                <li>
-                  👉 Al finalizar, escribe tu correo electrónico{" "}
-                  <strong>una sola vez</strong> para enviar tu selección.
-                </li>
-              </ul>
-            </div>
-            <p className="mt-5 text-[14px] leading-relaxed" style={{ color: ED.ink }}>
-              ¡Y listo! Así comenzaremos a preparar tus recuerdos con el cuidado que
-              merecen. 🪄
-            </p>
-            <p className="mt-3 text-[13px] leading-relaxed" style={{ color: ED.muted }}>
-              Si tienes cualquier duda durante el proceso, escríbeme con confianza.
-              Estaré encantado de ayudarte. 🤍
+            <p>
+              👉 Al finalizar, escribe tu correo electrónico{" "}
+              <strong>una sola vez</strong> para enviar tu selección.
             </p>
           </div>
-        </div>
+
+          <p
+            className="mx-auto mt-10 max-w-xl text-balance"
+            style={{
+              fontFamily: SERIF,
+              fontStyle: "italic",
+              fontSize: "clamp(1.05rem,2.2vw,1.3rem)",
+              lineHeight: 1.55,
+              color: "#3a332b",
+            }}
+          >
+            ¡Y listo! Así comenzaremos a preparar tus recuerdos con el cuidado que merecen. 🪄
+          </p>
+          <p
+            className="mx-auto mt-4 max-w-lg"
+            style={{ fontSize: "0.86rem", lineHeight: 1.65, color: ED.muted }}
+          >
+            Si tienes cualquier duda durante el proceso, escríbeme con confianza.
+            Estaré encantado de ayudarte. 🤍
+          </p>
+        </section>
       )}
 
       {gallery.description && (
