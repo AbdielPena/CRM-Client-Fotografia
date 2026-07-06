@@ -664,127 +664,133 @@ export function FinalDeliveryBook({
             style={{}}
             onFlip={(e: { data: number }) => setPage(e.data)}
           >
-            {/* PORTADA (tapa dura) */}
-            <div data-density="hard" className="pxbook-cover" style={coverStyle(coverImg, tpl, accent, dims.w, dims.h)}>
-              <div className="pxbook-scrim" />
-              <div className="pxbook-foil" aria-hidden />
-              <div className="pxbook-frame" aria-hidden />
-              <div style={{ position: "relative", textAlign: "center", padding: 28, color: "#fff", zIndex: 4 }}>
-                {showLogo && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={studio.logoUrl!} alt={studio.name} style={{ height: 38, objectFit: "contain", margin: "0 auto 6px", filter: "brightness(0) invert(1) drop-shadow(0 0 8px rgba(0,0,0,.4))", opacity: 0.92 }} />
-                )}
-                {showLogo && <div className="pxbook-crest" aria-hidden />}
-                <p className="pxbook-eyebrow" style={{ margin: "16px 0 14px", opacity: 0.85 }}>
-                  {subtitle || "Álbum de entrega"}
-                </p>
-                {tplId === "luxury_xv" && quince && (
-                  <p className="pxbook-script" style={{ margin: "0 0 2px" }}>Su quinceañera</p>
-                )}
-                <h1 className="pxbook-title" style={{ margin: 0 }}>
-                  {quince || title}
-                </h1>
-                {eventDate && (
-                  <p className="pxbook-date" style={{ marginTop: 16, opacity: 0.9 }}>
-                    {eventDate}
+            {[
+              /* PORTADA (tapa dura) */
+              <div key="cover" data-density="hard" className="pxbook-cover" style={coverStyle(coverImg, tpl, accent, dims.w, dims.h)}>
+                <div className="pxbook-scrim" />
+                <div className="pxbook-foil" aria-hidden />
+                <div className="pxbook-frame" aria-hidden />
+                <div style={{ position: "relative", textAlign: "center", padding: 28, color: "#fff", zIndex: 4 }}>
+                  {showLogo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={studio.logoUrl!} alt={studio.name} style={{ height: 38, objectFit: "contain", margin: "0 auto 6px", filter: "brightness(0) invert(1) drop-shadow(0 0 8px rgba(0,0,0,.4))", opacity: 0.92 }} />
+                  )}
+                  {showLogo && <div className="pxbook-crest" aria-hidden />}
+                  <p className="pxbook-eyebrow" style={{ margin: "16px 0 14px", opacity: 0.85 }}>
+                    {subtitle || "Álbum de entrega"}
                   </p>
-                )}
-                <div className="pxbook-accentline" />
-              </div>
-            </div>
+                  {tplId === "luxury_xv" && quince && (
+                    <p className="pxbook-script" style={{ margin: "0 0 2px" }}>Su quinceañera</p>
+                  )}
+                  <h1 className="pxbook-title" style={{ margin: 0 }}>
+                    {quince || title}
+                  </h1>
+                  {eventDate && (
+                    <p className="pxbook-date" style={{ marginTop: 16, opacity: 0.9 }}>
+                      {eventDate}
+                    </p>
+                  )}
+                  <div className="pxbook-accentline" />
+                </div>
+              </div>,
 
-            {/* DEDICATORIA / AGRADECIMIENTO (página tras la portada) */}
-            {dedicationText ? (
-              <div className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
-                <div
-                  style={{
-                    position: "relative",
-                    width: "100%",
-                    height: "100%",
-                    padding: "11% 9%",
-                    boxSizing: "border-box",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    textAlign: "center",
-                    zIndex: 1,
-                  }}
-                >
-                  <p
-                    style={{
-                      fontFamily: "system-ui, sans-serif",
-                      fontSize: 11,
-                      letterSpacing: "0.34em",
-                      textTransform: "uppercase",
-                      color: accent,
-                      marginBottom: 20,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {dedicationIsMother ? "Dedicatoria" : "Gracias"}
-                  </p>
-                  <p
-                    style={{
-                      fontFamily: "var(--font-display), 'Cormorant Garamond', Georgia, serif",
-                      fontStyle: "italic",
-                      fontSize: "clamp(16px,3.6vw,24px)",
-                      lineHeight: 1.6,
-                      color: tpl.ink,
-                      maxWidth: "34ch",
-                    }}
-                  >
-                    “{dedicationText}”
-                  </p>
-                  {dedicationFrom && (
-                    <p
-                      style={{
-                        fontFamily: "var(--font-script), 'Pinyon Script', cursive",
-                        fontSize: "clamp(18px,3.4vw,26px)",
-                        color: accent,
-                        marginTop: 22,
-                      }}
-                    >
-                      {dedicationFrom}
+              /* DEDICATORIA / AGRADECIMIENTO (página tras la portada) — solo si existe.
+                 IMPORTANTE: react-pageflip hace cloneElement sobre cada hijo y revienta
+                 con un hijo null. Por eso se incluye vía spread condicional (nunca null). */
+              ...(dedicationText
+                ? [
+                    <div key="ded" className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
+                      <div
+                        style={{
+                          position: "relative",
+                          width: "100%",
+                          height: "100%",
+                          padding: "11% 9%",
+                          boxSizing: "border-box",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          textAlign: "center",
+                          zIndex: 1,
+                        }}
+                      >
+                        <p
+                          style={{
+                            fontFamily: "system-ui, sans-serif",
+                            fontSize: 11,
+                            letterSpacing: "0.34em",
+                            textTransform: "uppercase",
+                            color: accent,
+                            marginBottom: 20,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {dedicationIsMother ? "Dedicatoria" : "Gracias"}
+                        </p>
+                        <p
+                          style={{
+                            fontFamily: "var(--font-display), 'Cormorant Garamond', Georgia, serif",
+                            fontStyle: "italic",
+                            fontSize: "clamp(16px,3.6vw,24px)",
+                            lineHeight: 1.6,
+                            color: tpl.ink,
+                            maxWidth: "34ch",
+                          }}
+                        >
+                          “{dedicationText}”
+                        </p>
+                        {dedicationFrom && (
+                          <p
+                            style={{
+                              fontFamily: "var(--font-script), 'Pinyon Script', cursive",
+                              fontSize: "clamp(18px,3.4vw,26px)",
+                              color: accent,
+                              marginTop: 22,
+                            }}
+                          >
+                            {dedicationFrom}
+                          </p>
+                        )}
+                      </div>
+                    </div>,
+                  ]
+                : []),
+
+              /* PÁGINAS DE FOTOS */
+              ...photos.map((a, i) => (
+                <div key={a.id} className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
+                  <div style={{ position: "relative", width: "100%", height: "100%", padding: "5%", boxSizing: "border-box", zIndex: 1 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={a.webUrl ?? a.thumbUrl ?? ""}
+                      alt={`${gallery.name} — foto ${i + 1}`}
+                      loading="eager"
+                      fetchPriority={i < 4 ? "high" : "low"}
+                      decoding="async"
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", boxShadow: "0 8px 30px -12px rgba(0,0,0,.45)" }}
+                    />
+                    <span className="pxbook-pagenum">— {i + 1}</span>
+                  </div>
+                </div>
+              )),
+
+              /* CONTRAPORTADA (tapa dura) */
+              <div key="back" data-density="hard" className="pxbook-back" style={{ ...coverStyleSolid(tpl, dims.w, dims.h), display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ textAlign: "center", color: "#efe6dc", padding: 28 }}>
+                  {showLogo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={studio.logoUrl!} alt={studio.name} style={{ height: 34, objectFit: "contain", margin: "0 auto 16px", filter: "brightness(0) invert(1)", opacity: 0.9 }} />
+                  )}
+                  <p className="pxbook-thanks" style={{ margin: 0 }}>Gracias.</p>
+                  {!studio.hideBranding && (
+                    <p style={{ marginTop: 18, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", opacity: 0.5 }}>
+                      {studio.name}
                     </p>
                   )}
                 </div>
-              </div>
-            ) : null}
-
-            {/* PÁGINAS DE FOTOS */}
-            {photos.map((a, i) => (
-              <div key={a.id} className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
-                <div style={{ position: "relative", width: "100%", height: "100%", padding: "5%", boxSizing: "border-box", zIndex: 1 }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={a.webUrl ?? a.thumbUrl ?? ""}
-                    alt={`${gallery.name} — foto ${i + 1}`}
-                    loading="eager"
-                    fetchPriority={i < 4 ? "high" : "low"}
-                    decoding="async"
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", boxShadow: "0 8px 30px -12px rgba(0,0,0,.45)" }}
-                  />
-                  <span className="pxbook-pagenum">— {i + 1}</span>
-                </div>
-              </div>
-            ))}
-
-            {/* CONTRAPORTADA (tapa dura) */}
-            <div data-density="hard" className="pxbook-back" style={{ ...coverStyleSolid(tpl, dims.w, dims.h), display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ textAlign: "center", color: "#efe6dc", padding: 28 }}>
-                {showLogo && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={studio.logoUrl!} alt={studio.name} style={{ height: 34, objectFit: "contain", margin: "0 auto 16px", filter: "brightness(0) invert(1)", opacity: 0.9 }} />
-                )}
-                <p className="pxbook-thanks" style={{ margin: 0 }}>Gracias.</p>
-                {!studio.hideBranding && (
-                  <p style={{ marginTop: 18, fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", opacity: 0.5 }}>
-                    {studio.name}
-                  </p>
-                )}
-              </div>
-            </div>
+              </div>,
+            ]}
           </HTMLFlipBook>
         </div>
       )}
