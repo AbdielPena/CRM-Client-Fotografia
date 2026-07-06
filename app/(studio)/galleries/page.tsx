@@ -71,6 +71,7 @@ type GalleryListRow = {
   created_at: string
   project_id: string | null
   delivery_ready_at: string | null
+  delivery_date: string | null
 }
 
 // ---- Cumpleaños + prioridad de entrega (regla quinceañera) -----------------
@@ -492,6 +493,11 @@ export default async function GalleriesPage({
                             </span>
                           )}
                         </>
+                      ) : g.delivery_date ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10.5px] font-semibold text-blue-600 dark:bg-blue-500/15 dark:text-blue-300">
+                          <Calendar className="h-3 w-3" />
+                          Entrega {fmtDateOnly(g.delivery_date)}
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
                           <Calendar className="h-3 w-3" />

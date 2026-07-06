@@ -37,6 +37,8 @@ import {
   ProjectKanbanView,
   type ProjectCard,
 } from "@/components/projects/project-kanban-view"
+import { listUpcomingDeliveryEntries } from "@/server/services/delivery.service"
+import { UpcomingDeliveriesAside } from "@/components/deliveries/upcoming-deliveries-aside"
 
 export const metadata: Metadata = { title: "Sesiones" }
 
@@ -275,6 +277,11 @@ export default async function ProjectsPage({
     () => [],
   )
 
+  // Próximas entregas (proyectos + galerías con fecha) para la lista lateral.
+  const upcomingEntries = await listUpcomingDeliveryEntries(session.studioId, {
+    limit: 12,
+  }).catch(() => [] as Awaited<ReturnType<typeof listUpcomingDeliveryEntries>>)
+
   return (
     <>
       <AppTopbar
@@ -296,7 +303,8 @@ export default async function ProjectsPage({
         }
       />
 
-      <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
+      <div className="flex gap-6 px-6 py-6 lg:px-8 lg:py-8">
+        <div className="min-w-0 flex-1 space-y-5">
         <RequestQuinceNamesButton rows={quinceMissingRows} />
 
         {/* Scope: Activos | Completados (vista aparte) */}
@@ -575,6 +583,13 @@ export default async function ProjectsPage({
             )}
           </>
         )}
+        </div>
+
+        <aside className="hidden w-80 shrink-0 xl:block">
+          <div className="sticky top-6 rounded-xl border border-border bg-card p-5">
+            <UpcomingDeliveriesAside entries={upcomingEntries} />
+          </div>
+        </aside>
       </div>
     </>
   )

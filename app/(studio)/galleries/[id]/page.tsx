@@ -24,6 +24,7 @@ import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { GalleryDetailTabs } from "@/components/galleries/gallery-detail-tabs"
 import { GalleryDeleteButton } from "@/components/galleries/gallery-delete-button"
+import { GalleryDeliveryDateCard } from "@/components/galleries/gallery-delivery-date-card"
 import { GalleryExtrasInvoiceButton } from "@/components/galleries/gallery-extras-invoice-button"
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
 import { DriveBackupPanel } from "@/components/galleries/drive-backup-panel"
@@ -275,6 +276,15 @@ export default async function GalleryDetailPage({
       </div>
 
       <div className="px-6 lg:px-8">
+        <div className="mb-5">
+          <GalleryDeliveryDateCard
+            galleryId={gallery.id}
+            initialDate={
+              (gallery as unknown as { delivery_date?: string | null }).delivery_date ?? null
+            }
+            hasProject={!!gallery.project_id}
+          />
+        </div>
         <PrintProductionPanel galleryId={galleryId} state={printState} />
         {showDeliveryPanels && driveStatus && (
           <DriveBackupPanel

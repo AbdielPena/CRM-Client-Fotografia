@@ -220,6 +220,93 @@ export async function getDeliveryStats(studioId: string): Promise<{
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Lista UNIFICADA de próximas entregas (proyectos + galerías con fecha manual),
+// ordenada por FECHA ascendente (la más cercana primero). Alimenta la lista
+// lateral del pipeline y el dashboard.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type UpcomingEntryKind = "project" | "gallery"
+
+export interface UpcomingDeliveryEntry {
+  id: string
+  kind: UpcomingEntryKind
+  title: string // nombre del cliente (proyecto) o nombre de la galería
+  subtitle: string | null // nombre de la sesión / "Galería"
+  date: string | null // fecha de entrega (YYYY-MM-DD)
+  priority: DeliveryPriority
+  overdue: boolean
+  href: string
+}
+
+/**
+ * Próximas entregas ORDENADAS POR FECHA (de la más cercana a la más lejana),
+ * combinando: (a) entregas de proyectos (`client_deliveries`, con su fecha
+ * estimada) y (b) galerías SIN proyecto que tienen `delivery_date` manual.
+ */
+export async function listUpcomingDeliveryEntries(
+  studioId: string,
+  opts: { limit?: number } = {},
+): Promise<UpcomingDeliveryEntry[]> {
+  const supabase = createSupabaseServerClient()
+
+  // (a) Entregas de proyectos — reutiliza el cálculo existente.
+  const projectDeliveries = await listDeliveries(studioId, { includeDelivered: false })
+  const projectEntries: UpcomingDeliveryEntry[] = projectDeliveries.map((d) => ({
+    id: `delivery-${d.id}`,
+    kind: "project",
+    title: d.clientName,
+    subtitle: d.projectName,
+    date: d.estimatedDeliveryDate,
+    priority: d.priority,
+    overdue: d.overdue,
+    href: d.projectId ? `/projects/${d.projectId}` : "/deliveries",
+  }))
+
+  // (b) Galerías SIN proyecto con fecha de entrega manual (las que tienen
+  //     proyecto ya vienen por client_deliveries, así se evita duplicar).
+  const { data: galRows } = await supabase
+    .from("galleries")
+    .select("id, name, delivery_date")
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .is("project_id", null)
+    .not("delivery_date", "is", null)
+
+  const today = new Date()
+  const galleryEntries: UpcomingDeliveryEntry[] = (
+    (galRows as Array<{ id: string; name: string; delivery_date: string | null }> | null) ?? []
+  ).map((g) => {
+    const computed = deriveDeliveryComputed({
+      status: "pendiente",
+      birthday: null,
+      estimatedDeliveryDate: g.delivery_date,
+      today,
+    })
+    return {
+      id: `gallery-${g.id}`,
+      kind: "gallery",
+      title: g.name,
+      subtitle: "Galería",
+      date: g.delivery_date,
+      priority: computed.priority,
+      overdue: computed.overdue,
+      href: `/galleries/${g.id}`,
+    }
+  })
+
+  const all = [...projectEntries, ...galleryEntries]
+  // Orden por fecha ascendente (más cercana / vencida primero); sin fecha al final.
+  all.sort((a, b) => {
+    if (a.date && b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0
+    if (a.date) return -1
+    if (b.date) return 1
+    return a.title.localeCompare(b.title)
+  })
+
+  return opts.limit ? all.slice(0, opts.limit) : all
+}
+
 /**
  * Genera eventos de calendario INTERNOS (no Google) para fechas de entrega y
  * cumpleaños, para mostrarlos en el calendario del software. Reutiliza el mismo

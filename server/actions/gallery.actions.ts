@@ -264,6 +264,40 @@ export async function deleteGalleryAction(galleryId: string): Promise<void> {
   revalidatePath("/galleries")
 }
 
+/**
+ * Fija (o quita, con null) la FECHA DE ENTREGA manual de una galería. Pensado
+ * para galerías SIN proyecto/cliente (las que tienen proyecto usan la entrega
+ * calculada de `client_deliveries`). Alimenta la lista de "Próximas entregas".
+ */
+export async function setGalleryDeliveryDateAction(
+  galleryId: string,
+  deliveryDate: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const ctx = await requireStudioAuth()
+  try {
+    const date = (deliveryDate ?? "").trim()
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { ok: false, error: "Fecha inválida" }
+    }
+    const { untypedService } = await import("@/server/supabase/untyped")
+    const sb = untypedService()
+    const { error } = await sb
+      .from("galleries")
+      .update({ delivery_date: date || null, updated_at: new Date().toISOString() })
+      .eq("id", galleryId)
+      .eq("studio_id", ctx.studioId)
+      .is("deleted_at", null)
+    if (error) throw new Error(error.message)
+    revalidatePath(`/galleries/${galleryId}`)
+    revalidatePath("/galleries")
+    revalidatePath("/projects")
+    revalidatePath("/dashboard")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
 export async function shareGalleryAction(
   galleryId: string,
   formData: FormData,
