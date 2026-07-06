@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Loader2 } from 'lucide-react'
 import type { FormSchema, FormField } from '@/lib/forms/types'
+import { ImageUploadInput } from './image-upload-input'
 
 interface PublicFormViewProps {
   token: string
@@ -390,6 +391,14 @@ function renderInput(
         </div>
       )
     }
+    case 'image':
+      return (
+        <ImageUploadInput
+          value={str}
+          onChange={(v) => onChange(v)}
+          accept={field.accept ?? 'image/*'}
+        />
+      )
     case 'file':
       return (
         <p className="text-xs text-muted-foreground">

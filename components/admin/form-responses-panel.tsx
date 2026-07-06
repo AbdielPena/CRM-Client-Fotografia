@@ -276,6 +276,23 @@ function formatValue(
       .join(", ")
   }
 
+  if (field.type === "image") {
+    const src = String(raw)
+    if (!src.startsWith("data:image/") && !/^https?:\/\//.test(src)) {
+      return <span className="text-muted-foreground italic">— sin imagen —</span>
+    }
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <a href={src} target="_blank" rel="noreferrer">
+        <img
+          src={src}
+          alt="Imagen del cliente"
+          className="mt-1 max-h-48 w-auto rounded-lg border border-border object-contain"
+        />
+      </a>
+    )
+  }
+
   if (field.type === "select" || field.type === "radio") {
     const opt = (field.options ?? []).find((o) => o.value === String(raw))
     return opt ? opt.label : String(raw)

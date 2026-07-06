@@ -23,6 +23,7 @@ export type FormFieldType =
   | 'checkbox'
   | 'checkboxes' // grupo de casillas multi-selección (valor = string[])
   | 'file'
+  | 'image' // imagen subida por el cliente (valor = data URL)
   | 'explanation' // bloque de texto descriptivo (no es un input)
 
 export interface FormFieldOption {
@@ -150,6 +151,14 @@ export function validateFormData(
       case 'date':
         if (typeof value === 'string' && Number.isNaN(new Date(value).getTime())) {
           errors[field.key] = 'Fecha inválida'
+        }
+        break
+      case 'image':
+        if (
+          typeof value !== 'string' ||
+          !(value.startsWith('data:image/') || /^https?:\/\//.test(value))
+        ) {
+          errors[field.key] = 'Imagen inválida'
         }
         break
     }
