@@ -1,13 +1,13 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import dynamic from "next/dynamic"
 import { X, ChevronLeft, ChevronRight, BookOpen } from "lucide-react"
 
-// StPageFlip es DOM-pesado y solo cliente → carga diferida sin SSR.
-const HTMLFlipBook = dynamic(() => import("react-pageflip"), {
-  ssr: false,
-}) as unknown as React.ComponentType<
+// StPageFlip es DOM-pesado y solo cliente. Se carga con import() dentro de un
+// efecto (NO next/dynamic) para poder pasarle el `ref` REAL al componente
+// forwardRef de react-pageflip (expone pageFlip()). next/dynamic NO reenvía
+// refs → bookRef quedaba null y las flechas ◀ ▶ no accionaban el API.
+type FlipBookComponent = React.ComponentType<
   Record<string, unknown> & { children?: React.ReactNode }
 >
 
@@ -459,6 +459,19 @@ export function FinalDeliveryBook({
   const [page, setPage] = useState(0)
   const [ready, setReady] = useState(false)
   const [dims, setDims] = useState({ w: 480, h: 640 })
+  // Carga cliente de react-pageflip con su ref real (para que las flechas ◀ ▶
+  // puedan llamar pageFlip().flipNext/flipPrev).
+  const [HTMLFlipBook, setHTMLFlipBook] = useState<FlipBookComponent | null>(null)
+  useEffect(() => {
+    let alive = true
+    void import("react-pageflip").then((m) => {
+      const Comp = (m.default ?? m) as unknown as FlipBookComponent
+      if (alive) setHTMLFlipBook(() => Comp)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   const settings = gallery.bookSettings ?? {}
   const tplId = gallery.bookTemplateId ?? "luxury_xv"
@@ -627,7 +640,7 @@ export function FinalDeliveryBook({
         )}
       </div>
 
-      {!ready ? (
+      {!ready || !HTMLFlipBook ? (
         <div className="pxbook-loading">
           <div className="pxbook-loglow" aria-hidden />
           <div className="pxbook-logbook" aria-hidden>
