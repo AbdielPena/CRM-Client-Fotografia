@@ -171,6 +171,59 @@ export async function createGalleryAction(formData: FormData): Promise<{ id: str
   return { id: row.id }
 }
 
+/**
+ * Vincula una galería HUÉRFANA (sin cliente/sesión) a una sesión existente.
+ * Setea client_id + project_id y dispara la automatización que mueve la sesión
+ * a "Esperando selección". Pensado para galerías creadas sueltas (sesiones ya
+ * realizadas / clientes migrados cuya galería se creó antes que la sesión).
+ */
+export async function linkGalleryToSessionAction(
+  galleryId: string,
+  projectId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const ctx = await requireStudioAuth()
+  try {
+    z.string().uuid().parse(galleryId)
+    z.string().uuid().parse(projectId)
+    const supabase = createSupabaseServerClient()
+
+    const { data: project, error: pErr } = await supabase
+      .from("projects")
+      .select("id, client_id")
+      .eq("id", projectId)
+      .eq("studio_id", ctx.studioId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (pErr) throw pErr
+    const proj = project as { id: string; client_id: string | null } | null
+    if (!proj || !proj.client_id) {
+      return { ok: false, error: "La sesión no existe o no tiene cliente" }
+    }
+
+    const { error: gErr } = await supabase
+      .from("galleries")
+      .update({ client_id: proj.client_id, project_id: proj.id })
+      .eq("id", galleryId)
+      .eq("studio_id", ctx.studioId)
+    if (gErr) throw gErr
+
+    // Automatización: mueve la sesión a "Esperando selección".
+    try {
+      await onGalleryLinkedToClient(ctx.studioId, proj.client_id, proj.id)
+    } catch (err) {
+      console.error("[linkGalleryToSessionAction] automation falló:", err)
+    }
+
+    revalidatePath(`/galleries/${galleryId}`)
+    revalidatePath("/galleries")
+    revalidatePath("/projects")
+    revalidatePath("/dashboard")
+    return { ok: true as const }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo vincular la galería" }
+  }
+}
+
 export async function updateGalleryAction(
   galleryId: string,
   formData: FormData,

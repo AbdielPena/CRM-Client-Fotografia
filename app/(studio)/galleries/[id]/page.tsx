@@ -25,6 +25,7 @@ import { AppTopbar } from "@/components/layout/app-topbar"
 import { GalleryDetailTabs } from "@/components/galleries/gallery-detail-tabs"
 import { GalleryDeleteButton } from "@/components/galleries/gallery-delete-button"
 import { GalleryDeliveryDateCard } from "@/components/galleries/gallery-delivery-date-card"
+import { GalleryLinkSessionCard } from "@/components/galleries/gallery-link-session-card"
 import { GalleryExtrasInvoiceButton } from "@/components/galleries/gallery-extras-invoice-button"
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
 import { DriveBackupPanel } from "@/components/galleries/drive-backup-panel"
@@ -83,6 +84,32 @@ export default async function GalleryDetailPage({
       clientPhone = c.phone
       clientLabel = c.email ? `${c.name} · ${c.email}` : c.name
     }
+  }
+
+  // Sesiones disponibles para vincular (solo si la galería está huérfana, sin cliente).
+  let linkableSessions: { projectId: string; label: string }[] = []
+  if (!gallery.client_id) {
+    const sbLink = createSupabaseServerClient()
+    const { data: projs } = await sbLink
+      .from("projects")
+      .select("id, name, client:clients(name)")
+      .eq("studio_id", session.studioId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(300)
+    linkableSessions = (
+      (projs ?? []) as Array<{
+        id: string
+        name: string | null
+        client: { name: string } | { name: string }[] | null
+      }>
+    ).map((p) => {
+      const cName = Array.isArray(p.client) ? p.client[0]?.name : p.client?.name
+      return {
+        projectId: p.id,
+        label: cName ? `${cName} — ${p.name ?? "Sesión"}` : p.name ?? "Sesión",
+      }
+    })
   }
 
   // Extras facturables: solo si se envió la selección y excede la cuota del plan.
@@ -276,6 +303,11 @@ export default async function GalleryDetailPage({
       </div>
 
       <div className="px-6 lg:px-8">
+        {!gallery.client_id && (
+          <div className="mb-5">
+            <GalleryLinkSessionCard galleryId={gallery.id} sessions={linkableSessions} />
+          </div>
+        )}
         <div className="mb-5">
           <GalleryDeliveryDateCard
             galleryId={gallery.id}
