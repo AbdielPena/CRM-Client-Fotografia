@@ -233,52 +233,60 @@ export function GalleryDetailTabs({
     })),
   }
 
+  const navCls =
+    "justify-start gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-muted-foreground data-[state=active]:bg-brand-soft data-[state=active]:text-brand data-[state=active]:shadow-none"
+
   return (
     <div className="px-6 pb-12 pt-6 lg:px-8">
-      <Tabs defaultValue="photos">
-        <TabsList className="h-9 bg-muted/60">
-          <TabsTrigger value="photos" className="gap-1.5">
-            <ImageIcon className="h-3.5 w-3.5" /> Fotos
-            <span className="ml-1 text-[10px] text-muted-foreground tabular-nums">
+      <Tabs
+        defaultValue="photos"
+        orientation="vertical"
+        className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-7"
+      >
+        <TabsList className="flex h-auto w-full flex-row flex-wrap justify-start gap-1 rounded-none bg-transparent p-0 lg:sticky lg:top-6 lg:w-52 lg:flex-col lg:flex-nowrap lg:items-stretch">
+          <TabsTrigger value="photos" className={navCls}>
+            <ImageIcon className="h-4 w-4" /> Fotos
+            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
               {assets.length}
             </span>
           </TabsTrigger>
-          <TabsTrigger value="sets" className="gap-1.5">
-            <FolderTree className="h-3.5 w-3.5" /> Sets
-            <span className="ml-1 text-[10px] text-muted-foreground tabular-nums">
+          <TabsTrigger value="sets" className={navCls}>
+            <FolderTree className="h-4 w-4" /> Sets
+            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
               {sets.length}
             </span>
           </TabsTrigger>
-          <TabsTrigger value="selections" className="gap-1.5">
-            <Heart className="h-3.5 w-3.5" /> Selecciones
+          <TabsTrigger value="selections" className={navCls}>
+            <Heart className="h-4 w-4" /> Selecciones
             {submittedCount > 0 && (
-              <span className="ml-1 rounded-full bg-brand px-1.5 py-0.5 text-[9px] font-bold text-brand-foreground tabular-nums">
+              <span className="ml-auto rounded-full bg-brand px-1.5 py-0.5 text-[9px] font-bold text-brand-foreground tabular-nums">
                 {submittedCount}
               </span>
             )}
           </TabsTrigger>
           {hasDelivery && (
-            <TabsTrigger value="validate" className="gap-1.5">
-              <Check className="h-3.5 w-3.5" /> Validar entrega
+            <TabsTrigger value="validate" className={navCls}>
+              <Check className="h-4 w-4" /> Validar entrega
             </TabsTrigger>
           )}
-          <TabsTrigger value="pins" className="gap-1.5">
-            <KeyRound className="h-3.5 w-3.5" /> PINs
+          <TabsTrigger value="pins" className={navCls}>
+            <KeyRound className="h-4 w-4" /> PINs
           </TabsTrigger>
-          <TabsTrigger value="watermark" className="gap-1.5">
-            <Droplet className="h-3.5 w-3.5" /> Marca de agua
+          <TabsTrigger value="watermark" className={navCls}>
+            <Droplet className="h-4 w-4" /> Marca de agua
           </TabsTrigger>
-          <TabsTrigger value="appearance" className="gap-1.5">
-            <Palette className="h-3.5 w-3.5" /> Apariencia
+          <TabsTrigger value="appearance" className={navCls}>
+            <Palette className="h-4 w-4" /> Apariencia
           </TabsTrigger>
-          <TabsTrigger value="share" className="gap-1.5">
-            <Share2 className="h-3.5 w-3.5" /> Compartir
+          <TabsTrigger value="share" className={navCls}>
+            <Share2 className="h-4 w-4" /> Compartir
           </TabsTrigger>
-          <TabsTrigger value="activity" className="gap-1.5">
-            <Activity className="h-3.5 w-3.5" /> Actividad
+          <TabsTrigger value="activity" className={navCls}>
+            <Activity className="h-4 w-4" /> Actividad
           </TabsTrigger>
         </TabsList>
 
+        <div className="min-w-0 flex-1 [&>[role=tabpanel]]:mt-0">
         <TabsContent value="photos" className="mt-5">
           <PhotosTab
             gallery={gallery}
@@ -364,6 +372,7 @@ export function GalleryDetailTabs({
         <TabsContent value="activity" className="mt-5">
           <GalleryActivityTab activity={activity} />
         </TabsContent>
+        </div>
       </Tabs>
     </div>
   )
