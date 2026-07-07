@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { X, ChevronLeft, ChevronRight, BookOpen } from "lucide-react"
 
+import {
+  parseBookPages,
+  layoutGridStyle,
+  layoutItemStyle,
+  type BookPageLayout,
+} from "@/lib/book/layouts"
+
 // StPageFlip es DOM-pesado y solo cliente. Se carga con import() dentro de un
 // efecto (NO next/dynamic) para poder pasarle el `ref` REAL al componente
 // forwardRef de react-pageflip (expone pageFlip()). next/dynamic NO reenvía
@@ -512,6 +519,28 @@ export function FinalDeliveryBook({
     () => assets.filter((a) => a.webUrl || a.thumbUrl),
     [assets],
   )
+  // Diseño de páginas (Fase 1). Si el estudio organizó el álbum, usamos SUS
+  // páginas (con layouts multi-foto); si no, 1 foto por página como siempre.
+  const assetsById = useMemo(() => {
+    const m = new Map<string, BookAsset>()
+    for (const a of photos) m.set(a.id, a)
+    return m
+  }, [photos])
+  const photoPages = useMemo((): { key: string; layout: BookPageLayout; items: BookAsset[] }[] => {
+    const configured = parseBookPages((settings as Record<string, unknown>).pages)
+    if (configured.length) {
+      return configured
+        .map((pg) => ({
+          key: pg.id,
+          layout: pg.layout,
+          items: pg.assetIds
+            .map((id) => assetsById.get(id))
+            .filter((a): a is BookAsset => !!a),
+        }))
+        .filter((p) => p.items.length > 0)
+    }
+    return photos.map((a) => ({ key: a.id, layout: "single" as BookPageLayout, items: [a] }))
+  }, [settings, assetsById, photos])
   const coverImg =
     gallery.bookCoverImage || gallery.coverWebUrl || photos[0]?.webUrl || null
 
@@ -599,7 +628,7 @@ export function FinalDeliveryBook({
   }
 
   // Página de portada (tapa dura).
-  const totalPages = photos.length + 2 + (dedicationText ? 1 : 0)
+  const totalPages = photoPages.length + 2 + (dedicationText ? 1 : 0)
 
   // CSS vars de fallback inline (los tokens completos los pone .abby-book / [data-tpl]).
   const wrapVars = {
@@ -811,19 +840,38 @@ export function FinalDeliveryBook({
                   ]
                 : []),
 
-              /* PÁGINAS DE FOTOS */
-              ...photos.map((a, i) => (
-                <div key={a.id} className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
-                  <div style={{ position: "relative", width: "100%", height: "100%", padding: "5%", boxSizing: "border-box", zIndex: 1 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={a.webUrl ?? a.thumbUrl ?? ""}
-                      alt={`${gallery.name} — foto ${i + 1}`}
-                      loading="eager"
-                      fetchPriority={i < 4 ? "high" : "low"}
-                      decoding="async"
-                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", boxShadow: "0 8px 30px -12px rgba(0,0,0,.45)" }}
-                    />
+              /* PÁGINAS DE FOTOS (respetan el diseño del álbum; multi-foto por layout) */
+              ...photoPages.map((pg, i) => (
+                <div key={pg.key} className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      height: "100%",
+                      padding: pg.layout === "full" ? 0 : "5%",
+                      boxSizing: "border-box",
+                      zIndex: 1,
+                      display: "grid",
+                      gap: pg.layout === "full" ? 0 : 8,
+                      ...layoutGridStyle(pg.layout),
+                    }}
+                  >
+                    {pg.items.map((a, idx) => (
+                      <div
+                        key={`${a.id}-${idx}`}
+                        style={{ position: "relative", overflow: "hidden", ...layoutItemStyle(pg.layout, idx) }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={a.webUrl ?? a.thumbUrl ?? ""}
+                          alt={`${gallery.name} — ${i + 1}`}
+                          loading="eager"
+                          fetchPriority={i < 3 ? "high" : "low"}
+                          decoding="async"
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", boxShadow: "0 8px 30px -12px rgba(0,0,0,.45)" }}
+                        />
+                      </div>
+                    ))}
                     <span className="pxbook-pagenum">— {i + 1}</span>
                   </div>
                 </div>

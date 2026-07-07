@@ -23,6 +23,17 @@ export const galleryBookConfigSchema = z.object({
       bgColor: z.string().max(20),
       font: z.string().max(40),
       showLogo: z.boolean(),
+      // Fase 1: diseño de páginas del álbum (organización manual de fotos).
+      pages: z
+        .array(
+          z.object({
+            id: z.string().max(64),
+            layout: z.enum(["single", "full", "duo", "trio", "collage", "magazine"]),
+            assetIds: z.array(z.string().max(64)).max(4),
+          }),
+        )
+        .max(400)
+        .optional(),
     })
     .partial()
     .optional(),

@@ -1,8 +1,17 @@
 "use client"
 
 import { useRef, useState, useTransition } from "react"
+import Link from "next/link"
 import { toast } from "sonner"
-import { BookOpen, ExternalLink, UploadCloud, Loader2, ImageIcon } from "lucide-react"
+import {
+  BookOpen,
+  ExternalLink,
+  UploadCloud,
+  Loader2,
+  ImageIcon,
+  LayoutGrid,
+  ChevronRight,
+} from "lucide-react"
 
 import { updateGalleryBookConfigAction } from "@/server/actions/gallery.actions"
 
@@ -94,6 +103,25 @@ export function LuxuryBookPanel({
 
       {enabled && (
         <div className="mt-5 space-y-5">
+          {/* Diseñar páginas del álbum (organización manual de las fotos) */}
+          <Link
+            href={`/galleries/${galleryId}/book`}
+            className="flex items-center justify-between gap-3 rounded-xl border border-brand/40 bg-brand-soft/40 px-4 py-3 transition-colors hover:bg-brand-soft"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="grid size-8 place-items-center rounded-lg bg-brand text-brand-foreground">
+                <LayoutGrid className="size-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Diseñar páginas del álbum</p>
+                <p className="text-xs text-muted-foreground">
+                  Organiza las fotos por página, elige layouts y reordénalas (se guarda solo).
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </Link>
+
           {/* Modo de visualización */}
           <div>
             <p className="mb-1.5 text-sm font-medium text-foreground">Modo de visualización</p>
