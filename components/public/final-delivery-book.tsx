@@ -118,6 +118,15 @@ const PXBOOK_CSS = `
        color-mix(in srgb, var(--velvet-1) 88%, var(--royal-wine)) 40%, var(--velvet-0) 100%) !important;
 }
 
+/* Luz ambiental que DERIVA por todo el fondo (backdrop vivo, no estático).
+   Dos glows cálidos que se desplazan/respiran lento tras el libro. */
+.pxbook-ambient{
+  position:absolute; inset:-25%; pointer-events:none; z-index:0; mix-blend-mode:screen;
+  background:
+    radial-gradient(40% 32% at 30% 28%, var(--glow-warm) 0%, transparent 62%),
+    radial-gradient(34% 28% at 74% 66%, rgba(231,200,132,.16) 0%, transparent 60%);
+  animation:pxAmbient 20s ease-in-out infinite; will-change:transform,opacity;
+}
 /* Halo de candelabro detrás del libro (capa fija) */
 .pxbook-aura{
   position:absolute; inset:0; pointer-events:none; z-index:0;
@@ -402,6 +411,11 @@ const PXBOOK_CSS = `
 }
 @keyframes pxFoilSweep{ 0%{ background-position:0% 50%; } 100%{ background-position:200% 50%; } }
 @keyframes pxAura{ 0%,100%{ opacity:.7; transform:scale(1); } 50%{ opacity:1; transform:scale(1.04); } }
+@keyframes pxAmbient{
+  0%,100%{ transform:translate3d(-2%,-1%,0) scale(1);    opacity:.85; }
+  33%{    transform:translate3d(3%,2%,0)   scale(1.07);  opacity:1;   }
+  66%{    transform:translate3d(-1%,3%,0)  scale(1.03);  opacity:.9;  }
+}
 @keyframes pxFrameGlow{
   0%,100%{ box-shadow:0 0 0 0 rgba(231,200,132,0); border-color:rgba(231,200,132,.22); }
   50%{ box-shadow:0 0 22px -2px rgba(231,200,132,.35); border-color:rgba(231,200,132,.45); }
@@ -430,7 +444,7 @@ const PXBOOK_CSS = `
 
 /* ── Accesibilidad: prefers-reduced-motion ─────────────────────── */
 @media (prefers-reduced-motion: reduce){
-  .pxbook-foil,.pxbook-aura,.pxbook-frame,.pxbook-title,.pxbook-dust,.pxbook-star,
+  .pxbook-foil,.pxbook-aura,.pxbook-ambient,.pxbook-frame,.pxbook-title,.pxbook-dust,.pxbook-star,
   .pxbook-stage,.pxbook-ui,.pxbook-floor,.pxbook-accentline,
   .pxbook-loading .pxbook-loglow,.pxbook-loading .pxbook-logbook,
   .pxbook-loading .pxbook-logfoil::after,.pxbook-loading .pxbook-logtxt{
@@ -622,6 +636,7 @@ export function FinalDeliveryBook({
       <style dangerouslySetInnerHTML={{ __html: PXBOOK_CSS }} />
 
       {/* CAPAS DE ESCENARIO — hermanas del libro, detrás (z-index 0/1) */}
+      <div className="pxbook-ambient" aria-hidden />
       <div className="pxbook-aura" aria-hidden />
       <div className="pxbook-sparkles" aria-hidden>
         <i className="pxbook-dust" />
