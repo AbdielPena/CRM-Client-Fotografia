@@ -700,6 +700,31 @@ export function PublicGalleryView({
       ? selectionAssets
       : assets
 
+  // Mosaico de selección EN ORDEN DE LECTURA. Las columnas CSS (`columns-*`)
+  // llenan de arriba-abajo por columna, así que el orden real de las fotos se ve
+  // barajado. En su lugar repartimos round-robin por índice (0→col0, 1→col1, …) y
+  // apilamos cada columna: leer la fila superior de izquierda a derecha da
+  // 0,1,2,3… en orden. `masonryCols` arranca en 4 (igual en SSR y primer render
+  // cliente → sin desajuste de hidratación) y se ajusta al viewport tras montar.
+  const [masonryCols, setMasonryCols] = useState(4)
+  useEffect(() => {
+    const compute = () => {
+      const w = window.innerWidth
+      setMasonryCols(w >= 1280 ? 6 : w >= 1024 ? 5 : w >= 768 ? 4 : w >= 640 ? 3 : 2)
+    }
+    compute()
+    window.addEventListener("resize", compute)
+    return () => window.removeEventListener("resize", compute)
+  }, [])
+  const orderedColumns = useMemo(() => {
+    const cols: { a: Asset; i: number }[][] = Array.from(
+      { length: masonryCols },
+      () => [],
+    )
+    visibleAssets.forEach((a, i) => cols[i % masonryCols]!.push({ a, i }))
+    return cols
+  }, [visibleAssets, masonryCols])
+
   const requestZip = useCallback(
     async (key: string, assetIds: string[], resolution: "web" | "original") => {
       if (assetIds.length === 0) {
@@ -802,7 +827,7 @@ export function PublicGalleryView({
         }}
         className={cn(
           "group relative cursor-pointer overflow-hidden",
-          compact ? "mb-3 break-inside-avoid rounded-lg" : "m-0",
+          compact ? "rounded-lg" : "m-0",
         )}
         style={{
           aspectRatio: ar,
@@ -1323,8 +1348,12 @@ export function PublicGalleryView({
             })}
           </div>
         ) : (
-          <div className="columns-2 gap-3 sm:columns-3 md:columns-4 lg:columns-5 xl:columns-6">
-            {visibleAssets.map((a, i) => renderTile(a, i, true))}
+          <div className="flex items-start gap-3">
+            {orderedColumns.map((col, ci) => (
+              <div key={ci} className="flex min-w-0 flex-1 flex-col gap-3">
+                {col.map(({ a, i }) => renderTile(a, i, true))}
+              </div>
+            ))}
           </div>
         )}
       </main>

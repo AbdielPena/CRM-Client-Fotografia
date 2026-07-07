@@ -85,6 +85,22 @@ export function PublicSelectionView({
 
   const cur = active !== null ? assets[active] : null
 
+  // Mosaico en ORDEN DE LECTURA: las columnas CSS llenan por columna (de arriba
+  // a abajo) y barajan el orden real. Repartimos round-robin por índice y
+  // apilamos cada columna → la fila superior leída de izq. a der. va en orden.
+  const [selCols, setSelCols] = useState(3)
+  useEffect(() => {
+    const compute = () => {
+      const w = window.innerWidth
+      setSelCols(w >= 1024 ? 4 : w >= 640 ? 3 : 2)
+    }
+    compute()
+    window.addEventListener("resize", compute)
+    return () => window.removeEventListener("resize", compute)
+  }, [])
+  const selColumns = Array.from({ length: selCols }, () => [] as { a: Asset; i: number }[])
+  assets.forEach((a, i) => selColumns[i % selCols]!.push({ a, i }))
+
   return (
     <div className="min-h-screen bg-[#fbf9f6] text-[#1a1614]">
       {/* Header */}
@@ -126,23 +142,27 @@ export function PublicSelectionView({
             Todavía no hay fotos en la selección.
           </p>
         ) : (
-          <div className="columns-2 gap-2 sm:columns-3 lg:columns-4 [&>*]:mb-2">
-            {assets.map((a, i) => (
-              <button
-                key={a.id}
-                onClick={() => setActive(i)}
-                className="group relative block w-full overflow-hidden rounded-lg bg-black/5"
-                style={{ aspectRatio: a.width && a.height ? `${a.width}/${a.height}` : undefined }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={a.thumbUrl ?? a.webUrl ?? ""}
-                  alt=""
-                  loading="lazy"
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                  style={a.lqip ? { backgroundImage: `url(${a.lqip})`, backgroundSize: "cover" } : undefined}
-                />
-              </button>
+          <div className="flex items-start gap-2">
+            {selColumns.map((col, ci) => (
+              <div key={ci} className="flex min-w-0 flex-1 flex-col gap-2">
+                {col.map(({ a, i }) => (
+                  <button
+                    key={a.id}
+                    onClick={() => setActive(i)}
+                    className="group relative block w-full overflow-hidden rounded-lg bg-black/5"
+                    style={{ aspectRatio: a.width && a.height ? `${a.width}/${a.height}` : undefined }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={a.thumbUrl ?? a.webUrl ?? ""}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                      style={a.lqip ? { backgroundImage: `url(${a.lqip})`, backgroundSize: "cover" } : undefined}
+                    />
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         )}
