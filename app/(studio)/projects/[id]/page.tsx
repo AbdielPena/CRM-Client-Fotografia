@@ -17,6 +17,7 @@ import { ClientPortalAccessCard } from "@/components/projects/client-portal-acce
 import { ensureClientAccessCode } from "@/server/services/client-portal.service"
 import { WhatsAppSendMenu } from "@/components/whatsapp/whatsapp-send-menu"
 import { FormResponsesPanel } from "@/components/admin/form-responses-panel"
+import { CollapsibleCard } from "@/components/ui/collapsible-card"
 import {
   listProjectCollaborators,
   listCollaborators,
@@ -589,8 +590,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           />
 
           {/* Notes */}
-          <div className="sf-card p-5">
-            <h2 className="text-sm font-semibold text-foreground mb-4">Notas internas</h2>
+          <CollapsibleCard
+            title="Notas internas"
+            icon={<FileText className="h-4 w-4" />}
+            summary={notes.length > 0 ? String(notes.length) : undefined}
+          >
             <NoteForm entityType="project" entityId={project.id as string} />
 
             <div className="mt-4 space-y-3">
@@ -609,15 +613,15 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 ))
               )}
             </div>
-          </div>
+          </CollapsibleCard>
 
           {/* Historial de actividad del proyecto */}
           {activity.length > 0 && (
-            <div className="sf-card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <History className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Historial</h2>
-              </div>
+            <CollapsibleCard
+              title="Historial"
+              icon={<History className="h-4 w-4" />}
+              summary={String(activity.length)}
+            >
               <ol className="space-y-3">
                 {[...activity].reverse().map((a) => (
                   <li key={String(a.id)} className="flex gap-3">
@@ -634,7 +638,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </li>
                 ))}
               </ol>
-            </div>
+            </CollapsibleCard>
           )}
         </div>
 
@@ -739,13 +743,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
           {/* Otros proyectos del cliente */}
           {otherProjects.length > 0 && (
-            <div className="sf-card p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">
-                  Otras sesiones del cliente ({otherProjects.length})
-                </h2>
-              </div>
+            <CollapsibleCard
+              title="Otras sesiones del cliente"
+              icon={<FolderOpen className="h-4 w-4" />}
+              summary={String(otherProjects.length)}
+            >
               <div className="space-y-1">
                 {otherProjects.map((p) => (
                   <Link
@@ -769,7 +771,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </Link>
                 ))}
               </div>
-            </div>
+            </CollapsibleCard>
           )}
 
           {/* Project details */}
@@ -814,11 +816,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
           {/* Ganancia neta (ingreso − vestido − colaboradores) */}
           {(projectCollaborators.length > 0 || (includesDress && dressCost > 0)) && (
-            <div className="sf-card p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Ganancia neta</h2>
-              </div>
+            <CollapsibleCard
+              title="Ganancia neta"
+              icon={<DollarSign className="h-4 w-4" />}
+              summary={formatCurrency(netProfit, currency)}
+            >
               <dl className="space-y-2 text-xs">
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Ingreso del proyecto</dt>
@@ -911,16 +913,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </dd>
                 </div>
               </dl>
-            </div>
+            </CollapsibleCard>
           )}
 
           {/* Finance summary */}
           {invoices.length > 0 && (
-            <div className="sf-card p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Receipt className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Finanzas</h2>
-              </div>
+            <CollapsibleCard
+              title="Finanzas"
+              icon={<Receipt className="h-4 w-4" />}
+              summary={String(invoices.length)}
+            >
               <div className="space-y-2">
                 {invoices.map((invoice) => (
                   <Link
@@ -943,16 +945,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </Link>
                 ))}
               </div>
-            </div>
+            </CollapsibleCard>
           )}
 
           {/* Pagos */}
           {payments.length > 0 && (
-            <div className="sf-card p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Pagos</h2>
-              </div>
+            <CollapsibleCard
+              title="Pagos"
+              icon={<CreditCard className="h-4 w-4" />}
+              summary={String(payments.length)}
+            >
               <div className="space-y-2">
                 {payments.map((p) => (
                   <div key={String(p.id)} className="flex items-center justify-between py-1.5">
@@ -971,7 +973,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </div>
                 ))}
               </div>
-            </div>
+            </CollapsibleCard>
           )}
 
           {/* Contrato — timeline con fechas reales */}
@@ -984,14 +986,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 ["Firmado", (c.signed_at as string | null) ?? null],
               ]
               return (
-                <div className="sf-card p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <h2 className="text-sm font-semibold text-foreground">Contrato</h2>
-                    </div>
-                    <StatusBadge status={String(c.status)} />
-                  </div>
+                <CollapsibleCard
+                  title="Contrato"
+                  icon={<FileText className="h-4 w-4" />}
+                  summary={<StatusBadge status={String(c.status)} />}
+                >
                   <dl className="space-y-1.5 text-xs">
                     {rows.map(([label, val]) =>
                       val ? (
@@ -1016,17 +1015,17 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   >
                     Ver contrato →
                   </Link>
-                </div>
+                </CollapsibleCard>
               )
             })()}
 
           {/* Entregas */}
           {deliveries.length > 0 && (
-            <div className="sf-card p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <Truck className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-foreground">Entregas</h2>
-              </div>
+            <CollapsibleCard
+              title="Entregas"
+              icon={<Truck className="h-4 w-4" />}
+              summary={String(deliveries.length)}
+            >
               <div className="space-y-2">
                 {deliveries.map((d) => (
                   <div key={String(d.id)} className="flex items-center justify-between py-1.5">
@@ -1044,7 +1043,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </div>
                 ))}
               </div>
-            </div>
+            </CollapsibleCard>
           )}
 
           {/* Meta */}
