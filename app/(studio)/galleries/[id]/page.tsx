@@ -228,6 +228,59 @@ export default async function GalleryDetailPage({
   const driveStatus = showDeliveryPanels ? await getGoogleDriveStatus(session.studioId) : null
   const driveBackup = showDeliveryPanels ? await getDriveBackupStatusAction(galleryId) : null
 
+  // Toda la parte de ENTREGA vive en la pestaña "Entrega" del navbar (más
+  // organizada): Fecha de entrega + Google Drive + Luxury Book + Impresión.
+  // "Validar entrega" se antepone dentro de la pestaña (en GalleryDetailTabs).
+  const deliverySlot = (
+    <>
+      <GalleryDeliveryDateCard
+        galleryId={gallery.id}
+        initialDate={
+          (gallery as unknown as { delivery_date?: string | null }).delivery_date ?? null
+        }
+        hasProject={!!gallery.project_id}
+      />
+      {showDeliveryPanels && driveStatus && (
+        <DriveBackupPanel
+          galleryId={galleryId}
+          connected={driveStatus.connected}
+          needsReconnect={driveStatus.needsReconnect}
+          driveEmail={driveStatus.email}
+          initialStatus={driveBackup}
+        />
+      )}
+      {showDeliveryPanels && (
+        <LuxuryBookPanel
+          galleryId={galleryId}
+          publicToken={activeToken?.token ?? null}
+          initial={{
+            enabled:
+              (gallery as unknown as { book_enabled?: boolean }).book_enabled ?? false,
+            displayMode: ((gallery as unknown as { book_display_mode?: string })
+              .book_display_mode ?? "classic") as "classic" | "book" | "both",
+            templateId:
+              (gallery as unknown as { book_template_id?: string | null })
+                .book_template_id ?? null,
+            coverImage:
+              (gallery as unknown as { book_cover_image?: string | null })
+                .book_cover_image ?? null,
+            settings:
+              ((gallery as unknown as { book_settings?: Record<string, unknown> })
+                .book_settings ?? {}) as {
+                title?: string
+                subtitle?: string
+                quinceaneraName?: string
+                eventDate?: string
+                accent?: string
+                showLogo?: boolean
+              },
+          }}
+        />
+      )}
+      <PrintProductionPanel galleryId={galleryId} state={printState} />
+    </>
+  )
+
   return (
     <>
       <AppTopbar unreadNotifications={unread} />
@@ -302,62 +355,14 @@ export default async function GalleryDetailPage({
         </div>
       </div>
 
-      <div className="px-6 lg:px-8">
-        {!gallery.client_id && (
-          <div className="mb-5">
-            <GalleryLinkSessionCard galleryId={gallery.id} sessions={linkableSessions} />
-          </div>
-        )}
-        <div className="mb-5">
-          <GalleryDeliveryDateCard
-            galleryId={gallery.id}
-            initialDate={
-              (gallery as unknown as { delivery_date?: string | null }).delivery_date ?? null
-            }
-            hasProject={!!gallery.project_id}
-          />
+      {!gallery.client_id && (
+        <div className="px-6 lg:px-8">
+          <GalleryLinkSessionCard galleryId={gallery.id} sessions={linkableSessions} />
         </div>
-        <PrintProductionPanel galleryId={galleryId} state={printState} />
-        {showDeliveryPanels && driveStatus && (
-          <DriveBackupPanel
-            galleryId={galleryId}
-            connected={driveStatus.connected}
-            needsReconnect={driveStatus.needsReconnect}
-            driveEmail={driveStatus.email}
-            initialStatus={driveBackup}
-          />
-        )}
-        {showDeliveryPanels && (
-          <LuxuryBookPanel
-            galleryId={galleryId}
-            publicToken={activeToken?.token ?? null}
-            initial={{
-              enabled:
-                (gallery as unknown as { book_enabled?: boolean }).book_enabled ?? false,
-              displayMode: ((gallery as unknown as { book_display_mode?: string })
-                .book_display_mode ?? "classic") as "classic" | "book" | "both",
-              templateId:
-                (gallery as unknown as { book_template_id?: string | null })
-                  .book_template_id ?? null,
-              coverImage:
-                (gallery as unknown as { book_cover_image?: string | null })
-                  .book_cover_image ?? null,
-              settings:
-                ((gallery as unknown as { book_settings?: Record<string, unknown> })
-                  .book_settings ?? {}) as {
-                  title?: string
-                  subtitle?: string
-                  quinceaneraName?: string
-                  eventDate?: string
-                  accent?: string
-                  showLogo?: boolean
-                },
-            }}
-          />
-        )}
-      </div>
+      )}
 
       <GalleryDetailTabs
+        deliverySlot={deliverySlot}
         gallery={{
           id: gallery.id,
           name: gallery.name,

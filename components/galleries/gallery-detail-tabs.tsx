@@ -28,6 +28,7 @@ import {
   Ban,
   Download,
   Pencil,
+  Truck,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -190,6 +191,9 @@ interface Props {
   motherMessage?: string | null
   motherMessageFrom?: string | null
   motherMessageEnabled?: boolean
+  /** Paneles de entrega renderizados en el server (Fecha de entrega, Google
+   *  Drive, Luxury Book, Impresión) — se muestran dentro de la pestaña "Entrega". */
+  deliverySlot?: React.ReactNode
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -214,6 +218,7 @@ export function GalleryDetailTabs({
   motherMessage = null,
   motherMessageFrom = null,
   motherMessageEnabled = false,
+  deliverySlot = null,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -264,11 +269,9 @@ export function GalleryDetailTabs({
               </span>
             )}
           </TabsTrigger>
-          {hasDelivery && (
-            <TabsTrigger value="validate" className={navCls}>
-              <Check className="h-4 w-4" /> Validar entrega
-            </TabsTrigger>
-          )}
+          <TabsTrigger value="delivery" className={navCls}>
+            <Truck className="h-4 w-4" /> Entrega
+          </TabsTrigger>
           <TabsTrigger value="pins" className={navCls}>
             <KeyRound className="h-4 w-4" /> PINs
           </TabsTrigger>
@@ -310,16 +313,19 @@ export function GalleryDetailTabs({
           />
         </TabsContent>
 
-        {hasDelivery && (
-          <TabsContent value="validate" className="mt-5">
-            <ValidateDeliveryTab
-              galleryId={gallery.id}
-              assets={assets}
-              favorites={favoriteSelections}
-              collections={collections}
-            />
-          </TabsContent>
-        )}
+        <TabsContent value="delivery" className="mt-5">
+          <div className="space-y-5">
+            {hasDelivery && (
+              <ValidateDeliveryTab
+                galleryId={gallery.id}
+                assets={assets}
+                favorites={favoriteSelections}
+                collections={collections}
+              />
+            )}
+            {deliverySlot}
+          </div>
+        </TabsContent>
 
         <TabsContent value="pins" className="mt-5">
           <PinsTab galleryId={gallery.id} pins={pins} />
