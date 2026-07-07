@@ -16,6 +16,12 @@ export const createServiceCategorySchema = z.object({
   // Monto de vestido incluido por defecto para los planes de esta categoría
   // (cada plan lo puede sobrescribir).
   dressIncludedAmount: z.coerce.number().min(0).optional(),
+  // Días de entrega contados DESDE la selección del cliente (default 21).
+  // preprocess: campo vacío ("") → undefined (no lo cuentes como 0).
+  deliveryDays: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(1).max(120).optional(),
+  ),
 })
 
 export const updateServiceCategorySchema = createServiceCategorySchema.partial()

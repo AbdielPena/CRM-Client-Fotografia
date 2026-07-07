@@ -2078,10 +2078,16 @@ export async function submitClientSelection(
   // Cargar contexto de la galería (studio + nombre + tipo)
   const { data: g } = await supabase
     .from("galleries")
-    .select("id, studio_id, name, gallery_type")
+    .select("id, studio_id, name, gallery_type, project_id")
     .eq("id", galleryId)
     .maybeSingle()
-  const gallery = g as { id: string; studio_id: string; name: string; gallery_type: string | null } | null
+  const gallery = g as {
+    id: string
+    studio_id: string
+    name: string
+    gallery_type: string | null
+    project_id: string | null
+  } | null
   if (!gallery) throw new Error("Galería no encontrada")
 
   // Marcar la galería como con selección enviada (NO bloquear — cliente puede modificar)
@@ -2094,6 +2100,17 @@ export async function submitClientSelection(
       selection_locked: false,
     })
     .eq("id", galleryId)
+
+  // La entrega se cuenta DESDE la selección → recalcular la fecha estimada de
+  // entrega ahora que el cliente eligió (best-effort; no bloquea el envío).
+  if (gallery.project_id) {
+    try {
+      const { recomputeProjectDelivery } = await import("./delivery.service")
+      await recomputeProjectDelivery(gallery.studio_id, gallery.project_id)
+    } catch (err) {
+      console.error("[submitClientSelection] recomputeProjectDelivery falló:", err)
+    }
+  }
 
   // Notificar al studio (best-effort)
   try {

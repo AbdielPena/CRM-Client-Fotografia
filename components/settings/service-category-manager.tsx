@@ -25,6 +25,7 @@ export interface ServiceCategoryView {
   packageCount: number
   thankyouMessage: string | null
   dressIncludedAmount: number | null
+  deliveryDays: number | null
 }
 
 type FormMode = "create" | "edit" | null
@@ -313,6 +314,27 @@ function CategoryForm({
           <p className="mt-1 text-[11px] text-muted-foreground">
             Monto de vestido incluido para los planes de esta categoría. Cada plan
             lo puede sobrescribir. Vacío = sin monto por defecto.
+          </p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Días de entrega{" "}
+            <span className="font-normal text-muted-foreground">(desde la selección)</span>
+          </label>
+          <input
+            name="deliveryDays"
+            type="number"
+            min="1"
+            max="120"
+            step="1"
+            defaultValue={defaults?.deliveryDays ?? ""}
+            className={inputCls}
+            placeholder="21"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            La entrega se cuenta desde que el cliente hace su selección. Vacío = 21
+            días (3 semanas). En quinceañeras, si el cumpleaños cae antes, se
+            entrega 2 días antes del cumpleaños.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-foreground">

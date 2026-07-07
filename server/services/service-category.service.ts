@@ -24,6 +24,7 @@ export interface ServiceCategory {
   sortOrder: number
   thankyouMessage: string | null
   dressIncludedAmount: number | null
+  deliveryDays: number | null
 }
 
 function sanitizeFolder(s: string): string {
@@ -71,7 +72,7 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
   const { data } = await sb
     .from("service_categories")
     .select(
-      "id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order, thankyou_message, dress_included_amount",
+      "id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order, thankyou_message, dress_included_amount, delivery_days",
     )
     .eq("studio_id", studioId)
     .is("deleted_at", null)
@@ -90,6 +91,7 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
     sortOrder: r.sort_order,
     thankyouMessage: r.thankyou_message ?? null,
     dressIncludedAmount: r.dress_included_amount ?? null,
+    deliveryDays: r.delivery_days ?? null,
   }))
 }
 
@@ -143,6 +145,7 @@ export async function createServiceCategory(
       sort_order: input.sortOrder ?? nextOrder,
       thankyou_message: input.thankyouMessage || null,
       dress_included_amount: input.dressIncludedAmount ?? null,
+      delivery_days: input.deliveryDays ?? null,
     })
     .select("id")
     .single()
@@ -175,6 +178,7 @@ export async function updateServiceCategory(
   if (input.thankyouMessage !== undefined) patch.thankyou_message = input.thankyouMessage || null
   if (input.dressIncludedAmount !== undefined)
     patch.dress_included_amount = input.dressIncludedAmount ?? null
+  if (input.deliveryDays !== undefined) patch.delivery_days = input.deliveryDays ?? null
   const { error } = await sb
     .from("service_categories")
     .update(patch)
