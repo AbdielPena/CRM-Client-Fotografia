@@ -16,6 +16,7 @@ export function CollapsibleCard({
   icon,
   summary,
   defaultOpen = false,
+  flush = false,
   children,
   className,
 }: {
@@ -24,6 +25,8 @@ export function CollapsibleCard({
   /** Texto/nodo pequeño a la derecha del título (resumen visible al estar plegado). */
   summary?: React.ReactNode
   defaultOpen?: boolean
+  /** Sin padding en el cuerpo (cuando los hijos ya traen su propio padding). */
+  flush?: boolean
   children: React.ReactNode
   className?: string
 }) {
@@ -49,7 +52,9 @@ export function CollapsibleCard({
           )}
         />
       </button>
-      {open && <div className="border-t border-border/60 px-5 py-4">{children}</div>}
+      {open && (
+        <div className={cn("border-t border-border/60", !flush && "px-5 py-4")}>{children}</div>
+      )}
     </div>
   )
 }

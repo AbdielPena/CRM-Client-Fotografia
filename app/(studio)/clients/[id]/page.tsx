@@ -27,6 +27,7 @@ import { getAssetThumbUrl } from "@/server/services/gallery.service"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { StatusBadge } from "@/components/shared/status-badge"
+import { CollapsibleCard } from "@/components/ui/collapsible-card"
 import { NoteForm } from "@/components/shared/note-form"
 import { ClientDetailActions } from "@/components/clients/client-detail-actions"
 import { ClientCreatedToast } from "@/components/clients/client-created-toast"
@@ -709,23 +710,19 @@ function SectionCard({
   children: React.ReactNode
 }) {
   return (
-    <div className="sf-card">
-      <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
-        <div className="flex items-center gap-2">
-          {icon}
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        </div>
-        {actionHref && actionLabel ? (
+    <CollapsibleCard title={title} icon={icon} flush>
+      {actionHref && actionLabel ? (
+        <div className="flex justify-end px-5 pt-3">
           <Link
             href={actionHref}
             className="text-xs font-medium text-primary hover:text-primary/80"
           >
             {actionLabel}
           </Link>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {children}
-    </div>
+    </CollapsibleCard>
   )
 }
 
