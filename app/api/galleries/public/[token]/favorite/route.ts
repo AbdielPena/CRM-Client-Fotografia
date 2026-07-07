@@ -8,11 +8,12 @@ import {
   validateGalleryToken,
 } from "@/server/services/gallery.service"
 import { apiError } from "@/lib/utils/api-error"
-import { optionalClientEmail } from "@/lib/validations/gallery.schema"
 
+// El correo es OBLIGATORIO: cada selección (favoritos) va atada a un correo, no
+// se comparte una sola por galería. Sin correo válido no se guarda el favorito.
 const schema = z.object({
   assetId: z.string().min(1),
-  clientEmail: optionalClientEmail,
+  clientEmail: z.string().trim().email(),
   clientName: z.string().max(120).optional().or(z.literal("")),
 })
 

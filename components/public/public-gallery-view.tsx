@@ -327,7 +327,10 @@ export function PublicGalleryView({
   const dirtyFavsRef = useRef<Set<string>>(new Set())
   const [open, setOpen] = useState<number | null>(null)
   const [email, setEmail] = useState<string | null>(null)
-  const [emailPrompt, setEmailPrompt] = useState(gallery.require_email)
+  // El correo es OBLIGATORIO para seleccionar: cada persona hace su propia
+  // selección con su correo (los favoritos se guardan por correo, no compartidos).
+  // La descarga (?entrega=1) NO lo pide. Ver restore de localStorage abajo.
+  const [emailPrompt, setEmailPrompt] = useState(!deliveryOnly)
 
   const [collections, setCollections] = useState<Collection[]>([])
   const [activeCollId, setActiveCollId] = useState<string | null>(null)
@@ -347,17 +350,19 @@ export function PublicGalleryView({
     packageName: string | null
   } | null>(null)
 
-  // Restore email from localStorage (or default to anon when email not required)
+  // Restaura el correo desde localStorage. En SELECCIÓN el correo es obligatorio
+  // (sin fallback anónimo → el gate lo pide). Solo la descarga (?entrega=1) usa
+  // un correo neutro porque no guarda selección por-cliente.
   useEffect(() => {
     if (typeof window === "undefined") return
     const saved = window.localStorage.getItem(`gallery_email_${gallery.id}`)
     if (saved) {
       setEmail(saved)
       setEmailPrompt(false)
-    } else if (!gallery.require_email) {
+    } else if (deliveryOnly) {
       setEmail("anon@guest")
     }
-  }, [gallery.id, gallery.require_email])
+  }, [gallery.id, deliveryOnly])
 
   // Cargar collections + favs cuando hay email
   const loadCollections = useCallback(async () => {
@@ -438,6 +443,20 @@ export function PublicGalleryView({
     setEmailPrompt(false)
   }
 
+  // Otra persona en el MISMO dispositivo: reinicia el correo para que haga su
+  // propia selección. Limpia los favoritos en memoria del anterior; al reingresar
+  // el correo, loadFavs trae los favoritos guardados de ESE correo (o ninguno).
+  const changeEmail = () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(`gallery_email_${gallery.id}`)
+    }
+    setEmail(null)
+    setFavs(new Set())
+    dirtyFavsRef.current.clear()
+    setActiveCollId(null)
+    setEmailPrompt(true)
+  }
+
   const activeColl = useMemo(
     () => collections.find((c) => c.id === activeCollId) ?? null,
     [collections, activeCollId],
@@ -460,6 +479,12 @@ export function PublicGalleryView({
       // Bloqueo del fotógrafo: ya empezó a editar → el cliente no puede tocar.
       if (gallery.selection_locked) {
         toast.error("El fotógrafo ya está editando — la selección está bloqueada por ahora")
+        return
+      }
+      // Correo obligatorio: cada selección va atada a un correo. Sin correo,
+      // abre el gate en vez de guardar un favorito huérfano.
+      if (!email) {
+        setEmailPrompt(true)
         return
       }
       // Caso 1: lista activa — siempre se puede modificar
@@ -1228,8 +1253,20 @@ export function PublicGalleryView({
               👉 Dale <strong>LIKE ❤️</strong> a todas las fotografías que más te gusten.
             </p>
             <p>
-              👉 Al finalizar, escribe tu correo electrónico{" "}
-              <strong>una sola vez</strong> para enviar tu selección.
+              👉 Al terminar, pulsa <strong>“Avisar al fotógrafo”</strong> para
+              enviarme tu selección.
+            </p>
+            <p style={{ fontSize: "0.84rem", color: ED.muted }}>
+              Seleccionas con el correo{" "}
+              <strong style={{ color: ED.ink }}>{email}</strong>.{" "}
+              <button
+                type="button"
+                onClick={changeEmail}
+                className="underline underline-offset-2"
+                style={{ color: ED.gold }}
+              >
+                ¿No eres tú? Cambiar correo
+              </button>
             </p>
           </div>
 
