@@ -225,6 +225,22 @@ export function GalleryDetailTabs({
     (a) => a.delivery_track === "social" || a.delivery_track === "high_quality",
   )
 
+  // Entrega: sets cuyo nombre matchea Redes/Máxima Calidad = destinos de subida
+  // de las fotos FINALES. Toda la parte de entrega (subir finales + enviar al
+  // cliente + validar) vive en la pestaña "Entrega", NO en "Fotos".
+  const deliverySets = sets
+    .map((s) => ({ set: s, track: inferDeliveryTrack(s.name) }))
+    .filter((x) => x.track !== null)
+  const uploadTargets: UploadTarget[] | undefined =
+    deliverySets.length > 0
+      ? deliverySets.map(({ set, track }) => ({
+          id: set.id,
+          name: set.name,
+          deliveryTrack: track,
+        }))
+      : undefined
+  const canDeliver = !!uploadTargets && assets.length > 0 && !!client
+
   // Fuentes de selección para armar la 2da ronda: ♥ generales (favoritos únicos)
   // + cada lista con su conteo. El fotógrafo elige de cuáles se arma la galería.
   const favAssetIds = new Set<string>()
@@ -291,13 +307,7 @@ export function GalleryDetailTabs({
 
         <div className="min-w-0 flex-1 [&>[role=tabpanel]]:mt-0">
         <TabsContent value="photos" className="mt-5">
-          <PhotosTab
-            gallery={gallery}
-            assets={assets}
-            sets={sets}
-            studioId={studioId}
-            client={client}
-          />
+          <PhotosTab gallery={gallery} assets={assets} studioId={studioId} />
         </TabsContent>
 
         <TabsContent value="sets" className="mt-5">
@@ -315,6 +325,40 @@ export function GalleryDetailTabs({
 
         <TabsContent value="delivery" className="mt-5">
           <div className="space-y-5">
+            {/* Estado de entrega enviada: permite cancelar (des-publicar). */}
+            {gallery.delivery_ready_at && (
+              <DeliveryStatusBanner
+                galleryId={gallery.id}
+                deliveryReadyAt={gallery.delivery_ready_at}
+              />
+            )}
+            {/* Habilitar entrega final (crea las carpetas de pista). */}
+            {!uploadTargets && (
+              <EnableFinalDeliveryBanner galleryId={gallery.id} hasDeliveryAssets={hasDelivery} />
+            )}
+            {/* Enviar al cliente (email/WhatsApp + links). */}
+            {canDeliver && client && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 dark:bg-emerald-500/5">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-foreground">
+                    ¿Listo para entregar a {client.name ?? "tu cliente"}?
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                    Le avisamos por email y/o WhatsApp y te damos los links para compartir manualmente.
+                  </p>
+                </div>
+                <DeliverToClientButton
+                  galleryId={gallery.id}
+                  clientName={client.name}
+                  clientEmail={client.email}
+                  clientPhone={client.phone}
+                />
+              </div>
+            )}
+            {/* Subir las fotos FINALES (Máxima Calidad / Redes). */}
+            {uploadTargets && (
+              <AssetUploader galleryId={gallery.id} studioId={studioId} targets={uploadTargets} />
+            )}
             {hasDelivery && (
               <ValidateDeliveryTab
                 galleryId={gallery.id}
@@ -400,67 +444,17 @@ function inferDeliveryTrack(name: string): "social" | "high_quality" | null {
 function PhotosTab({
   gallery,
   assets,
-  sets,
   studioId,
-  client,
 }: {
   gallery: Gallery
   assets: Asset[]
-  sets: SetRow[]
   studioId: string
-  client: { name: string | null; email: string | null; phone: string | null } | null
 }) {
-  // Si la galería tiene sets cuyo nombre matchea Redes/Máxima Calidad, mostrar
-  // selector de target. Vale para entrega final O para galerías de selección que
-  // habilitaron entrega final con el botón "+ Habilitar entrega final".
-  const deliverySets = sets
-    .map((s) => ({ set: s, track: inferDeliveryTrack(s.name) }))
-    .filter((x) => x.track !== null)
-  const uploadTargets: UploadTarget[] | undefined =
-    deliverySets.length > 0
-      ? deliverySets.map(({ set, track }) => ({
-          id: set.id,
-          name: set.name,
-          deliveryTrack: track,
-        }))
-      : undefined
-
-  const hasDeliveryAssets = assets.some(
-    (a) => a.delivery_track === "social" || a.delivery_track === "high_quality",
-  )
-  const canDeliver = !!uploadTargets && assets.length > 0 && !!client
   return (
     <div className="space-y-5">
-      {/* Estado de entrega enviada: permite cancelar (des-publicar) la entrega. */}
-      {gallery.delivery_ready_at && (
-        <DeliveryStatusBanner
-          galleryId={gallery.id}
-          deliveryReadyAt={gallery.delivery_ready_at}
-        />
-      )}
-      {/* Habilitar entrega final (crea carpetas de pista en la misma galería). */}
-      {!uploadTargets && (
-        <EnableFinalDeliveryBanner galleryId={gallery.id} hasDeliveryAssets={hasDeliveryAssets} />
-      )}
-      {canDeliver && client && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 dark:bg-emerald-500/5">
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-foreground">
-              ¿Listo para entregar a {client.name ?? "tu cliente"}?
-            </p>
-            <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-              Le avisamos por email y/o WhatsApp y te damos los links para compartir manualmente.
-            </p>
-          </div>
-          <DeliverToClientButton
-            galleryId={gallery.id}
-            clientName={client.name}
-            clientEmail={client.email}
-            clientPhone={client.phone}
-          />
-        </div>
-      )}
-      <AssetUploader galleryId={gallery.id} studioId={studioId} targets={uploadTargets} />
+      {/* Solo fotos base de la galería. Toda la ENTREGA (subir finales + enviar
+          al cliente + validar) vive en la pestaña "Entrega". */}
+      <AssetUploader galleryId={gallery.id} studioId={studioId} />
       {assets.length > 1 && (
         <SortByNameButton galleryId={gallery.id} />
       )}
