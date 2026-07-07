@@ -130,18 +130,32 @@ const PXBOOK_CSS = `
 .pxbook-sparkles{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
 .pxbook-dust{
   position:absolute; top:50%; left:50%; width:2px; height:2px; border-radius:50%; background:transparent;
+  /* Campo ancho (±660px) para que las partículas cubran TODO el fondo alrededor
+     del libro, no solo el centro. */
   box-shadow:
-    -180px -120px 0 0 var(--gold-foil),  120px -160px 0 0 var(--gold-bright),
-     200px   40px 0 0 var(--gold-foil), -220px   60px 0 0 var(--gold-bright),
-     -60px -200px 0 0 var(--gold-foil),   60px  180px 0 0 var(--gold-bright),
-     240px  -60px 0 0 var(--gold-foil), -260px  -40px 0 0 var(--gold-bright),
-       0px -240px 0 0 var(--gold-foil),  140px  120px 0 0 var(--gold-bright);
+    -360px -220px 0 0 var(--gold-foil),  300px -280px 0 0 var(--gold-bright),
+     460px   80px 0 0 var(--gold-foil), -520px  120px 0 0 var(--gold-bright),
+    -140px -360px 0 0 var(--gold-foil),  120px  340px 0 0 var(--gold-bright),
+     560px -160px 0 0 var(--gold-foil), -600px  -80px 0 0 var(--gold-bright),
+      20px -420px 0 0 var(--gold-foil),  320px  260px 0 0 var(--gold-bright),
+    -300px  300px 0 0 var(--gold-foil),  620px  300px 0 0 var(--gold-bright),
+    -660px  320px 0 0 var(--gold-foil),  440px -340px 0 0 var(--gold-bright);
   animation:pxDriftA 9s ease-in-out infinite, pxTwinkle 2.6s ease-in-out infinite;
   will-change:transform,opacity;
 }
 .pxbook-dust.b{ animation:pxDriftB 11s ease-in-out infinite, pxTwinkle 3.4s ease-in-out infinite .8s; opacity:.7; }
 .pxbook-dust.c{ width:1px; height:1px;
-  animation:pxDriftA 13s ease-in-out infinite reverse, pxTwinkle 2.1s ease-in-out infinite .4s; opacity:.5; }
+  animation:pxDriftA 13s ease-in-out infinite reverse, pxTwinkle 2.1s ease-in-out infinite .4s; opacity:.55; }
+.pxbook-dust.d{
+  box-shadow:
+    -480px   40px 0 0 var(--gold-foil),  520px -120px 0 0 var(--gold-bright),
+    -220px -280px 0 0 var(--gold-foil),  240px  220px 0 0 var(--gold-bright),
+     380px  340px 0 0 var(--gold-foil), -420px  260px 0 0 var(--gold-bright),
+      80px  420px 0 0 var(--gold-foil),  -80px -460px 0 0 var(--gold-bright),
+     640px  120px 0 0 var(--gold-foil), -640px -180px 0 0 var(--gold-bright),
+    -560px -260px 0 0 var(--gold-foil),  560px  380px 0 0 var(--gold-bright);
+  animation:pxDriftB 12s ease-in-out infinite .5s, pxTwinkle 2.9s ease-in-out infinite 1.1s; opacity:.8;
+}
 
 /* Estrellas de 4 puntas (de Enchanted, reubicadas al escenario) */
 .pxbook-star{
@@ -200,10 +214,12 @@ const PXBOOK_CSS = `
    (ver nota en .pxbook-page). NO usar relative o el canto duro se descoloca. */
 .pxbook-cover{ position:absolute; overflow:hidden; }
 .pxbook-cover .pxbook-scrim{
-  position:absolute; inset:0; pointer-events:none;
+  position:absolute; inset:0; pointer-events:none; z-index:1;
+  /* Suave: deja ver la portada (antes ~85% negro la enterraba); solo oscurece
+     bordes/base lo justo para que el texto/marco se lean. */
   background:
-    radial-gradient(120% 80% at 50% 20%, transparent 0%, rgba(0,0,0,.30) 60%, rgba(0,0,0,.66) 100%),
-    linear-gradient(180deg, rgba(16,11,8,.30), rgba(16,11,8,.62));
+    radial-gradient(120% 95% at 50% 32%, rgba(0,0,0,.06) 0%, rgba(0,0,0,.20) 55%, rgba(0,0,0,.52) 100%),
+    linear-gradient(180deg, rgba(16,11,8,.10), rgba(16,11,8,.50));
 }
 /* marco de filigrana doble */
 .pxbook-cover::before{
@@ -611,6 +627,7 @@ export function FinalDeliveryBook({
         <i className="pxbook-dust" />
         <i className="pxbook-dust b" />
         <i className="pxbook-dust c" />
+        <i className="pxbook-dust d" />
         <span className="pxbook-star s1" />
         <span className="pxbook-star s2" />
         <span className="pxbook-star s3" />
@@ -679,7 +696,16 @@ export function FinalDeliveryBook({
           >
             {[
               /* PORTADA (tapa dura) */
-              <div key="cover" data-density="hard" className="pxbook-cover" style={coverStyle(coverImg, tpl, accent, dims.w, dims.h)}>
+              <div key="cover" data-density="hard" className="pxbook-cover" style={coverStyle(tpl, accent, dims.w, dims.h)}>
+                {coverImg && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={coverImg}
+                    alt=""
+                    aria-hidden
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+                  />
+                )}
                 <div className="pxbook-scrim" />
                 <div className="pxbook-foil" aria-hidden />
                 <div className="pxbook-frame" aria-hidden />
@@ -882,21 +908,20 @@ export function BookLauncher(props: {
 // flip las hojas blandas inactivas no reciben tamaño de StPageFlip y un 100%
 // colapsa a 0 → la imagen se desbordaba fuera del libro al voltear.
 function coverStyle(
-  img: string | null,
   tpl: Template,
   accent: string,
   w: number,
   h: number,
 ): React.CSSProperties {
+  // La portada se renderiza como <img> real encima (más fiable que un
+  // background CSS sobre la tapa dura de StPageFlip). Aquí solo el color base.
   return {
     width: w,
     height: h,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: img
-      ? `#000 url(${img}) center/cover no-repeat`
-      : `linear-gradient(135deg, ${tpl.bg}, #000)`,
+    background: `linear-gradient(135deg, ${tpl.bg}, #000)`,
     boxShadow: `inset 0 0 0 1px ${accent}33`,
     position: "relative",
   }
