@@ -4,6 +4,7 @@ import { getProjectById } from "@/server/services/project.service"
 import { ChangeSessionTime } from "@/components/projects/change-session-time"
 import { QuinceDetails } from "@/components/projects/quince-details"
 import { SessionDressCard } from "@/components/projects/session-dress-card"
+import { RequirementsWaiveToggle } from "@/components/projects/requirements-waive-toggle"
 import { listFormResponsesForProject } from "@/server/services/form.service"
 import { getEntityActivity } from "@/server/services/activity.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
@@ -238,8 +239,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   // exigir N colaboradores de cierto tipo → avisar si faltan.
   const pkgId =
     (project.package_id as string | null) ?? (pkg?.id as string | undefined) ?? null
+  // Sesión "antigua": no exigir hora/colaborador/vestido (marca del usuario en
+  // sesiones que pasaron antes de agregar esas funciones al sistema).
+  const requirementsWaived = !!(project.requirements_waived as boolean | null)
   let requirementStatuses: RequirementStatus[] = []
-  if (pkgId) {
+  if (pkgId && !requirementsWaived) {
     const { data: pkgReq } = await supabase
       .from("packages")
       .select("collaborator_requirements")
@@ -301,10 +305,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
   // Badges de "pendiente": la HORA en toda sesión (parte importante); los
   // COLABORADORES y el VESTIDO solo en sesiones de quinceañera.
-  const missingTime = !eventTime
+  const missingTime = !requirementsWaived && !eventTime
   const hasDress = !!((project.dress_name as string | null) || dressCost > 0)
-  const missingCollaborators = isQuince && projectCollaborators.length === 0
-  const missingDress = includesDress && !hasDress
+  const missingCollaborators = !requirementsWaived && isQuince && projectCollaborators.length === 0
+  const missingDress = !requirementsWaived && includesDress && !hasDress
   // Datos de la quinceañera: el NOMBRE se usa como nombre por defecto al crear
   // sus galerías; el CUMPLEAÑOS define la entrega pautada (2 días antes) y el
   // badge de prioridad en Galerías.
@@ -352,7 +356,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
       {/* Pendientes por completar (hora en toda sesión; nombre/colaboradores/vestido/cumpleaños en quinceañera) */}
-      {(missingTime || missingQuinceName || missingCollaborators || missingDress || missingBirthday) && (
+      {(missingTime || missingQuinceName || missingCollaborators || missingDress || missingBirthday || requirementsWaived) && (
         <div className="flex flex-wrap items-center gap-2">
           {missingTime && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11.5px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
@@ -379,6 +383,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               <Shirt className="h-3.5 w-3.5" /> Falta el vestido
             </span>
           )}
+          <RequirementsWaiveToggle
+            projectId={project.id as string}
+            waived={requirementsWaived}
+          />
         </div>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

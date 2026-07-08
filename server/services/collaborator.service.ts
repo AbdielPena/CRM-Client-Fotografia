@@ -413,13 +413,14 @@ export async function getProjectsMissingCollaborators(
   try {
     const { data: projRows } = await sb
       .from("projects")
-      .select("id, package_id")
+      .select("id, package_id, requirements_waived")
       .eq("studio_id", studioId)
       .in("id", projectIds)
     const projs = ((projRows ?? []) as Array<{
       id: string
       package_id: string | null
-    }>).filter((p) => p.package_id)
+      requirements_waived: boolean | null
+    }>).filter((p) => p.package_id && !p.requirements_waived)
     const pkgIds = [...new Set(projs.map((p) => p.package_id as string))]
     if (pkgIds.length === 0) return new Set()
 

@@ -157,6 +157,33 @@ export async function addDressExtraToInvoiceAction(
 }
 
 /**
+ * Marca/desmarca una sesión como "antigua": cuando está marcada, el detalle NO
+ * pide hora, colaborador ni vestido (sesiones que pasaron antes de agregar esas
+ * funciones al sistema). No borra datos; solo oculta las marcas de pendiente.
+ */
+export async function setRequirementsWaivedAction(
+  projectId: string,
+  waived: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const { untypedService } = await import("@/server/supabase/untyped")
+    const sb = untypedService()
+    const { error } = await sb
+      .from("projects")
+      .update({ requirements_waived: waived })
+      .eq("id", projectId)
+      .eq("studio_id", session.studioId)
+    if (error) return { ok: false, error: error.message }
+    revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/projects")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
+/**
  * Guarda los datos de la quinceañera en la sesión: nombre (se usa como nombre
  * por defecto al crear galerías) y cumpleaños (define la entrega pautada: 2
  * días antes del cumpleaños / 3 semanas después de la sesión, lo que ocurra
