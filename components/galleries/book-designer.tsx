@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Reorder, useDragControls } from "framer-motion"
 import {
   ArrowLeft,
@@ -22,6 +23,10 @@ import {
 import { toast } from "sonner"
 
 import { updateGalleryBookConfigAction } from "@/server/actions/gallery.actions"
+import {
+  saveBookTemplateAction,
+  deleteBookTemplateAction,
+} from "@/server/actions/book-template.actions"
 import {
   BOOK_LAYOUTS,
   layoutCapacity,
@@ -58,6 +63,7 @@ export function BookDesigner({
   publicToken,
   coverImg,
   logoUrl,
+  templates,
 }: {
   galleryId: string
   assets: DAsset[]
@@ -66,7 +72,9 @@ export function BookDesigner({
   publicToken: string | null
   coverImg: string | null
   logoUrl: string | null
+  templates: { id: string; name: string; config: Record<string, unknown> }[]
 }) {
+  const router = useRouter()
   const seed = useMemo<BookPage[]>(
     () =>
       initialPages.length
@@ -177,6 +185,57 @@ export function BookDesigner({
   }
   const patchCover = (p: Partial<CoverConfig>) => setCover((c) => ({ ...c, ...p }))
 
+  // ── Plantillas (Fase 3) ──
+  async function saveTemplate() {
+    const nm = window.prompt("Nombre de la plantilla:", name ? `Estilo ${name}` : "Mi plantilla premium")
+    if (!nm) return
+    const res = await saveBookTemplateAction(galleryId, nm, {
+      accent,
+      showLogo,
+      cover,
+      pagePattern: pages.map((p) => p.layout),
+    })
+    if (res.error) toast.error(res.error)
+    else {
+      toast.success("Plantilla guardada")
+      router.refresh()
+    }
+  }
+  function applyTemplate(cfg: Record<string, unknown>) {
+    const c = cfg as {
+      accent?: string
+      showLogo?: boolean
+      cover?: CoverConfig
+      pagePattern?: BookPageLayout[]
+    }
+    if (c.cover) setCover(c.cover)
+    if (typeof c.accent === "string") setAccent(c.accent)
+    if (typeof c.showLogo === "boolean") setShowLogo(c.showLogo)
+    if (c.pagePattern?.length) {
+      const flat = pages.flatMap((p) => p.assetIds)
+      const np: BookPage[] = []
+      let i = 0
+      let k = 0
+      while (i < flat.length && np.length < 400) {
+        const layout = c.pagePattern[k % c.pagePattern.length]!
+        const cap = layoutCapacity(layout)
+        np.push({ id: uid(), layout, assetIds: flat.slice(i, i + cap) })
+        i += cap
+        k++
+      }
+      if (np.length) setPages(np)
+    }
+    toast.success("Plantilla aplicada")
+  }
+  async function deleteTemplate(id: string) {
+    const res = await deleteBookTemplateAction(galleryId, id)
+    if (res.error) toast.error(res.error)
+    else {
+      toast.success("Plantilla eliminada")
+      router.refresh()
+    }
+  }
+
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
       <link rel="stylesheet" href={COVER_FONTS_HREF} />
@@ -282,6 +341,10 @@ export function BookDesigner({
           setAccent={setAccent}
           showLogo={showLogo}
           setShowLogo={setShowLogo}
+          templates={templates}
+          onSaveTemplate={saveTemplate}
+          onApplyTemplate={applyTemplate}
+          onDeleteTemplate={deleteTemplate}
         />
       )}
     </div>
@@ -301,6 +364,7 @@ function SaveBadge({ state }: { state: "idle" | "saving" | "saved" | "error" }) 
 function CoverTab({
   coverImg, logoUrl, cover, patchCover, onModel,
   name, setName, subtitle, setSubtitle, date, setDate, accent, setAccent, showLogo, setShowLogo,
+  templates, onSaveTemplate, onApplyTemplate, onDeleteTemplate,
 }: {
   coverImg: string | null
   logoUrl: string | null
@@ -312,6 +376,10 @@ function CoverTab({
   date: string; setDate: (v: string) => void
   accent: string; setAccent: (v: string) => void
   showLogo: boolean; setShowLogo: (v: boolean) => void
+  templates: { id: string; name: string; config: Record<string, unknown> }[]
+  onSaveTemplate: () => void
+  onApplyTemplate: (config: Record<string, unknown>) => void
+  onDeleteTemplate: (id: string) => void
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
@@ -336,6 +404,27 @@ function CoverTab({
 
       {/* Controles */}
       <div className="min-w-0 flex-1 space-y-6 overflow-y-auto p-6">
+        <Group label="Biblioteca de plantillas">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {templates.map((t) => (
+              <span key={t.id} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-[12px]">
+                <button onClick={() => onApplyTemplate(t.config)} className="font-medium text-foreground hover:text-brand" title="Aplicar plantilla">
+                  {t.name}
+                </button>
+                <button onClick={() => onDeleteTemplate(t.id)} className="text-muted-foreground hover:text-destructive" title="Eliminar">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <button onClick={onSaveTemplate} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-2.5 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:border-brand hover:text-brand">
+              <Plus className="h-3 w-3" /> Guardar diseño actual
+            </button>
+          </div>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Guarda este diseño (portada + colores + patrón de páginas) para reutilizarlo en futuras galerías.
+          </p>
+        </Group>
+
         <Group label="Modelo de portada">
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {COVER_MODELS.map((m) => (

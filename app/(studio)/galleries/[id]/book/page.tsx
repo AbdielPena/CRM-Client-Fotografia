@@ -9,6 +9,7 @@ import {
 } from "@/server/services/gallery.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { parseBookPages } from "@/lib/book/layouts"
+import { getBookTemplates } from "@/server/services/book-template.service"
 import { BookDesigner } from "@/components/galleries/book-designer"
 
 export const metadata: Metadata = { title: "Diseñador de álbum" }
@@ -67,6 +68,8 @@ export default async function BookDesignerPage({ params }: { params: { id: strin
     .maybeSingle()
   const logoUrl = (studioRow as { logo_url: string | null } | null)?.logo_url ?? null
 
+  const templates = await getBookTemplates(session.studioId)
+
   return (
     <BookDesigner
       galleryId={galleryId}
@@ -76,6 +79,7 @@ export default async function BookDesignerPage({ params }: { params: { id: strin
       publicToken={publicToken}
       coverImg={coverImg}
       logoUrl={logoUrl}
+      templates={templates}
     />
   )
 }
