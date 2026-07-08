@@ -547,6 +547,38 @@ export function FinalDeliveryBook({
   const eventDate = s(settings.eventDate)
   const showLogo = settings.showLogo !== false && !!studio.logoUrl
 
+  // Música de fondo (opcional). Los navegadores bloquean el autoplay con sonido,
+  // así que arranca tras la primera interacción del usuario con la página (y hay
+  // botón play/pausa flotante).
+  const music = (settings as Record<string, unknown>).music as
+    | { url?: string | null; autoplay?: boolean; volume?: number }
+    | undefined
+  const musicUrl = (music?.url ?? "").trim() || null
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [musicOn, setMusicOn] = useState(false)
+  const toggleMusic = () => {
+    const a = audioRef.current
+    if (!a) return
+    if (a.paused) {
+      a.volume = typeof music?.volume === "number" ? music.volume : 0.5
+      void a.play().then(() => setMusicOn(true)).catch(() => {})
+    } else {
+      a.pause()
+      setMusicOn(false)
+    }
+  }
+  useEffect(() => {
+    if (!musicUrl || music?.autoplay === false) return
+    const a = audioRef.current
+    if (!a) return
+    const start = () => {
+      a.volume = typeof music?.volume === "number" ? music.volume : 0.5
+      void a.play().then(() => setMusicOn(true)).catch(() => {})
+    }
+    window.addEventListener("pointerdown", start, { once: true })
+    return () => window.removeEventListener("pointerdown", start)
+  }, [musicUrl, music?.autoplay, music?.volume])
+
   // Dedicatoria de la madre / agradecimiento (página tras la portada). Misma
   // lógica de 3 estados que la galería pública.
   const dedicationEnabled = !!gallery.motherMessageEnabled
@@ -657,6 +689,57 @@ export function FinalDeliveryBook({
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link rel="stylesheet" href={COVER_FONTS_HREF} />
       <style dangerouslySetInnerHTML={{ __html: PXBOOK_CSS }} />
+
+      {/* Música de fondo (opcional) + botón play/pausa flotante */}
+      {musicUrl && (
+        <>
+          <audio ref={audioRef} src={musicUrl} loop preload="none" />
+          <button
+            type="button"
+            onClick={toggleMusic}
+            aria-label={musicOn ? "Pausar música" : "Reproducir música"}
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              zIndex: 40,
+              width: 42,
+              height: 42,
+              borderRadius: "50%",
+              display: "grid",
+              placeItems: "center",
+              background: "rgba(20,18,26,0.55)",
+              color: accent,
+              border: `1px solid ${accent}66`,
+              cursor: "pointer",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+              boxShadow: musicOn ? `0 0 16px ${accent}66` : "none",
+              transition: "box-shadow .3s ease",
+            }}
+          >
+            {musicOn ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="5" width="4" height="14" rx="1" />
+                <rect x="14" y="5" width="4" height="14" rx="1" />
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M9 17.5V6l9-1.8v9.3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <circle cx="6.5" cy="17.5" r="2.5" />
+                <circle cx="15.5" cy="15.5" r="2.5" />
+              </svg>
+            )}
+          </button>
+        </>
+      )}
 
       {/* CAPAS DE ESCENARIO — hermanas del libro, detrás (z-index 0/1) */}
       <div className="pxbook-ambient" aria-hidden />

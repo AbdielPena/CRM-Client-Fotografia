@@ -64,6 +64,17 @@ export const galleryBookConfigSchema = z.object({
           phrase: z.string().max(200).optional(),
         })
         .optional(),
+      // Música de fondo del álbum (opcional). El estudio pega una URL a un
+      // MP3/audio público; el flipbook la reproduce con un botón play/pausa.
+      music: z
+        .object({
+          url: z
+            .union([z.string().url("URL inválida"), z.literal(""), z.null()])
+            .optional(),
+          autoplay: z.boolean().optional(),
+          volume: z.number().min(0).max(1).optional(),
+        })
+        .optional(),
     })
     .partial()
     .optional(),

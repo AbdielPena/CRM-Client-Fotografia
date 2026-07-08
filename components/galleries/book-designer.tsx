@@ -93,6 +93,9 @@ export function BookDesigner({
   const [date, setDate] = useState(str(initialSettings.eventDate))
   const [accent, setAccent] = useState(str(initialSettings.accent) || "#b89968")
   const [showLogo, setShowLogo] = useState(initialSettings.showLogo !== false)
+  const [music, setMusic] = useState<{ url?: string; autoplay?: boolean; volume?: number }>(
+    (initialSettings.music as { url?: string; autoplay?: boolean; volume?: number } | undefined) ?? {},
+  )
 
   const [save, setSave] = useState<"idle" | "saving" | "saved" | "error">("idle")
 
@@ -126,6 +129,7 @@ export function BookDesigner({
           eventDate: date,
           accent,
           showLogo,
+          music,
         },
       })
       if (res?.error) {
@@ -136,7 +140,7 @@ export function BookDesigner({
       }
     }, 700)
     return () => clearTimeout(t)
-  }, [pages, cover, name, subtitle, date, accent, showLogo, galleryId, initialSettings])
+  }, [pages, cover, name, subtitle, date, accent, showLogo, music, galleryId, initialSettings])
 
   const activePage = pages.find((p) => p.id === activeId) ?? null
 
@@ -346,6 +350,50 @@ export function BookDesigner({
           onApplyTemplate={applyTemplate}
           onDeleteTemplate={deleteTemplate}
         />
+      )}
+
+      {tab === "cover" && (
+        <div className="mt-4 rounded-2xl border border-border bg-card p-5">
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="grid size-8 place-items-center rounded-lg bg-amber-100 text-lg text-amber-700">🎵</span>
+            <div>
+              <p className="text-sm font-semibold text-foreground">Música de fondo</p>
+              <p className="text-xs text-muted-foreground">
+                Suena en el álbum digital. El cliente puede pausarla con el botón flotante.
+              </p>
+            </div>
+          </div>
+          <label className="mb-1 block text-xs font-medium text-foreground">URL del audio (MP3)</label>
+          <input
+            type="url"
+            value={music.url ?? ""}
+            onChange={(e) => setMusic((m) => ({ ...m, url: e.target.value }))}
+            placeholder="https://…/cancion.mp3"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={music.autoplay !== false}
+                onChange={(e) => setMusic((m) => ({ ...m, autoplay: e.target.checked }))}
+                className="size-4"
+              />
+              Arrancar sola (tras el primer toque del cliente)
+            </label>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Volumen
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={music.volume ?? 0.5}
+                onChange={(e) => setMusic((m) => ({ ...m, volume: Number(e.target.value) }))}
+              />
+            </label>
+          </div>
+        </div>
       )}
     </div>
   )
