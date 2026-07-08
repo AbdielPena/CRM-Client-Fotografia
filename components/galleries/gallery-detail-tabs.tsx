@@ -26,15 +26,13 @@ import {
   ArrowDownAZ,
   CheckCircle2,
   Ban,
-  Download,
-  Pencil,
   Truck,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
-import { renderWaMessage, DEFAULT_DELIVERY_WA_MESSAGE } from "@/lib/share/wa-message"
+import { renderWaMessage } from "@/lib/share/wa-message"
 import type { ReselectionInfo } from "@/server/services/reselection.service"
 import {
   createReselectionAction,
@@ -43,6 +41,7 @@ import {
 import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
 import { DeliverToClientButton } from "@/components/galleries/deliver-to-client-modal"
+import { DeliveryLinksPanel } from "@/components/galleries/delivery-links-panel"
 import { MotherDedicationCard } from "@/components/galleries/mother-dedication-card"
 import { ValidateDeliveryTab } from "@/components/galleries/validate-delivery-tab"
 import { GalleryAppearanceTab } from "@/components/galleries/gallery-appearance-tab"
@@ -354,6 +353,21 @@ export function GalleryDetailTabs({
                   clientPhone={client.phone}
                 />
               </div>
+            )}
+            {/* TODOS los links de la entrega (galería web, descarga ZIP, álbum
+                Experience, Google Drive) + mensaje de WhatsApp. Es lo que el
+                fotógrafo viene a buscar acá, así que va destacado arriba. */}
+            {(hasDelivery || gallery.delivery_ready_at || driveLink) && (
+              <DeliveryLinksPanel
+                galleryName={gallery.name}
+                token={publicToken}
+                bookEnabled={gallery.book_enabled ?? false}
+                bookDisplayMode={gallery.book_display_mode ?? "classic"}
+                driveLink={driveLink}
+                clientName={client?.name ?? null}
+                clientPhone={client?.phone ?? null}
+                waDeliveryTemplate={waDeliveryTemplate}
+              />
             )}
             {/* Subir las fotos FINALES (Máxima Calidad / Redes). */}
             {uploadTargets && (
@@ -1818,13 +1832,9 @@ function ShareTab({
   const [pending, startTransition] = useTransition()
   const [token, setToken] = React.useState(publicToken)
   const [copied, setCopied] = React.useState(false)
-  const [driveCopied, setDriveCopied] = React.useState(false)
   const [selToken, setSelToken] = React.useState<string | null>(null)
   const [selCopied, setSelCopied] = React.useState(false)
   const [msgCopied, setMsgCopied] = React.useState(false)
-  const [webCopied, setWebCopied] = React.useState(false)
-  const [bookCopied, setBookCopied] = React.useState(false)
-  const [delivMsgCopied, setDelivMsgCopied] = React.useState(false)
   const [resel, setResel] = React.useState<ReselectionInfo | null>(reselection)
   const [reselCopied, setReselCopied] = React.useState(false)
   const [creatingResel, startReselTransition] = useTransition()
@@ -1873,52 +1883,6 @@ function ShareTab({
         link: publicUrl,
       })
     : ""
-  // ── Entrega final: link de descarga web (?entrega=1) + Drive + mensaje editable ──
-  // Separado de la selección: este link muestra SOLO la entrega (sin selección).
-  const deliveryWebUrl = publicUrl ? `${publicUrl}?entrega=1` : null
-  // Link directo al álbum digital (libro) — solo si el libro está habilitado
-  // y el modo no es "clásica". Sirve para enviar galería y libro.
-  const bookUrl =
-    publicUrl && gallery.book_enabled && gallery.book_display_mode !== "classic"
-      ? `${publicUrl}?libro=1`
-      : null
-  const msgEntregaFinal = renderWaMessage(
-    waDeliveryTemplate || DEFAULT_DELIVERY_WA_MESSAGE,
-    {
-      cliente: firstName,
-      galeria: gallery.name,
-      link_web: deliveryWebUrl ?? "",
-      link_drive: driveLink ?? "",
-    },
-  )
-
-  const handleCopyDrive = () => {
-    if (!driveLink) return
-    navigator.clipboard.writeText(driveLink)
-    setDriveCopied(true)
-    toast.success("Link de Drive copiado")
-    setTimeout(() => setDriveCopied(false), 2000)
-  }
-  const handleCopyWeb = () => {
-    if (!deliveryWebUrl) return
-    navigator.clipboard.writeText(deliveryWebUrl)
-    setWebCopied(true)
-    toast.success("Link de descarga copiado")
-    setTimeout(() => setWebCopied(false), 2000)
-  }
-  const handleCopyBook = () => {
-    if (!bookUrl) return
-    navigator.clipboard.writeText(bookUrl)
-    setBookCopied(true)
-    toast.success("Link del álbum copiado")
-    setTimeout(() => setBookCopied(false), 2000)
-  }
-  const handleCopyDelivMsg = () => {
-    navigator.clipboard.writeText(msgEntregaFinal)
-    setDelivMsgCopied(true)
-    toast.success("Mensaje copiado")
-    setTimeout(() => setDelivMsgCopied(false), 2000)
-  }
 
   const handleGenerate = () => {
     const fd = new FormData()
@@ -2370,168 +2334,26 @@ function ShareTab({
             <div className="h-px flex-1 bg-border" />
           </div>
 
-          <div className="space-y-4 rounded-xl border border-border bg-card p-5">
-            <div>
-              <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-foreground">
-                <Download className="h-4 w-4 text-brand" /> Descarga de la entrega
-              </h3>
-              <p className="mt-0.5 text-[12px] text-muted-foreground">
-                Link <strong>aparte</strong> para que el cliente SOLO vea y descargue sus
-                fotos editadas (sin la selección). Se guardan en su teléfono como ZIP.
-              </p>
-            </div>
+          <DeliveryLinksPanel
+            galleryName={gallery.name}
+            token={token}
+            bookEnabled={gallery.book_enabled ?? false}
+            bookDisplayMode={gallery.book_display_mode ?? "classic"}
+            driveLink={driveLink}
+            clientName={client?.name ?? null}
+            clientPhone={client?.phone ?? null}
+            waDeliveryTemplate={waDeliveryTemplate}
+          />
 
-            {/* Link de descarga desde la web (?entrega=1) */}
-            {deliveryWebUrl && (
-              <div>
-                <p className="mb-1 text-[11px] font-medium text-foreground">
-                  Link de descarga (desde la web)
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    readOnly
-                    value={deliveryWebUrl}
-                    className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
-                  />
-                  <button
-                    onClick={handleCopyWeb}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
-                  >
-                    {webCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    {webCopied ? "Copiado" : "Copiar"}
-                  </button>
-                  <a
-                    href={deliveryWebUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" /> Abrir
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {/* Link directo al álbum digital (libro) — si el libro está habilitado */}
-            {bookUrl && (
-              <div>
-                <p className="mb-1 text-[11px] font-medium text-foreground">
-                  Link del álbum (libro digital)
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    readOnly
-                    value={bookUrl}
-                    className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
-                  />
-                  <button
-                    onClick={handleCopyBook}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
-                  >
-                    {bookCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    {bookCopied ? "Copiado" : "Copiar"}
-                  </button>
-                  <a
-                    href={bookUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" /> Abrir
-                  </a>
-                </div>
-              </div>
-            )}
-
-            {/* Link de Google Drive */}
-            <div>
-              <p className="mb-1 text-[11px] font-medium text-foreground">Google Drive</p>
-              {driveLink ? (
-                <div className="flex gap-2">
-                  <input
-                    readOnly
-                    value={driveLink}
-                    className="flex-1 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-[12.5px] text-foreground"
-                  />
-                  <button
-                    onClick={handleCopyDrive}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
-                  >
-                    {driveCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                    {driveCopied ? "Copiado" : "Copiar"}
-                  </button>
-                  <a
-                    href={driveLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border px-3 text-xs font-medium text-foreground hover:bg-muted/50"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" /> Abrir
-                  </a>
-                </div>
-              ) : (
-                <p className="text-[12px] text-muted-foreground">
-                  Aún no hay carpeta de Drive. Se genera al respaldar la entrega final en
-                  Google Drive.
-                </p>
-              )}
-            </div>
-
-            {/* Mensaje editable con AMBOS links (descarga web + Drive) */}
-            {deliveryWebUrl && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/30 dark:bg-emerald-500/10">
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                    Mensaje de entrega para el cliente
-                  </span>
-                  <button
-                    onClick={handleCopyDelivMsg}
-                    className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-emerald-800 hover:bg-white dark:border-emerald-500/40 dark:bg-transparent dark:text-emerald-300"
-                  >
-                    {delivMsgCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                    {delivMsgCopied ? "Copiado" : "Copiar mensaje"}
-                  </button>
-                </div>
-                <p className="whitespace-pre-wrap text-[12.5px] leading-relaxed text-foreground">
-                  {msgEntregaFinal}
-                </p>
-                <Link
-                  href="/settings/whatsapp"
-                  className="mt-2 inline-flex items-center gap-1 text-[10.5px] font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-                >
-                  <Pencil className="h-3 w-3" /> Editar mensaje (con {"{{link_web}}"} y {"{{link_drive}}"})
-                </Link>
-              </div>
-            )}
-
-            {/* Enviar la entrega por WhatsApp */}
-            {waPhone && deliveryWebUrl ? (
-              <a
-                href={waLink(msgEntregaFinal)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 text-xs font-semibold text-white hover:bg-[#1eb858]"
-              >
-                <MessageCircle className="h-3.5 w-3.5" /> Enviar entrega por WhatsApp
-              </a>
-            ) : (
-              !waPhone && (
-                <p className="text-[11.5px] text-muted-foreground">
-                  Agrega el teléfono del cliente para enviar la entrega directo por WhatsApp.
-                </p>
-              )
-            )}
-
-            {/* Dedicatoria de la madre — aparece en la entrega (editable por el
-                estudio o por la mamá vía link) */}
-            <MotherDedicationCard
-              galleryId={gallery.id}
-              publicToken={token}
-              initialMessage={motherMessage ?? ""}
-              initialFrom={motherMessageFrom ?? ""}
-              initialEnabled={motherMessageEnabled}
-            />
-          </div>
+          {/* Dedicatoria de la madre — aparece en la entrega (editable por el
+              estudio o por la mamá vía link) */}
+          <MotherDedicationCard
+            galleryId={gallery.id}
+            publicToken={token}
+            initialMessage={motherMessage ?? ""}
+            initialFrom={motherMessageFrom ?? ""}
+            initialEnabled={motherMessageEnabled}
+          />
         </>
       )}
     </div>
