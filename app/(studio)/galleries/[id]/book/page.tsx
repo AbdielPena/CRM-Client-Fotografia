@@ -55,6 +55,18 @@ export default async function BookDesignerPage({ params }: { params: { id: strin
     .limit(1)
   const publicToken = (tokens ?? [])[0]?.token ?? null
 
+  // Portada (imagen + logo del estudio) para la vista previa del editor.
+  const coverImg =
+    ((gallery as unknown as { book_cover_image?: string | null }).book_cover_image ?? null) ||
+    pool[0]?.thumbUrl ||
+    null
+  const { data: studioRow } = await supabase
+    .from("studios")
+    .select("logo_url")
+    .eq("id", session.studioId)
+    .maybeSingle()
+  const logoUrl = (studioRow as { logo_url: string | null } | null)?.logo_url ?? null
+
   return (
     <BookDesigner
       galleryId={galleryId}
@@ -62,6 +74,8 @@ export default async function BookDesignerPage({ params }: { params: { id: strin
       initialPages={initialPages}
       initialSettings={bookSettings}
       publicToken={publicToken}
+      coverImg={coverImg}
+      logoUrl={logoUrl}
     />
   )
 }

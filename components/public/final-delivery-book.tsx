@@ -9,6 +9,8 @@ import {
   layoutItemStyle,
   type BookPageLayout,
 } from "@/lib/book/layouts"
+import { COVER_FONTS_HREF } from "@/lib/book/cover"
+import { BookCoverView } from "@/components/galleries/book-cover-view"
 
 // StPageFlip es DOM-pesado y solo cliente. Se carga con import() dentro de un
 // efecto (NO next/dynamic) para poder pasarle el `ref` REAL al componente
@@ -237,12 +239,7 @@ const PXBOOK_CSS = `
     radial-gradient(120% 95% at 50% 32%, rgba(0,0,0,.06) 0%, rgba(0,0,0,.20) 55%, rgba(0,0,0,.52) 100%),
     linear-gradient(180deg, rgba(16,11,8,.10), rgba(16,11,8,.50));
 }
-/* marco de filigrana doble */
-.pxbook-cover::before{
-  content:""; position:absolute; inset:14px; pointer-events:none; z-index:3;
-  border:1px solid rgba(203,171,116,.55); border-radius:2px;
-  box-shadow:inset 0 0 0 1px rgba(255,243,212,.10), inset 0 0 26px rgba(122,90,34,.30);
-}
+/* (El marco de la portada lo dibuja BookCoverView según el modelo/margen.) */
 .pxbook-cover .pxbook-frame{
   position:absolute; inset:22px; z-index:3; pointer-events:none;
   border:1px solid rgba(231,200,132,.30);
@@ -658,10 +655,7 @@ export function FinalDeliveryBook({
     >
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Pinyon+Script&family=EB+Garamond:ital@0;1&display=swap"
-      />
+      <link rel="stylesheet" href={COVER_FONTS_HREF} />
       <style dangerouslySetInnerHTML={{ __html: PXBOOK_CSS }} />
 
       {/* CAPAS DE ESCENARIO — hermanas del libro, detrás (z-index 0/1) */}
@@ -741,40 +735,16 @@ export function FinalDeliveryBook({
             {[
               /* PORTADA (tapa dura) */
               <div key="cover" data-density="hard" className="pxbook-cover" style={coverStyle(tpl, accent, dims.w, dims.h)}>
-                {coverImg && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={coverImg}
-                    alt=""
-                    aria-hidden
-                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
-                  />
-                )}
-                <div className="pxbook-scrim" />
-                <div className="pxbook-foil" aria-hidden />
-                <div className="pxbook-frame" aria-hidden />
-                <div style={{ position: "relative", textAlign: "center", padding: 28, color: "#fff", zIndex: 4 }}>
-                  {showLogo && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={studio.logoUrl!} alt={studio.name} style={{ height: 38, objectFit: "contain", margin: "0 auto 6px", filter: "brightness(0) invert(1) drop-shadow(0 0 8px rgba(0,0,0,.4))", opacity: 0.92 }} />
-                  )}
-                  {showLogo && <div className="pxbook-crest" aria-hidden />}
-                  <p className="pxbook-eyebrow" style={{ margin: "16px 0 14px", opacity: 0.85 }}>
-                    {subtitle || "Álbum de entrega"}
-                  </p>
-                  {tplId === "luxury_xv" && quince && (
-                    <p className="pxbook-script" style={{ margin: "0 0 2px" }}>Su quinceañera</p>
-                  )}
-                  <h1 className="pxbook-title" style={{ margin: 0 }}>
-                    {quince || title}
-                  </h1>
-                  {eventDate && (
-                    <p className="pxbook-date" style={{ marginTop: 16, opacity: 0.9 }}>
-                      {eventDate}
-                    </p>
-                  )}
-                  <div className="pxbook-accentline" />
-                </div>
+                <BookCoverView
+                  coverRaw={(settings as Record<string, unknown>).cover}
+                  coverImg={coverImg}
+                  name={quince || title}
+                  subtitle={subtitle || "Álbum de entrega"}
+                  eventDate={eventDate}
+                  logoUrl={studio.logoUrl ?? null}
+                  showLogo={showLogo}
+                  accent={accent}
+                />
               </div>,
 
               /* DEDICATORIA / AGRADECIMIENTO (página tras la portada) — solo si existe.

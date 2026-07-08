@@ -34,6 +34,36 @@ export const galleryBookConfigSchema = z.object({
         )
         .max(400)
         .optional(),
+      // Fase 2: portada premium (modelo + tipografía + estilo del nombre + ajustes).
+      cover: z
+        .object({
+          model: z
+            .enum([
+              "editorial", "fine_art", "minimal", "royal", "princess",
+              "elegant", "modern", "classic", "floral", "fashion",
+            ])
+            .optional(),
+          font: z
+            .enum([
+              "cormorant", "playfair", "bodoni", "garamond", "italiana",
+              "tenor", "montserrat", "josefin", "pinyon", "greatvibes",
+            ])
+            .optional(),
+          nameStyle: z
+            .enum([
+              "gold", "foil", "white", "engraved", "embossed",
+              "shadow", "spaced", "editorial", "script",
+            ])
+            .optional(),
+          textPosition: z.enum(["top", "center", "bottom"]).optional(),
+          textScale: z.number().min(0.5).max(2).optional(),
+          letterSpacing: z.number().min(0).max(0.6).optional(),
+          margin: z.number().min(0).max(30).optional(),
+          overlay: z.number().min(0).max(1).optional(),
+          shadow: z.boolean().optional(),
+          phrase: z.string().max(200).optional(),
+        })
+        .optional(),
     })
     .partial()
     .optional(),
