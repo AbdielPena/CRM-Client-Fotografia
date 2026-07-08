@@ -121,20 +121,28 @@ export default async function GalleryDetailPage({
     }
   }
 
-  // Public share token (si existe alguno activo)
+  // Public share token (si existe alguno activo). PREFERIMOS el token de galería
+  // COMPLETA: el token de solo-selección (view_mode='selection', para el flujo de
+  // favoritos) NO debe ser el link principal del detalle aunque sea el más
+  // reciente — si lo fuera, "Ver pública" y el panel de ENTREGA mostrarían la
+  // selección sin editar en vez de las fotos finales. Traemos varios y elegimos.
   const supabase = createSupabaseServerClient()
-  const { data: tokens } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: tokens } = await (supabase as any)
     .from("gallery_share_tokens")
-    .select("token, expires_at, view_count")
+    .select("token, expires_at, view_count, view_mode")
     .eq("gallery_id", galleryId)
     .is("revoked_at", null)
     .order("created_at", { ascending: false })
-    .limit(1)
-  const activeToken = (tokens ?? [])[0] as {
+    .limit(20)
+  const tokenList = (tokens ?? []) as Array<{
     token: string
     expires_at: string | null
     view_count: number
-  } | undefined
+    view_mode: string | null
+  }>
+  const activeToken =
+    tokenList.find((t) => t.view_mode !== "selection") ?? tokenList[0]
 
   // Link de la carpeta de Google Drive (respaldo de entrega) para compartir.
   // gallery_drive_backups no está en los tipos generados → cast a any.
