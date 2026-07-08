@@ -706,17 +706,21 @@ export function PublicGalleryView({
   }, [deliveryAssets])
   const hasTracks = deliveryAssets.length > 0
   const hasSelection = selectionAssets.length > 0
+  // "Entregada" = ya hay fotos de entrega (con track) O la galería fue marcada
+  // lista. Es la MISMA definición que usa el resto del sistema (badge/lista).
+  // No se exige `delivery_ready_at`: si el estudio ya subió las fotos editadas,
+  // el cliente debe poder verlas por el link (antes se quedaba en la selección).
+  const isDelivered = hasTracks || deliveryReady
   // En modo "solo entrega" NO se muestra el toggle ni nada de selección.
-  const showBothSections = !deliveryOnly && hasSelection && hasTracks && deliveryReady
-  // Default SIEMPRE en "selección": aunque la entrega esté lista, el cliente
-  // debe poder seguir viendo todas sus fotos y re-seleccionar. El toggle da
-  // acceso a la entrega final cuando existe.
+  const showBothSections = !deliveryOnly && hasSelection && isDelivered
+  // Default: si ya hay entrega, se muestra la ENTREGA (las fotos editadas que el
+  // cliente espera); el toggle deja volver a la selección para re-seleccionar.
   const [activeSection, setActiveSection] = useState<"selection" | "delivery">(
-    "selection",
+    isDelivered ? "delivery" : "selection",
   )
   const isShowingDelivery = deliveryOnly
     ? hasTracks
-    : activeSection === "delivery" && hasTracks && deliveryReady
+    : activeSection === "delivery" && isDelivered
   const visibleAssets = isShowingDelivery
     ? deliveryAssets.length > 0
       ? deliveryAssets
