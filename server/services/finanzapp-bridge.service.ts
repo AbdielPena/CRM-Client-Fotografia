@@ -344,6 +344,77 @@ export async function cancelCollaboratorPayable(
   return { ok: true }
 }
 
+// ─── Pagos ADICIONALES a colaboradores (bono/ajuste/reembolso/…) ──────────────
+// No ligados a un proyecto. Mismo modelo payable→gasto, ref propia.
+const collabExtraRef = (paymentId: string) => `crm-collab-extra:${paymentId}`
+
+/** Crea/actualiza el payable pendiente de un pago adicional al colaborador. */
+export async function recordCollaboratorExtraPayable(
+  studioId: string,
+  input: {
+    paymentId: string
+    acreedor: string
+    monto: number
+    dueDate?: string | null
+    notas?: string | null
+  },
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_record_payable", {
+    p_workspace_id: workspaceId,
+    p_acreedor: input.acreedor || "Colaborador",
+    p_monto: input.monto,
+    p_fecha_emision: new Date().toISOString().slice(0, 10),
+    p_fecha_venc: input.dueDate ? input.dueDate.slice(0, 10) : null,
+    p_external_reference: collabExtraRef(input.paymentId),
+    p_notas: input.notas ?? "Pago adicional a colaborador (CRM)",
+  })
+  if (error) throwServiceError("FINZ_RECORD_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
+/** Salda el payable del pago adicional: 'pagada' + gasto real. */
+export async function settleCollaboratorExtraPayable(
+  studioId: string,
+  input: {
+    paymentId: string
+    accountId?: string | null
+    paidAt?: string
+    descripcion?: string | null
+  },
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_settle_payable", {
+    p_workspace_id: workspaceId,
+    p_external_reference: collabExtraRef(input.paymentId),
+    p_cuenta_id: input.accountId ?? null,
+    p_fecha_pago: (input.paidAt ?? new Date().toISOString()).slice(0, 10),
+    p_descripcion: input.descripcion ?? null,
+  })
+  if (error) throwServiceError("FINZ_SETTLE_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
+/** Cancela el payable del pago adicional (+ anula el gasto si existía). */
+export async function cancelCollaboratorExtraPayable(
+  studioId: string,
+  paymentId: string,
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const { error } = await sb.rpc("finz_cancel_payable", {
+    p_workspace_id: workspaceId,
+    p_external_reference: collabExtraRef(paymentId),
+  })
+  if (error) throwServiceError("FINZ_CANCEL_PAYABLE_FAILED", error, { studioId })
+  return { ok: true }
+}
+
 // ─── Vestido de la sesión (gasto en FinanzApp, como los colaboradores) ────────
 const dressRef = (projectId: string) => `crm-dress:${projectId}`
 

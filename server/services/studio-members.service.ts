@@ -5,10 +5,25 @@ import { randomBytes } from "crypto"
 import { untypedServer, untypedService } from "@/server/supabase/untyped"
 import { throwServiceError } from "@/lib/utils/api-error"
 import { logActivity } from "./activity.service"
+import { enqueueEmail } from "./email.service"
+import { resolveTemplate, type TemplateSlug } from "./email-template.service"
 
 /**
  * Service de members del studio + invitations.
  */
+
+function appBaseUrl(): string {
+  return (process.env["NEXT_PUBLIC_APP_URL"] ?? "https://my.abbypixel.com").replace(/\/+$/, "")
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
 
 export type StudioRole = "owner" | "admin" | "staff" | "finance" | "viewer"
 
@@ -437,4 +452,163 @@ export async function acceptInvitation(
   })
 
   return { ok: true, studioId: invitation.studio_id }
+}
+
+// ============================================================================
+// Creación directa de usuario del sistema (email + contraseña)
+// ----------------------------------------------------------------------------
+// El estudio crea la cuenta del compañero con email + contraseña. Se crea la
+// cuenta en Supabase Auth (service-role) Y la membresía del estudio de una vez,
+// de modo que al iniciar sesión el usuario cae directo al CRM (nunca a /setup,
+// que crearía un estudio nuevo). Si el email ya tiene cuenta, se reutiliza y
+// solo se agrega la membresía (no se toca su contraseña).
+// ============================================================================
+
+/** Busca el id de un usuario Auth por email (auth.users no es embebible). */
+async function findAuthUserIdByEmail(
+  admin: ReturnType<typeof untypedService>,
+  email: string,
+): Promise<string | null> {
+  const target = email.toLowerCase()
+  const perPage = 1000
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage })
+    if (error) break
+    const users = (data?.users ?? []) as Array<{ id: string; email?: string | null }>
+    const hit = users.find((u) => (u.email ?? "").toLowerCase() === target)
+    if (hit) return hit.id
+    if (users.length < perPage) break
+  }
+  return null
+}
+
+export async function createInternalUser(
+  studioId: string,
+  actorId: string,
+  input: { name?: string | null; email: string; password: string; role: StudioRole },
+): Promise<{ ok: boolean; userId: string; createdAccount: boolean; alreadyMember?: boolean }> {
+  const email = input.email.trim().toLowerCase()
+  if (!email.includes("@")) throw new Error("Correo inválido")
+  if (input.role === "owner") throw new Error("No se puede asignar el rol de propietario")
+
+  const admin = untypedService()
+
+  // 1. Reutilizar la cuenta Auth si el email ya existe; si no, crearla.
+  let userId = await findAuthUserIdByEmail(admin, email)
+  let createdAccount = false
+  if (!userId) {
+    if (!input.password || input.password.length < 8) {
+      throw new Error("La contraseña debe tener al menos 8 caracteres")
+    }
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password: input.password,
+      email_confirm: true,
+      user_metadata: { full_name: input.name?.trim() || null },
+    })
+    if (error) throw new Error(error.message ?? "No se pudo crear la cuenta")
+    userId = (data?.user?.id as string | undefined) ?? null
+    createdAccount = true
+  }
+  if (!userId) throw new Error("No se pudo resolver el usuario")
+
+  // 2. ¿Ya es miembro de ESTE estudio?
+  const { data: existingMember } = await admin
+    .from("studio_members")
+    .select("user_id")
+    .eq("studio_id", studioId)
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (existingMember) {
+    return { ok: false, userId, createdAccount, alreadyMember: true }
+  }
+
+  // 3. Membresía en el estudio EXISTENTE (service-role → RLS bypass).
+  const { error: insErr } = await admin.from("studio_members").insert({
+    studio_id: studioId,
+    user_id: userId,
+    role: input.role,
+    is_active: true,
+    display_name: input.name?.trim() || null,
+    joined_at: new Date().toISOString(),
+  })
+  if (insErr) throwServiceError("MEMBER_CREATE_FAILED", insErr)
+
+  await logActivity({
+    studioId,
+    actorId,
+    entityType: "studio_member",
+    entityId: userId,
+    action: "studio_member.created",
+    metadata: { email, role: input.role, new_account: createdAccount },
+  })
+
+  // 4. Correo de bienvenida (best-effort; no bloquea la creación).
+  try {
+    await sendTeamWelcomeEmail(studioId, {
+      email,
+      name: input.name ?? null,
+      createdAccount,
+    })
+  } catch (e) {
+    console.error("[members] correo de bienvenida falló", e)
+  }
+
+  return { ok: true, userId, createdAccount }
+}
+
+async function sendTeamWelcomeEmail(
+  studioId: string,
+  opts: { email: string; name: string | null; createdAccount: boolean },
+): Promise<void> {
+  const sb = untypedService()
+  const { data: studioRow } = await sb
+    .from("studios")
+    .select("name, email")
+    .eq("id", studioId)
+    .maybeSingle()
+  const studio = studioRow as { name?: string; email?: string | null } | null
+  const studioName = studio?.name ?? "El estudio"
+  const loginUrl = `${appBaseUrl()}/login`
+  const firstName = (opts.name ?? "").trim() || opts.email
+
+  const accessLine = opts.createdAccount
+    ? `Tu cuenta ya está lista. Entra con tu correo <strong>${escapeHtml(
+        opts.email,
+      )}</strong> y la contraseña que te compartió el estudio.`
+    : `Ahora también tienes acceso al sistema de <strong>${escapeHtml(
+        studioName,
+      )}</strong> con tu cuenta de siempre (<strong>${escapeHtml(opts.email)}</strong>).`
+
+  const defaultHtml = `
+  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Equipo</p>
+  <h1>Ya tienes acceso a {{studio_name}}</h1>
+  <p>Hola <strong>{{first_name}}</strong>, ${accessLine}</p>
+  <p style="text-align:center;margin:28px 0 6px"><a class="btn" href="{{login_url}}">Entrar al sistema</a></p>
+  <p style="margin:8px 0 0;font-size:12.5px;color:#A1A1A6;text-align:center">Si no esperabas este acceso, puedes ignorar este correo.</p>`
+
+  const resolved = await resolveTemplate(
+    studioId,
+    "team_member_welcome" as TemplateSlug,
+    {
+      studio_name: escapeHtml(studioName),
+      first_name: escapeHtml(firstName),
+      login_url: loginUrl,
+    },
+    { subject: `Acceso al sistema de ${studioName}`, bodyHtml: defaultHtml },
+  )
+
+  await enqueueEmail({
+    studioId,
+    toEmail: opts.email,
+    toName: opts.name ?? undefined,
+    fromEmail: studio?.email ?? null,
+    fromName: resolved.fromName ?? studioName,
+    replyTo: resolved.replyTo ?? studio?.email ?? null,
+    subject: resolved.subject,
+    bodyHtml: resolved.bodyHtml,
+    templateSlug: "team_member_welcome",
+    relatedEntityType: "studio_member",
+    relatedEntityId: null,
+  })
 }

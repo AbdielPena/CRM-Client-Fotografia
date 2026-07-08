@@ -17,7 +17,18 @@ import {
   updateAssignment,
   removeAssignment,
 } from "@/server/services/collaborator.service"
-import { sendCollaboratorInvite } from "@/server/services/collaborator-invite.service"
+import {
+  sendCollaboratorInvite,
+  sendCollaboratorPortalInvite,
+} from "@/server/services/collaborator-invite.service"
+import {
+  createCollaboratorPayment,
+  markCollaboratorPaymentPaid,
+  cancelCollaboratorPayment,
+  listCollaboratorPaymentsForAdmin,
+  COLLAB_PAYMENT_CONCEPTS,
+  type CollabPaymentConcept,
+} from "@/server/services/collaborator-payments.service"
 import { syncProjectById } from "@/server/services/google-calendar.service"
 
 // Re-sincroniza el evento de Google Calendar del proyecto (best-effort, no
@@ -72,6 +83,78 @@ export async function updateCollaboratorAction(id: string, formData: FormData) {
 export async function deleteCollaboratorAction(id: string) {
   const session = await requireStudioAuth()
   await deleteCollaborator(session.studioId, id)
+  revalidatePath("/colaboradores")
+  return { ok: true as const }
+}
+
+/**
+ * Da acceso al PORTAL del colaborador: genera el token de activación, le envía
+ * el correo con el link (si tiene email) y devuelve el link para copiarlo.
+ */
+export async function startPortalSetupAction(collaboratorId: string) {
+  const session = await requireStudioAuth()
+  const res = await sendCollaboratorPortalInvite(session.studioId, collaboratorId)
+  revalidatePath("/colaboradores")
+  return {
+    ok: true as const,
+    link: res.link,
+    emailed: res.emailed,
+    noEmail: res.reason === "no_email",
+  }
+}
+
+// ── Pagos adicionales al colaborador (no ligados a proyecto) ──────────────────
+export async function loadCollaboratorPaymentsAction(collaboratorId: string) {
+  const session = await requireStudioAuth()
+  const payments = await listCollaboratorPaymentsForAdmin(session.studioId, collaboratorId)
+  return { ok: true as const, payments }
+}
+
+export async function createCollaboratorPaymentAction(
+  collaboratorId: string,
+  formData: FormData,
+) {
+  const session = await requireStudioAuth()
+  const conceptRaw = String(formData.get("concept") ?? "otro")
+  const concept = (
+    COLLAB_PAYMENT_CONCEPTS.includes(conceptRaw as CollabPaymentConcept)
+      ? conceptRaw
+      : "otro"
+  ) as CollabPaymentConcept
+  const amount = Number(formData.get("amount") ?? 0)
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Monto inválido")
+  const status = formData.get("status") === "paid" ? "paid" : "pending"
+
+  await createCollaboratorPayment(session.studioId, session.userId, collaboratorId, {
+    concept,
+    description: (formData.get("description") as string) || null,
+    amount,
+    status,
+    paymentMethod: (formData.get("paymentMethod") as string) || null,
+    paymentDate: (formData.get("paymentDate") as string) || null,
+    accountId: (formData.get("accountId") as string) || null,
+  })
+  revalidatePath("/colaboradores")
+  return { ok: true as const }
+}
+
+export async function markCollaboratorPaymentPaidAction(
+  paymentId: string,
+  formData?: FormData,
+) {
+  const session = await requireStudioAuth()
+  await markCollaboratorPaymentPaid(session.studioId, paymentId, {
+    accountId: (formData?.get("accountId") as string) || null,
+    paymentMethod: (formData?.get("paymentMethod") as string) || null,
+    paymentDate: (formData?.get("paymentDate") as string) || null,
+  })
+  revalidatePath("/colaboradores")
+  return { ok: true as const }
+}
+
+export async function cancelCollaboratorPaymentAction(paymentId: string) {
+  const session = await requireStudioAuth()
+  await cancelCollaboratorPayment(session.studioId, paymentId)
   revalidatePath("/colaboradores")
   return { ok: true as const }
 }

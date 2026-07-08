@@ -5,6 +5,7 @@ import {
   listCollaborators,
   getCollaboratorTotals,
 } from "@/server/services/collaborator.service"
+import { listFinanzAppAccounts } from "@/server/services/finanzapp-bridge.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import {
@@ -16,13 +17,15 @@ export const metadata: Metadata = { title: "Colaboradores" }
 
 export default async function ColaboradoresPage() {
   const session = await requireStudioAuth()
-  const [rows, totals, unread] = await Promise.all([
+  const [rows, totals, unread, financeAccounts] = await Promise.all([
     listCollaborators(session.studioId, { includeInactive: true }),
     getCollaboratorTotals(session.studioId).catch(
       (): Record<string, { assignments: number; pending: number; paid: number }> => ({}),
     ),
     countUnreadNotifications(session.studioId),
+    listFinanzAppAccounts(session.studioId).catch(() => []),
   ])
+  const accountOptions = financeAccounts.map((a) => ({ id: a.id, name: a.nombre }))
 
   const collaborators: CollaboratorUI[] = rows.map((c) => {
     const t = totals[c.id]
@@ -37,6 +40,7 @@ export default async function ColaboradoresPage() {
       baseRate: c.base_rate != null ? Number(c.base_rate) : null,
       notes: c.notes,
       status: c.status,
+      portalEnabled: c.portal_enabled ?? false,
       assignments: t?.assignments ?? 0,
       totalPending: t?.pending ?? 0,
       totalPaid: t?.paid ?? 0,
@@ -52,7 +56,7 @@ export default async function ColaboradoresPage() {
         unreadNotifications={unread}
       />
       <div className="p-6">
-        <CollaboratorManager collaborators={collaborators} />
+        <CollaboratorManager collaborators={collaborators} financeAccounts={accountOptions} />
       </div>
     </>
   )

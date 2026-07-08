@@ -14,6 +14,8 @@ const PUBLIC_PREFIXES = [
   '/vestidos/', // selección pública de vestidos del catálogo web (por token)
   '/colab/', // confirmación pública de colaborador (por token)
   '/api/colab/', // confirmar/rechazar invitación de colaborador (auth por token)
+  '/colab-portal', // portal del colaborador (login/activar/dashboard; auth propia sf_colab)
+  '/api/colab-portal', // endpoints del portal del colaborador
   '/portal', // portal cliente (matchea /portal y /portal/...)
   '/api/portal', // endpoints del portal (login, logout)
   '/contract-print', // página print del contrato (auth interna por path)

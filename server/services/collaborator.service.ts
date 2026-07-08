@@ -38,6 +38,7 @@ export type CollaboratorRow = {
   base_rate: number | null
   notes: string | null
   status: "active" | "inactive"
+  portal_enabled?: boolean
   created_at: string
   updated_at: string
 }

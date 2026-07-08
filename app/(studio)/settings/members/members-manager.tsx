@@ -6,7 +6,6 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
-  Copy,
   Trash2,
   RefreshCw,
   XCircle,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react"
 
 import {
-  inviteMemberAction,
+  createInternalUserAction,
   removeMemberAction,
   resendInvitationAction,
   revokeInvitationAction,
@@ -59,9 +58,6 @@ export function MembersManager({
   maxUsers: number | null
 }) {
   const [showInvite, setShowInvite] = useState(false)
-  const [newInvitationLink, setNewInvitationLink] = useState<string | null>(
-    null,
-  )
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState<{
     type: "ok" | "err"
@@ -70,13 +66,13 @@ export function MembersManager({
 
   const atLimit = maxUsers !== null && members.length >= maxUsers
 
-  async function handleInvite(formData: FormData) {
+  async function handleCreate(formData: FormData) {
     startTransition(async () => {
-      const res = await inviteMemberAction(formData)
-      if (res.ok && res.invitationLink) {
-        setNewInvitationLink(res.invitationLink)
+      const res = await createInternalUserAction(formData)
+      if (res.ok) {
         setShowInvite(false)
-        setFeedback({ type: "ok", msg: "Invitación creada" })
+        setFeedback({ type: "ok", msg: res.message ?? "Usuario creado" })
+        window.location.reload()
       } else {
         setFeedback({ type: "err", msg: res.message ?? "Error" })
       }
@@ -122,39 +118,8 @@ export function MembersManager({
     })
   }
 
-  function copyLink() {
-    if (!newInvitationLink) return
-    navigator.clipboard.writeText(newInvitationLink)
-    setFeedback({ type: "ok", msg: "Link copiado" })
-  }
-
   return (
     <>
-      {/* Modal: invitation link recién creada */}
-      {newInvitationLink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
-            <h3 className="text-base font-bold">Invitación creada</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Copia y comparte este link con la persona (también recibirá un
-              email cuando el sistema de mail esté integrado V2).
-            </p>
-            <div className="mt-4 flex items-center gap-2 rounded-lg bg-muted px-3 py-2">
-              <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs">
-                {newInvitationLink}
-              </code>
-              <Button onClick={copyLink} size="sm" variant="outline">
-                <Copy className="mr-1 size-3.5" />
-                Copiar
-              </Button>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <Button onClick={() => window.location.reload()}>Cerrar</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {feedback && (
         <div
           className={
@@ -203,7 +168,7 @@ export function MembersManager({
             ) : (
               <>
                 <UserPlus className="mr-1 size-3.5" />
-                Invitar
+                Crear usuario
               </>
             )}
           </Button>
@@ -211,19 +176,18 @@ export function MembersManager({
 
         {showInvite && (
           <form
-            action={handleInvite}
+            action={handleCreate}
             className="mb-4 space-y-3 rounded-xl border border-input bg-muted/30 p-4"
           >
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-xs font-medium">
-                  Email
+                  Nombre
                 </label>
                 <input
-                  type="email"
-                  name="email"
-                  required
-                  placeholder="staff@tuestudio.com"
+                  type="text"
+                  name="name"
+                  placeholder="Nombre del compañero"
                   className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>
@@ -241,25 +205,47 @@ export function MembersManager({
                   ))}
                 </select>
               </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium">
+                  Correo
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  autoComplete="off"
+                  placeholder="staff@tuestudio.com"
+                  className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium">
+                  Contraseña
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder="Mínimo 8 caracteres"
+                  className="block w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium">
-                Mensaje personal (opcional)
-              </label>
-              <textarea
-                name="message"
-                rows={2}
-                placeholder="¡Hola! Te invité para que me ayudes con la edición..."
-                className="block w-full resize-y rounded-xl border border-input bg-background px-3 py-2 text-sm"
-              />
-            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Se crea la cuenta y la persona puede entrar de inmediato en{" "}
+              <span className="font-medium">my.abbypixel.com</span> con su correo y
+              contraseña. Compártele la contraseña; podrá cambiarla luego. Si el correo ya
+              tiene cuenta, solo se agrega a tu estudio.
+            </p>
             <Button type="submit" disabled={isPending} size="sm">
               {isPending ? (
                 <Loader2 className="mr-1 size-3.5 animate-spin" />
               ) : (
-                <Mail className="mr-1 size-3.5" />
+                <UserPlus className="mr-1 size-3.5" />
               )}
-              Crear invitación
+              Crear usuario
             </Button>
           </form>
         )}

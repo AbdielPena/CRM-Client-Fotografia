@@ -11,11 +11,14 @@ import {
   Mail,
   Search,
   UserCog,
+  KeyRound,
+  Wallet,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
 import { formatCurrency } from "@/lib/utils/currency"
+import { CollaboratorPaymentsModal } from "./collaborator-payments-modal"
 import {
   COLLABORATOR_TYPES,
   collaboratorTypeLabel,
@@ -24,6 +27,7 @@ import {
   createCollaboratorAction,
   updateCollaboratorAction,
   deleteCollaboratorAction,
+  startPortalSetupAction,
 } from "@/server/actions/collaborator.actions"
 
 export type CollaboratorUI = {
@@ -40,6 +44,7 @@ export type CollaboratorUI = {
   assignments?: number
   totalPending?: number
   totalPaid?: number
+  portalEnabled?: boolean
 }
 
 const inputCls =
@@ -48,8 +53,10 @@ const labelCls = "mb-1 block text-xs font-medium text-foreground"
 
 export function CollaboratorManager({
   collaborators: initial,
+  financeAccounts = [],
 }: {
   collaborators: CollaboratorUI[]
+  financeAccounts?: { id: string; name: string }[]
 }) {
   const router = useRouter()
   const [collaborators, setCollaborators] = React.useState(initial)
@@ -57,6 +64,7 @@ export function CollaboratorManager({
   const [showInactive, setShowInactive] = React.useState(false)
   const [editing, setEditing] = React.useState<CollaboratorUI | null>(null)
   const [creating, setCreating] = React.useState(false)
+  const [payingFor, setPayingFor] = React.useState<CollaboratorUI | null>(null)
   const [pending, startTransition] = React.useTransition()
 
   React.useEffect(() => setCollaborators(initial), [initial])
@@ -82,6 +90,33 @@ export function CollaboratorManager({
       try {
         await deleteCollaboratorAction(c.id)
         toast.success("Colaborador eliminado")
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+
+  const handlePortalAccess = (c: CollaboratorUI) => {
+    const verb = c.portalEnabled ? "Reenviar acceso al portal de" : "Dar acceso al portal a"
+    if (!confirm(`${verb} ${c.name}? Recibirá un enlace para crear su contraseña.`)) return
+    startTransition(async () => {
+      try {
+        const res = await startPortalSetupAction(c.id)
+        try {
+          await navigator.clipboard.writeText(res.link)
+        } catch {
+          /* clipboard no disponible */
+        }
+        if (res.emailed) {
+          toast.success(`Enlace de acceso enviado a ${c.email}`, {
+            description: "También quedó copiado al portapapeles.",
+          })
+        } else {
+          toast.success("Enlace de acceso generado y copiado", {
+            description: "No tiene correo: pégalo y compártelo por WhatsApp.",
+          })
+        }
         router.refresh()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error")
@@ -167,6 +202,24 @@ export function CollaboratorManager({
                 </div>
                 <div className="flex flex-shrink-0 gap-1">
                   <button
+                    onClick={() => setPayingFor(c)}
+                    title="Pagos adicionales (bono, ajuste, reembolso…)"
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <Wallet className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handlePortalAccess(c)}
+                    disabled={pending}
+                    title={c.portalEnabled ? "Reenviar acceso al portal" : "Dar acceso al portal"}
+                    className={cn(
+                      "rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground",
+                      c.portalEnabled && "text-emerald-600 dark:text-emerald-400",
+                    )}
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                  </button>
+                  <button
                     onClick={() => setEditing(c)}
                     title="Editar"
                     className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -245,6 +298,16 @@ export function CollaboratorManager({
             setEditing(null)
             router.refresh()
           }}
+        />
+      )}
+
+      {payingFor && (
+        <CollaboratorPaymentsModal
+          collaboratorId={payingFor.id}
+          collaboratorName={payingFor.name}
+          financeAccounts={financeAccounts}
+          onClose={() => setPayingFor(null)}
+          onChanged={() => router.refresh()}
         />
       )}
     </div>

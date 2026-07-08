@@ -172,6 +172,69 @@ export async function sendCollaboratorInvite(
   return { ok: true }
 }
 
+/**
+ * Da acceso al PORTAL del colaborador: genera el token de activación y le envía
+ * el link por correo para que ponga su contraseña. Devuelve siempre el link
+ * (aunque no tenga correo) para que el estudio pueda copiarlo y compartirlo.
+ */
+export async function sendCollaboratorPortalInvite(
+  studioId: string,
+  collaboratorId: string,
+): Promise<{ ok: boolean; link: string; emailed: boolean; reason?: "no_email" }> {
+  const { startPortalSetup } = await import(
+    "@/server/services/collaborator-portal.service"
+  )
+  const { token, email, name } = await startPortalSetup(studioId, collaboratorId)
+  const link = `${appUrl()}/colab-portal/activar/${token}`
+
+  const { data: studioRow } = await untypedService()
+    .from("studios")
+    .select("name, email")
+    .eq("id", studioId)
+    .maybeSingle()
+  const studio = studioRow as any
+  const studioName = studio?.name ?? "El estudio"
+
+  if (!email) return { ok: true, link, emailed: false, reason: "no_email" }
+
+  const defaultHtml = `
+  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Portal del colaborador</p>
+  <h1>Activa tu portal</h1>
+  <p>Hola <strong>{{collab_name}}</strong>, <strong>{{studio_name}}</strong> te dio acceso a tu portal de colaborador. Ahí verás tus <strong>trabajos</strong>, tu <strong>agenda</strong> y tus <strong>pagos</strong> cuando quieras.</p>
+  <p style="text-align:center;margin:28px 0 6px"><a class="btn" href="{{setup_url}}">Activar mi portal</a></p>
+  <p style="margin:8px 0 0;font-size:12.5px;color:#A1A1A6;text-align:center">El enlace vence en 7 días. Si no lo solicitaste, ignora este correo.</p>`
+
+  const resolved = await resolveTemplate(
+    studioId,
+    "collaborator_portal_invite" as TemplateSlug,
+    {
+      collab_name: esc(name ?? ""),
+      studio_name: esc(studioName),
+      setup_url: link,
+    },
+    {
+      subject: `Tu portal de colaborador — ${studioName}`,
+      bodyHtml: defaultHtml,
+    },
+  )
+
+  await enqueueEmail({
+    studioId,
+    toEmail: email,
+    toName: name ?? undefined,
+    fromEmail: studio?.email ?? null,
+    fromName: resolved.fromName ?? studioName,
+    replyTo: resolved.replyTo ?? studio?.email ?? null,
+    subject: resolved.subject,
+    bodyHtml: resolved.bodyHtml,
+    templateSlug: "collaborator_portal_invite",
+    relatedEntityType: "collaborator",
+    relatedEntityId: collaboratorId,
+  })
+
+  return { ok: true, link, emailed: true }
+}
+
 export type PublicInvite = {
   collaboratorName: string
   role: string

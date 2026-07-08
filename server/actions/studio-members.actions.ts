@@ -6,6 +6,7 @@ import { redirect } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import {
   acceptInvitation,
+  createInternalUser,
   inviteToStudio,
   removeMember,
   resendInvitation,
@@ -55,6 +56,53 @@ export async function inviteMemberAction(formData: FormData): Promise<{
       userMsg = "Ya hay una invitación pendiente para ese email"
     if (msg === "INVALID_EMAIL") userMsg = "Email inválido"
     return { ok: false, message: userMsg }
+  }
+}
+
+/**
+ * Crea un usuario del sistema con email + contraseña y lo agrega al estudio
+ * (accede al CRM de una vez). Si el email ya tiene cuenta, la reutiliza.
+ */
+export async function createInternalUserAction(formData: FormData): Promise<{
+  ok: boolean
+  message?: string
+}> {
+  let session
+  try {
+    session = await requireStudioAuth()
+  } catch {
+    return { ok: false, message: "Sesión expirada" }
+  }
+  if (session.role !== "owner" && session.role !== "admin") {
+    return { ok: false, message: "Solo el dueño o un admin puede crear usuarios" }
+  }
+
+  const name = (String(formData.get("name") ?? "").trim() || null) as string | null
+  const email = String(formData.get("email") ?? "").trim()
+  const password = String(formData.get("password") ?? "")
+  const role = String(formData.get("role") ?? "staff") as StudioRole
+
+  if (!email) return { ok: false, message: "Correo requerido" }
+
+  try {
+    const res = await createInternalUser(session.studioId, session.userId, {
+      name,
+      email,
+      password,
+      role,
+    })
+    revalidatePath("/settings/members")
+    if (!res.ok && res.alreadyMember) {
+      return { ok: false, message: "Esa persona ya es miembro del estudio" }
+    }
+    return {
+      ok: true,
+      message: res.createdAccount
+        ? "Usuario creado. Ya puede entrar con su correo y contraseña."
+        : "Usuario existente agregado a tu estudio.",
+    }
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : "Error" }
   }
 }
 
