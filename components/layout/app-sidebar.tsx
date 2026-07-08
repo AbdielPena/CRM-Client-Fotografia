@@ -95,23 +95,23 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    // El "quién": conseguir y gestionar clientes y sus trabajos.
+    // Conseguir y gestionar clientes y sus trabajos (adquisición → gestión).
     type: "group",
-    label: "Clientes",
+    label: "Clientes y sesiones",
     items: [
       { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
       { type: "link", href: "/leads", label: "Leads", icon: UserPlus },
-      { type: "link", href: "/armario", label: "Vestidos", icon: Shirt },
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
-      { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
       { type: "link", href: "/projects", label: "Sesiones", icon: FolderOpen },
       { type: "link", href: "/colaboradores", label: "Colaboradores", icon: UserCog },
+      { type: "link", href: "/armario", label: "Vestidos", icon: Shirt },
+      { type: "link", href: "/onboarding", label: "Onboarding", icon: Rocket },
     ],
   },
   {
-    // Cockpit diario, transversal a todos los clientes.
+    // Cockpit diario.
     type: "group",
-    label: "Operaciones",
+    label: "Agenda",
     items: [
       { type: "link", href: "/calendar", label: "Calendario", icon: CalendarDays },
       { type: "link", href: "/tasks", label: "Tareas", icon: CheckSquare },
@@ -132,7 +132,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Negocio",
     items: [
       // /finance del CRM: lista de pagos + cuentas de FinanzApp + cuenta default.
-      // Botón "Abrir FinanzApp" arriba para ir a la app completa.
       { type: "link", href: "/finance", label: "Finanzas", icon: Wallet },
       { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
       { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
@@ -140,22 +139,15 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    // Todos los canales de mensajería, internos y externos.
+    // Mensajería (interna y externa) + lo que el sistema hace solo.
     type: "group",
-    label: "Comunicación",
+    label: "Comunicación y automatización",
     items: [
       { type: "link", href: "/mail/inbox", label: "Correo", icon: Mail },
       { type: "link", href: "/notificaciones", label: "Correos enviados", icon: MailCheck },
       { type: "link", href: "/settings/whatsapp", label: "WhatsApp", icon: MessageCircle },
       { type: "link", href: "/chat", label: "Chat interno", icon: MessageCircle },
       { type: "link", href: "/engagement", label: "Engagement Hub", icon: HeartHandshake },
-    ],
-  },
-  {
-    // Trabajo que el sistema hace solo.
-    type: "group",
-    label: "Automatización",
-    items: [
       { type: "link", href: "/ai-assistant", label: "AI Assistant", icon: Bot },
       { type: "link", href: "/automations", label: "Automatizaciones", icon: Sparkles },
     ],
@@ -170,7 +162,7 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    // Cómo opera el estudio: catálogo, plantillas, marca y fiscal.
+    // Cómo opera el estudio: catálogo, plantillas, marca, fiscal e integraciones.
     type: "group",
     label: "Configuración",
     items: [
@@ -182,22 +174,10 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/settings/project-templates", label: "Plantillas de proyecto", icon: Layers },
       { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },
       { type: "link", href: "/settings/branding", label: "Marca y personalización", icon: Layers },
-      { type: "link", href: "/settings/domain", label: "Dominio", icon: Globe },
       { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },
       { type: "link", href: "/settings/fiscal", label: "Fiscal RD (NCF/ITBIS)", icon: Landmark },
-    ],
-  },
-  {
-    // Conexiones con sistemas externos.
-    type: "group",
-    label: "Integraciones",
-    items: [
-      {
-        type: "link",
-        href: "/settings/integrations/google",
-        label: "Google Calendar",
-        icon: CalendarClock,
-      },
+      { type: "link", href: "/settings/domain", label: "Dominio", icon: Globe },
+      { type: "link", href: "/settings/integrations/google", label: "Google Calendar", icon: CalendarClock },
       { type: "link", href: "/settings/webhooks", label: "Webhooks salientes", icon: Webhook },
       { type: "link", href: "/settings/api", label: "API y tokens", icon: Key },
     ],
