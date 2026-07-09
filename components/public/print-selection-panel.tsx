@@ -6,6 +6,7 @@ import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
 import type { GalleryPrintState } from "@/server/services/print-selection.service"
+import { PrintInstructions } from "@/components/public/print-instructions"
 
 interface AssetLite {
   id: string
@@ -125,11 +126,7 @@ export function PrintSelectionPanel({
             {hasSelectable ? "Seleccionar para impresión" : "Tus impresiones"}
           </h2>
         </div>
-        <p className="mb-5 text-sm text-zinc-500 dark:text-zinc-400">
-          {hasSelectable
-            ? "Elige tus fotos para cada entregable incluido en tu plan. Toca una categoría y luego las fotos."
-            : "Tu plan incluye las impresiones que se detallan abajo."}
-        </p>
+        <PrintInstructions categories={state.categories} />
 
         {state.submitted && (
           <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
