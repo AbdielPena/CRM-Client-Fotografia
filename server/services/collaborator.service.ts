@@ -413,14 +413,24 @@ export async function getProjectsMissingCollaborators(
   try {
     const { data: projRows } = await sb
       .from("projects")
-      .select("id, package_id, requirements_waived")
+      .select("id, package_id, requirements_waived, event_date")
       .eq("studio_id", studioId)
       .in("id", projectIds)
+    // Sesiones que YA PASARON (fecha anterior a hoy en RD) no piden colaboradores.
+    const todayRD = new Date().toLocaleDateString("en-CA", {
+      timeZone: "America/Santo_Domingo",
+    })
     const projs = ((projRows ?? []) as Array<{
       id: string
       package_id: string | null
       requirements_waived: boolean | null
-    }>).filter((p) => p.package_id && !p.requirements_waived)
+      event_date: string | null
+    }>).filter(
+      (p) =>
+        p.package_id &&
+        !p.requirements_waived &&
+        !(p.event_date && p.event_date < todayRD),
+    )
     const pkgIds = [...new Set(projs.map((p) => p.package_id as string))]
     if (pkgIds.length === 0) return new Set()
 

@@ -202,6 +202,10 @@ export default async function ProjectsPage({
 
   // Badge "falta colaborador" (solo en grid): proyectos cuyo plan requiere
   // colaboradores aún no asignados.
+  // Hoy en RD, para ocultar pendientes de sesiones que YA PASARON.
+  const todayRD = new Date().toLocaleDateString("en-CA", {
+    timeZone: "America/Santo_Domingo",
+  })
   const missingCollab =
     view === "grid"
       ? await getProjectsMissingCollaborators(
@@ -509,9 +513,13 @@ export default async function ProjectsPage({
                       // Pendientes: la HORA en toda sesión; COLABORADOR y VESTIDO
                       // solo en quinceañeras.
                       const isQuince = /quince|xv/i.test(project.event_type ?? "")
-                      const noTime = !project.event_time
-                      const noCollab = missingCollab.has(project.id)
+                      // Sesiones que YA PASARON no piden hora / vestido / colaborador.
+                      const isPast =
+                        !!project.event_date && project.event_date < todayRD
+                      const noTime = !isPast && !project.event_time
+                      const noCollab = !isPast && missingCollab.has(project.id)
                       const noDress =
+                        !isPast &&
                         isQuince &&
                         !(
                           project.dress_name ||

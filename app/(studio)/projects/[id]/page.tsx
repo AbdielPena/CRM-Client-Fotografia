@@ -253,8 +253,15 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   // Sesión "antigua": no exigir hora/colaborador/vestido (marca del usuario en
   // sesiones que pasaron antes de agregar esas funciones al sistema).
   const requirementsWaived = !!(project.requirements_waived as boolean | null)
+  // También auto-eximir si la sesión YA PASÓ (fecha anterior a hoy en RD): una
+  // sesión que ya ocurrió no necesita hora / colaborador / vestido.
+  const isPastSession =
+    !!(project.event_date as string | null) &&
+    (project.event_date as string) <
+      new Date().toLocaleDateString("en-CA", { timeZone: "America/Santo_Domingo" })
+  const suppressRequirements = requirementsWaived || isPastSession
   let requirementStatuses: RequirementStatus[] = []
-  if (pkgId && !requirementsWaived) {
+  if (pkgId && !suppressRequirements) {
     const { data: pkgReq } = await supabase
       .from("packages")
       .select("collaborator_requirements")
@@ -316,10 +323,10 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
 
   // Badges de "pendiente": la HORA en toda sesión (parte importante); los
   // COLABORADORES y el VESTIDO solo en sesiones de quinceañera.
-  const missingTime = !requirementsWaived && !eventTime
+  const missingTime = !suppressRequirements && !eventTime
   const hasDress = !!((project.dress_name as string | null) || dressCost > 0)
-  const missingCollaborators = !requirementsWaived && isQuince && projectCollaborators.length === 0
-  const missingDress = !requirementsWaived && includesDress && !hasDress
+  const missingCollaborators = !suppressRequirements && isQuince && projectCollaborators.length === 0
+  const missingDress = !suppressRequirements && includesDress && !hasDress
   // Datos de la quinceañera: el NOMBRE se usa como nombre por defecto al crear
   // sus galerías; el CUMPLEAÑOS define la entrega pautada (2 días antes) y el
   // badge de prioridad en Galerías.
