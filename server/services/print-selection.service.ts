@@ -87,12 +87,22 @@ async function loadGallery(galleryId: string): Promise<GalleryRow | null> {
 export async function resolveGalleryEntitlements(
   gallery: GalleryRow,
 ): Promise<PrintEntitlements> {
-  if (!gallery.package_id) return EMPTY_ENTITLEMENTS
   const sb = untypedService()
+  // El plan puede estar en la galería o (si no lo heredó) en el proyecto.
+  let packageId = gallery.package_id
+  if (!packageId && gallery.project_id) {
+    const { data: proj } = await sb
+      .from("projects")
+      .select("package_id")
+      .eq("id", gallery.project_id)
+      .maybeSingle()
+    packageId = (proj as { package_id?: string | null } | null)?.package_id ?? null
+  }
+  if (!packageId) return EMPTY_ENTITLEMENTS
   const { data } = await sb
     .from("packages")
     .select("print_entitlements")
-    .eq("id", gallery.package_id)
+    .eq("id", packageId)
     .maybeSingle()
   return normalizeEntitlements(
     (data as { print_entitlements?: unknown } | null)?.print_entitlements,
@@ -189,10 +199,13 @@ export async function getGalleryPrintState(
   }
 
   return {
+    // Disponible si el plan incluye impresos Y (ya se habilitó explícitamente al
+    // publicar la entrega O ya hay fotos de entrega). Así aparece en toda galería
+    // entregada de un plan con impresos, sin depender del flag de publicación.
     enabled:
-      (gallery.print_selection_enabled ?? false) &&
       entitlements.enabled &&
-      hasPrintEntitlements(entitlements),
+      hasPrintEntitlements(entitlements) &&
+      ((gallery.print_selection_enabled ?? false) || deliveredCount > 0),
     packageId: gallery.package_id,
     submitted: !!gallery.print_submitted_at,
     submittedAt: gallery.print_submitted_at,

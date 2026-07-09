@@ -34,7 +34,7 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
   const sb = createSupabaseServiceClient()
   const { data: gRow } = await sb
     .from("galleries")
-    .select("id, studio_id, client_id, name, package_id")
+    .select("id, studio_id, client_id, name, package_id, project_id")
     .eq("id", galleryId)
     .maybeSingle()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,13 +59,23 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
   const studio = studioRow as any
   const studioName = studio?.name ?? "Tu fotógrafo"
 
-  // Resumen del plan (bloque dinámico → variable {{plan_summary}}).
+  // Resumen del plan (bloque dinámico → variable {{plan_summary}}). El plan puede
+  // estar en la galería o, si no lo heredó, en el proyecto.
   let planSummary = ""
-  if (g.package_id) {
+  let summaryPackageId = g.package_id as string | null
+  if (!summaryPackageId && g.project_id) {
+    const { data: proj } = await sb
+      .from("projects")
+      .select("package_id")
+      .eq("id", g.project_id)
+      .maybeSingle()
+    summaryPackageId = (proj as { package_id?: string | null } | null)?.package_id ?? null
+  }
+  if (summaryPackageId) {
     const { data: pkg } = await sb
       .from("packages")
       .select("print_entitlements")
-      .eq("id", g.package_id)
+      .eq("id", summaryPackageId)
       .maybeSingle()
     const e = normalizeEntitlements((pkg as { print_entitlements?: unknown } | null)?.print_entitlements)
     const parts: string[] = []

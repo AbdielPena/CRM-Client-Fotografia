@@ -61,7 +61,7 @@ export async function buildPrintZip(
   // Galería (verifica studio) + cliente + plan
   const { data: gRow } = await sb
     .from("galleries")
-    .select("id, studio_id, name, client_id, package_id")
+    .select("id, studio_id, name, client_id, package_id, project_id")
     .eq("id", galleryId)
     .maybeSingle()
   const gallery = gRow as {
@@ -70,6 +70,7 @@ export async function buildPrintZip(
     name: string
     client_id: string | null
     package_id: string | null
+    project_id: string | null
   } | null
   if (!gallery || gallery.studio_id !== studioId) return null
 
@@ -83,13 +84,23 @@ export async function buildPrintZip(
     clientName = (c as { name?: string } | null)?.name ?? clientName
   }
 
-  // Entregables del plan (tamaño de álbum + tamaños automáticos).
+  // Entregables del plan (tamaño de álbum + tamaños automáticos). El plan puede
+  // estar en la galería o, si no lo heredó, en el proyecto.
   let entitlements = EMPTY_ENTITLEMENTS
-  if (gallery.package_id) {
+  let packageId = gallery.package_id
+  if (!packageId && gallery.project_id) {
+    const { data: proj } = await sb
+      .from("projects")
+      .select("package_id")
+      .eq("id", gallery.project_id)
+      .maybeSingle()
+    packageId = (proj as { package_id?: string | null } | null)?.package_id ?? null
+  }
+  if (packageId) {
     const { data: pkg } = await sb
       .from("packages")
       .select("print_entitlements")
-      .eq("id", gallery.package_id)
+      .eq("id", packageId)
       .maybeSingle()
     entitlements = normalizeEntitlements(
       (pkg as { print_entitlements?: unknown } | null)?.print_entitlements,
