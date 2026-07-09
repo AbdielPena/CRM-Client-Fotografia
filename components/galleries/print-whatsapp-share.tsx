@@ -28,7 +28,7 @@ export function PrintWhatsAppShare({
   const [origin, setOrigin] = React.useState("")
   React.useEffect(() => setOrigin(window.location.origin), [])
 
-  const link = token && origin ? `${origin}/g/${token}` : null
+  const link = token && origin ? `${origin}/g/${token}?impresiones=1` : null
   const firstName = (clientName ?? "").trim().split(/\s+/)[0] || ""
   const waPhone = (clientPhone ?? "").replace(/\D/g, "").replace(/^(\d{10})$/, "1$1")
   const message = renderWaMessage(template || DEFAULT_PRINT_WA_MESSAGE, {

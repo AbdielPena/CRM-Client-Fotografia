@@ -12,6 +12,7 @@ import { getGalleryPrintState } from "@/server/services/print-selection.service"
 import { GalleryPasswordGate } from "@/components/public/gallery-password-gate"
 import { PublicGalleryView } from "@/components/public/public-gallery-view"
 import { PublicSelectionView } from "@/components/public/public-selection-view"
+import { PrintSelectionView } from "@/components/public/print-selection-view"
 import {
   FinalDeliveryBook,
   BookLauncher,
@@ -25,7 +26,14 @@ export const fetchCache = "force-no-store"
 
 type PageProps = {
   params: { token: string }
-  searchParams?: { entrega?: string; descarga?: string; libro?: string; book?: string }
+  searchParams?: {
+    entrega?: string
+    descarga?: string
+    libro?: string
+    book?: string
+    impresiones?: string
+    imprimir?: string
+  }
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -62,6 +70,11 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
   // Link de descarga (?entrega=1): muestra SOLO la entrega final, sin selección.
   const deliveryOnly =
     searchParams?.entrega === "1" || searchParams?.descarga === "1"
+
+  // Link enfocado de IMPRESIONES (?impresiones=1): el cliente entra directo a
+  // elegir marcos / álbum / fotos, sin bajar por toda la galería de entrega.
+  const printOnly =
+    searchParams?.impresiones === "1" || searchParams?.imprimir === "1"
 
   // ?libro=1 fuerza la vista del LIBRO (aunque el modo sea "both"): lo usa el
   // botón "Ver libro" del panel y sirve para compartir directo al álbum.
@@ -226,6 +239,29 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
   }
 
   const printState = await getGalleryPrintState(view.gallery.id)
+
+  // Vista ENFOCADA de impresiones: el link de WhatsApp entra directo aquí.
+  if (printOnly && printState?.enabled) {
+    const deliveryAssets = view.assets.filter(
+      (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
+    )
+    const printAssets = deliveryAssets.length > 0 ? deliveryAssets : view.assets
+    return (
+      <PrintSelectionView
+        token={params.token}
+        galleryName={view.gallery.name}
+        assets={printAssets.map((a) => ({ id: a.id, thumbUrl: a.thumbUrl }))}
+        printState={printState}
+        studio={{
+          name: studioInfo?.studios?.name ?? "PixelOS",
+          logoUrl: branding?.logo_url ?? studioInfo?.studios?.logo_url ?? null,
+          primaryColor: branding?.primary_color ?? null,
+          hideBranding: branding?.hide_studioflow_branding ?? false,
+          footerHtml: branding?.custom_footer_html ?? null,
+        }}
+      />
+    )
+  }
 
   return (
     <>

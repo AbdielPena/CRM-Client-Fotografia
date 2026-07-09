@@ -1086,6 +1086,25 @@ export function PublicGalleryView({
         </div>
       )}
 
+      {/* CTA: elegir impresiones incluidas (marcos / álbum / fotos) */}
+      {isShowingDelivery && !deliveryOnly && printState?.enabled && (
+        <div style={{ borderBottom: `1px solid ${ED.line}`, background: `${ED.gold}14` }}>
+          <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-between gap-3 px-6 py-3">
+            <p className="text-[13px]" style={{ color: ED.ink }}>
+              🖼️ Tu plan incluye <strong>impresiones</strong> — elige las fotos para tus
+              marcos, álbum e impresiones.
+            </p>
+            <a
+              href={`/g/${token}?impresiones=1`}
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-[12.5px] font-semibold text-white"
+              style={{ background: ED.gold }}
+            >
+              Elegir mis impresiones →
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Selección bloqueada por el fotógrafo */}
       {!isShowingDelivery && !deliveryOnly && gallery.selection_locked && (
         <div style={{ borderBottom: `1px solid ${ED.line}`, background: "#FBF3E6" }}>
