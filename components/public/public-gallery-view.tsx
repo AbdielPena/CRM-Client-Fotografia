@@ -129,6 +129,7 @@ function EditorialCover({
   label,
   ctaLabel,
   photoCount,
+  hideLogo,
 }: {
   gallery: Gallery
   cover: ReturnType<typeof resolveCoverConfig>
@@ -136,6 +137,7 @@ function EditorialCover({
   label: string
   ctaLabel: string
   photoCount: number
+  hideLogo?: boolean
 }) {
   const candidates = [
     cover.imageUrl || null,
@@ -182,9 +184,9 @@ function EditorialCover({
         </>
       )}
 
-      {/* Wordmark del estudio */}
+      {/* Wordmark del estudio (sin logo en la entrega final) */}
       <div className="absolute left-0 right-0 top-7 z-10 flex items-center justify-center">
-        {studio.logoUrl ? (
+        {!hideLogo && studio.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={studio.logoUrl}
@@ -911,6 +913,7 @@ export function PublicGalleryView({
         label={isShowingDelivery ? "Entrega final" : "Galería"}
         ctaLabel={isShowingDelivery ? "Ver y descargar" : "Ver fotos"}
         photoCount={visibleAssets.length}
+        hideLogo={isShowingDelivery}
       />
 
       {/* Barra fina superior: estudio + controles (sin selección en modo entrega) */}
@@ -920,7 +923,7 @@ export function PublicGalleryView({
       >
         <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-4 px-6 py-3.5">
           <div className="flex min-w-0 items-center gap-3">
-            {studio.logoUrl ? (
+            {!isShowingDelivery && studio.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={studio.logoUrl} alt={studio.name} className="h-6 w-auto" />
             ) : (
@@ -1518,7 +1521,7 @@ export function PublicGalleryView({
 
       <footer className="mx-auto max-w-[1240px] px-6 pb-24 pt-6 text-center">
         <div className="mx-auto mb-7 h-px w-14" style={{ background: ED.gold }} />
-        {studio.logoUrl ? (
+        {!isShowingDelivery && studio.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={studio.logoUrl} alt={studio.name} className="mx-auto mb-3 h-7 w-auto" />
         ) : (

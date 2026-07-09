@@ -44,10 +44,6 @@ export function PrintSelectionView({
       <header className="border-b border-black/5 bg-white/70 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-center gap-3">
-            {studio.logoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={studio.logoUrl} alt={studio.name} className="h-8 w-auto object-contain" />
-            )}
             <span className="text-sm font-medium text-black/60">{studio.name}</span>
           </div>
           <span
