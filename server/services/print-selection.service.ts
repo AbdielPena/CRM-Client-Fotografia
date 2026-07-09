@@ -99,7 +99,27 @@ export async function resolveGalleryEntitlements(
   )
 }
 
-/** Nº de fotos de ENTREGA FINAL (prefiere máxima calidad; si no hay, sociales). */
+/**
+ * ¿La galería es de ENTREGA aunque sus fotos no tengan track social/high_quality?
+ * (galerías donde toda la galería es la entrega, sin distinción de tracks).
+ */
+async function isDeliveredGallery(galleryId: string): Promise<boolean> {
+  const sb = untypedService()
+  const { data } = await sb
+    .from("galleries")
+    .select("gallery_type, delivery_ready_at")
+    .eq("id", galleryId)
+    .maybeSingle()
+  const g = data as { gallery_type?: string | null; delivery_ready_at?: string | null } | null
+  return g?.gallery_type === "final_delivery" || !!g?.delivery_ready_at
+}
+
+/**
+ * Nº de fotos de ENTREGA FINAL. Prefiere máxima calidad (high_quality), luego
+ * sociales. Si la galería no usa tracks pero ES de entrega, todas sus fotos
+ * completadas son la entrega (nunca la selección: eso solo aplica cuando NO hay
+ * fotos con track).
+ */
 async function countDeliveredAssets(galleryId: string): Promise<number> {
   const sb = untypedService()
   const base = () =>
@@ -111,7 +131,12 @@ async function countDeliveredAssets(galleryId: string): Promise<number> {
   const { count: hq } = await base().eq("delivery_track", "high_quality")
   if ((hq ?? 0) > 0) return hq ?? 0
   const { count: soc } = await base().eq("delivery_track", "social")
-  return soc ?? 0
+  if ((soc ?? 0) > 0) return soc ?? 0
+  if (await isDeliveredGallery(galleryId)) {
+    const { count: all } = await base()
+    return all ?? 0
+  }
+  return 0
 }
 
 export async function getGalleryPrintState(
@@ -348,16 +373,19 @@ export interface DeliveredAsset {
  */
 export async function listDeliveredAssets(galleryId: string): Promise<DeliveredAsset[]> {
   const sb = untypedService()
-  const pull = async (track: "high_quality" | "social"): Promise<DeliveredAsset[]> => {
+  const pull = async (
+    track: "high_quality" | "social" | null,
+  ): Promise<DeliveredAsset[]> => {
     const out: DeliveredAsset[] = []
     const PAGE = 1000
     for (let from = 0; ; from += PAGE) {
-      const { data } = await sb
+      let query = sb
         .from("gallery_assets")
         .select("id, original_key, original_name, thumb_key, sort_order")
         .eq("gallery_id", galleryId)
         .eq("status", "completed")
-        .eq("delivery_track", track)
+      if (track) query = query.eq("delivery_track", track)
+      const { data } = await query
         .order("sort_order", { ascending: true })
         .order("original_name", { ascending: true })
         .range(from, from + PAGE - 1)
@@ -381,7 +409,11 @@ export async function listDeliveredAssets(galleryId: string): Promise<DeliveredA
   }
   const hq = await pull("high_quality")
   if (hq.length) return hq
-  return pull("social")
+  const social = await pull("social")
+  if (social.length) return social
+  // Sin tracks: si la galería es de entrega, todas sus fotos son la entrega.
+  if (await isDeliveredGallery(galleryId)) return pull(null)
+  return []
 }
 
 // ---------------------------------------------------------------------------

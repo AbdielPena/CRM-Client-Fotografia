@@ -1481,11 +1481,16 @@ export function PublicGalleryView({
       )}
 
       {/* Selección para impresión (si el plan la incluye y está habilitada).
-          SIEMPRE desde las fotos de ENTREGA FINAL — nunca desde la selección. */}
-      {printState?.enabled && deliveryAssets.length > 0 && (
+          Desde las fotos de ENTREGA FINAL: los tracks si existen; si la galería
+          es de entrega sin tracks, todas sus fotos (nunca la selección cuando
+          coexisten ambas). */}
+      {printState?.enabled && (deliveryAssets.length > 0 || isDelivered) && (
         <PrintSelectionPanel
           token={token}
-          assets={deliveryAssets.map((a) => ({ id: a.id, thumbUrl: a.thumbUrl }))}
+          assets={(deliveryAssets.length > 0 ? deliveryAssets : assets).map((a) => ({
+            id: a.id,
+            thumbUrl: a.thumbUrl,
+          }))}
           initialState={printState}
           clientEmail={email}
           clientName={null}
