@@ -25,6 +25,8 @@ import {
 } from "@/server/services/collaborator.service"
 import { ProjectCollaboratorsCard } from "@/components/collaborators/project-collaborators-card"
 import { EntityTasks } from "@/components/tasks/entity-tasks"
+import { getProjectPrintViews } from "@/server/services/print-selection.service"
+import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
 import {
   normalizeRequirements,
   evaluateRequirements,
@@ -206,6 +208,11 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     listProjectCollaborators(session.studioId, params.id).catch(() => []),
     listCollaborators(session.studioId).catch(() => []),
   ])
+
+  // Apartado IMPRESIONES: estado de selección de impresos por galería de entrega.
+  const printViews = await getProjectPrintViews(session.studioId, params.id).catch(
+    () => [],
+  )
   const projectCollaborators = projCollabRows.map((a) => ({
     id: a.id,
     role: a.role,
@@ -564,6 +571,18 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               </div>
             )}
           </div>
+
+          {/* IMPRESIONES — selección de impresos del cliente (por galería de entrega) */}
+          {printViews.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="px-1 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Impresiones
+              </h2>
+              {printViews.map((v) => (
+                <PrintProductionPanel key={v.galleryId} view={v} title={v.galleryName} />
+              ))}
+            </div>
+          )}
 
           {/* Colaboradores del proyecto */}
           <ProjectCollaboratorsCard

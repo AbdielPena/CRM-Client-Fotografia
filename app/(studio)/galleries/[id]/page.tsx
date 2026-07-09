@@ -17,7 +17,7 @@ import { getCollectionsByGallery } from "@/server/services/gallery-collection.se
 import { getSetsByGallery } from "@/server/services/gallery-set.service"
 import { getPinsByGallery } from "@/server/services/gallery-download-pin.service"
 import { getGallerySelectionQuota } from "@/server/services/selection-quota.service"
-import { getGalleryPrintState } from "@/server/services/print-selection.service"
+import { getGalleryPrintAdminView } from "@/server/services/print-selection.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 
@@ -224,8 +224,8 @@ export default async function GalleryDetailPage({
   const favoritesCount = await countSelectedAssets(galleryId)
   const reselection = await getReselectionForGallery(session.studioId, galleryId)
 
-  // Estado de selección de impresión (para el panel de producción).
-  const printState = await getGalleryPrintState(galleryId)
+  // Estado de selección de impresión + miniaturas (para el panel de producción).
+  const printView = await getGalleryPrintAdminView(galleryId)
 
   // Entrega a Google Drive (si la galería tiene assets de entrega o delivery_ready_at).
   const hasDeliveryAssets = assetsWithUrls.some(
@@ -285,7 +285,7 @@ export default async function GalleryDetailPage({
           }}
         />
       )}
-      <PrintProductionPanel galleryId={galleryId} state={printState} />
+      <PrintProductionPanel view={printView} />
     </>
   )
 

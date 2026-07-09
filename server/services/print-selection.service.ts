@@ -5,9 +5,11 @@ import {
   allowedFor,
   catLabel,
   hasPrintEntitlements,
+  isAutoPrint,
   normalizeEntitlements,
   EMPTY_ENTITLEMENTS,
   type PrintEntitlements,
+  type PrintMode,
   type PrintSelectionType,
 } from "@/lib/print/entitlements"
 
@@ -37,6 +39,12 @@ export interface PrintCategory {
   allowed: number
   used: number
   assetIds: string[]
+  /**
+   * "auto" solo aplica a impresiones: se imprimen TODAS las entregadas y el
+   * cliente NO selecciona (allowed/used = nº de fotos entregadas). El resto
+   * de categorías es "manual".
+   */
+  mode: PrintMode
 }
 
 export interface GalleryPrintState {
@@ -47,6 +55,8 @@ export interface GalleryPrintState {
   locked: boolean
   entitlements: PrintEntitlements
   categories: PrintCategory[]
+  /** Nº de fotos de ENTREGA FINAL (para modo automático + carpeta digitales). */
+  deliveredCount: number
   /** assetId → selecciones que tiene (para badges en cada foto). */
   byAsset: Record<string, Array<{ type: PrintSelectionType; spec: string | null }>>
 }
@@ -89,6 +99,21 @@ export async function resolveGalleryEntitlements(
   )
 }
 
+/** Nº de fotos de ENTREGA FINAL (prefiere máxima calidad; si no hay, sociales). */
+async function countDeliveredAssets(galleryId: string): Promise<number> {
+  const sb = untypedService()
+  const base = () =>
+    sb
+      .from("gallery_assets")
+      .select("id", { count: "exact", head: true })
+      .eq("gallery_id", galleryId)
+      .eq("status", "completed")
+  const { count: hq } = await base().eq("delivery_track", "high_quality")
+  if ((hq ?? 0) > 0) return hq ?? 0
+  const { count: soc } = await base().eq("delivery_track", "social")
+  return soc ?? 0
+}
+
 export async function getGalleryPrintState(
   galleryId: string,
 ): Promise<GalleryPrintState | null> {
@@ -98,6 +123,7 @@ export async function getGalleryPrintState(
   const entitlements = await resolveGalleryEntitlements(gallery)
 
   const sb = untypedService()
+  const deliveredCount = await countDeliveredAssets(galleryId)
   const { data: selRaw } = await sb
     .from("gallery_print_selections")
     .select("id, asset_id, selection_type, spec")
@@ -111,13 +137,18 @@ export async function getGalleryPrintState(
 
   const categories: PrintCategory[] = []
   if (entitlements.covers > 0) {
-    categories.push({ key: "album_cover", type: "album_cover", spec: null, label: catLabel("album_cover", null), allowed: entitlements.covers, used: 0, assetIds: [] })
+    categories.push({ key: "album_cover", type: "album_cover", spec: null, label: catLabel("album_cover", null), allowed: entitlements.covers, used: 0, assetIds: [], mode: "manual" })
   }
   for (const f of entitlements.frames) {
-    categories.push({ key: `frame:${f.size}`, type: "frame", spec: f.size, label: catLabel("frame", f.size), allowed: f.qty, used: 0, assetIds: [] })
+    categories.push({ key: `frame:${f.size}`, type: "frame", spec: f.size, label: catLabel("frame", f.size), allowed: f.qty, used: 0, assetIds: [], mode: "manual" })
   }
   for (const [size, qty] of Object.entries(entitlements.prints)) {
-    if (qty > 0) categories.push({ key: `print:${size}`, type: "print", spec: size, label: catLabel("print", size), allowed: qty, used: 0, assetIds: [] })
+    if (isAutoPrint(entitlements, size)) {
+      // Automático: se imprimen todas las entregadas, sin selección del cliente.
+      categories.push({ key: `print:${size}`, type: "print", spec: size, label: catLabel("print", size), allowed: deliveredCount, used: deliveredCount, assetIds: [], mode: "auto" })
+    } else if (qty > 0) {
+      categories.push({ key: `print:${size}`, type: "print", spec: size, label: catLabel("print", size), allowed: qty, used: 0, assetIds: [], mode: "manual" })
+    }
   }
 
   const byKey = new Map(categories.map((c) => [c.key, c]))
@@ -125,7 +156,7 @@ export async function getGalleryPrintState(
   for (const s of selections) {
     const key = s.selection_type === "album_cover" ? "album_cover" : `${s.selection_type}:${s.spec}`
     const cat = byKey.get(key)
-    if (cat) {
+    if (cat && cat.mode !== "auto") {
       cat.used += 1
       cat.assetIds.push(s.asset_id)
     }
@@ -143,6 +174,7 @@ export async function getGalleryPrintState(
     locked: !!gallery.print_locked,
     entitlements,
     categories,
+    deliveredCount,
     byAsset,
   }
 }
@@ -173,6 +205,13 @@ export async function addPrintSelection(input: {
   if (gallery.print_locked) throw new PrintSelectionError("LOCKED", "La selección está bloqueada")
 
   const entitlements = await resolveGalleryEntitlements(gallery)
+  // Nunca mezclar comportamientos: en un tamaño automático NO se selecciona a mano.
+  if (input.type === "print" && isAutoPrint(entitlements, input.spec)) {
+    throw new PrintSelectionError(
+      "AUTO_MODE",
+      "Este tamaño se imprime automáticamente: incluye todas tus fotos entregadas.",
+    )
+  }
   const allowed = allowedFor(entitlements, input.type, input.spec)
   if (allowed <= 0) throw new PrintSelectionError("NOT_ALLOWED", "Este entregable no está incluido en tu plan")
 
@@ -289,4 +328,130 @@ export async function submitGalleryPrintSelection(input: {
     .eq("id", input.galleryId)
   if (error) throw new PrintSelectionError("SUBMIT_FAILED", error.message)
   return { ok: true }
+}
+
+// ---------------------------------------------------------------------------
+// Fotos de ENTREGA FINAL (para el ZIP: carpeta digitales + tamaños automáticos)
+// ---------------------------------------------------------------------------
+
+export interface DeliveredAsset {
+  id: string
+  originalKey: string | null
+  originalName: string | null
+  thumbKey: string | null
+}
+
+/**
+ * Todas las fotos de ENTREGA FINAL de la galería (nunca las de selección).
+ * Prefiere la máxima calidad: si hay track high_quality usa solo esas; si no,
+ * las sociales. Paginado para no toparse con el tope de 1000 filas.
+ */
+export async function listDeliveredAssets(galleryId: string): Promise<DeliveredAsset[]> {
+  const sb = untypedService()
+  const pull = async (track: "high_quality" | "social"): Promise<DeliveredAsset[]> => {
+    const out: DeliveredAsset[] = []
+    const PAGE = 1000
+    for (let from = 0; ; from += PAGE) {
+      const { data } = await sb
+        .from("gallery_assets")
+        .select("id, original_key, original_name, thumb_key, sort_order")
+        .eq("gallery_id", galleryId)
+        .eq("status", "completed")
+        .eq("delivery_track", track)
+        .order("sort_order", { ascending: true })
+        .order("original_name", { ascending: true })
+        .range(from, from + PAGE - 1)
+      const rows = (data ?? []) as Array<{
+        id: string
+        original_key: string | null
+        original_name: string | null
+        thumb_key: string | null
+      }>
+      out.push(
+        ...rows.map((r) => ({
+          id: r.id,
+          originalKey: r.original_key,
+          originalName: r.original_name,
+          thumbKey: r.thumb_key,
+        })),
+      )
+      if (rows.length < PAGE) break
+    }
+    return out
+  }
+  const hq = await pull("high_quality")
+  if (hq.length) return hq
+  return pull("social")
+}
+
+// ---------------------------------------------------------------------------
+// Vista administrativa (apartado IMPRESIONES en galería y en la sesión)
+// ---------------------------------------------------------------------------
+
+export interface PrintAdminView {
+  galleryId: string
+  galleryName: string
+  state: GalleryPrintState
+  /** thumbUrl de cada foto seleccionada (portada / marcos) para previsualizar. */
+  thumbByAsset: Record<string, string | null>
+}
+
+/** Estado de impresión + miniaturas de lo elegido, para el panel del estudio. */
+export async function getGalleryPrintAdminView(
+  galleryId: string,
+): Promise<PrintAdminView | null> {
+  const state = await getGalleryPrintState(galleryId)
+  if (!state) return null
+
+  const sb = untypedService()
+  const ids = [...new Set(state.categories.flatMap((c) => c.assetIds))]
+  const thumbByAsset: Record<string, string | null> = {}
+  if (ids.length) {
+    const { data } = await sb
+      .from("gallery_assets")
+      .select("id, thumb_key")
+      .in("id", ids)
+    const { getAssetThumbUrl } = await import("./gallery.service")
+    for (const r of (data ?? []) as Array<{ id: string; thumb_key: string | null }>) {
+      thumbByAsset[r.id] = getAssetThumbUrl(r.thumb_key)
+    }
+  }
+
+  const { data: g } = await sb
+    .from("galleries")
+    .select("name")
+    .eq("id", galleryId)
+    .maybeSingle()
+  return {
+    galleryId,
+    galleryName: (g as { name?: string } | null)?.name ?? "Galería",
+    state,
+    thumbByAsset,
+  }
+}
+
+/** Vistas de impresión de todas las galerías de una sesión con impresos activos. */
+export async function getProjectPrintViews(
+  studioId: string,
+  projectId: string,
+): Promise<PrintAdminView[]> {
+  const sb = untypedService()
+  const { data: gals } = await sb
+    .from("galleries")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+  const out: PrintAdminView[] = []
+  for (const row of (gals ?? []) as Array<{ id: string }>) {
+    const v = await getGalleryPrintAdminView(row.id)
+    if (
+      v &&
+      (v.state.enabled ||
+        v.state.categories.some((c) => c.used > 0 || c.mode === "auto"))
+    ) {
+      out.push(v)
+    }
+  }
+  return out
 }

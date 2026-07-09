@@ -6,12 +6,13 @@ import { buildPrintZip, type PrintZipScope } from "@/server/services/print-zip.s
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const SCOPES: PrintZipScope[] = ["all", "album", "frames", "prints"]
+const SCOPES: PrintZipScope[] = ["all", "album", "frames", "prints", "digitales"]
 const SCOPE_LABEL: Record<PrintZipScope, string> = {
-  all: "Impresion",
-  album: "Album",
+  all: "Impresiones",
+  album: "Portada",
   frames: "Marcos",
   prints: "Impresiones",
+  digitales: "Entregadas digitales",
 }
 
 export async function GET(
@@ -39,14 +40,26 @@ export async function GET(
     )
   }
 
-  const safeClient = (result.clientName || "Cliente").replace(/[^\w\-]+/g, "_")
-  const filename = `${SCOPE_LABEL[scope]}-${safeClient}.zip`
+  // Nombre pedido: "Cliente - Impresiones.zip" (con espacios). Se envía un
+  // fallback ASCII + filename* UTF-8 para nombres con acentos.
+  const client = (result.clientName || "Cliente").trim()
+  const rawName =
+    scope === "all"
+      ? `${client} - Impresiones.zip`
+      : `${SCOPE_LABEL[scope]} - ${client}.zip`
+  const asciiName =
+    rawName
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7E]/g, "")
+      .replace(/[/\\:*?"<>|]+/g, "-")
+      .replace(/\s+/g, " ")
+      .trim() || "Impresiones.zip"
 
   return new NextResponse(new Uint8Array(result.buffer), {
     status: 200,
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(rawName)}`,
       "Content-Length": String(result.buffer.length),
       "Cache-Control": "no-store",
     },

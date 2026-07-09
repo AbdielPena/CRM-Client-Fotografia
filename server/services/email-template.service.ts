@@ -43,6 +43,7 @@ export type TemplateSlug =
   | "gallery_expired"
   | "gallery_final_delivery_available"
   | "gallery_drive_link_available"
+  | "print_selection_ready"
   // Entregas
   | "delivery_ready"
   // Otros
@@ -411,6 +412,29 @@ export const TEMPLATE_CATALOG: Record<
       { key: "client_name", label: "Cliente", example: "Juan" },
       { key: "gallery_name", label: "Galería", example: "Boda Pérez" },
       { key: "drive_link", label: "Link de Drive", example: "https://drive.google.com/..." },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
+  print_selection_ready: {
+    label: "Elige tus fotos para impresión",
+    description:
+      "Se envía automáticamente al publicar la entrega final si el plan incluye impresos: el cliente elige portada/marcos/impresiones desde su galería.",
+    category: "gallery",
+    defaultSubject: "Elige tus fotos para impresión — {{gallery_name}}",
+    defaultBodyHtml:
+      `<p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Impresiones</p>` +
+      `<h1>Elige tus fotos para impresión 🖼️</h1>` +
+      `<p>Hola <strong>{{client_name}}</strong>,</p>` +
+      `<p>¡Tus fotos editadas ya están listas! Ahora puedes elegir desde tu galería cuáles quieres para <strong>portada de álbum, marcos e impresiones</strong>, según lo incluido en tu plan.</p>` +
+      `{{plan_summary}}` +
+      `<p style="text-align:center;margin:26px 0 6px"><a class="btn" href="{{gallery_link}}">Seleccionar mis impresiones</a></p>` +
+      `<p style="margin:8px 0 0;font-size:12.5px;color:#A1A1A6;text-align:center">Puedes ajustar tu selección hasta enviarla.</p>` +
+      `<div style="margin:20px 0 0;padding:14px 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px"><p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#3f3f46">Entrega de impresiones</p><p style="margin:0;font-size:12.5px;line-height:1.55;color:#52525b">La entrega de impresiones se realiza directamente en el estudio. Si deseas envío, este tendrá un costo adicional y estará sujeto a disponibilidad, ubicación y tiempos de entrega.</p></div>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "gallery_name", label: "Galería", example: "Quinceañera de María" },
+      { key: "plan_summary", label: "Resumen del plan (automático)", example: "1 portada de álbum, 1 marco 12x18…" },
+      { key: "gallery_link", label: "Link para seleccionar", example: "https://my.abbypixel.com/g/xxxx" },
       { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
     ],
   },

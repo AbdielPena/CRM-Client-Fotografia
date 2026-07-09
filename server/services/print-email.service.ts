@@ -1,14 +1,20 @@
 /**
  * Email al cliente cuando se habilita la selección de impresiones
  * (al publicar la galería de entrega final, si el plan incluye impresos).
+ *
+ * Usa una plantilla EDITABLE desde Ajustes → Correos (slug
+ * `print_selection_ready`): el estudio puede cambiar asunto y cuerpo. El
+ * resumen del plan y el link a la galería se inyectan como variables.
  */
 
 import "server-only"
 
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { enqueueEmail } from "@/server/services/email.service"
-import { getEmailBranding } from "@/server/services/email-template.service"
-import { wrapLuxuryEmail } from "@/lib/email/luxury-layout"
+import {
+  resolveTemplate,
+  TEMPLATE_CATALOG,
+} from "@/server/services/email-template.service"
 import { normalizeEntitlements } from "@/lib/print/entitlements"
 
 function appUrl(): string {
@@ -53,8 +59,8 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
   const studio = studioRow as any
   const studioName = studio?.name ?? "Tu fotógrafo"
 
-  // Entitlements para el resumen
-  let summaryLis = ""
+  // Resumen del plan (bloque dinámico → variable {{plan_summary}}).
+  let planSummary = ""
   if (g.package_id) {
     const { data: pkg } = await sb
       .from("packages")
@@ -65,8 +71,20 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
     const parts: string[] = []
     if (e.covers > 0) parts.push(`${e.covers} portada${e.covers === 1 ? "" : "s"} de álbum`)
     for (const f of e.frames) parts.push(`${f.qty} marco${f.qty === 1 ? "" : "s"} ${escapeHtml(f.size)}`)
-    for (const [size, qty] of Object.entries(e.prints)) parts.push(`${qty} impresión${qty === 1 ? "" : "es"} ${escapeHtml(size)}`)
-    summaryLis = parts.map((p) => `<li style="margin:4px 0">${p}</li>`).join("")
+    for (const [size, qty] of Object.entries(e.prints)) {
+      if (e.print_modes[size] === "auto") {
+        parts.push(`Impresiones ${escapeHtml(size)} — todas tus fotos entregadas`)
+      } else if (qty > 0) {
+        parts.push(`${qty} impresión${qty === 1 ? "" : "es"} ${escapeHtml(size)}`)
+      }
+    }
+    if (parts.length) {
+      const lis = parts.map((p) => `<li style="margin:4px 0">${p}</li>`).join("")
+      planSummary =
+        `<div style="margin:0 0 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px;padding:16px 18px">` +
+        `<p style="margin:0 0 6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#A1A1A6">Tu plan incluye</p>` +
+        `<ul style="margin:0;padding-left:18px;font-size:14px;color:#52525b">${lis}</ul></div>`
+    }
   }
 
   // Link a la galería (token de compartir activo) o al portal.
@@ -82,43 +100,29 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
   const token = (tokRow as { token?: string } | null)?.token
   if (token) galleryUrl = `${appUrl()}/g/${token}`
 
-  // Contenido interno + marco luxury minimalista compartido (logo + footer).
-  const inner = `
-  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Impresiones</p>
-  <h1>Elige tus fotos para impresión 🖼️</h1>
-  <p>Hola <strong>${escapeHtml(client.name ?? "")}</strong>,</p>
-  <p>¡Tus fotos editadas ya están listas! Ahora puedes elegir desde tu galería cuáles quieres para <strong>portada de álbum, marcos e impresiones</strong>, según lo incluido en tu plan.</p>
-  ${summaryLis ? `<div style="margin:0 0 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px;padding:16px 18px">
-    <p style="margin:0 0 6px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#A1A1A6">Tu plan incluye</p>
-    <ul style="margin:0;padding-left:18px;font-size:14px;color:#52525b">${summaryLis}</ul>
-  </div>` : ""}
-  <p style="text-align:center;margin:26px 0 6px"><a class="btn" href="${galleryUrl}">Seleccionar mis impresiones</a></p>
-  <p style="margin:8px 0 0;font-size:12.5px;color:#A1A1A6;text-align:center">Puedes ajustar tu selección hasta enviarla.</p>
-  <div style="margin:20px 0 0;padding:14px 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px">
-    <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#3f3f46">Entrega de impresiones</p>
-    <p style="margin:0;font-size:12.5px;line-height:1.55;color:#52525b">La entrega de impresiones se realiza directamente en el estudio. Si deseas envío, este tendrá un costo adicional y estará sujeto a disponibilidad, ubicación y tiempos de entrega.</p>
-  </div>`
-
-  const branding = await getEmailBranding(g.studio_id)
-  const html = wrapLuxuryEmail(inner, {
-    studioName: studio?.name ?? branding.studioName,
-    logoUrl: branding.logoUrl,
-    accent: branding.accent,
-    footerHtml: branding.footerHtml,
-    contactLine: branding.contactLine,
-    whatsappUrl: branding.whatsappUrl,
-    social: branding.social,
-  })
+  const catalog = TEMPLATE_CATALOG.print_selection_ready
+  const { subject, bodyHtml, fromName, replyTo } = await resolveTemplate(
+    g.studio_id,
+    "print_selection_ready",
+    {
+      client_name: client.name ?? "",
+      gallery_name: g.name ?? "",
+      studio_name: studioName,
+      plan_summary: planSummary,
+      gallery_link: galleryUrl,
+    },
+    { subject: catalog.defaultSubject, bodyHtml: catalog.defaultBodyHtml },
+  )
 
   await enqueueEmail({
     studioId: g.studio_id,
     toEmail: client.email,
     toName: client.name ?? undefined,
     fromEmail: studio?.email ?? null,
-    fromName: studioName,
-    replyTo: studio?.email ?? null,
-    subject: `Elige tus fotos para impresión — ${g.name}`,
-    bodyHtml: html,
+    fromName: fromName ?? studioName,
+    replyTo: replyTo ?? studio?.email ?? null,
+    subject,
+    bodyHtml,
     relatedEntityType: "gallery",
     relatedEntityId: galleryId,
   })

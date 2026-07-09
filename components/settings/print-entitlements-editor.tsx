@@ -4,9 +4,13 @@ import { useState } from "react"
 import { Plus, Trash2, Frame, Printer, BookOpen, Image as ImageIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
-import { DEFAULT_PRINT_SIZES, type PrintEntitlements } from "@/lib/print/entitlements"
+import {
+  DEFAULT_PRINT_SIZES,
+  type PrintEntitlements,
+  type PrintMode,
+} from "@/lib/print/entitlements"
 
-type Row = { size: string; qty: number }
+type Row = { size: string; qty: number; mode?: PrintMode }
 
 const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
@@ -28,10 +32,15 @@ export function PrintEntitlementsEditor({
   )
   const [prints, setPrints] = useState<Row[]>(
     dv && Object.keys(dv.prints).length
-      ? Object.entries(dv.prints).map(([size, qty]) => ({ size, qty }))
-      : DEFAULT_PRINT_SIZES.map((size) => ({ size, qty: 0 })),
+      ? Object.entries(dv.prints).map(([size, qty]) => ({
+          size,
+          qty,
+          mode: dv.print_modes?.[size] ?? "manual",
+        }))
+      : DEFAULT_PRINT_SIZES.map((size) => ({ size, qty: 0, mode: "manual" as PrintMode })),
   )
 
+  const printRows = prints.filter((p) => p.size.trim())
   const json = JSON.stringify({
     enabled,
     covers,
@@ -40,10 +49,17 @@ export function PrintEntitlementsEditor({
     frames: frames
       .filter((f) => f.size.trim() && f.qty > 0)
       .map((f) => ({ size: f.size.trim(), qty: f.qty })),
+    // Manuales con cantidad; los automáticos van en print_modes (se re-agregan
+    // al normalizar, aunque no tengan cantidad).
     prints: Object.fromEntries(
-      prints
-        .filter((p) => p.size.trim() && p.qty > 0)
+      printRows
+        .filter((p) => (p.mode ?? "manual") !== "auto" && p.qty > 0)
         .map((p) => [p.size.trim(), p.qty]),
+    ),
+    print_modes: Object.fromEntries(
+      printRows
+        .filter((p) => p.mode === "auto")
+        .map((p) => [p.size.trim(), "auto"]),
     ),
   })
 
@@ -122,11 +138,12 @@ export function PrintEntitlementsEditor({
             sizePlaceholder="ej. 12x18"
           />
 
-          {/* Impresiones — tamaños editables */}
+          {/* Impresiones — tamaños editables + modo (cliente elige / todas auto) */}
           <RowEditor
+            withMode
             icon={<Printer className="h-3.5 w-3.5" />}
             title="Impresiones"
-            hint="Cantidad de fotos a imprimir por tamaño. Cantidad 0 = no se incluye."
+            hint="Por cada tamaño: elige si el cliente selecciona las fotos (respetando la cantidad) o si se imprimen TODAS las entregadas automáticamente."
             rows={prints}
             setRows={setPrints}
             addLabel="Agregar tamaño"
@@ -146,6 +163,7 @@ function RowEditor({
   setRows,
   addLabel,
   sizePlaceholder,
+  withMode = false,
 }: {
   icon: React.ReactNode
   title: string
@@ -154,6 +172,7 @@ function RowEditor({
   setRows: React.Dispatch<React.SetStateAction<Row[]>>
   addLabel: string
   sizePlaceholder: string
+  withMode?: boolean
 }) {
   const update = (i: number, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
@@ -166,36 +185,77 @@ function RowEditor({
       </div>
       <p className="mb-2 text-[11px] text-muted-foreground">{hint}</p>
       <div className="space-y-2">
-        {rows.map((r, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <input
-              value={r.size}
-              onChange={(e) => update(i, { size: e.target.value })}
-              placeholder={sizePlaceholder}
-              className={sizeCls}
-            />
-            <span className="text-xs text-muted-foreground">×</span>
-            <input
-              type="number"
-              min={0}
-              value={r.qty}
-              onChange={(e) => update(i, { qty: Math.max(0, Number(e.target.value) || 0) })}
-              className={numCls}
-            />
-            <button
-              type="button"
-              onClick={() => remove(i)}
-              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
-              aria-label="Quitar"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
+        {rows.map((r, i) => {
+          const isAuto = withMode && r.mode === "auto"
+          return (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <input
+                value={r.size}
+                onChange={(e) => update(i, { size: e.target.value })}
+                placeholder={sizePlaceholder}
+                className={sizeCls}
+              />
+              <span className="text-xs text-muted-foreground">×</span>
+              {isAuto ? (
+                <span className={cn(numCls, "flex items-center justify-center text-[11px] font-medium text-muted-foreground")}>
+                  Todas
+                </span>
+              ) : (
+                <input
+                  type="number"
+                  min={0}
+                  value={r.qty}
+                  onChange={(e) => update(i, { qty: Math.max(0, Number(e.target.value) || 0) })}
+                  className={numCls}
+                />
+              )}
+
+              {withMode && (
+                <div className="flex overflow-hidden rounded-lg border border-border text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => update(i, { mode: "manual" })}
+                    className={cn(
+                      "px-2.5 py-2 font-medium transition-colors",
+                      (r.mode ?? "manual") === "manual"
+                        ? "bg-brand text-brand-foreground"
+                        : "bg-card text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    Cliente elige
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update(i, { mode: "auto" })}
+                    className={cn(
+                      "border-l border-border px-2.5 py-2 font-medium transition-colors",
+                      r.mode === "auto"
+                        ? "bg-brand text-brand-foreground"
+                        : "bg-card text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    Imprimir todas
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-danger/10 hover:text-danger"
+                aria-label="Quitar"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )
+        })}
       </div>
       <button
         type="button"
-        onClick={() => setRows((prev) => [...prev, { size: "", qty: 1 }])}
+        onClick={() =>
+          setRows((prev) => [...prev, { size: "", qty: 1, mode: "manual" }])
+        }
         className="mt-2 inline-flex items-center gap-1 rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-brand hover:text-brand"
       >
         <Plus className="h-3.5 w-3.5" /> {addLabel}
