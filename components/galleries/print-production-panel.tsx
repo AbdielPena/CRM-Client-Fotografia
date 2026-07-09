@@ -11,6 +11,7 @@ import {
 
 import type { PrintAdminView } from "@/server/services/print-selection.service"
 import { PrintLockToggle } from "@/components/galleries/print-lock-toggle"
+import { PrintWhatsAppShare } from "@/components/galleries/print-whatsapp-share"
 
 function fmtDate(iso: string | null): string | null {
   if (!iso) return null
@@ -63,9 +64,11 @@ function ThumbRow({
 export function PrintProductionPanel({
   view,
   title = "Producción de impresión",
+  waPrintTemplate,
 }: {
   view: PrintAdminView | null
   title?: string
+  waPrintTemplate?: string
 }) {
   if (!view) return null
   const { galleryId, galleryName, state, thumbByAsset } = view
@@ -269,6 +272,17 @@ export function PrintProductionPanel({
         <p className="border-t border-border/60 pt-4 text-[12.5px] text-muted-foreground">
           El cliente aún no ha seleccionado fotos para impresión.
         </p>
+      )}
+
+      {/* Enviar al cliente el link para elegir sus impresiones (WhatsApp) */}
+      {state.enabled && (
+        <PrintWhatsAppShare
+          token={view.publicToken}
+          galleryName={galleryName}
+          clientName={view.clientName}
+          clientPhone={view.clientPhone}
+          template={waPrintTemplate}
+        />
       )}
     </div>
   )

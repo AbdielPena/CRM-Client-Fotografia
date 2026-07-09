@@ -5,23 +5,26 @@ import { getWhatsAppStatus } from "@/server/services/whatsapp/cloud-api.service"
 import {
   getSelectionWaTemplate,
   getDeliveryWaTemplate,
+  getPrintWaTemplate,
 } from "@/server/services/share-message.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { WhatsAppSettings } from "@/components/settings/whatsapp-settings"
 import { SelectionMessageEditor } from "@/components/settings/selection-message-editor"
 import { DeliveryMessageEditor } from "@/components/settings/delivery-message-editor"
+import { PrintMessageEditor } from "@/components/settings/print-message-editor"
 
 export const metadata: Metadata = { title: "WhatsApp" }
 
 export default async function WhatsAppSettingsPage() {
   const session = await requireStudioAuth()
 
-  const [status, unread, selectionMsg, deliveryMsg] = await Promise.all([
+  const [status, unread, selectionMsg, deliveryMsg, printMsg] = await Promise.all([
     getWhatsAppStatus(session.studioId),
     countUnreadNotifications(session.studioId),
     getSelectionWaTemplate(session.studioId),
     getDeliveryWaTemplate(session.studioId),
+    getPrintWaTemplate(session.studioId),
   ])
 
   return (
@@ -36,6 +39,7 @@ export default async function WhatsAppSettingsPage() {
         <WhatsAppSettings status={status} />
         <SelectionMessageEditor initial={selectionMsg} />
         <DeliveryMessageEditor initial={deliveryMsg} />
+        <PrintMessageEditor initial={printMsg} />
       </div>
     </>
   )

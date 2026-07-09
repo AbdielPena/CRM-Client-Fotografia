@@ -6,6 +6,7 @@ import { requireStudioAuth } from "@/server/middleware/auth"
 import {
   setSelectionWaTemplate,
   setDeliveryWaTemplate,
+  setPrintWaTemplate,
 } from "@/server/services/share-message.service"
 
 export async function updateSelectionWaMessageAction(message: string): Promise<void> {
@@ -17,5 +18,11 @@ export async function updateSelectionWaMessageAction(message: string): Promise<v
 export async function updateDeliveryWaMessageAction(message: string): Promise<void> {
   const ctx = await requireStudioAuth()
   await setDeliveryWaTemplate(ctx.studioId, message)
+  revalidatePath("/settings/whatsapp")
+}
+
+export async function updatePrintWaMessageAction(message: string): Promise<void> {
+  const ctx = await requireStudioAuth()
+  await setPrintWaTemplate(ctx.studioId, message)
   revalidatePath("/settings/whatsapp")
 }

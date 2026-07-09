@@ -35,6 +35,7 @@ import { getDriveBackupStatusAction } from "@/server/actions/gallery-drive.actio
 import {
   getSelectionWaTemplate,
   getDeliveryWaTemplate,
+  getPrintWaTemplate,
 } from "@/server/services/share-message.service"
 import {
   getReselectionForGallery,
@@ -160,9 +161,10 @@ export default async function GalleryDetailPage({
 
   // Mensajes de WhatsApp (fuente única, editables en Ajustes → WhatsApp):
   // selección + entrega final (esta con {{link_web}} y {{link_drive}}).
-  const [waSelectionTemplate, waDeliveryTemplate] = await Promise.all([
+  const [waSelectionTemplate, waDeliveryTemplate, waPrintTemplate] = await Promise.all([
     getSelectionWaTemplate(session.studioId),
     getDeliveryWaTemplate(session.studioId),
+    getPrintWaTemplate(session.studioId),
   ])
 
   // Hidratar assets con thumbUrl + webUrl
@@ -285,7 +287,7 @@ export default async function GalleryDetailPage({
           }}
         />
       )}
-      <PrintProductionPanel view={printView} />
+      <PrintProductionPanel view={printView} waPrintTemplate={waPrintTemplate} />
     </>
   )
 

@@ -11,6 +11,11 @@ export const DEFAULT_SELECTION_WA_MESSAGE =
 export const DEFAULT_DELIVERY_WA_MESSAGE =
   '¡Hola {{cliente}}! 🎉 Tu entrega final de "{{galeria}}" ya está lista. Míralas y descárgalas aquí: {{link_web}} · Y desde Google Drive: {{link_drive}}'
 
+// Mensaje para invitar a elegir IMPRESIONES (marcos / álbum / fotos) desde la
+// galería de entrega. Variables: {{cliente}}, {{galeria}}, {{link}}.
+export const DEFAULT_PRINT_WA_MESSAGE =
+  '¡Hola {{cliente}}! 🖼️ Tus fotos de "{{galeria}}" ya están listas. Ahora puedes elegir tus impresiones incluidas en tu plan (marcos, álbum y fotos) aquí: {{link}}'
+
 export type WaMessageVars = {
   cliente?: string | null
   galeria?: string | null

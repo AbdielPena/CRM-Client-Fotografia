@@ -436,6 +436,10 @@ export async function listDeliveredAssets(galleryId: string): Promise<DeliveredA
 export interface PrintAdminView {
   galleryId: string
   galleryName: string
+  clientName: string | null
+  clientPhone: string | null
+  /** Token público activo (para el link donde el cliente elige impresiones). */
+  publicToken: string | null
   state: GalleryPrintState
   /** thumbUrl de cada foto seleccionada (portada / marcos) para previsualizar. */
   thumbByAsset: Record<string, string | null>
@@ -464,12 +468,43 @@ export async function getGalleryPrintAdminView(
 
   const { data: g } = await sb
     .from("galleries")
-    .select("name")
+    .select("name, client_id")
     .eq("id", galleryId)
     .maybeSingle()
+  const gallery = g as { name?: string; client_id?: string | null } | null
+
+  // Cliente (nombre + teléfono para el link/WhatsApp).
+  let clientName: string | null = null
+  let clientPhone: string | null = null
+  if (gallery?.client_id) {
+    const { data: c } = await sb
+      .from("clients")
+      .select("name, phone")
+      .eq("id", gallery.client_id)
+      .maybeSingle()
+    const client = c as { name?: string | null; phone?: string | null } | null
+    clientName = client?.name ?? null
+    clientPhone = client?.phone ?? null
+  }
+
+  // Token público activo (preferir el de galería COMPLETA, no el de solo-selección).
+  const { data: tokens } = await sb
+    .from("gallery_share_tokens")
+    .select("token, view_mode")
+    .eq("gallery_id", galleryId)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false })
+    .limit(20)
+  const tokenList = (tokens ?? []) as Array<{ token: string; view_mode: string | null }>
+  const publicToken =
+    (tokenList.find((t) => t.view_mode !== "selection") ?? tokenList[0])?.token ?? null
+
   return {
     galleryId,
-    galleryName: (g as { name?: string } | null)?.name ?? "Galería",
+    galleryName: gallery?.name ?? "Galería",
+    clientName,
+    clientPhone,
+    publicToken,
     state,
     thumbByAsset,
   }

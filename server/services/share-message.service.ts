@@ -4,6 +4,7 @@ import { untypedService } from "@/server/supabase/untyped"
 import {
   DEFAULT_SELECTION_WA_MESSAGE,
   DEFAULT_DELIVERY_WA_MESSAGE,
+  DEFAULT_PRINT_WA_MESSAGE,
 } from "@/lib/share/wa-message"
 
 /**
@@ -64,6 +65,36 @@ export async function setDeliveryWaTemplate(
   const { error } = await sb
     .from("studio_branding")
     .update({ whatsapp_delivery_message: message.trim() || null })
+    .eq("studio_id", studioId)
+  if (error) throw error
+}
+
+/**
+ * Mensaje de WhatsApp para invitar a elegir IMPRESIONES — fuente única editable.
+ * Guardado en `studio_branding.whatsapp_print_message` (1:1 con el estudio).
+ * Variables: {{cliente}}, {{galeria}}, {{link}} (galería de entrega).
+ */
+export async function getPrintWaTemplate(studioId: string): Promise<string> {
+  const sb = untypedService()
+  const { data } = await sb
+    .from("studio_branding")
+    .select("whatsapp_print_message")
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const v = (data as { whatsapp_print_message?: string | null } | null)
+    ?.whatsapp_print_message
+  return v && v.trim() ? v : DEFAULT_PRINT_WA_MESSAGE
+}
+
+export async function setPrintWaTemplate(
+  studioId: string,
+  message: string,
+): Promise<void> {
+  const sb = untypedService()
+  await sb.rpc("studio_get_or_create_branding", { p_studio_id: studioId })
+  const { error } = await sb
+    .from("studio_branding")
+    .update({ whatsapp_print_message: message.trim() || null })
     .eq("studio_id", studioId)
   if (error) throw error
 }

@@ -27,6 +27,7 @@ import { ProjectCollaboratorsCard } from "@/components/collaborators/project-col
 import { EntityTasks } from "@/components/tasks/entity-tasks"
 import { getProjectPrintViews } from "@/server/services/print-selection.service"
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
+import { getPrintWaTemplate } from "@/server/services/share-message.service"
 import {
   normalizeRequirements,
   evaluateRequirements,
@@ -212,6 +213,9 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   // Apartado IMPRESIONES: estado de selección de impresos por galería de entrega.
   const printViews = await getProjectPrintViews(session.studioId, params.id).catch(
     () => [],
+  )
+  const waPrintTemplate = await getPrintWaTemplate(session.studioId).catch(
+    () => undefined,
   )
   const projectCollaborators = projCollabRows.map((a) => ({
     id: a.id,
@@ -579,7 +583,12 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 Impresiones
               </h2>
               {printViews.map((v) => (
-                <PrintProductionPanel key={v.galleryId} view={v} title={v.galleryName} />
+                <PrintProductionPanel
+                  key={v.galleryId}
+                  view={v}
+                  title={v.galleryName}
+                  waPrintTemplate={waPrintTemplate}
+                />
               ))}
             </div>
           )}
