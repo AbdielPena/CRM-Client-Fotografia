@@ -79,6 +79,42 @@ export async function onContractSigned(contractId: string): Promise<void> {
   }
 }
 
+/**
+ * Red de seguridad: si un proyecto tiene un contrato FIRMADO pero aún no tiene
+ * factura (p.ej. si el hook post-firma falló), la genera. Idempotente (la RPC
+ * devuelve la factura existente si ya hay) y best-effort. Se llama al abrir la
+ * sesión en el CRM, así una sesión firmada nunca se queda sin su factura.
+ */
+export async function ensureBookingInvoice(
+  studioId: string,
+  projectId: string,
+): Promise<void> {
+  try {
+    const supabase = createSupabaseServiceClient()
+    const { data: signed } = await supabase
+      .from("contracts")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("status", "signed")
+      .limit(1)
+      .maybeSingle()
+    if (!signed) return
+    const { count } = await supabase
+      .from("invoices")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", projectId)
+      .neq("status", "cancelled")
+    if ((count ?? 0) > 0) return
+    const { untypedService } = await import("@/server/supabase/untyped")
+    await untypedService().rpc("generate_booking_invoice", {
+      p_studio_id: studioId,
+      p_project_id: projectId,
+    })
+  } catch (err) {
+    console.error("[ensureBookingInvoice] failed", err)
+  }
+}
+
 async function generateInvoiceAndAdvanceBooking(params: {
   studioId: string
   projectId: string

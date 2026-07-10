@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { getProjectById } from "@/server/services/project.service"
+import { ensureBookingInvoice } from "@/server/services/contract-post-sign.service"
 import { ChangeSessionTime } from "@/components/projects/change-session-time"
 import { QuinceDetails } from "@/components/projects/quince-details"
 import { SessionDressCard } from "@/components/projects/session-dress-card"
@@ -83,6 +84,9 @@ function pickFirst(v: unknown): Rec | null {
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   const session = await requireStudioAuth()
+  // Red de seguridad: si esta sesión tiene contrato firmado pero aún sin
+  // factura (p.ej. el hook post-firma falló), la genera antes de renderizar.
+  await ensureBookingInvoice(session.studioId, params.id)
   // Optimización: las 3 queries en paralelo en lugar de project→formResponses
   // secuencial. listFormResponsesForProject usa params.id directamente —
   // no necesita esperar a project. Si el project no existe igual el
