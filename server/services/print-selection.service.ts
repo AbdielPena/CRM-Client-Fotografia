@@ -7,6 +7,7 @@ import {
   hasPrintEntitlements,
   isAutoPrint,
   normalizeEntitlements,
+  summarizeEntitlements,
   EMPTY_ENTITLEMENTS,
   type PrintEntitlements,
   type PrintMode,
@@ -508,6 +509,270 @@ export async function getGalleryPrintAdminView(
     state,
     thumbByAsset,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Apartado GLOBAL de impresiones — todas las galerías entregadas del estudio
+// cuyo plan incluye impresos, con su estado por cliente (pendiente/seleccionado).
+// ---------------------------------------------------------------------------
+
+export type StudioPrintStatus =
+  | "pending" // el cliente aún NO ha seleccionado (hay algo que elegir)
+  | "in_progress" // empezó a elegir pero no envió
+  | "selected" // envió / completó su selección
+  | "auto" // no requiere selección (se imprime todo lo entregado)
+
+export interface StudioPrintItem {
+  galleryId: string
+  galleryName: string
+  projectId: string | null
+  clientName: string | null
+  clientPhone: string | null
+  /** Token público (para el link ?impresiones=1 que se envía al cliente). */
+  publicToken: string | null
+  status: StudioPrintStatus
+  submittedAt: string | null
+  locked: boolean
+  /** Fecha de entrega/sesión (YYYY-MM-DD) para ordenar y mostrar. */
+  deliveredDate: string | null
+  /** Resumen legible de lo incluido en el plan (portadas, marcos, impresiones). */
+  summary: string
+  hasManual: boolean
+  /** Fotos ya seleccionadas por el cliente (categorías manuales). */
+  selectedCount: number
+  /** Total de fotos que el cliente debe elegir (categorías manuales). */
+  manualTotal: number
+}
+
+/**
+ * Lista todas las galerías ENTREGADAS del estudio cuyo plan incluye impresos,
+ * con el estado de selección de impresiones de cada una. Alimenta el apartado
+ * global /impresiones: qué clientes tienen impresiones pendientes de elegir y
+ * cuáles ya seleccionaron. Batch de consultas (no por-galería) para escalar.
+ */
+export async function listStudioPrintOverview(
+  studioId: string,
+): Promise<StudioPrintItem[]> {
+  const sb = untypedService()
+
+  // 1. Candidatas: galerías entregadas de alguna forma (entrega lista, tipo
+  //    final_delivery, selección de impresión ya habilitada, o ya enviada).
+  const { data: galRaw } = await sb
+    .from("galleries")
+    .select(
+      "id, project_id, package_id, name, client_id, print_selection_enabled, print_submitted_at, print_locked, gallery_type, delivery_ready_at, delivery_date",
+    )
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .or(
+      "delivery_ready_at.not.is.null,gallery_type.eq.final_delivery,print_selection_enabled.is.true,print_submitted_at.not.is.null",
+    )
+  interface GRow {
+    id: string
+    project_id: string | null
+    package_id: string | null
+    name: string | null
+    client_id: string | null
+    print_submitted_at: string | null
+    print_locked: boolean | null
+    delivery_ready_at: string | null
+    delivery_date: string | null
+  }
+  const galleries = (galRaw ?? []) as GRow[]
+  if (galleries.length === 0) return []
+  const galleryIds = galleries.map((g) => g.id)
+
+  // 2. Proyectos (heredar package_id / event_date / client_id si faltan).
+  const projectIds = [
+    ...new Set(galleries.map((g) => g.project_id).filter((x): x is string => !!x)),
+  ]
+  const projectMap = new Map<
+    string,
+    { package_id: string | null; event_date: string | null; client_id: string | null }
+  >()
+  if (projectIds.length) {
+    const { data } = await sb
+      .from("projects")
+      .select("id, package_id, event_date, client_id")
+      .in("id", projectIds)
+    for (const p of (data ?? []) as Array<{
+      id: string
+      package_id: string | null
+      event_date: string | null
+      client_id: string | null
+    }>) {
+      projectMap.set(p.id, {
+        package_id: p.package_id ?? null,
+        event_date: p.event_date ?? null,
+        client_id: p.client_id ?? null,
+      })
+    }
+  }
+
+  const resolvePkg = (g: GRow): string | null =>
+    g.package_id ?? (g.project_id ? projectMap.get(g.project_id)?.package_id ?? null : null)
+  const resolveClient = (g: GRow): string | null =>
+    g.client_id ?? (g.project_id ? projectMap.get(g.project_id)?.client_id ?? null : null)
+
+  // 3. Entitlements por paquete.
+  const pkgIds = [
+    ...new Set(galleries.map(resolvePkg).filter((x): x is string => !!x)),
+  ]
+  const entByPkg = new Map<string, PrintEntitlements>()
+  if (pkgIds.length) {
+    const { data } = await sb
+      .from("packages")
+      .select("id, print_entitlements")
+      .in("id", pkgIds)
+    for (const p of (data ?? []) as Array<{ id: string; print_entitlements: unknown }>) {
+      entByPkg.set(p.id, normalizeEntitlements(p.print_entitlements))
+    }
+  }
+
+  // 4. Selecciones por galería.
+  const selByGallery = new Map<
+    string,
+    Array<{ type: PrintSelectionType; spec: string | null }>
+  >()
+  {
+    const { data } = await sb
+      .from("gallery_print_selections")
+      .select("gallery_id, selection_type, spec")
+      .in("gallery_id", galleryIds)
+    for (const s of (data ?? []) as Array<{
+      gallery_id: string
+      selection_type: PrintSelectionType
+      spec: string | null
+    }>) {
+      const arr = selByGallery.get(s.gallery_id) ?? []
+      arr.push({ type: s.selection_type, spec: s.spec })
+      selByGallery.set(s.gallery_id, arr)
+    }
+  }
+
+  // 5. Clientes.
+  const clientIds = [
+    ...new Set(galleries.map(resolveClient).filter((x): x is string => !!x)),
+  ]
+  const clientMap = new Map<string, { name: string | null; phone: string | null }>()
+  if (clientIds.length) {
+    const { data } = await sb
+      .from("clients")
+      .select("id, name, phone")
+      .in("id", clientIds)
+    for (const c of (data ?? []) as Array<{
+      id: string
+      name: string | null
+      phone: string | null
+    }>) {
+      clientMap.set(c.id, { name: c.name ?? null, phone: c.phone ?? null })
+    }
+  }
+
+  // 6. Tokens públicos (preferir el de galería completa, no el de solo-selección).
+  const tokensByGallery = new Map<
+    string,
+    Array<{ token: string; viewMode: string | null }>
+  >()
+  {
+    const { data } = await sb
+      .from("gallery_share_tokens")
+      .select("gallery_id, token, view_mode, created_at")
+      .in("gallery_id", galleryIds)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false })
+    for (const t of (data ?? []) as Array<{
+      gallery_id: string
+      token: string
+      view_mode: string | null
+    }>) {
+      const arr = tokensByGallery.get(t.gallery_id) ?? []
+      arr.push({ token: t.token, viewMode: t.view_mode })
+      tokensByGallery.set(t.gallery_id, arr)
+    }
+  }
+
+  const items: StudioPrintItem[] = []
+  for (const g of galleries) {
+    const pkgId = resolvePkg(g)
+    const ent = pkgId ? entByPkg.get(pkgId) : undefined
+    if (!ent || !ent.enabled || !hasPrintEntitlements(ent)) continue
+
+    // Categorías manuales (lo que el cliente elige) + permitido de cada una.
+    const manualCats: Array<{ key: string; allowed: number }> = []
+    if (ent.covers > 0) manualCats.push({ key: "album_cover", allowed: ent.covers })
+    for (const f of ent.frames) manualCats.push({ key: `frame:${f.size}`, allowed: f.qty })
+    for (const [size, qty] of Object.entries(ent.prints)) {
+      if (ent.print_modes[size] === "auto") continue
+      if (qty > 0) manualCats.push({ key: `print:${size}`, allowed: qty })
+    }
+    const hasManual = manualCats.length > 0
+    const manualTotal = manualCats.reduce((s, c) => s + c.allowed, 0)
+
+    // Usadas por categoría (para progreso + "todo completo").
+    const usedByKey = new Map<string, number>()
+    for (const s of selByGallery.get(g.id) ?? []) {
+      const key = s.type === "album_cover" ? "album_cover" : `${s.type}:${s.spec}`
+      usedByKey.set(key, (usedByKey.get(key) ?? 0) + 1)
+    }
+    let selectedCount = 0
+    let allFull = hasManual
+    for (const c of manualCats) {
+      const used = Math.min(usedByKey.get(c.key) ?? 0, c.allowed)
+      selectedCount += used
+      if (used < c.allowed) allFull = false
+    }
+
+    const submitted = !!g.print_submitted_at
+    let status: StudioPrintStatus
+    if (!hasManual) status = "auto"
+    else if (submitted || allFull) status = "selected"
+    else if (selectedCount > 0) status = "in_progress"
+    else status = "pending"
+
+    const clientId = resolveClient(g)
+    const client = clientId ? clientMap.get(clientId) : undefined
+    const tokens = tokensByGallery.get(g.id) ?? []
+    const publicToken =
+      (tokens.find((t) => t.viewMode !== "selection") ?? tokens[0])?.token ?? null
+
+    const proj = g.project_id ? projectMap.get(g.project_id) : undefined
+    const deliveredDate =
+      g.delivery_date ??
+      proj?.event_date ??
+      (g.delivery_ready_at ? g.delivery_ready_at.slice(0, 10) : null)
+
+    items.push({
+      galleryId: g.id,
+      galleryName: g.name ?? "Galería",
+      projectId: g.project_id ?? null,
+      clientName: client?.name ?? null,
+      clientPhone: client?.phone ?? null,
+      publicToken,
+      status,
+      submittedAt: g.print_submitted_at ?? null,
+      locked: !!g.print_locked,
+      deliveredDate,
+      summary: summarizeEntitlements(ent),
+      hasManual,
+      selectedCount,
+      manualTotal,
+    })
+  }
+
+  // Orden: primero lo que espera acción del cliente (pending → in_progress),
+  // luego lo listo; dentro de cada grupo, entregas más recientes primero.
+  const rank: Record<StudioPrintStatus, number> = {
+    pending: 0,
+    in_progress: 1,
+    selected: 2,
+    auto: 3,
+  }
+  items.sort((a, b) => {
+    if (rank[a.status] !== rank[b.status]) return rank[a.status] - rank[b.status]
+    return (b.deliveredDate ?? "").localeCompare(a.deliveredDate ?? "")
+  })
+  return items
 }
 
 /** Vistas de impresión de todas las galerías de una sesión con impresos activos. */

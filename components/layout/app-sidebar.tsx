@@ -49,6 +49,7 @@ import {
   Tag,
   MailCheck,
   Shirt,
+  Printer,
   type LucideIcon,
 } from "lucide-react"
 
@@ -124,6 +125,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { type: "link", href: "/deliveries", label: "Pipeline / Entregas", icon: Workflow },
       { type: "link", href: "/galleries", label: "Galerías", icon: ImageIcon },
+      { type: "link", href: "/impresiones", label: "Impresiones", icon: Printer },
     ],
   },
   {

@@ -129,3 +129,34 @@ export function catLabel(type: PrintSelectionType, spec: string | null): string 
   if (type === "frame") return `Marco ${spec}`
   return `Impresión ${spec}`
 }
+
+/**
+ * Resumen corto y legible de lo que incluye el plan en impresos, para listas
+ * administrativas. Ej.: "Portada de álbum · 2 marcos 12x18 · Impresiones 5x7 (todas)".
+ */
+export function summarizeEntitlements(e: PrintEntitlements): string {
+  const parts: string[] = []
+  if (e.covers > 0) {
+    parts.push(e.covers === 1 ? "Portada de álbum" : `${e.covers} portadas`)
+  }
+  if (e.albums > 0) {
+    parts.push(
+      e.album_size
+        ? `Álbum ${e.album_size}`
+        : e.albums === 1
+          ? "Álbum"
+          : `${e.albums} álbumes`,
+    )
+  }
+  for (const f of e.frames) {
+    parts.push(`${f.qty} marco${f.qty === 1 ? "" : "s"} ${f.size}`)
+  }
+  for (const [size, qty] of Object.entries(e.prints)) {
+    if (e.print_modes[size] === "auto") {
+      parts.push(`Impresiones ${size} (todas)`)
+    } else if (qty > 0) {
+      parts.push(`${qty} impresi${qty === 1 ? "ón" : "ones"} ${size}`)
+    }
+  }
+  return parts.join(" · ") || "Impresiones"
+}
