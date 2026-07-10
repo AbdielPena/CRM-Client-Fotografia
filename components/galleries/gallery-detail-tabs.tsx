@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   Ban,
   Truck,
+  Printer,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -191,8 +192,11 @@ interface Props {
   motherMessageFrom?: string | null
   motherMessageEnabled?: boolean
   /** Paneles de entrega renderizados en el server (Fecha de entrega, Google
-   *  Drive, Luxury Book, Impresión) — se muestran dentro de la pestaña "Entrega". */
+   *  Drive, Luxury Book) — se muestran dentro de la pestaña "Entrega". */
   deliverySlot?: React.ReactNode
+  /** Producción de impresión del cliente (PrintProductionPanel) — su propia
+   *  pestaña "Impresiones". Null cuando el plan no tiene impresos / nada que producir. */
+  printsSlot?: React.ReactNode
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -218,6 +222,7 @@ export function GalleryDetailTabs({
   motherMessageFrom = null,
   motherMessageEnabled = false,
   deliverySlot = null,
+  printsSlot = null,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -287,6 +292,11 @@ export function GalleryDetailTabs({
           <TabsTrigger value="delivery" className={navCls}>
             <Truck className="h-4 w-4" /> Entrega
           </TabsTrigger>
+          {printsSlot && (
+            <TabsTrigger value="prints" className={navCls}>
+              <Printer className="h-4 w-4" /> Impresiones
+            </TabsTrigger>
+          )}
           <TabsTrigger value="pins" className={navCls}>
             <KeyRound className="h-4 w-4" /> PINs
           </TabsTrigger>
@@ -384,6 +394,12 @@ export function GalleryDetailTabs({
             {deliverySlot}
           </div>
         </TabsContent>
+
+        {printsSlot && (
+          <TabsContent value="prints" className="mt-5">
+            {printsSlot}
+          </TabsContent>
+        )}
 
         <TabsContent value="pins" className="mt-5">
           <PinsTab galleryId={gallery.id} pins={pins} />

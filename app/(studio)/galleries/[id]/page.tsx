@@ -242,7 +242,8 @@ export default async function GalleryDetailPage({
   const driveBackup = showDeliveryPanels ? await getDriveBackupStatusAction(galleryId) : null
 
   // Toda la parte de ENTREGA vive en la pestaña "Entrega" del navbar (más
-  // organizada): Fecha de entrega + Google Drive + Luxury Book + Impresión.
+  // organizada): Fecha de entrega + Google Drive + Luxury Book. La producción de
+  // IMPRESIÓN tiene su propia pestaña "Impresiones" (ver printsSlot abajo).
   // "Validar entrega" se antepone dentro de la pestaña (en GalleryDetailTabs).
   const deliverySlot = (
     <>
@@ -290,13 +291,23 @@ export default async function GalleryDetailPage({
           }}
         />
       )}
-      <PrintProductionPanel
-        view={printView}
-        waPrintTemplate={waPrintTemplate}
-        printsReadyTemplate={waPrintsReadyTemplate}
-      />
     </>
   )
+
+  // IMPRESIONES: pestaña propia en el navbar de la galería (solo si el plan tiene
+  // impresos y hay algo que producir). Antes colgaba al final de "Entrega".
+  const printRelevant =
+    !!printView &&
+    (printView.state.enabled ||
+      printView.state.categories.some((c) => c.used > 0 || c.mode === "auto"))
+  const printsSlot = printRelevant ? (
+    <PrintProductionPanel
+      view={printView}
+      title="Producción de impresión del cliente"
+      waPrintTemplate={waPrintTemplate}
+      printsReadyTemplate={waPrintsReadyTemplate}
+    />
+  ) : null
 
   return (
     <>
@@ -380,6 +391,7 @@ export default async function GalleryDetailPage({
 
       <GalleryDetailTabs
         deliverySlot={deliverySlot}
+        printsSlot={printsSlot}
         gallery={{
           id: gallery.id,
           name: gallery.name,
