@@ -16,6 +16,7 @@ import {
   Send,
   ExternalLink,
   MessageCircle,
+  Printer,
 } from "lucide-react"
 import { formatDoPhone } from "@/lib/whatsapp/templates"
 
@@ -24,8 +25,11 @@ import { getClientById } from "@/server/services/client.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { getAssetThumbUrl } from "@/server/services/gallery.service"
+import { listClientPrintOverview } from "@/server/services/print-selection.service"
+import { getPrintWaTemplate } from "@/server/services/share-message.service"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
+import { PrintRow } from "@/components/prints/print-overview-list"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { CollapsibleCard } from "@/components/ui/collapsible-card"
 import { NoteForm } from "@/components/shared/note-form"
@@ -159,6 +163,12 @@ export default async function ClientDetailPage({
       coverThumbs[row.id] = getAssetThumbUrl(row.thumb_key)
     }
   }
+
+  // Impresiones del cliente (estado por galería entregada de un plan con impresos).
+  const [clientPrints, waPrintTemplate] = await Promise.all([
+    listClientPrintOverview(session.studioId, params.id).catch(() => []),
+    getPrintWaTemplate(session.studioId).catch(() => ""),
+  ])
 
   // Métricas para resumen
   const totalInvoiced = invoices.reduce(
@@ -417,6 +427,24 @@ export default async function ClientDetailPage({
 
             {/* Entregas finales */}
             <DeliveriesPanel clientId={client.id as string} />
+
+            {/* Impresiones — solo si el cliente tiene galerías con impresos */}
+            {clientPrints.length > 0 && (
+              <SectionCard
+                icon={<Printer className="h-4 w-4 text-muted-foreground" />}
+                title={`Impresiones (${clientPrints.length})`}
+              >
+                <div className="space-y-3 p-5">
+                  {clientPrints.map((it) => (
+                    <PrintRow
+                      key={it.galleryId}
+                      item={it}
+                      waPrintTemplate={waPrintTemplate}
+                    />
+                  ))}
+                </div>
+              </SectionCard>
+            )}
 
             {/* Bookings/Reservas */}
             <SectionCard

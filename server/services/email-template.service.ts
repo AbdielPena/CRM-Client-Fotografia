@@ -44,6 +44,7 @@ export type TemplateSlug =
   | "gallery_final_delivery_available"
   | "gallery_drive_link_available"
   | "print_selection_ready"
+  | "print_selection_received"
   // Entregas
   | "delivery_ready"
   // Otros
@@ -438,6 +439,25 @@ export const TEMPLATE_CATALOG: Record<
       { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
     ],
   },
+  print_selection_received: {
+    label: "Recibimos tu selección de impresiones",
+    description:
+      "Se envía automáticamente al cliente cuando ENVÍA su selección de impresiones: confirma que la recibiste y ya la estás preparando.",
+    category: "gallery",
+    defaultSubject: "¡Recibimos tu selección de impresiones! — {{gallery_name}}",
+    defaultBodyHtml:
+      `<p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Impresiones</p>` +
+      `<h1>¡Recibimos tu selección! 🖼️</h1>` +
+      `<p>Hola <strong>{{client_name}}</strong>,</p>` +
+      `<p>¡Gracias! Ya recibimos tu selección de impresiones de <strong>{{gallery_name}}</strong> y comenzamos a prepararla. Te avisaremos apenas esté lista.</p>` +
+      `<div style="margin:20px 0 0;padding:14px 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px"><p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#3f3f46">Entrega de impresiones</p><p style="margin:0;font-size:12.5px;line-height:1.55;color:#52525b">La entrega de impresiones se realiza directamente en el estudio. Si deseas envío, este tendrá un costo adicional y estará sujeto a disponibilidad, ubicación y tiempos de entrega.</p></div>` +
+      `<p style="margin:16px 0 0">— {{studio_name}}</p>`,
+    variables: [
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "gallery_name", label: "Galería", example: "Quinceañera de María" },
+      { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
+    ],
+  },
   delivery_ready: {
     label: "Entrega lista",
     description: "Notifica al cliente que sus fotos editadas están listas.",
@@ -464,14 +484,21 @@ export const TEMPLATE_CATALOG: Record<
     ],
   },
   prints_ready: {
-    label: "Impresiones listas",
-    description: "Notifica al cliente que sus impresiones están listas para retirar.",
+    label: "Impresiones listas para retirar",
+    description:
+      "Se envía al cliente (botón \"Avisar impresiones listas\" en la sesión/galería) cuando sus impresiones están listas para retirar en el estudio.",
     category: "delivery",
-    defaultSubject: "Tus impresiones están listas",
+    defaultSubject: "🎉 Tus impresiones están listas — {{gallery_name}}",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>Tus impresiones ya están listas para retirar.</p>`,
+      `<p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Impresiones</p>` +
+      `<h1>¡Tus impresiones están listas! 🎉</h1>` +
+      `<p>Hola <strong>{{client_name}}</strong>,</p>` +
+      `<p>Tus impresiones de <strong>{{gallery_name}}</strong> ya están listas para retirar <strong>en el estudio</strong>. ¡Te esperamos!</p>` +
+      `<div style="margin:20px 0 0;padding:14px 16px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:12px"><p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#3f3f46">Entrega</p><p style="margin:0;font-size:12.5px;line-height:1.55;color:#52525b">La entrega de impresiones se realiza directamente en el estudio. Si deseas envío, este tendrá un costo adicional y estará sujeto a disponibilidad, ubicación y tiempos de entrega.</p></div>` +
+      `<p style="margin:16px 0 0">— {{studio_name}}</p>`,
     variables: [
-      { key: "client_name", label: "Cliente", example: "Juan" },
+      { key: "client_name", label: "Cliente", example: "María" },
+      { key: "gallery_name", label: "Galería", example: "Quinceañera de María" },
       { key: "studio_name", label: "Estudio", example: "Abby Pixel" },
     ],
   },

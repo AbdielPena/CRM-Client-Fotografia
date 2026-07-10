@@ -36,6 +36,7 @@ import {
   getSelectionWaTemplate,
   getDeliveryWaTemplate,
   getPrintWaTemplate,
+  getPrintsReadyWaTemplate,
 } from "@/server/services/share-message.service"
 import {
   getReselectionForGallery,
@@ -161,11 +162,13 @@ export default async function GalleryDetailPage({
 
   // Mensajes de WhatsApp (fuente única, editables en Ajustes → WhatsApp):
   // selección + entrega final (esta con {{link_web}} y {{link_drive}}).
-  const [waSelectionTemplate, waDeliveryTemplate, waPrintTemplate] = await Promise.all([
-    getSelectionWaTemplate(session.studioId),
-    getDeliveryWaTemplate(session.studioId),
-    getPrintWaTemplate(session.studioId),
-  ])
+  const [waSelectionTemplate, waDeliveryTemplate, waPrintTemplate, waPrintsReadyTemplate] =
+    await Promise.all([
+      getSelectionWaTemplate(session.studioId),
+      getDeliveryWaTemplate(session.studioId),
+      getPrintWaTemplate(session.studioId),
+      getPrintsReadyWaTemplate(session.studioId),
+    ])
 
   // Hidratar assets con thumbUrl + webUrl
   const assetsWithUrls = assets.map((a) => ({
@@ -287,7 +290,11 @@ export default async function GalleryDetailPage({
           }}
         />
       )}
-      <PrintProductionPanel view={printView} waPrintTemplate={waPrintTemplate} />
+      <PrintProductionPanel
+        view={printView}
+        waPrintTemplate={waPrintTemplate}
+        printsReadyTemplate={waPrintsReadyTemplate}
+      />
     </>
   )
 

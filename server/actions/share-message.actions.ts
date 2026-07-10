@@ -7,6 +7,7 @@ import {
   setSelectionWaTemplate,
   setDeliveryWaTemplate,
   setPrintWaTemplate,
+  setPrintsReadyWaTemplate,
 } from "@/server/services/share-message.service"
 
 export async function updateSelectionWaMessageAction(message: string): Promise<void> {
@@ -24,5 +25,11 @@ export async function updateDeliveryWaMessageAction(message: string): Promise<vo
 export async function updatePrintWaMessageAction(message: string): Promise<void> {
   const ctx = await requireStudioAuth()
   await setPrintWaTemplate(ctx.studioId, message)
+  revalidatePath("/settings/whatsapp")
+}
+
+export async function updatePrintsReadyWaMessageAction(message: string): Promise<void> {
+  const ctx = await requireStudioAuth()
+  await setPrintsReadyWaTemplate(ctx.studioId, message)
   revalidatePath("/settings/whatsapp")
 }

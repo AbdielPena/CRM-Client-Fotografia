@@ -5,6 +5,7 @@ import {
   DEFAULT_SELECTION_WA_MESSAGE,
   DEFAULT_DELIVERY_WA_MESSAGE,
   DEFAULT_PRINT_WA_MESSAGE,
+  DEFAULT_PRINTS_READY_WA_MESSAGE,
 } from "@/lib/share/wa-message"
 
 /**
@@ -95,6 +96,36 @@ export async function setPrintWaTemplate(
   const { error } = await sb
     .from("studio_branding")
     .update({ whatsapp_print_message: message.trim() || null })
+    .eq("studio_id", studioId)
+  if (error) throw error
+}
+
+/**
+ * Mensaje de WhatsApp para avisar que las IMPRESIONES están LISTAS para retirar
+ * — fuente única editable (`studio_branding.whatsapp_prints_ready_message`).
+ * Variables: {{cliente}}, {{galeria}}.
+ */
+export async function getPrintsReadyWaTemplate(studioId: string): Promise<string> {
+  const sb = untypedService()
+  const { data } = await sb
+    .from("studio_branding")
+    .select("whatsapp_prints_ready_message")
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const v = (data as { whatsapp_prints_ready_message?: string | null } | null)
+    ?.whatsapp_prints_ready_message
+  return v && v.trim() ? v : DEFAULT_PRINTS_READY_WA_MESSAGE
+}
+
+export async function setPrintsReadyWaTemplate(
+  studioId: string,
+  message: string,
+): Promise<void> {
+  const sb = untypedService()
+  await sb.rpc("studio_get_or_create_branding", { p_studio_id: studioId })
+  const { error } = await sb
+    .from("studio_branding")
+    .update({ whatsapp_prints_ready_message: message.trim() || null })
     .eq("studio_id", studioId)
   if (error) throw error
 }

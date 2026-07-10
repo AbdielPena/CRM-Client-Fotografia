@@ -12,6 +12,7 @@ import {
 import type { PrintAdminView } from "@/server/services/print-selection.service"
 import { PrintLockToggle } from "@/components/galleries/print-lock-toggle"
 import { PrintWhatsAppShare } from "@/components/galleries/print-whatsapp-share"
+import { PrintReadyButton } from "@/components/galleries/print-ready-button"
 
 function fmtDate(iso: string | null): string | null {
   if (!iso) return null
@@ -65,10 +66,12 @@ export function PrintProductionPanel({
   view,
   title = "Producción de impresión",
   waPrintTemplate,
+  printsReadyTemplate,
 }: {
   view: PrintAdminView | null
   title?: string
   waPrintTemplate?: string
+  printsReadyTemplate?: string
 }) {
   if (!view) return null
   const { galleryId, galleryName, state, thumbByAsset } = view
@@ -284,6 +287,16 @@ export function PrintProductionPanel({
           template={waPrintTemplate}
         />
       )}
+
+      {/* Avisar que las impresiones están listas para retirar (correo + WhatsApp) */}
+      <PrintReadyButton
+        galleryId={galleryId}
+        galleryName={galleryName}
+        clientName={view.clientName}
+        clientPhone={view.clientPhone}
+        printReadyAt={view.printReadyAt}
+        template={printsReadyTemplate}
+      />
     </div>
   )
 }

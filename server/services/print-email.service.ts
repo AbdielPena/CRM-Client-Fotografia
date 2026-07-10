@@ -137,3 +137,151 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
     relatedEntityId: galleryId,
   })
 }
+
+// ---------------------------------------------------------------------------
+// Proceso de impresiones: "selección recibida" y "impresiones listas".
+// Cada uno manda el correo editable correspondiente + (si el canal de WhatsApp
+// está conectado) espeja el aviso por WhatsApp. Best-effort e idempotente.
+// ---------------------------------------------------------------------------
+
+/**
+ * Espeja un aviso de cara al cliente por WhatsApp (Cloud API transaccional).
+ * Solo envía si el estudio tiene el canal conectado Y existe la plantilla de
+ * Meta aprobada para ese `emailSlug`. Si no, no-op (el correo ya salió; el
+ * WhatsApp manual sigue disponible desde el botón). Nunca lanza.
+ */
+async function mirrorPrintWhatsApp(
+  studioId: string,
+  clientPhone: string | null,
+  firstName: string,
+  emailSlug: string,
+): Promise<boolean> {
+  try {
+    if (!clientPhone) return false
+    const { WHATSAPP_BY_EMAIL_SLUG } = await import("@/lib/whatsapp/meta-templates")
+    const tpl = WHATSAPP_BY_EMAIL_SLUG[emailSlug]
+    if (!tpl) return false
+    const { getWhatsAppStatus, sendTemplateMessage } = await import(
+      "@/server/services/whatsapp/cloud-api.service"
+    )
+    const status = await getWhatsAppStatus(studioId)
+    if (!status.connected) return false
+    const r = await sendTemplateMessage(studioId, clientPhone, tpl.name, tpl.language, [
+      firstName,
+    ])
+    return !!r.ok
+  } catch (err) {
+    console.error("[print] mirrorPrintWhatsApp", err)
+    return false
+  }
+}
+
+/**
+ * Manda el correo (plantilla editable `slug`) de cara al cliente para un paso
+ * del proceso de impresiones + espeja por WhatsApp. Devuelve qué se envió.
+ * Con `expectStudioId` valida propiedad (para acciones del admin).
+ */
+async function sendPrintLifecycleEmail(
+  galleryId: string,
+  slug: "print_selection_received" | "prints_ready",
+  expectStudioId?: string,
+): Promise<{ emailed: boolean; waSent: boolean }> {
+  const sb = createSupabaseServiceClient()
+  const { data: gRow } = await sb
+    .from("galleries")
+    .select("id, studio_id, client_id, name")
+    .eq("id", galleryId)
+    .maybeSingle()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g = gRow as any
+  if (!g) return { emailed: false, waSent: false }
+  if (expectStudioId && g.studio_id !== expectStudioId) {
+    return { emailed: false, waSent: false }
+  }
+  if (!g.client_id) return { emailed: false, waSent: false }
+
+  const { data: clientRow } = await sb
+    .from("clients")
+    .select("name, email, phone")
+    .eq("id", g.client_id)
+    .maybeSingle()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = clientRow as any
+
+  const { data: studioRow } = await sb
+    .from("studios")
+    .select("name, email")
+    .eq("id", g.studio_id)
+    .maybeSingle()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const studio = studioRow as any
+  const studioName = studio?.name ?? "Tu fotógrafo"
+
+  let emailed = false
+  if (client?.email) {
+    const catalog = TEMPLATE_CATALOG[slug]
+    const { subject, bodyHtml, fromName, replyTo } = await resolveTemplate(
+      g.studio_id,
+      slug,
+      {
+        client_name: client.name ?? "",
+        gallery_name: g.name ?? "",
+        studio_name: studioName,
+      },
+      { subject: catalog.defaultSubject, bodyHtml: catalog.defaultBodyHtml },
+    )
+    await enqueueEmail({
+      studioId: g.studio_id,
+      toEmail: client.email,
+      toName: client.name ?? undefined,
+      fromEmail: studio?.email ?? null,
+      fromName: fromName ?? studioName,
+      replyTo: replyTo ?? studio?.email ?? null,
+      subject,
+      bodyHtml,
+      relatedEntityType: "gallery",
+      relatedEntityId: galleryId,
+    })
+    emailed = true
+  }
+
+  const firstName = (client?.name ?? "").trim().split(/\s+/)[0] || ""
+  const waSent = await mirrorPrintWhatsApp(g.studio_id, client?.phone ?? null, firstName, slug)
+  return { emailed, waSent }
+}
+
+/**
+ * El cliente ENVIÓ su selección de impresiones → confirmación al cliente
+ * (correo `print_selection_received` + WhatsApp). Best-effort.
+ */
+export async function onPrintSelectionSubmitted(galleryId: string): Promise<void> {
+  try {
+    await sendPrintLifecycleEmail(galleryId, "print_selection_received")
+  } catch (err) {
+    console.error("[print] onPrintSelectionSubmitted", err)
+  }
+}
+
+/**
+ * Aviso "impresiones listas para retirar" → correo `prints_ready` + WhatsApp,
+ * y marca `galleries.print_ready_at`. Disparado por el botón del estudio.
+ */
+export async function sendPrintsReadyNotification(
+  galleryId: string,
+  expectStudioId?: string,
+): Promise<{ ok: boolean; emailed: boolean; waSent: boolean }> {
+  const res = await sendPrintLifecycleEmail(galleryId, "prints_ready", expectStudioId)
+  if (res.emailed || res.waSent) {
+    try {
+      // untypedService: print_ready_at no está en los tipos generados (columna nueva).
+      const { untypedService } = await import("@/server/supabase/untyped")
+      await untypedService()
+        .from("galleries")
+        .update({ print_ready_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", galleryId)
+    } catch (err) {
+      console.error("[print] set print_ready_at", err)
+    }
+  }
+  return { ok: res.emailed || res.waSent, ...res }
+}

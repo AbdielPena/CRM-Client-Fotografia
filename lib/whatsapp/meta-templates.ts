@@ -129,6 +129,26 @@ export const WHATSAPP_TEMPLATE_CATALOG: WhatsAppTemplateDef[] = [
     example: [NAME],
     emailSlug: "gallery_final_delivery_available",
   },
+  {
+    name: "impresiones_seleccion_recibida",
+    label: "Selección de impresiones recibida",
+    category: "UTILITY",
+    language: "es",
+    body:
+      "¡Hola {{1}}! 🖼️ Recibimos tu selección de impresiones y ya la estamos preparando. Te avisamos apenas esté lista. ¡Gracias! — AbbyPixel",
+    example: [NAME],
+    emailSlug: "print_selection_received",
+  },
+  {
+    name: "impresiones_listas",
+    label: "Impresiones listas para retirar",
+    category: "UTILITY",
+    language: "es",
+    body:
+      "¡Hola {{1}}! 🎉 Tus impresiones ya están listas para retirar en el estudio. ¡Te esperamos! — AbbyPixel",
+    example: [NAME],
+    emailSlug: "prints_ready",
+  },
 
   {
     name: "cambio_hora_sesion",

@@ -16,6 +16,11 @@ export const DEFAULT_DELIVERY_WA_MESSAGE =
 export const DEFAULT_PRINT_WA_MESSAGE =
   '¡Hola {{cliente}}! 🖼️ Tus fotos de "{{galeria}}" ya están listas. Ahora puedes elegir tus impresiones incluidas en tu plan (marcos, álbum y fotos) aquí: {{link}}'
 
+// Mensaje para avisar que las IMPRESIONES ya están listas para retirar en el
+// estudio. Variables: {{cliente}}, {{galeria}}.
+export const DEFAULT_PRINTS_READY_WA_MESSAGE =
+  '¡Hola {{cliente}}! 🎉 Tus impresiones de "{{galeria}}" ya están listas para retirar en el estudio. ¡Te esperamos!'
+
 export type WaMessageVars = {
   cliente?: string | null
   galeria?: string | null

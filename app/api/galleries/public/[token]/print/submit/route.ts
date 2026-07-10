@@ -18,8 +18,11 @@ export async function POST(
     // Por defecto NO bloquea (el cliente puede ajustar; el estudio cierra cuando quiera).
     await submitGalleryPrintSelection({ galleryId: view.gallery.id, lock: false })
 
-    // Notifica al estudio (best-effort).
+    // Notifica al estudio (in-app) + confirma al cliente por correo/WhatsApp (best-effort).
     void notifyStudioPrintSubmitted(view.gallery.id)
+    void import("@/server/services/print-email.service").then((m) =>
+      m.onPrintSelectionSubmitted(view.gallery.id),
+    )
 
     const state = await getGalleryPrintState(view.gallery.id)
     return NextResponse.json({ ok: true, state })

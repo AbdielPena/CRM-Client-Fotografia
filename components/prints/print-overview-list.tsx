@@ -185,7 +185,7 @@ export function PrintOverviewList({
 // Fila / tarjeta
 // ---------------------------------------------------------------------------
 
-function PrintRow({
+export function PrintRow({
   item,
   waPrintTemplate,
 }: {

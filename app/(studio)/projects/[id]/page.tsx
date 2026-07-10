@@ -28,7 +28,10 @@ import { ProjectCollaboratorsCard } from "@/components/collaborators/project-col
 import { EntityTasks } from "@/components/tasks/entity-tasks"
 import { getProjectPrintViews } from "@/server/services/print-selection.service"
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
-import { getPrintWaTemplate } from "@/server/services/share-message.service"
+import {
+  getPrintWaTemplate,
+  getPrintsReadyWaTemplate,
+} from "@/server/services/share-message.service"
 import {
   normalizeRequirements,
   evaluateRequirements,
@@ -219,6 +222,9 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     () => [],
   )
   const waPrintTemplate = await getPrintWaTemplate(session.studioId).catch(
+    () => undefined,
+  )
+  const waPrintsReadyTemplate = await getPrintsReadyWaTemplate(session.studioId).catch(
     () => undefined,
   )
   const projectCollaborators = projCollabRows.map((a) => ({
@@ -599,6 +605,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   view={v}
                   title={v.galleryName}
                   waPrintTemplate={waPrintTemplate}
+                  printsReadyTemplate={waPrintsReadyTemplate}
                 />
               ))}
             </div>

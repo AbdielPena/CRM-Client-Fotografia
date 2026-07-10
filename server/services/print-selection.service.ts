@@ -444,6 +444,8 @@ export interface PrintAdminView {
   state: GalleryPrintState
   /** thumbUrl de cada foto seleccionada (portada / marcos) para previsualizar. */
   thumbByAsset: Record<string, string | null>
+  /** Cuándo se avisó al cliente que sus impresiones están listas (o null). */
+  printReadyAt: string | null
 }
 
 /** Estado de impresión + miniaturas de lo elegido, para el panel del estudio. */
@@ -469,10 +471,14 @@ export async function getGalleryPrintAdminView(
 
   const { data: g } = await sb
     .from("galleries")
-    .select("name, client_id")
+    .select("name, client_id, print_ready_at")
     .eq("id", galleryId)
     .maybeSingle()
-  const gallery = g as { name?: string; client_id?: string | null } | null
+  const gallery = g as {
+    name?: string
+    client_id?: string | null
+    print_ready_at?: string | null
+  } | null
 
   // Cliente (nombre + teléfono para el link/WhatsApp).
   let clientName: string | null = null
@@ -508,6 +514,7 @@ export async function getGalleryPrintAdminView(
     publicToken,
     state,
     thumbByAsset,
+    printReadyAt: gallery?.print_ready_at ?? null,
   }
 }
 
@@ -544,6 +551,65 @@ export interface StudioPrintItem {
   manualTotal: number
 }
 
+interface PrintGalleryRow {
+  id: string
+  project_id: string | null
+  package_id: string | null
+  name: string | null
+  client_id: string | null
+  print_submitted_at: string | null
+  print_locked: boolean | null
+  delivery_ready_at: string | null
+  delivery_date: string | null
+}
+
+const PRINT_GALLERY_COLS =
+  "id, project_id, package_id, name, client_id, print_selection_enabled, print_submitted_at, print_locked, gallery_type, delivery_ready_at, delivery_date"
+
+/** Señales de "galería entregada" (cualquiera basta). */
+const DELIVERED_OR =
+  "delivery_ready_at.not.is.null,gallery_type.eq.final_delivery,print_selection_enabled.is.true,print_submitted_at.not.is.null"
+
+/**
+ * Galerías candidatas del estudio: entregadas de alguna forma. Con `clientId`
+ * se limita a las de ese cliente (por galería o por su proyecto).
+ */
+async function loadPrintCandidateGalleries(
+  studioId: string,
+  clientId?: string,
+): Promise<PrintGalleryRow[]> {
+  const sb = untypedService()
+  let projectIdsForClient: string[] = []
+  if (clientId) {
+    const { data } = await sb
+      .from("projects")
+      .select("id")
+      .eq("studio_id", studioId)
+      .eq("client_id", clientId)
+      .is("deleted_at", null)
+    projectIdsForClient = ((data ?? []) as Array<{ id: string }>).map((p) => p.id)
+  }
+  let query = sb
+    .from("galleries")
+    .select(PRINT_GALLERY_COLS)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .or(DELIVERED_OR)
+  if (clientId) {
+    // La galería es de este cliente si: (a) su client_id es él, O (b) NO tiene
+    // client_id propio y hereda el cliente de su proyecto (que es de él). NO
+    // basta con que el proyecto sea suyo si la galería tiene otro client_id
+    // explícito (dato inconsistente): en ese caso resolveClient etiquetaría con
+    // el otro cliente y el botón de WhatsApp marcaría al número equivocado.
+    const clientOr = projectIdsForClient.length
+      ? `client_id.eq.${clientId},and(client_id.is.null,project_id.in.(${projectIdsForClient.join(",")}))`
+      : `client_id.eq.${clientId}`
+    query = query.or(clientOr)
+  }
+  const { data } = await query
+  return (data ?? []) as PrintGalleryRow[]
+}
+
 /**
  * Lista todas las galerías ENTREGADAS del estudio cuyo plan incluye impresos,
  * con el estado de selección de impresiones de cada una. Alimenta el apartado
@@ -553,33 +619,26 @@ export interface StudioPrintItem {
 export async function listStudioPrintOverview(
   studioId: string,
 ): Promise<StudioPrintItem[]> {
-  const sb = untypedService()
+  return buildPrintItems(await loadPrintCandidateGalleries(studioId))
+}
 
-  // 1. Candidatas: galerías entregadas de alguna forma (entrega lista, tipo
-  //    final_delivery, selección de impresión ya habilitada, o ya enviada).
-  const { data: galRaw } = await sb
-    .from("galleries")
-    .select(
-      "id, project_id, package_id, name, client_id, print_selection_enabled, print_submitted_at, print_locked, gallery_type, delivery_ready_at, delivery_date",
-    )
-    .eq("studio_id", studioId)
-    .is("deleted_at", null)
-    .or(
-      "delivery_ready_at.not.is.null,gallery_type.eq.final_delivery,print_selection_enabled.is.true,print_submitted_at.not.is.null",
-    )
-  interface GRow {
-    id: string
-    project_id: string | null
-    package_id: string | null
-    name: string | null
-    client_id: string | null
-    print_submitted_at: string | null
-    print_locked: boolean | null
-    delivery_ready_at: string | null
-    delivery_date: string | null
-  }
-  const galleries = (galRaw ?? []) as GRow[]
+/**
+ * Igual que listStudioPrintOverview pero solo las impresiones de UN cliente
+ * (para la sección "Impresiones" del perfil del cliente).
+ */
+export async function listClientPrintOverview(
+  studioId: string,
+  clientId: string,
+): Promise<StudioPrintItem[]> {
+  return buildPrintItems(await loadPrintCandidateGalleries(studioId, clientId))
+}
+
+/** Calcula el estado de impresión de un conjunto de galerías candidatas. */
+async function buildPrintItems(
+  galleries: PrintGalleryRow[],
+): Promise<StudioPrintItem[]> {
   if (galleries.length === 0) return []
+  const sb = untypedService()
   const galleryIds = galleries.map((g) => g.id)
 
   // 2. Proyectos (heredar package_id / event_date / client_id si faltan).
@@ -609,9 +668,9 @@ export async function listStudioPrintOverview(
     }
   }
 
-  const resolvePkg = (g: GRow): string | null =>
+  const resolvePkg = (g: PrintGalleryRow): string | null =>
     g.package_id ?? (g.project_id ? projectMap.get(g.project_id)?.package_id ?? null : null)
-  const resolveClient = (g: GRow): string | null =>
+  const resolveClient = (g: PrintGalleryRow): string | null =>
     g.client_id ?? (g.project_id ? projectMap.get(g.project_id)?.client_id ?? null : null)
 
   // 3. Entitlements por paquete.
