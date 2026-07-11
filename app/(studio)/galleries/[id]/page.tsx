@@ -302,10 +302,12 @@ export default async function GalleryDetailPage({
 
   // IMPRESIONES: pestaña propia en el navbar de la galería (solo si el plan tiene
   // impresos y hay algo que producir). Antes colgaba al final de "Entrega".
+  // Solo ENTREGA FINAL: las impresiones se eligen de las fotos entregadas.
+  // `state.enabled` ya exige entrega; no mostrar en galerías de selección.
   const printRelevant =
     !!printView &&
     (printView.state.enabled ||
-      printView.state.categories.some((c) => c.used > 0 || c.mode === "auto"))
+      printView.state.categories.some((c) => c.used > 0))
   const printsSlot = printRelevant ? (
     <PrintProductionPanel
       view={printView}

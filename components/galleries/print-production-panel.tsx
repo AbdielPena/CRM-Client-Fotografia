@@ -78,7 +78,9 @@ export function PrintProductionPanel({
 
   const hasAuto = state.categories.some((c) => c.mode === "auto")
   const anySelected = state.categories.some((c) => c.used > 0)
-  if (!state.enabled && !anySelected && !hasAuto) return null
+  // Solo ENTREGA FINAL: `state.enabled` ya exige entrega. NO mostrar en galerías
+  // de selección aunque el plan tenga una impresión "automática" (hasAuto).
+  if (!state.enabled && !anySelected) return null
 
   const coverCat = state.categories.find((c) => c.type === "album_cover")
   const frameCats = state.categories.filter((c) => c.type === "frame")

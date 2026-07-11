@@ -849,11 +849,11 @@ export async function getProjectPrintViews(
   const out: PrintAdminView[] = []
   for (const row of (gals ?? []) as Array<{ id: string }>) {
     const v = await getGalleryPrintAdminView(row.id)
-    if (
-      v &&
-      (v.state.enabled ||
-        v.state.categories.some((c) => c.used > 0 || c.mode === "auto"))
-    ) {
+    // SOLO galerías de ENTREGA FINAL: las impresiones se eligen de las fotos
+    // ENTREGADAS, no de la selección. `state.enabled` ya exige entrega (fotos de
+    // entrega o selección de impresión habilitada). NO mostrar en galerías de
+    // selección/2da selección aunque el plan tenga una impresión "automática".
+    if (v && (v.state.enabled || v.state.categories.some((c) => c.used > 0))) {
       out.push(v)
     }
   }
