@@ -46,7 +46,6 @@ import { AssetGrid } from "@/components/galleries/asset-grid"
 import { AssetUploader, type UploadTarget } from "@/components/galleries/asset-uploader"
 import { DeliverToClientButton } from "@/components/galleries/deliver-to-client-modal"
 import { DeliveryLinksPanel } from "@/components/galleries/delivery-links-panel"
-import { MotherDedicationCard } from "@/components/galleries/mother-dedication-card"
 import { ValidateDeliveryTab } from "@/components/galleries/validate-delivery-tab"
 import { GalleryAppearanceTab } from "@/components/galleries/gallery-appearance-tab"
 import { GalleryActivityTab } from "@/components/galleries/gallery-activity-tab"
@@ -2500,18 +2499,9 @@ function ShareTab({
             <p className="rounded-lg border border-dashed border-border bg-card/40 px-4 py-3 text-[12px] text-muted-foreground">
               Sube las fotos editadas en la pestaña <strong>Entrega</strong> para
               generar los links de descarga, el álbum y activar las impresiones.
+              El <strong>mensaje de la madre</strong> lo editas en la pestaña Entrega.
             </p>
           )}
-
-          {/* Dedicatoria de la madre — se puede preparar apenas se habilita la
-              entrega (editable por el estudio o por la mamá vía link) */}
-          <MotherDedicationCard
-            galleryId={gallery.id}
-            publicToken={token}
-            initialMessage={motherMessage ?? ""}
-            initialFrom={motherMessageFrom ?? ""}
-            initialEnabled={motherMessageEnabled}
-          />
         </>
       )}
     </div>

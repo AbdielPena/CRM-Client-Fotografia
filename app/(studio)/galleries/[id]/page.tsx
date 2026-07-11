@@ -30,6 +30,7 @@ import { GalleryExtrasInvoiceButton } from "@/components/galleries/gallery-extra
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
 import { DriveBackupPanel } from "@/components/galleries/drive-backup-panel"
 import { LuxuryBookPanel } from "@/components/galleries/luxury-book-panel"
+import { MotherDedicationCard } from "@/components/galleries/mother-dedication-card"
 import { getGoogleDriveStatus } from "@/server/services/gallery-drive.service"
 import { getDriveBackupStatusAction } from "@/server/actions/gallery-drive.actions"
 import {
@@ -306,6 +307,25 @@ export default async function GalleryDetailPage({
                 showLogo?: boolean
               },
           }}
+        />
+      )}
+      {/* Mensaje / dedicatoria de la madre — junto a la entrega (aparece apenas se
+          habilita, para prepararlo; también editable por la mamá vía su link). */}
+      {deliveryEnabled && (
+        <MotherDedicationCard
+          galleryId={gallery.id}
+          publicToken={activeToken?.token ?? null}
+          initialMessage={
+            (gallery as unknown as { mother_message?: string | null }).mother_message ?? ""
+          }
+          initialFrom={
+            (gallery as unknown as { mother_message_from?: string | null })
+              .mother_message_from ?? ""
+          }
+          initialEnabled={
+            (gallery as unknown as { mother_message_enabled?: boolean })
+              .mother_message_enabled ?? false
+          }
         />
       )}
     </>
