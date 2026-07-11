@@ -166,6 +166,107 @@ export async function getReselectionForGallery(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Todas las RONDAS de re-selección de una galería, con sus fotos, para mostrarlas
+// como listas SEPARADAS en la pestaña Selecciones de la galería madre (así el
+// estudio ve cada ronda —163 → 71 → 42…— en un solo lugar, sin navegar galerías
+// anidadas).
+// ---------------------------------------------------------------------------
+
+export interface SelectionRoundPhoto {
+  id: string
+  thumbUrl: string | null
+  originalName: string
+}
+
+export interface SelectionRound {
+  galleryId: string
+  /** "2da selección", "3ra selección"… según la profundidad en la cadena. */
+  label: string
+  count: number
+  submittedAt: string | null
+  photos: SelectionRoundPhoto[]
+}
+
+const ROUND_ORDINALS = [
+  "",
+  "Selección",
+  "2da selección",
+  "3ra selección",
+  "4ta selección",
+  "5ta selección",
+  "6ta selección",
+  "7ma selección",
+  "8va selección",
+]
+
+/**
+ * Recorre la cadena de re-selecciones HACIA ABAJO desde `rootGalleryId` y
+ * devuelve cada galería descendiente (2da, 3ra…) con las fotos que el cliente
+ * eligió en esa ronda (♥ + listas), miniaturas ya resueltas. La ronda 1 (la
+ * propia galería madre) NO se incluye: ya se muestra con sus favoritos/listas.
+ */
+export async function getSelectionRoundsForGallery(
+  studioId: string,
+  rootGalleryId: string,
+): Promise<SelectionRound[]> {
+  const sb = untypedService()
+  const { getAssetThumbUrl } = await import("./gallery.service")
+  const rounds: SelectionRound[] = []
+  const seen = new Set<string>([rootGalleryId])
+  let parents = [rootGalleryId]
+  let depth = 1
+
+  // Cadena acotada (máx 8 niveles) por seguridad ante ciclos.
+  while (parents.length && depth < 8) {
+    const { data: children } = await sb
+      .from("galleries")
+      .select("id, selection_submitted_at, created_at")
+      .in("parent_gallery_id", parents)
+      .eq("studio_id", studioId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true })
+    const kids = ((children ?? []) as Array<{
+      id: string
+      selection_submitted_at: string | null
+    }>).filter((c) => !seen.has(c.id))
+    if (!kids.length) break
+    depth += 1
+    for (const kid of kids) {
+      seen.add(kid.id)
+      const assetIds = await getSelectedAssetIds(sb, kid.id)
+      const photos: SelectionRoundPhoto[] = []
+      if (assetIds.length) {
+        const { data: rows } = await sb
+          .from("gallery_assets")
+          .select("id, thumb_key, original_name, sort_order")
+          .in("id", assetIds.slice(0, 600))
+          .order("sort_order", { ascending: true })
+        for (const r of (rows ?? []) as Array<{
+          id: string
+          thumb_key: string | null
+          original_name: string | null
+        }>) {
+          photos.push({
+            id: r.id,
+            thumbUrl: getAssetThumbUrl(r.thumb_key),
+            originalName: r.original_name ?? "",
+          })
+        }
+      }
+      rounds.push({
+        galleryId: kid.id,
+        label: ROUND_ORDINALS[depth] ?? `${depth}ª selección`,
+        count: assetIds.length,
+        submittedAt: kid.selection_submitted_at ?? null,
+        photos,
+      })
+    }
+    parents = kids.map((k) => k.id)
+  }
+  return rounds
+}
+
 export async function createReselectionGallery(
   studioId: string,
   parentGalleryId: string,

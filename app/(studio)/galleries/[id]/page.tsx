@@ -40,6 +40,7 @@ import {
 } from "@/server/services/share-message.service"
 import {
   getReselectionForGallery,
+  getSelectionRoundsForGallery,
   countSelectedAssets,
 } from "@/server/services/reselection.service"
 
@@ -228,6 +229,11 @@ export default async function GalleryDetailPage({
   // cliente armó una lista, dejando el botón deshabilitado.
   const favoritesCount = await countSelectedAssets(galleryId)
   const reselection = await getReselectionForGallery(session.studioId, galleryId)
+  // Todas las rondas de re-selección (2da, 3ra…) con sus fotos, para mostrarlas
+  // como listas separadas en la pestaña Selecciones (todo en un solo lugar).
+  const selectionRounds = await getSelectionRoundsForGallery(session.studioId, galleryId).catch(
+    () => [],
+  )
 
   // Estado de selección de impresión + miniaturas (para el panel de producción).
   const printView = await getGalleryPrintAdminView(galleryId)
@@ -449,6 +455,7 @@ export default async function GalleryDetailPage({
         waDeliveryTemplate={waDeliveryTemplate}
         favoritesCount={favoritesCount}
         reselection={reselection}
+        reselectionRounds={selectionRounds}
         motherMessage={
           (gallery as unknown as { mother_message: string | null }).mother_message ?? null
         }

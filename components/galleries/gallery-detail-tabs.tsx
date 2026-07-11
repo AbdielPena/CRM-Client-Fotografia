@@ -34,7 +34,10 @@ import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils/cn"
 import { renderWaMessage } from "@/lib/share/wa-message"
-import type { ReselectionInfo } from "@/server/services/reselection.service"
+import type {
+  ReselectionInfo,
+  SelectionRound,
+} from "@/server/services/reselection.service"
 import {
   createReselectionAction,
   deleteReselectionAction,
@@ -187,6 +190,9 @@ interface Props {
   favoritesCount?: number
   /** Segunda selección existente (galería hija) si ya se creó. */
   reselection?: ReselectionInfo | null
+  /** Todas las rondas de re-selección (2da, 3ra…) con sus fotos, para mostrarlas
+   *  como listas separadas dentro de la pestaña Selecciones. */
+  reselectionRounds?: SelectionRound[]
   /** Dedicatoria de la madre (aparece en la entrega). */
   motherMessage?: string | null
   motherMessageFrom?: string | null
@@ -218,6 +224,7 @@ export function GalleryDetailTabs({
   waDeliveryTemplate,
   favoritesCount = 0,
   reselection = null,
+  reselectionRounds = [],
   motherMessage = null,
   motherMessageFrom = null,
   motherMessageEnabled = false,
@@ -329,6 +336,7 @@ export function GalleryDetailTabs({
             collections={collections}
             favorites={favoriteSelections}
             assets={assets}
+            reselectionRounds={reselectionRounds}
           />
         </TabsContent>
 
@@ -673,11 +681,13 @@ function SelectionsTab({
   collections,
   favorites,
   assets,
+  reselectionRounds = [],
 }: {
   galleryId: string
   collections: CollectionRow[]
   favorites: FavoriteSelectionRow[]
   assets: Asset[]
+  reselectionRounds?: SelectionRound[]
 }) {
   const router = useRouter()
   const [creating, setCreating] = React.useState(false)
@@ -752,6 +762,9 @@ function SelectionsTab({
   const favItems = activeFav
     ? assets.filter((a) => activeFav.assetIds.includes(a.id))
     : []
+  const activeRound = selectedColl?.startsWith("round:")
+    ? (reselectionRounds.find((r) => `round:${r.galleryId}` === selectedColl) ?? null)
+    : null
 
   const [copyOpen, setCopyOpen] = React.useState(false)
   type CopyFormat = "original" | "jpg" | "arw" | "none"
@@ -777,9 +790,11 @@ function SelectionsTab({
     })
   }
 
-  const rawNames = activeFav
-    ? favItems.map((a) => a.original_name)
-    : items.map((i) => i.original_name)
+  const rawNames = activeRound
+    ? activeRound.photos.map((p) => p.originalName)
+    : activeFav
+      ? favItems.map((a) => a.original_name)
+      : items.map((i) => i.original_name)
 
   const formatNames = (
     names: string[],
@@ -810,7 +825,7 @@ function SelectionsTab({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-[13px] font-semibold text-foreground">
-            Selecciones ({favorites.length + collections.length})
+            Selecciones ({favorites.length + collections.length + reselectionRounds.length})
           </p>
           {!creating && (
             <button
@@ -855,12 +870,15 @@ function SelectionsTab({
         )}
 
         <div className="space-y-1">
-          {collections.length === 0 && favorites.length === 0 && !creating && (
-            <p className="rounded-lg border border-dashed border-border bg-card/40 px-3 py-4 text-center text-[12px] text-muted-foreground">
-              Aún no hay selecciones. Cuando el cliente marque favoritas ❤️ o
-              cree listas, aparecerán acá.
-            </p>
-          )}
+          {collections.length === 0 &&
+            favorites.length === 0 &&
+            reselectionRounds.length === 0 &&
+            !creating && (
+              <p className="rounded-lg border border-dashed border-border bg-card/40 px-3 py-4 text-center text-[12px] text-muted-foreground">
+                Aún no hay selecciones. Cuando el cliente marque favoritas ❤️ o
+                cree listas, aparecerán acá.
+              </p>
+            )}
 
           {/* Selecciones por favoritos ❤️ — el flujo "Avisar al fotógrafo" */}
           {favorites.map((f) => {
@@ -942,12 +960,118 @@ function SelectionsTab({
               </button>
             )
           })}
+
+          {/* Rondas de re-selección (2da, 3ra…) como listas separadas */}
+          {reselectionRounds.map((r) => {
+            const key = `round:${r.galleryId}`
+            const active = key === selectedColl
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSelectedColl(key)}
+                className={cn(
+                  "group flex w-full items-start justify-between gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
+                  active
+                    ? "border-violet-400 bg-violet-50 dark:border-violet-500/50 dark:bg-violet-500/10"
+                    : "border-border bg-card hover:border-border-strong",
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles
+                      className={cn(
+                        "h-3 w-3 flex-shrink-0",
+                        active ? "text-violet-600 dark:text-violet-300" : "text-violet-500",
+                      )}
+                    />
+                    <p
+                      className={cn(
+                        "truncate text-[12.5px] font-semibold",
+                        active ? "text-violet-700 dark:text-violet-300" : "text-foreground",
+                      )}
+                    >
+                      {r.label}
+                    </p>
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    Re-selección del cliente
+                  </p>
+                </div>
+                <span className="flex-shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10.5px] font-semibold text-violet-700 tabular-nums dark:bg-violet-500/20 dark:text-violet-300">
+                  {r.count}
+                </span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
       {/* Detalle selección */}
       <div className="min-w-0">
-        {activeFav ? (
+        {activeRound ? (
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50/50 p-4 dark:border-violet-500/30 dark:bg-violet-500/5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-violet-500" />
+                  <h3 className="truncate text-[15px] font-semibold text-foreground">
+                    {activeRound.label}
+                  </h3>
+                </div>
+                <p className="mt-1 text-[12px] text-muted-foreground">
+                  {activeRound.count} foto{activeRound.count === 1 ? "" : "s"} que el cliente
+                  re-eligió
+                  {activeRound.submittedAt &&
+                    ` · enviada ${new Date(activeRound.submittedAt).toLocaleDateString("es-DO")}`}
+                </p>
+              </div>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <button
+                  onClick={openCopyDialog}
+                  disabled={activeRound.photos.length === 0}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-muted px-2.5 text-[12px] font-medium text-foreground hover:bg-muted/70 disabled:opacity-40"
+                >
+                  <Copy className="h-3 w-3" /> Copiar nombres
+                </button>
+                <Link
+                  href={`/galleries/${activeRound.galleryId}`}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-[12px] font-medium text-foreground hover:bg-muted"
+                >
+                  <ExternalLink className="h-3 w-3" /> Abrir ronda
+                </Link>
+              </div>
+            </div>
+            {activeRound.photos.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-card/40 px-6 py-12 text-center text-sm text-muted-foreground">
+                Esta ronda todavía no tiene selección del cliente.
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+                {activeRound.photos.map((p) => (
+                  <div
+                    key={p.id}
+                    className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                    title={p.originalName}
+                  >
+                    {p.thumbUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.thumbUrl}
+                        alt={p.originalName}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      {p.originalName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activeFav ? (
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card p-4">
               <div className="min-w-0">
