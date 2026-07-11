@@ -129,17 +129,28 @@ export async function drainEmailQueue(limit = BATCH_SIZE): Promise<DrainResult> 
       (row.metadata as { marketing?: boolean } | null)?.marketing === true
     let extraHeaders: Record<string, string> | undefined
     if (isMarketing) {
-      const { data: cliRow } = await sb
+      // Cliente por email EXACTO (case-insensitive). No usar ilike con el email
+      // crudo: `_`/`%` actuarían como comodines SQL (john_doe matchea john.doe).
+      // Escapamos los comodines + filtramos por igualdad exacta en JS, y si hay
+      // clientes duplicados con el mismo email, cualquiera dado de baja manda.
+      const likePattern = row.to_email.replace(/([\\%_])/g, "\\$1")
+      const { data: cliRows } = await sb
         .from("clients")
-        .select("email_token, email_opted_out_at")
+        .select("email, email_token, email_opted_out_at")
         .eq("studio_id", row.studio_id)
-        .ilike("email", row.to_email)
-        .limit(1)
-        .maybeSingle()
-      const cli = cliRow as
-        | { email_token: string | null; email_opted_out_at: string | null }
-        | null
-      if (cli?.email_opted_out_at) {
+        .ilike("email", likePattern)
+        .limit(20)
+      const matches = (
+        (cliRows ?? []) as Array<{
+          email: string | null
+          email_token: string | null
+          email_opted_out_at: string | null
+        }>
+      ).filter((c) => (c.email ?? "").trim().toLowerCase() === row.to_email)
+      const optedOut = matches.some((c) => c.email_opted_out_at)
+      const token = matches.find((c) => c.email_token)?.email_token ?? null
+
+      if (optedOut) {
         // Dado de baja de correos no esenciales → no enviar este marketing.
         await sb
           .from("email_queue")
@@ -152,8 +163,8 @@ export async function drainEmailQueue(limit = BATCH_SIZE): Promise<DrainResult> 
           .eq("status", "sending")
         continue
       }
-      if (cli?.email_token) {
-        const unsubUrl = `${appBaseUrl()}/e/${cli.email_token}/unsubscribe`
+      if (token) {
+        const unsubUrl = `${appBaseUrl()}/e/${token}/unsubscribe`
         const mailTo = row.reply_to ?? row.from_email
         const listParts = mailTo
           ? [`<mailto:${mailTo}?subject=Baja>`, `<${unsubUrl}>`]
