@@ -9,6 +9,7 @@ import {
   Cake,
   CheckCircle2,
   CircleDot,
+  Sparkles,
 } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -72,6 +73,7 @@ type GalleryListRow = {
   project_id: string | null
   delivery_ready_at: string | null
   delivery_date: string | null
+  parent_gallery_id: string | null
 }
 
 // ---- Cumpleaños + prioridad de entrega (regla quinceañera) -----------------
@@ -438,6 +440,11 @@ export default async function GalleriesPage({
                         Selección recibida
                       </span>
                     ) : null}
+                    {g.parent_gallery_id && (
+                      <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-violet-500 px-2 py-0.5 text-[10.5px] font-semibold text-white shadow-sm">
+                        <Sparkles className="h-3 w-3" /> 2da selección
+                      </span>
+                    )}
                   </div>
 
                   {/* Body */}

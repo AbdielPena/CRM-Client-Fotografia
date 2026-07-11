@@ -189,9 +189,9 @@ export async function getGalleries(
     .select("*", { count: "exact" })
     .eq("studio_id", studioId)
     .is("deleted_at", null)
-    // Las "segundas selecciones" (hijas) no aparecen en la lista; se gestionan
-    // desde la galería padre.
-    .is("parent_gallery_id", null)
+    // Las "segundas selecciones" (hijas) SÍ aparecen en la lista, con insignia
+    // "2da selección" (antes se ocultaban con `.is(parent_gallery_id, null)` y las
+    // selecciones anidadas quedaban inaccesibles → parecían "perdidas").
     .order("created_at", { ascending: false })
 
   if (opts.status) q = q.eq("status", opts.status)
