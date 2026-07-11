@@ -244,6 +244,17 @@ export default async function GalleryDetailPage({
   )
   const deliveryReadyAt = (gallery as unknown as { delivery_ready_at?: string | null }).delivery_ready_at ?? null
   const showDeliveryPanels = hasDeliveryAssets || !!deliveryReadyAt
+  // "Entrega habilitada" = ya existen las carpetas de entrega (Máxima Calidad /
+  // Redes) aunque todavía no se hayan subido fotos. Con esto, el Álbum Experience
+  // y la dedicatoria de la madre se pueden PREPARAR apenas se habilita la entrega,
+  // sin esperar a subir las fotos (antes solo salían con fotos ya subidas).
+  const DELIVERY_SET_RE = /redes|social|instagram|facebook|web|maxima|calidad|alta|original|print/i
+  const hasDeliverySets = (sets as Array<{ name?: string | null }>).some((s) =>
+    DELIVERY_SET_RE.test(
+      (s.name ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, ""),
+    ),
+  )
+  const deliveryEnabled = showDeliveryPanels || hasDeliverySets
   const driveStatus = showDeliveryPanels ? await getGoogleDriveStatus(session.studioId) : null
   const driveBackup = showDeliveryPanels ? await getDriveBackupStatusAction(galleryId) : null
 
@@ -269,7 +280,7 @@ export default async function GalleryDetailPage({
           initialStatus={driveBackup}
         />
       )}
-      {showDeliveryPanels && (
+      {deliveryEnabled && (
         <LuxuryBookPanel
           galleryId={galleryId}
           publicToken={activeToken?.token ?? null}

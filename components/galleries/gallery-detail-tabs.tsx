@@ -251,6 +251,11 @@ export function GalleryDetailTabs({
         }))
       : undefined
   const canDeliver = !!uploadTargets && assets.length > 0 && !!client
+  // "Entrega habilitada" = ya existen las carpetas de entrega (aunque aún sin
+  // fotos), o ya hay fotos/entrega marcada. Con esto el mensaje de la madre se
+  // puede preparar apenas se habilita, sin esperar a subir las fotos.
+  const deliveryEnabled =
+    deliverySets.length > 0 || hasDelivery || !!gallery.delivery_ready_at
 
   // Fuentes de selección para armar la 2da ronda: ♥ generales (favoritos únicos)
   // + cada lista con su conteo. El fotógrafo elige de cuáles se arma la galería.
@@ -446,6 +451,7 @@ export function GalleryDetailTabs({
             driveLink={driveLink}
             client={client}
             hasDeliveryAssets={hasDelivery}
+            deliveryEnabled={deliveryEnabled}
             waSelectionTemplate={waSelectionTemplate}
             waDeliveryTemplate={waDeliveryTemplate}
             favoritesCount={favoritesCount}
@@ -1941,6 +1947,7 @@ function ShareTab({
   driveLink = null,
   client = null,
   hasDeliveryAssets = false,
+  deliveryEnabled = false,
   waSelectionTemplate,
   waDeliveryTemplate,
   favoritesCount = 0,
@@ -1955,6 +1962,7 @@ function ShareTab({
   driveLink?: string | null
   client?: { name: string | null; email: string | null; phone: string | null } | null
   hasDeliveryAssets?: boolean
+  deliveryEnabled?: boolean
   waSelectionTemplate?: string
   waDeliveryTemplate?: string
   favoritesCount?: number
@@ -2464,8 +2472,11 @@ function ShareTab({
         )}
       </div>
 
-      {/* ═══ Bloque ENTREGA FINAL (aparte de la selección) ═══ */}
-      {(hasDeliveryAssets || !!driveLink) && (
+      {/* ═══ Bloque ENTREGA FINAL (aparte de la selección) ═══
+          Aparece apenas se HABILITA la entrega (existen las carpetas), para poder
+          preparar el mensaje de la madre sin esperar a subir fotos. Los links de
+          descarga solo tienen sentido con fotos ya subidas. */}
+      {(deliveryEnabled || !!driveLink) && (
         <>
           <div className="flex items-center gap-3 pt-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -2474,19 +2485,26 @@ function ShareTab({
             <div className="h-px flex-1 bg-border" />
           </div>
 
-          <DeliveryLinksPanel
-            galleryName={gallery.name}
-            token={token}
-            bookEnabled={gallery.book_enabled ?? false}
-            bookDisplayMode={gallery.book_display_mode ?? "classic"}
-            driveLink={driveLink}
-            clientName={client?.name ?? null}
-            clientPhone={client?.phone ?? null}
-            waDeliveryTemplate={waDeliveryTemplate}
-          />
+          {(hasDeliveryAssets || !!driveLink) ? (
+            <DeliveryLinksPanel
+              galleryName={gallery.name}
+              token={token}
+              bookEnabled={gallery.book_enabled ?? false}
+              bookDisplayMode={gallery.book_display_mode ?? "classic"}
+              driveLink={driveLink}
+              clientName={client?.name ?? null}
+              clientPhone={client?.phone ?? null}
+              waDeliveryTemplate={waDeliveryTemplate}
+            />
+          ) : (
+            <p className="rounded-lg border border-dashed border-border bg-card/40 px-4 py-3 text-[12px] text-muted-foreground">
+              Sube las fotos editadas en la pestaña <strong>Entrega</strong> para
+              generar los links de descarga, el álbum y activar las impresiones.
+            </p>
+          )}
 
-          {/* Dedicatoria de la madre — aparece en la entrega (editable por el
-              estudio o por la mamá vía link) */}
+          {/* Dedicatoria de la madre — se puede preparar apenas se habilita la
+              entrega (editable por el estudio o por la mamá vía link) */}
           <MotherDedicationCard
             galleryId={gallery.id}
             publicToken={token}
