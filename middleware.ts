@@ -29,6 +29,7 @@ const PUBLIC_PREFIXES = [
   '/f/', // formularios públicos
   '/q/', // captura pública del nombre de la quinceañera (por token firmado)
   '/fb/', // feedback / reseñas público (Engagement Hub)
+  '/e/', // baja de correos por token (List-Unsubscribe, RFC 8058)
   '/api/feedback', // submit de feedback público (auth por token)
   '/api/forms', // guardar/enviar formularios públicos (auth por access_token del form_response)
   '/api/galleries/public', // interacciones de galería pública: favoritos, selección, descargas, print, unlock (auth por token de galería)
