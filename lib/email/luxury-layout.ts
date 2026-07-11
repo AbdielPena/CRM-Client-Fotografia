@@ -129,6 +129,7 @@ ${inner}
       ${whatsappRow(opts.whatsappUrl)}
       ${socialRow(opts.social)}
       ${footer}
+      <p style="margin:10px 0 0;">💌 Para no perderte nada, agrega este correo a tus contactos.</p>
       <p style="margin:8px 0 0;opacity:.8;">Este mensaje es solo para ti.${year === "—" ? "" : ` © ${year}`}</p>
     </div>
   </div>

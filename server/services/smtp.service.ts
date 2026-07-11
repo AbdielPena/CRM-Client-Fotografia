@@ -27,6 +27,8 @@ export type SendEmailInput = {
   // Si se provee, override del From configurado
   fromEmail?: string | null
   fromName?: string | null
+  // Cabeceras extra (ej. List-Unsubscribe / List-Unsubscribe-Post).
+  headers?: Record<string, string>
 }
 
 export type SendEmailResult = {
@@ -115,6 +117,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       html: input.html,
       text: input.text ?? stripHtml(input.html),
       replyTo: safeReplyTo,
+      ...(input.headers ? { headers: input.headers } : {}),
     })
     console.log(`[smtp.sendEmail] ✉️  enviado a ${input.to} — id=${info.messageId}`)
     return { ok: true, messageId: info.messageId }

@@ -22,6 +22,25 @@ const BATCH_SIZE = 10 // acotado: cada fila es un round-trip SMTP secuencial
 const BACKOFF_BASE_SEC = 300 // 5 min · 10 · 20 …
 const STALE_SENDING_MIN = 15
 
+/**
+ * Slugs de correos de MARKETING (engagement). Solo estos: (a) respetan la baja
+ * del cliente (email_opted_out_at) y (b) llevan cabecera List-Unsubscribe. Los
+ * transaccionales (facturas, galerías, entregas, recordatorios) NO se afectan.
+ * También se marca marketing con metadata.marketing=true (engagement no setea slug).
+ */
+const MARKETING_SLUGS = new Set<string>([
+  "engagement_birthday_soon",
+  "engagement_birthday_greeting",
+  "engagement_post_delivery",
+  "engagement_reengagement",
+  "engagement_review_request",
+  "engagement_generic",
+])
+
+function appBaseUrl(): string {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "https://my.abbypixel.com").replace(/\/+$/, "")
+}
+
 type QueueRow = {
   id: string
   studio_id: string
@@ -35,6 +54,8 @@ type QueueRow = {
   body_text: string | null
   attempts: number
   max_attempts: number | null
+  template_slug: string | null
+  metadata: Record<string, unknown> | null
 }
 
 export type DrainResult = {
@@ -62,7 +83,7 @@ export async function drainEmailQueue(limit = BATCH_SIZE): Promise<DrainResult> 
   const { data: batch } = await sb
     .from("email_queue")
     .select(
-      "id, studio_id, to_email, to_name, from_email, from_name, reply_to, subject, body_html, body_text, attempts, max_attempts",
+      "id, studio_id, to_email, to_name, from_email, from_name, reply_to, subject, body_html, body_text, attempts, max_attempts, template_slug, metadata",
     )
     .in("status", ["pending", "retrying"])
     .lte("scheduled_for", new Date().toISOString())
@@ -100,6 +121,50 @@ export async function drainEmailQueue(limit = BATCH_SIZE): Promise<DrainResult> 
       continue
     }
 
+    // Marketing (engagement): respeta la baja del cliente + añade List-Unsubscribe
+    // de 1 clic. Transaccional (facturas, galerías, entregas, recordatorios): sin
+    // baja ni cabecera → siempre se envía.
+    const isMarketing =
+      (row.template_slug != null && MARKETING_SLUGS.has(row.template_slug)) ||
+      (row.metadata as { marketing?: boolean } | null)?.marketing === true
+    let extraHeaders: Record<string, string> | undefined
+    if (isMarketing) {
+      const { data: cliRow } = await sb
+        .from("clients")
+        .select("email_token, email_opted_out_at")
+        .eq("studio_id", row.studio_id)
+        .ilike("email", row.to_email)
+        .limit(1)
+        .maybeSingle()
+      const cli = cliRow as
+        | { email_token: string | null; email_opted_out_at: string | null }
+        | null
+      if (cli?.email_opted_out_at) {
+        // Dado de baja de correos no esenciales → no enviar este marketing.
+        await sb
+          .from("email_queue")
+          .update({
+            status: "cancelled",
+            last_error: "cliente dado de baja (marketing)",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", row.id)
+          .eq("status", "sending")
+        continue
+      }
+      if (cli?.email_token) {
+        const unsubUrl = `${appBaseUrl()}/e/${cli.email_token}/unsubscribe`
+        const mailTo = row.reply_to ?? row.from_email
+        const listParts = mailTo
+          ? [`<mailto:${mailTo}?subject=Baja>`, `<${unsubUrl}>`]
+          : [`<${unsubUrl}>`]
+        extraHeaders = {
+          "List-Unsubscribe": listParts.join(", "),
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        }
+      }
+    }
+
     const res = await sendEmail({
       studioId: row.studio_id,
       to: row.to_email,
@@ -111,6 +176,7 @@ export async function drainEmailQueue(limit = BATCH_SIZE): Promise<DrainResult> 
       fromEmail: null,
       fromName: row.from_name,
       replyTo: row.reply_to ?? row.from_email,
+      headers: extraHeaders,
     })
 
     const nowIso = new Date().toISOString()

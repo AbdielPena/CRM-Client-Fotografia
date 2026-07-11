@@ -475,6 +475,8 @@ async function runSendEmail(e: EnrollmentRow, step: StepRow, slugOverride?: stri
             fromName: cv.vars.studio_name,
             relatedEntityType: "client",
             relatedEntityId: e.client_id,
+            // Marketing → respeta la baja + List-Unsubscribe (ver email-drain.service).
+            metadata: { marketing: true },
           })
           await logRun(e.studio_id, e.id, step.id, step.block_type, "done", { to: cv.email, ai: true })
           return
@@ -506,6 +508,8 @@ async function runSendEmail(e: EnrollmentRow, step: StepRow, slugOverride?: stri
       fromName: tpl.fromName ?? cv.vars.studio_name,
       relatedEntityType: "client",
       relatedEntityId: e.client_id,
+      // Marketing → respeta la baja + List-Unsubscribe (ver email-drain.service).
+      metadata: { marketing: true },
     })
     await logRun(e.studio_id, e.id, step.id, step.block_type, "done", { to: cv.email })
   } catch (err) {
