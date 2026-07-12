@@ -184,17 +184,54 @@ export async function getGalleries(
   // ya filtran por studioId explícitamente. Default = cliente con RLS (web).
   const supabase = serviceRole ? svc() : srvc()
 
+  // Galerías HIJAS (2da selección) que YA son ENTREGA real (subieron fotos de
+  // entrega delivery_track): dejaron de ser "solo una ronda de selección" y
+  // deben verse en la lista aunque sean hijas. Se resuelven con una consulta
+  // previa (delivery_track no está en la fila de galleries). Junto con las
+  // señales de fila (álbum/entrega habilitada), estas hijas se "promueven".
+  let deliveredChildIds: string[] = []
+  {
+    const { data: children } = await supabase
+      .from("galleries")
+      .select("id")
+      .eq("studio_id", studioId)
+      .is("deleted_at", null)
+      .not("parent_gallery_id", "is", null)
+    const childIds = ((children ?? []) as { id: string }[]).map((r) => r.id)
+    if (childIds.length) {
+      const { data: dAssets } = await supabase
+        .from("gallery_assets")
+        .select("gallery_id")
+        .in("gallery_id", childIds)
+        .in("delivery_track", ["social", "high_quality"])
+      deliveredChildIds = [
+        ...new Set(((dAssets ?? []) as { gallery_id: string }[]).map((a) => a.gallery_id)),
+      ]
+    }
+  }
+
   let q = supabase
     .from("galleries")
     .select("*", { count: "exact" })
     .eq("studio_id", studioId)
     .is("deleted_at", null)
-    // Las "2da selección" (galerías HIJAS creadas para separar rondas de selección
-    // del cliente) NO aparecen en la lista: se gestionan desde la galería madre
-    // (pestaña Selecciones muestra cada ronda aparte + el selector de selección
-    // final). Ensuciaban el panel; la selección sigue accesible desde la madre.
-    .is("parent_gallery_id", null)
     .order("created_at", { ascending: false })
+
+  // Muestra: galerías MADRE (parent null) + hijas PROMOVIDAS a entrega —
+  // con álbum (book_enabled), entrega habilitada (delivery_ready_at),
+  // gallery_type='final_delivery', o con fotos de entrega (deliveredChildIds).
+  // Las hijas que son SOLO una ronda de selección (nada de lo anterior) siguen
+  // OCULTAS: se gestionan desde la galería madre (pestaña Selecciones). Antes se
+  // ocultaban TODAS las hijas → la entrega+álbum de Mía (montados sobre una
+  // "2da selección") desaparecían de la lista y parecían borrados.
+  const orParts = [
+    "parent_gallery_id.is.null",
+    "book_enabled.eq.true",
+    "delivery_ready_at.not.is.null",
+    "gallery_type.eq.final_delivery",
+  ]
+  if (deliveredChildIds.length) orParts.push(`id.in.(${deliveredChildIds.join(",")})`)
+  q = q.or(orParts.join(","))
 
   if (opts.status) q = q.eq("status", opts.status)
   if (opts.projectId) q = q.eq("project_id", opts.projectId)
