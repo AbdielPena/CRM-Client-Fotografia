@@ -297,6 +297,25 @@ export async function getRootGallery(
   return root
 }
 
+/**
+ * Marca (o desmarca) una galería como "publicada en Instagram". Alimenta el
+ * checklist de Instagram de galerías entregadas. `posted=true` → sella la fecha;
+ * `false` → la limpia.
+ */
+export async function setGalleryInstagramPosted(
+  studioId: string,
+  galleryId: string,
+  posted: boolean,
+): Promise<void> {
+  const db = srvc() as unknown as SupabaseClient
+  const { error } = await db
+    .from("galleries")
+    .update({ instagram_posted_at: posted ? new Date().toISOString() : null })
+    .eq("id", galleryId)
+    .eq("studio_id", studioId)
+  if (error) throw error
+}
+
 // ─── Luxury Book (Abby XV Gallery) — config del álbum digital ────────────────
 export type GalleryBookConfig = {
   enabled?: boolean

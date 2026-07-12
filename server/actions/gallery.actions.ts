@@ -19,6 +19,7 @@ import {
   setGalleryEmbed,
   shareGalleryWithClient,
   sortAssetsByName,
+  setGalleryInstagramPosted,
   updateGallery,
   updateGalleryBookConfig,
   type CreateGalleryInput,
@@ -315,6 +316,21 @@ export async function deleteGalleryAction(galleryId: string): Promise<void> {
   const ctx = await requireStudioAuth()
   await deleteGallery(ctx.studioId, ctx.userId, galleryId)
   revalidatePath("/galleries")
+}
+
+/** Marca/desmarca una galería entregada como publicada en Instagram (checklist). */
+export async function setGalleryInstagramPostedAction(
+  galleryId: string,
+  posted: boolean,
+): Promise<{ error?: string }> {
+  const ctx = await requireStudioAuth()
+  try {
+    await setGalleryInstagramPosted(ctx.studioId, galleryId, posted)
+    revalidatePath("/galleries")
+    return {}
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "No se pudo guardar" }
+  }
 }
 
 /**

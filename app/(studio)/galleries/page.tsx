@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   CircleDot,
   Sparkles,
+  Instagram,
 } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -29,6 +30,7 @@ import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/shared/empty-state"
 import { GalleryCardMenu } from "@/components/galleries/gallery-card-menu"
+import { InstagramChecklist } from "@/components/galleries/instagram-checklist"
 import { cn } from "@/lib/utils/cn"
 
 export const metadata: Metadata = { title: "Galerías" }
@@ -74,6 +76,7 @@ type GalleryListRow = {
   delivery_ready_at: string | null
   delivery_date: string | null
   parent_gallery_id: string | null
+  instagram_posted_at: string | null
 }
 
 // ---- Cumpleaños + prioridad de entrega (regla quinceañera) -----------------
@@ -147,9 +150,13 @@ export default async function GalleriesPage({
   searchParams?: { scope?: string }
 }) {
   const session = await requireStudioAuth()
-  // Scope: "Activas" (aún sin entrega) vs "Entregadas".
-  const scope: "active" | "delivered" =
-    searchParams?.scope === "delivered" ? "delivered" : "active"
+  // Scope: "Activas" (aún sin entrega) vs "Entregadas" vs "Instagram" (checklist).
+  const scope: "active" | "delivered" | "instagram" =
+    searchParams?.scope === "delivered"
+      ? "delivered"
+      : searchParams?.scope === "instagram"
+        ? "instagram"
+        : "active"
   const [{ rows }, unread] = await Promise.all([
     getGalleries(session.studioId, { limit: 100 }),
     countUnreadNotifications(session.studioId),
@@ -182,9 +189,13 @@ export default async function GalleriesPage({
     deliveredIds.has(g.id) || !!g.delivery_ready_at
   const deliveredCount = allGalleries.filter(isDelivered).length
   const activeCount = allGalleries.length - deliveredCount
+  // Pendientes de subir a Instagram = entregadas que aún no se marcaron publicadas.
+  const igPendingCount = allGalleries.filter(
+    (g) => isDelivered(g) && !g.instagram_posted_at,
+  ).length
   const grandTotal = allGalleries.length
   const galleries = allGalleries.filter((g) =>
-    scope === "delivered" ? isDelivered(g) : !isDelivered(g),
+    scope === "active" ? !isDelivered(g) : isDelivered(g),
   )
 
   // 1) covers explícitos (cover_asset_id → thumb/web)
@@ -299,6 +310,35 @@ export default async function GalleriesPage({
     }
   }
 
+  // Instagram checklist: token público (link de descarga) por galería entregada.
+  const tokenByGallery = new Map<string, string>()
+  if (scope === "instagram" && galleries.length > 0) {
+    const { data: tks } = await sb
+      .from("gallery_share_tokens")
+      .select("gallery_id, token, created_at")
+      .in(
+        "gallery_id",
+        galleries.map((g) => g.id),
+      )
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false })
+    for (const t of (tks ?? []) as Array<{ gallery_id: string; token: string }>) {
+      if (!tokenByGallery.has(t.gallery_id)) tokenByGallery.set(t.gallery_id, t.token)
+    }
+  }
+  const igItems = galleries.map((g) => ({
+    id: g.id,
+    name: g.name,
+    cover: coverByGallery.get(g.id) ?? null,
+    token: tokenByGallery.get(g.id) ?? null,
+    deliveredDate: g.delivery_ready_at
+      ? fmtDateOnly(g.delivery_ready_at)
+      : g.delivery_date
+        ? fmtDateOnly(g.delivery_date)
+        : null,
+    posted: !!g.instagram_posted_at,
+  }))
+
   return (
     <>
       <AppTopbar
@@ -354,10 +394,31 @@ export default async function GalleriesPage({
                 {deliveredCount}
               </span>
             </Link>
+            <Link
+              href="/galleries?scope=instagram"
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12.5px] font-medium transition-colors",
+                scope === "instagram"
+                  ? "bg-pink-500 text-white"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Instagram className="h-3.5 w-3.5" /> Instagram
+              <span
+                className={cn(
+                  "rounded-full px-1.5 text-[10.5px] tabular-nums",
+                  scope === "instagram" ? "bg-white/25" : "bg-muted",
+                )}
+              >
+                {igPendingCount}
+              </span>
+            </Link>
           </div>
         )}
 
-        {galleries.length === 0 ? (
+        {scope === "instagram" ? (
+          <InstagramChecklist items={igItems} />
+        ) : galleries.length === 0 ? (
           <div className="rounded-xl border border-border bg-card">
             <EmptyState
               icon={
