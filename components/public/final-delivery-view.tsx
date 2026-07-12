@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Download,
   X,
@@ -12,6 +12,7 @@ import {
   Clock,
   Gem,
   Smartphone,
+  ImageDown,
   type LucideIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -141,6 +142,72 @@ export function FinalDeliveryView({
       }
     },
     [token],
+  )
+
+  // "Guardar en Fotos" (iPhone): manda las fotos al carrete usando el menú de
+  // compartir de iOS (navigator.share con archivos → "Guardar imágenes"). Solo
+  // aparece en dispositivos que lo soportan (móvil Safari) — en desktop no hay
+  // app "Fotos". Máxima Calidad usa los ORIGINALES (URLs firmadas); Redes, el web.
+  const [canSharePhotos, setCanSharePhotos] = useState(false)
+  const [saveBusy, setSaveBusy] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      const probe = [new File([new Uint8Array(1)], "t.jpg", { type: "image/jpeg" })]
+      setCanSharePhotos(
+        typeof navigator !== "undefined" &&
+          typeof navigator.canShare === "function" &&
+          navigator.canShare({ files: probe }),
+      )
+    } catch {
+      setCanSharePhotos(false)
+    }
+  }, [])
+
+  const saveToPhotos = useCallback(
+    async (key: string, assetIds: string[], resolution: "original" | "web") => {
+      if (assetIds.length === 0) {
+        toast.error("No hay fotos para guardar")
+        return
+      }
+      setSaveBusy(key)
+      try {
+        const res = await fetch(`/api/galleries/public/${token}/originals`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assetIds, resolution }),
+        })
+        if (!res.ok) throw new Error("No se pudieron preparar las fotos")
+        const { photos } = (await res.json()) as {
+          photos: { id: string; url: string; filename: string }[]
+        }
+        if (!photos.length) throw new Error("No hay fotos")
+        if (photos.length > 1) {
+          toast.info(`Preparando ${photos.length} fotos… un momento`)
+        }
+        const files: File[] = []
+        for (const p of photos) {
+          const r = await fetch(p.url)
+          if (!r.ok) continue
+          const blob = await r.blob()
+          files.push(new File([blob], p.filename, { type: blob.type || "image/jpeg" }))
+        }
+        if (!files.length) throw new Error("No se pudieron cargar las fotos")
+        if (navigator.canShare?.({ files })) {
+          await navigator.share({ files, title: gallery.name })
+        } else {
+          throw new Error("compartir no disponible")
+        }
+      } catch (e) {
+        const err = e as Error
+        if (err.name === "AbortError") return // el usuario cerró el menú de compartir
+        toast.error(
+          "No se pudo guardar directo. En iPhone: abre una foto y toca “Guardar en Fotos”, o baja el ZIP.",
+        )
+      } finally {
+        setSaveBusy(null)
+      }
+    },
+    [token, gallery.name],
   )
 
   const toggleSelected = (id: string) => {
@@ -301,6 +368,27 @@ export function FinalDeliveryView({
                           )}
                           Descargar {selCount > 0 ? `(${selCount})` : "selección"}
                         </button>
+                        {canSharePhotos && selCount > 0 && (
+                          <button
+                            type="button"
+                            disabled={saveBusy !== null}
+                            onClick={() =>
+                              saveToPhotos(
+                                `save-sel-${track}`,
+                                list.filter((a) => selected.has(a.id)).map((a) => a.id),
+                                meta.resolution,
+                              )
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-full border border-[#d8d4cd] bg-white px-4 py-2 text-[12.5px] font-medium text-[#3a322b] hover:border-[#b8b3aa] disabled:opacity-50"
+                          >
+                            {saveBusy === `save-sel-${track}` ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <ImageDown className="h-3.5 w-3.5" />
+                            )}
+                            Guardar en Fotos
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setSelecting(null)}
@@ -331,6 +419,27 @@ export function FinalDeliveryView({
                           )}
                           Descargar carpeta completa
                         </button>
+                        {canSharePhotos && (
+                          <button
+                            type="button"
+                            disabled={saveBusy !== null}
+                            onClick={() =>
+                              saveToPhotos(
+                                `save-${track}`,
+                                list.map((a) => a.id),
+                                meta.resolution,
+                              )
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-full border border-[#d8d4cd] bg-white px-4 py-2 text-[12.5px] font-medium text-[#3a322b] hover:border-[#b8b3aa] disabled:opacity-50"
+                          >
+                            {saveBusy === `save-${track}` ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <ImageDown className="h-3.5 w-3.5" />
+                            )}
+                            Guardar en Fotos
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => startSelecting(track)}
@@ -448,6 +557,29 @@ export function FinalDeliveryView({
             className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain"
             onClick={(e) => e.stopPropagation()}
           />
+          {canSharePhotos && lightbox.list[lightbox.idx] && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                const a = lightbox.list[lightbox.idx]
+                if (a)
+                  saveToPhotos(
+                    `lb-${a.id}`,
+                    [a.id],
+                    a.deliveryTrack === "social" ? "web" : "original",
+                  )
+              }}
+              className="absolute bottom-6 left-1/2 inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/95 px-5 py-2.5 text-[13px] font-semibold text-[#3a322b] shadow-lg"
+            >
+              {saveBusy === `lb-${lightbox.list[lightbox.idx]?.id}` ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ImageDown className="h-4 w-4" />
+              )}
+              Guardar en Fotos
+            </button>
+          )}
         </div>
       )}
 
