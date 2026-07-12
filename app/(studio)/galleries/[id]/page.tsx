@@ -12,6 +12,7 @@ import {
   getGalleryActivity,
   getGalleryAssets,
   getGalleryById,
+  getRootGallery,
 } from "@/server/services/gallery.service"
 import { getCollectionsByGallery } from "@/server/services/gallery-collection.service"
 import { getSetsByGallery } from "@/server/services/gallery-set.service"
@@ -229,6 +230,12 @@ export default async function GalleryDetailPage({
   // (misma fuente que la creación) — antes solo contaba ♥ y daba 0 cuando el
   // cliente armó una lista, dejando el botón deshabilitado.
   const favoritesCount = await countSelectedAssets(galleryId)
+  // Galería de la SESIÓN (raíz). Si esta es una ronda de selección hija, la
+  // entrega final NO se hace aquí sino en la galería de la sesión (atada al
+  // cliente). `sessionGallery` != null solo cuando esta galería es una hija.
+  const rootGallery = await getRootGallery(session.studioId, galleryId)
+  const sessionGallery =
+    rootGallery && rootGallery.id !== galleryId ? rootGallery : null
   const reselection = await getReselectionForGallery(session.studioId, galleryId)
   // Todas las rondas de re-selección (2da, 3ra…) con sus fotos, para mostrarlas
   // como listas separadas en la pestaña Selecciones (todo en un solo lugar).
@@ -489,6 +496,7 @@ export default async function GalleryDetailPage({
         favoritesCount={favoritesCount}
         reselection={reselection}
         reselectionRounds={selectionRounds}
+        sessionGallery={sessionGallery}
         finalSelectionGalleryId={
           (gallery as unknown as { final_selection_gallery_id?: string | null })
             .final_selection_gallery_id ?? null

@@ -264,6 +264,39 @@ export async function getGalleryById(
   return (data as unknown as GalleryRow | null) ?? null
 }
 
+/**
+ * Resuelve la galería RAÍZ (la de la SESIÓN) subiendo por `parent_gallery_id`.
+ * Si la galería no tiene padre, se devuelve a sí misma. Se usa para saber en qué
+ * galería debe vivir la ENTREGA FINAL: nunca en una ronda de selección hija —
+ * la entrega es del cliente, no de una selección. Máx 10 saltos (anti-ciclos).
+ */
+export async function getRootGallery(
+  studioId: string,
+  galleryId: string,
+): Promise<{ id: string; name: string } | null> {
+  const supabase = srvc()
+  let currentId: string | null = galleryId
+  let root: { id: string; name: string } | null = null
+  for (let i = 0; i < 10 && currentId; i++) {
+    const { data } = await supabase
+      .from("galleries")
+      .select("id, name, parent_gallery_id")
+      .eq("id", currentId)
+      .eq("studio_id", studioId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (!data) break
+    const row = data as unknown as {
+      id: string
+      name: string
+      parent_gallery_id: string | null
+    }
+    root = { id: row.id, name: row.name }
+    currentId = row.parent_gallery_id
+  }
+  return root
+}
+
 // ─── Luxury Book (Abby XV Gallery) — config del álbum digital ────────────────
 export type GalleryBookConfig = {
   enabled?: boolean

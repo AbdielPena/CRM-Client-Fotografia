@@ -204,6 +204,9 @@ interface Props {
   /** Producción de impresión del cliente (PrintProductionPanel) — su propia
    *  pestaña "Impresiones". Null cuando el plan no tiene impresos / nada que producir. */
   printsSlot?: React.ReactNode
+  /** Cuando ESTA galería es una ronda de selección HIJA, apunta a la galería de
+   *  la SESIÓN (raíz) donde debe hacerse la entrega final. Null si es la sesión. */
+  sessionGallery?: { id: string; name: string } | null
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -232,6 +235,7 @@ export function GalleryDetailTabs({
   motherMessageEnabled = false,
   deliverySlot = null,
   printsSlot = null,
+  sessionGallery = null,
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -356,10 +360,29 @@ export function GalleryDetailTabs({
                 deliveryReadyAt={gallery.delivery_ready_at}
               />
             )}
-            {/* Habilitar entrega final (crea las carpetas de pista). */}
-            {!uploadTargets && (
-              <EnableFinalDeliveryBanner galleryId={gallery.id} hasDeliveryAssets={hasDelivery} />
-            )}
+            {/* Habilitar entrega final (crea las carpetas de pista). En una RONDA
+                DE SELECCIÓN (galería hija) NO se entrega: la entrega es del
+                CLIENTE, va en la galería de la sesión → redirige allá. */}
+            {!uploadTargets &&
+              (sessionGallery ? (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-50/60 px-4 py-3 dark:bg-amber-500/5">
+                  <p className="text-[13px] font-semibold text-foreground">
+                    Esta es una ronda de selección
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                    La entrega final y el álbum se hacen en la galería de la sesión —
+                    así quedan atados al cliente, no a una selección.
+                  </p>
+                  <a
+                    href={`/galleries/${sessionGallery.id}`}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-[12.5px] font-medium text-background transition-opacity hover:opacity-90"
+                  >
+                    Ir a «{sessionGallery.name}» para entregar →
+                  </a>
+                </div>
+              ) : (
+                <EnableFinalDeliveryBanner galleryId={gallery.id} hasDeliveryAssets={hasDelivery} />
+              ))}
             {/* Enviar al cliente (email/WhatsApp + links). */}
             {canDeliver && client && (
               <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-50/60 px-4 py-3 dark:bg-emerald-500/5">
