@@ -1,7 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { CheckCircle2, AlertTriangle, Heart, Loader2, Sparkles } from "lucide-react"
+import { toast } from "sonner"
+
+import { setFinalSelectionAction } from "@/server/actions/reselection.actions"
+import type { SelectionRound } from "@/server/services/reselection.service"
 
 type Asset = {
   id: string
@@ -48,14 +52,32 @@ export function ValidateDeliveryTab({
   assets,
   favorites,
   collections,
+  reselectionRounds = [],
+  finalSelectionGalleryId = null,
 }: {
   galleryId: string
   assets: Asset[]
   favorites: FavoriteSelectionRow[]
   collections: CollectionRow[]
+  /** Rondas de re-selección (2da, 3ra…) con sus fotos, para elegir la final. */
+  reselectionRounds?: SelectionRound[]
+  /** Ronda designada como FINAL (galería). null = la selección de esta galería. */
+  finalSelectionGalleryId?: string | null
 }) {
   const [collItems, setCollItems] = useState<Record<string, string[]> | null>(null)
   const [loading, setLoading] = useState(false)
+  // Cuál selección cuenta como la FINAL: esta galería (self) o una ronda concreta.
+  const [finalSel, setFinalSel] = useState<string>(finalSelectionGalleryId ?? galleryId)
+  const [savingSel, startSaveSel] = useTransition()
+
+  const chooseFinal = (value: string) => {
+    setFinalSel(value)
+    startSaveSel(async () => {
+      const r = await setFinalSelectionAction(galleryId, value === galleryId ? null : value)
+      if (r.ok) toast.success("Selección final actualizada")
+      else toast.error(r.message ?? "No se pudo guardar")
+    })
+  }
 
   // Cargar items de colecciones enviadas (para incluirlas en "lo seleccionado").
   const submittedColls = useMemo(
@@ -93,21 +115,36 @@ export function ValidateDeliveryTab({
   const report = useMemo(() => {
     if (collItems === null) return null
 
-    const byId = new Map(assets.map((a) => [a.id, a]))
-
-    // 1) Lo que el cliente eligió (ids → nombres normalizados)
-    const selectedIds = new Set<string>()
-    for (const f of favorites) for (const id of f.assetIds) selectedIds.add(id)
-    for (const ids of Object.values(collItems)) for (const id of ids) selectedIds.add(id)
-
-    const selected = [...selectedIds]
-      .map((id) => byId.get(id))
-      .filter((a): a is Asset => !!a)
-
+    // 1) Lo que el cliente eligió — según la RONDA designada como final.
     const selectedNames = new Map<string, Asset>()
-    for (const a of selected) selectedNames.set(norm(a.original_name), a)
+    if (finalSel === galleryId) {
+      // Selección de ESTA galería: favoritos + colecciones enviadas.
+      const byId = new Map(assets.map((a) => [a.id, a]))
+      const selectedIds = new Set<string>()
+      for (const f of favorites) for (const id of f.assetIds) selectedIds.add(id)
+      for (const ids of Object.values(collItems)) for (const id of ids) selectedIds.add(id)
+      for (const id of selectedIds) {
+        const a = byId.get(id)
+        if (a) selectedNames.set(norm(a.original_name), a)
+      }
+    } else {
+      // Una RONDA de re-selección concreta: sus fotos (comparadas por nombre).
+      const round = reselectionRounds.find((r) => r.galleryId === finalSel)
+      for (const p of round?.photos ?? []) {
+        selectedNames.set(norm(p.originalName), {
+          id: p.id,
+          original_name: p.originalName,
+          status: "completed",
+          set_id: null,
+          delivery_track: null,
+          thumbUrl: p.thumbUrl,
+        })
+      }
+    }
 
-    // 2) Lo entregado por pista
+    const selected = [...selectedNames.values()]
+
+    // 2) Lo entregado por pista (siempre de esta galería)
     const hq = assets.filter((a) => a.delivery_track === "high_quality")
     const social = assets.filter((a) => a.delivery_track === "social")
     const hqNames = new Set(hq.map((a) => norm(a.original_name)))
@@ -123,7 +160,7 @@ export function ValidateDeliveryTab({
     const extra = hq.filter((a) => selectedNames.size > 0 && !selectedNames.has(norm(a.original_name)))
 
     return { selected, hq, social, missing, matched, extra, socialNames }
-  }, [assets, favorites, collItems])
+  }, [assets, favorites, collItems, finalSel, galleryId, reselectionRounds])
 
   if (loading || report === null) {
     return (
@@ -138,6 +175,33 @@ export function ValidateDeliveryTab({
 
   return (
     <div className="max-w-4xl space-y-5">
+      {/* Selector: cuál RONDA de selección es la final (solo si hay varias) */}
+      {reselectionRounds.length > 0 && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4 dark:border-violet-500/30 dark:bg-violet-500/5">
+          <p className="mb-1 flex items-center gap-1.5 text-[12.5px] font-semibold text-foreground">
+            <Sparkles className="h-4 w-4 text-violet-500" /> ¿Cuál selección es la FINAL?
+          </p>
+          <p className="mb-2 text-[11.5px] text-muted-foreground">
+            El cliente hizo varias rondas. Elige cuál cuenta como la selección
+            final: la validación y el “cliente eligió” se calculan sobre esa,
+            no sobre la última que él hizo.
+          </p>
+          <select
+            value={finalSel}
+            onChange={(e) => chooseFinal(e.target.value)}
+            disabled={savingSel}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-brand focus:outline-none disabled:opacity-50"
+          >
+            <option value={galleryId}>Selección de esta galería</option>
+            {reselectionRounds.map((r) => (
+              <option key={r.galleryId} value={r.galleryId}>
+                {r.label} · {r.count} foto{r.count === 1 ? "" : "s"}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Resumen */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <SummaryCard

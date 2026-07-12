@@ -1704,6 +1704,8 @@ export type PublicGalleryAsset = {
   deliveryTrack: "social" | "high_quality" | null
   thumbUrl: string | null
   webUrl: string | null
+  /** Nombre de archivo original (para ordenar el álbum por orden de captura). */
+  originalName: string | null
 }
 
 export type PublicGalleryView = {
@@ -1869,6 +1871,7 @@ export async function validateGalleryToken(
             : null,
         thumbUrl: getAssetThumbUrl(a.thumb_key as string | null),
         webUrl: getAssetWebUrl(a.web_key as string | null),
+        originalName: (a.original_name as string | null) ?? null,
       }
     }),
     tokenInfo: { id: tk.id as string, expiresAt: tk.expires_at as string | null },

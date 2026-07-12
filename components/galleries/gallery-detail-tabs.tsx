@@ -192,6 +192,8 @@ interface Props {
   /** Todas las rondas de re-selección (2da, 3ra…) con sus fotos, para mostrarlas
    *  como listas separadas dentro de la pestaña Selecciones. */
   reselectionRounds?: SelectionRound[]
+  /** Ronda designada como selección FINAL (para la validación de entrega). */
+  finalSelectionGalleryId?: string | null
   /** Dedicatoria de la madre (aparece en la entrega). */
   motherMessage?: string | null
   motherMessageFrom?: string | null
@@ -224,6 +226,7 @@ export function GalleryDetailTabs({
   favoritesCount = 0,
   reselection = null,
   reselectionRounds = [],
+  finalSelectionGalleryId = null,
   motherMessage = null,
   motherMessageFrom = null,
   motherMessageEnabled = false,
@@ -401,6 +404,8 @@ export function GalleryDetailTabs({
                 assets={assets}
                 favorites={favoriteSelections}
                 collections={collections}
+                reselectionRounds={reselectionRounds}
+                finalSelectionGalleryId={finalSelectionGalleryId}
               />
             )}
             {deliverySlot}

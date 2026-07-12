@@ -489,6 +489,10 @@ export default async function GalleryDetailPage({
         favoritesCount={favoritesCount}
         reselection={reselection}
         reselectionRounds={selectionRounds}
+        finalSelectionGalleryId={
+          (gallery as unknown as { final_selection_gallery_id?: string | null })
+            .final_selection_gallery_id ?? null
+        }
         motherMessage={
           (gallery as unknown as { mother_message: string | null }).mother_message ?? null
         }

@@ -208,9 +208,16 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
 
   // Luxury Book: modo solo-libro reemplaza toda la vista (salvo el link de descarga).
   if (!deliveryOnly && hasDeliveryTracks && view.gallery.bookEnabled && (view.gallery.bookDisplayMode === "book" || bookRequested)) {
-    const deliveryAssets = view.assets.filter(
-      (a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality",
-    )
+    // Álbum en ORDEN DE CREACIÓN: por nombre de archivo (secuencia de captura,
+    // ej. APX07717 → APX07718…), primeras adelante, últimas al final.
+    const deliveryAssets = view.assets
+      .filter((a) => a.deliveryTrack === "social" || a.deliveryTrack === "high_quality")
+      .sort((a, b) =>
+        (a.originalName ?? "").localeCompare(b.originalName ?? "", undefined, {
+          numeric: true,
+          sensitivity: "base",
+        }),
+      )
     return (
       <FinalDeliveryBook
         gallery={{

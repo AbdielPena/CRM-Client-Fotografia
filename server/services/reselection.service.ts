@@ -267,6 +267,28 @@ export async function getSelectionRoundsForGallery(
   return rounds
 }
 
+/**
+ * Fija cuál RONDA de selección es la FINAL/oficial para esta galería de entrega
+ * (`galleries.final_selection_gallery_id`). `sourceGalleryId=null` = la selección
+ * de la propia galería. Se usa en la validación de entrega y cálculos derivados.
+ */
+export async function setGalleryFinalSelection(
+  studioId: string,
+  galleryId: string,
+  sourceGalleryId: string | null,
+): Promise<void> {
+  const sb = untypedService()
+  const { error } = await sb
+    .from("galleries")
+    .update({
+      final_selection_gallery_id: sourceGalleryId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", galleryId)
+    .eq("studio_id", studioId)
+  if (error) throw error
+}
+
 export async function createReselectionGallery(
   studioId: string,
   parentGalleryId: string,
