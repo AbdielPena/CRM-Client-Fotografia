@@ -71,6 +71,10 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https://*.supabase.co https://*.r2.cloudflarestorage.com https://abbypixel.com https://*.abbypixel.com",
               "font-src 'self' data: https://fonts.gstatic.com",
+              // Audio del álbum (música de fondo) servido desde el bucket público
+              // (sb.abbypixel.com / supabase / r2). Sin media-src explícito caería
+              // a default-src 'self' y el <audio> del flipbook se bloquearía.
+              "media-src 'self' data: blob: https://*.supabase.co https://*.r2.cloudflarestorage.com https://*.abbypixel.com",
               "connect-src 'self' https://*.supabase.co https://*.abbypixel.com https://accounts.google.com https://www.googleapis.com",
               "frame-src 'self' https://accounts.google.com",
               "frame-ancestors 'self'",

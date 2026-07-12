@@ -20,6 +20,9 @@ import {
   LayoutGrid,
   BookImage,
   ArrowDownAZ,
+  Upload,
+  Play,
+  Pause,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -28,6 +31,11 @@ import {
   saveBookTemplateAction,
   deleteBookTemplateAction,
 } from "@/server/actions/book-template.actions"
+import {
+  addBookMusicTrackAction,
+  removeBookMusicTrackAction,
+} from "@/server/actions/book-music.actions"
+import type { BookMusicTrack } from "@/server/services/book-music.service"
 import {
   BOOK_LAYOUTS,
   layoutCapacity,
@@ -65,6 +73,7 @@ export function BookDesigner({
   coverImg,
   logoUrl,
   templates,
+  musicLibrary,
 }: {
   galleryId: string
   assets: DAsset[]
@@ -74,6 +83,7 @@ export function BookDesigner({
   coverImg: string | null
   logoUrl: string | null
   templates: { id: string; name: string; config: Record<string, unknown> }[]
+  musicLibrary: BookMusicTrack[]
 }) {
   const router = useRouter()
   const seed = useMemo<BookPage[]>(
@@ -97,6 +107,62 @@ export function BookDesigner({
   const [music, setMusic] = useState<{ url?: string; autoplay?: boolean; volume?: number }>(
     (initialSettings.music as { url?: string; autoplay?: boolean; volume?: number } | undefined) ?? {},
   )
+  // Biblioteca de música reutilizable del estudio (predefinidas). Se sube por
+  // archivo (no links) y se guarda para reusar en cualquier álbum.
+  const [musicLib, setMusicLib] = useState<BookMusicTrack[]>(musicLibrary)
+  const [uploadingMusic, setUploadingMusic] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const musicFileRef = useRef<HTMLInputElement>(null)
+  const previewRef = useRef<HTMLAudioElement>(null)
+
+  async function uploadMusicFile(file: File) {
+    setUploadingMusic(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/studio/book-music", { method: "POST", body: fd })
+      const data = (await res.json()) as { url?: string; name?: string; error?: string }
+      if (!res.ok || !data?.url) {
+        toast.error(data?.error || "No se pudo subir la canción")
+        return
+      }
+      setMusic((m) => ({ ...m, url: data.url }))
+      const saved = await addBookMusicTrackAction(galleryId, data.name ?? "Canción", data.url)
+      if (saved.library) setMusicLib(saved.library)
+      else if (saved.error) toast.error(saved.error)
+      toast.success("Canción subida y guardada")
+    } catch {
+      toast.error("No se pudo subir la canción")
+    } finally {
+      setUploadingMusic(false)
+      if (musicFileRef.current) musicFileRef.current.value = ""
+    }
+  }
+
+  async function removeMusicTrack(id: string) {
+    const track = musicLib.find((t) => t.id === id)
+    const res = await removeBookMusicTrackAction(galleryId, id)
+    if (res.library) setMusicLib(res.library)
+    else if (res.error) return toast.error(res.error)
+    if (track && music.url === track.url) setMusic((m) => ({ ...m, url: "" }))
+    if (track && previewUrl === track.url) {
+      previewRef.current?.pause()
+      setPreviewUrl(null)
+    }
+  }
+
+  function toggleMusicPreview(url: string) {
+    const a = previewRef.current
+    if (!a) return
+    if (previewUrl === url && !a.paused) {
+      a.pause()
+      setPreviewUrl(null)
+      return
+    }
+    a.src = url
+    a.currentTime = 0
+    void a.play().then(() => setPreviewUrl(url)).catch(() => {})
+  }
 
   const [save, setSave] = useState<"idle" | "saving" | "saved" | "error">("idle")
 
@@ -390,36 +456,125 @@ export function BookDesigner({
               </p>
             </div>
           </div>
-          <label className="mb-1 block text-xs font-medium text-foreground">URL del audio (MP3)</label>
+          {/* Subir DESDE ARCHIVO (sin pegar links) */}
           <input
-            type="url"
-            value={music.url ?? ""}
-            onChange={(e) => setMusic((m) => ({ ...m, url: e.target.value }))}
-            placeholder="https://…/cancion.mp3"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+            ref={musicFileRef}
+            type="file"
+            accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/aac,audio/ogg,audio/wav,audio/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void uploadMusicFile(f)
+            }}
           />
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
-            <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={music.autoplay !== false}
-                onChange={(e) => setMusic((m) => ({ ...m, autoplay: e.target.checked }))}
-                className="size-4"
-              />
-              Arrancar sola (tras el primer toque del cliente)
-            </label>
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              Volumen
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={music.volume ?? 0.5}
-                onChange={(e) => setMusic((m) => ({ ...m, volume: Number(e.target.value) }))}
-              />
-            </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => musicFileRef.current?.click()}
+              disabled={uploadingMusic}
+              className="inline-flex items-center gap-2 rounded-lg bg-foreground px-3.5 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {uploadingMusic ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
+              )}
+              {uploadingMusic ? "Subiendo…" : "Subir canción"}
+            </button>
+            {music.url ? (
+              <button
+                type="button"
+                onClick={() => setMusic((m) => ({ ...m, url: "" }))}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+              >
+                <X className="size-4" /> Sin música
+              </button>
+            ) : null}
+            <span className="text-xs text-muted-foreground">MP3, M4A, AAC, OGG o WAV · máx 15&nbsp;MB</span>
           </div>
+
+          {/* Biblioteca reutilizable (canciones predefinidas del estudio) */}
+          {musicLib.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-medium text-foreground">
+                Tus canciones guardadas <span className="text-muted-foreground">(toca para usarla)</span>
+              </p>
+              <ul className="space-y-1.5">
+                {musicLib.map((t) => {
+                  const selected = music.url === t.url
+                  const playing = previewUrl === t.url
+                  return (
+                    <li
+                      key={t.id}
+                      className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-sm transition-colors ${selected ? "border-brand bg-brand-soft" : "border-border bg-background hover:bg-muted"}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleMusicPreview(t.url)}
+                        aria-label={playing ? "Pausar" : "Escuchar"}
+                        className="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-foreground hover:bg-border"
+                      >
+                        {playing ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMusic((m) => ({ ...m, url: t.url }))}
+                        className="flex-1 truncate text-left"
+                        title={t.name}
+                      >
+                        {t.name}
+                      </button>
+                      {selected && <Check className="size-4 shrink-0 text-brand" />}
+                      <button
+                        type="button"
+                        onClick={() => void removeMusicTrack(t.id)}
+                        aria-label="Quitar de la biblioteca"
+                        className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-red-100 hover:text-red-600"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* Canción externa (link viejo) que no está en la biblioteca */}
+          {music.url && !musicLib.some((t) => t.url === music.url) && (
+            <p className="mt-3 truncate text-xs text-muted-foreground" title={music.url}>
+              Canción actual: {music.url}
+            </p>
+          )}
+
+          {/* Audio oculto para previsualizar en el editor */}
+          <audio ref={previewRef} className="hidden" onEnded={() => setPreviewUrl(null)} />
+
+          {/* Ajustes (solo si hay canción elegida) */}
+          {music.url && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-3">
+              <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={music.autoplay !== false}
+                  onChange={(e) => setMusic((m) => ({ ...m, autoplay: e.target.checked }))}
+                  className="size-4"
+                />
+                Arrancar sola (tras el primer toque del cliente)
+              </label>
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                Volumen
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={music.volume ?? 0.5}
+                  onChange={(e) => setMusic((m) => ({ ...m, volume: Number(e.target.value) }))}
+                />
+              </label>
+            </div>
+          )}
         </div>
       )}
     </div>
