@@ -76,24 +76,6 @@ const TRACK_META: Record<
   },
 }
 
-/** Polling del export ZIP (endpoint público por token) hasta que está listo. */
-async function waitForZip(token: string, exportId: string): Promise<string> {
-  const base = `/api/galleries/public/${token}/zip/${exportId}`
-  for (let i = 0; i < 90; i++) {
-    await new Promise((r) => setTimeout(r, 2000))
-    const res = await fetch(base)
-    if (!res.ok) continue
-    const data = (await res.json()) as { status: string; error?: string | null }
-    if (data.status === "ready" || data.status === "completed") {
-      return `${base}?download=1`
-    }
-    if (data.status === "failed") {
-      throw new Error(data.error ?? "La descarga falló al generarse")
-    }
-  }
-  throw new Error("La descarga está tardando demasiado — intentá de nuevo en unos minutos")
-}
-
 export function FinalDeliveryView({
   token,
   gallery,
@@ -137,20 +119,21 @@ export function FinalDeliveryView({
       }
       setZipBusy(key)
       try {
+        // Crea el export SIN procesarlo a storage (stream:true) y descarga el ZIP
+        // en streaming directo — así "Máxima Calidad" (originales) ya no se queda
+        // cargando: antes el ZIP grande fallaba al subirse al bucket.
         const res = await fetch(`/api/galleries/public/${token}/zip`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scope: "selection", assetIds, resolution }),
+          body: JSON.stringify({ scope: "selection", assetIds, resolution, stream: true }),
         })
         if (!res.ok) {
           const err = (await res.json().catch(() => null)) as { error?: string } | null
           throw new Error(err?.error ?? "No se pudo iniciar la descarga")
         }
         const { exportId } = (await res.json()) as { exportId: string }
-        toast.info("Preparando tu ZIP… puede tardar un momento")
-        const url = await waitForZip(token, exportId)
-        window.location.href = url
-        toast.success("¡Descarga iniciada!")
+        toast.info("Preparando tu descarga…")
+        window.location.href = `/api/galleries/public/${token}/zip/${exportId}/stream`
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Error al descargar")
       } finally {

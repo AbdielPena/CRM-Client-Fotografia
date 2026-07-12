@@ -257,6 +257,7 @@ export async function createZipExport(
   studioId: string,
   actorId: string | null,
   input: CreateZipExportInput,
+  opts?: { process?: boolean },
 ): Promise<ZipExportRow> {
   const supabase = createSupabaseServiceClient()
 
@@ -294,8 +295,11 @@ export async function createZipExport(
     .single()
   if (error) throw error
 
-  // Procesamiento async (no bloquea la respuesta)
-  void processZipExport((row as ZipExportRow).id)
+  // Procesamiento async (no bloquea la respuesta). Se OMITE en modo streaming:
+  // en ese caso el ZIP se transmite DIRECTO al cliente (buildZipExportStream)
+  // sin subirlo al bucket — evita el "Request Entity Too Large" / OOM que rompía
+  // los ZIP de máxima calidad (originales).
+  if (opts?.process !== false) void processZipExport((row as ZipExportRow).id)
 
   return row as ZipExportRow
 }
@@ -303,7 +307,7 @@ export async function createZipExport(
 /**
  * Resuelve los assets a incluir según el scope del export.
  */
-async function resolveAssetIds(
+export async function resolveAssetIds(
   exportRow: ZipExportRow,
 ): Promise<{ assetId: string; key: string; filename: string }[]> {
   const supabase = createSupabaseServiceClient()
@@ -348,6 +352,81 @@ async function resolveAssetIds(
       filename: a.original_name as string,
     }
   })
+}
+
+/**
+ * ZIP en STREAMING directo al cliente (sin subir a storage ni bufferizar el zip
+ * entero): resuelve los assets del export, va descargando cada archivo y lo
+ * agrega al archive mientras el cliente ya está recibiendo bytes. Evita el OOM y
+ * el "Request Entity Too Large" del bucket que rompían los ZIP de máxima calidad.
+ *
+ * Devuelve el Readable del ZIP + el conteo; `null` si el export no existe, no
+ * pertenece a la galería esperada, o no tiene assets.
+ */
+export async function buildZipExportStream(
+  exportId: string,
+  expectGalleryId: string,
+): Promise<{ readable: Readable; assetCount: number; resolution: string } | null> {
+  const supabase = createSupabaseServiceClient()
+  const { data: row } = await supabase
+    .from("gallery_zip_exports")
+    .select("*")
+    .eq("id", exportId)
+    .maybeSingle()
+  if (!row) return null
+  const exportRow = row as ZipExportRow
+  if (exportRow.gallery_id !== expectGalleryId) return null
+
+  const assets = await resolveAssetIds(exportRow)
+  if (assets.length === 0) return null
+
+  const sourceBucket =
+    exportRow.resolution === "original" ? ORIGINALS_BUCKET : RENDITIONS_BUCKET
+  // Originales = JPEG ya comprimido → `store` (nivel 0): rápido, sin CPU extra y
+  // emite bytes constantemente (no dispara timeouts de nginx). Web = nivel 6.
+  const archive = archiver("zip", {
+    zlib: { level: exportRow.resolution === "original" ? 0 : 6 },
+    store: exportRow.resolution === "original",
+  })
+  // Silencia errores de entradas puntuales (un archivo faltante no aborta el zip).
+  archive.on("warning", (err) => console.warn("[zip-stream] warning", err))
+
+  // Agrega los archivos en segundo plano mientras el cliente descarga.
+  void (async () => {
+    try {
+      const usedNames = new Map<string, number>()
+      for (const asset of assets) {
+        const { data: blob, error } = await supabase.storage
+          .from(sourceBucket)
+          .download(asset.key)
+        if (error || !blob) {
+          console.error("[zip-stream] download fail", asset.assetId, error?.message)
+          continue
+        }
+        let name = asset.filename || `${asset.assetId}.jpg`
+        const seen = usedNames.get(name) ?? 0
+        if (seen > 0) {
+          const dot = name.lastIndexOf(".")
+          name =
+            dot > 0
+              ? `${name.slice(0, dot)}_${seen + 1}${name.slice(dot)}`
+              : `${name}_${seen + 1}`
+        }
+        usedNames.set(asset.filename, seen + 1)
+        archive.append(Buffer.from(await blob.arrayBuffer()), { name })
+      }
+      await archive.finalize()
+    } catch (err) {
+      console.error("[zip-stream] failed", exportId, err)
+      archive.destroy(err instanceof Error ? err : new Error(String(err)))
+    }
+  })()
+
+  return {
+    readable: archive as unknown as Readable,
+    assetCount: assets.length,
+    resolution: exportRow.resolution as string,
+  }
 }
 
 /**

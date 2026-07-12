@@ -14,6 +14,9 @@ const schema = z.object({
   clientEmail: optionalClientEmail,
   // "original" solo se honra en galerías de entrega final (fotos ya pagadas).
   resolution: z.enum(["web", "original"]).optional(),
+  // stream=true: NO se procesa a storage; el cliente descarga el ZIP en streaming
+  // por GET /zip/[exportId]/stream (evita el límite de subida del bucket).
+  stream: z.boolean().optional(),
 })
 
 export async function POST(
@@ -55,15 +58,21 @@ export async function POST(
     const resolution =
       body.resolution === "original" && isFinalDelivery ? "original" : "web"
 
-    const exportRow = await createZipExport(gallery.studio_id, null, {
-      galleryId: view.gallery.id,
-      scope: body.scope,
-      collectionId: body.collectionId,
-      assetIds: body.assetIds,
-      resolution,
-      clientEmail: body.clientEmail || null,
-      clientIp: ip,
-    })
+    const exportRow = await createZipExport(
+      gallery.studio_id,
+      null,
+      {
+        galleryId: view.gallery.id,
+        scope: body.scope,
+        collectionId: body.collectionId,
+        assetIds: body.assetIds,
+        resolution,
+        clientEmail: body.clientEmail || null,
+        clientIp: ip,
+      },
+      // En modo streaming NO procesamos el zip a storage (se transmite directo).
+      { process: !body.stream },
+    )
 
     return NextResponse.json({
       exportId: exportRow.id,
