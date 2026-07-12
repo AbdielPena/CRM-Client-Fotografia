@@ -32,11 +32,24 @@ export default async function BookDesignerPage({ params }: { params: { id: strin
     thumbUrl: getAssetThumbUrl(a.thumb_key),
     status: a.status,
     deliveryTrack: (a as unknown as { delivery_track: string | null }).delivery_track ?? null,
+    originalName: (a as unknown as { original_name?: string | null }).original_name ?? "",
   }))
-  const deliveryPhotos = hydrated.filter((a) => a.deliveryTrack)
-  const pool = (deliveryPhotos.length ? deliveryPhotos : hydrated.filter((a) => a.status === "completed")).map(
-    (a) => ({ id: a.id, thumbUrl: a.thumbUrl }),
-  )
+  // Banco de fotos en ORDEN DE CREACIÓN (nombre de captura: APX07717 → APX07718…),
+  // para que el auto-llenado y el botón "Ordenar por creación" queden cronológicos.
+  const byCreation = (
+    x: { originalName: string },
+    y: { originalName: string },
+  ) =>
+    x.originalName.localeCompare(y.originalName, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    })
+  const deliveryPhotos = hydrated.filter((a) => a.deliveryTrack).sort(byCreation)
+  const pool = (
+    deliveryPhotos.length
+      ? deliveryPhotos
+      : hydrated.filter((a) => a.status === "completed").sort(byCreation)
+  ).map((a) => ({ id: a.id, thumbUrl: a.thumbUrl }))
 
   const bookSettings =
     ((gallery as unknown as { book_settings?: Record<string, unknown> }).book_settings ?? {}) as Record<

@@ -19,6 +19,7 @@ import {
   Images,
   LayoutGrid,
   BookImage,
+  ArrowDownAZ,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -173,6 +174,19 @@ export function BookDesigner({
     setPages((prev) => [...prev, np])
     setActiveId(np.id)
   }
+  // Ordena las páginas por ORDEN DE CREACIÓN de sus fotos (el banco `assets` ya
+  // viene en orden de captura). Las páginas vacías van al final.
+  function sortPagesByCreation() {
+    const idx = new Map(assets.map((a, i) => [a.id, i]))
+    const rank = (p: BookPage) =>
+      p.assetIds.length
+        ? Math.min(...p.assetIds.map((id) => idx.get(id) ?? Number.POSITIVE_INFINITY))
+        : Number.POSITIVE_INFINITY
+    setPages((prev) =>
+      [...prev].sort((a, b) => rank(a) - rank(b)),
+    )
+    toast.success("Páginas ordenadas por creación")
+  }
   function duplicatePage(id: string) {
     setPages((prev) => {
       const idx = prev.findIndex((p) => p.id === id)
@@ -279,6 +293,19 @@ export function BookDesigner({
           {/* Páginas */}
           <main className="min-w-0 flex-1 overflow-y-auto p-5">
             <div className="mx-auto max-w-3xl">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <p className="text-[12.5px] text-muted-foreground">
+                  {pages.length} página{pages.length === 1 ? "" : "s"}
+                </p>
+                <button
+                  onClick={sortPagesByCreation}
+                  disabled={pages.length < 2}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:border-brand hover:text-brand disabled:opacity-40"
+                  title="Ordena las páginas por el orden de creación (captura) de sus fotos"
+                >
+                  <ArrowDownAZ className="h-3.5 w-3.5" /> Ordenar por creación
+                </button>
+              </div>
               <Reorder.Group as="div" axis="y" values={pages} onReorder={setPages} className="flex flex-col gap-3">
                 {pages.map((page, i) => (
                   <PageCard
