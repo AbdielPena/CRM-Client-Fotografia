@@ -78,6 +78,19 @@ function s(v: unknown): string {
   return typeof v === "string" ? v : ""
 }
 
+// ── Mensaje de CIERRE del álbum ───────────────────────────────────────────────
+// Se muestra SIEMPRE en la última página de contenido (justo antes de la
+// contraportada): el agradecimiento del estudio por confiar en su trabajo.
+// El nombre del estudio se renderiza aparte (multi-tenant) → el mensaje NO debe
+// contener el nombre. `signatureLead` es la antesala en itálica y debajo va el
+// nombre del estudio en script. Copia definida por panel creativo (breve, luxury).
+const CLOSING_THANKS = {
+  eyebrow: "HASTA SIEMPRE",
+  message:
+    "¡Gracias por confiar en nosotros para ser parte de este momento tan especial! Fue un placer crear estos recuerdos para ti. ✨",
+  signatureLead: "Con cariño,",
+}
+
 // ╔══════════════════════════════════════════════════════════════╗
 // ║  ROYAL ATELIER — Luxury Book Experience (pxbook-)             ║
 // ║  Bloque <style> estático: solo depende de las CSS vars inline ║
@@ -656,8 +669,12 @@ export function FinalDeliveryBook({
     else api.flipPrev()
   }
 
-  // Página de portada (tapa dura).
-  const totalPages = photoPages.length + 2 + (dedicationText ? 1 : 0)
+  // Cuenta de hojas: portada + contraportada (2) + página de cierre (1, siempre)
+  // + dedicatoria del frente (si existe).
+  const totalPages = photoPages.length + 3 + (dedicationText ? 1 : 0)
+
+  // Firma del cierre = nombre del estudio, salvo que esté oculto el branding.
+  const closingSignature = studio.hideBranding ? "" : studio.name
 
   // CSS vars de fallback inline (los tokens completos los pone .abby-book / [data-tpl]).
   const wrapVars = {
@@ -929,6 +946,83 @@ export function FinalDeliveryBook({
                   </div>
                 </div>
               )),
+
+              /* PÁGINA DE CIERRE — agradecimiento del estudio por la confianza.
+                 Siempre presente, en papel crema, antes de la contraportada. */
+              <div key="closing" className="pxbook-page" style={photoPageStyle(pageBg, dims.w, dims.h)}>
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    padding: "12% 10%",
+                    boxSizing: "border-box",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    zIndex: 1,
+                  }}
+                >
+                  <p
+                    style={{
+                      fontFamily: "system-ui, sans-serif",
+                      fontSize: 11,
+                      letterSpacing: "0.36em",
+                      textTransform: "uppercase",
+                      color: accent,
+                      marginBottom: 22,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {CLOSING_THANKS.eyebrow}
+                  </p>
+                  <p
+                    style={{
+                      fontFamily: "var(--font-display), 'Cormorant Garamond', Georgia, serif",
+                      fontStyle: "italic",
+                      fontWeight: 400,
+                      fontSize: "clamp(17px,3.9vw,26px)",
+                      lineHeight: 1.55,
+                      color: tpl.ink,
+                      maxWidth: "30ch",
+                      margin: 0,
+                    }}
+                  >
+                    {CLOSING_THANKS.message}
+                  </p>
+                  {/* Filete dorado con ornamento ✦ (crest reutilizado) */}
+                  <span className="pxbook-crest" aria-hidden style={{ marginTop: 26 }} />
+                  {closingSignature && (
+                    <div style={{ marginTop: 20 }}>
+                      <p
+                        style={{
+                          fontFamily: "var(--font-serif), 'EB Garamond', Georgia, serif",
+                          fontStyle: "italic",
+                          fontSize: 13,
+                          color: tpl.ink,
+                          opacity: 0.7,
+                          margin: 0,
+                        }}
+                      >
+                        {CLOSING_THANKS.signatureLead}
+                      </p>
+                      <p
+                        style={{
+                          fontFamily: "var(--font-script), 'Pinyon Script', cursive",
+                          fontSize: "clamp(22px,4vw,30px)",
+                          color: accent,
+                          marginTop: 4,
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        {closingSignature}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>,
 
               /* CONTRAPORTADA (tapa dura) */
               <div key="back" data-density="hard" className="pxbook-back" style={{ ...coverStyleSolid(tpl, dims.w, dims.h), display: "flex", alignItems: "center", justifyContent: "center" }}>
