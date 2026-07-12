@@ -28,6 +28,7 @@ import {
   Ban,
   Truck,
   Printer,
+  Settings2,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -279,79 +280,23 @@ export function GalleryDetailTabs({
   const navCls =
     "justify-start gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-muted-foreground data-[state=active]:bg-brand-soft data-[state=active]:text-brand data-[state=active]:shadow-none"
 
-  return (
-    <div className="px-6 pb-12 pt-6 lg:px-8">
-      <Tabs
-        defaultValue="photos"
-        orientation="vertical"
-        className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-7"
-      >
-        <TabsList className="flex h-auto w-full flex-row flex-wrap justify-start gap-1 rounded-none bg-transparent p-0 lg:sticky lg:top-6 lg:w-52 lg:flex-col lg:flex-nowrap lg:items-stretch">
-          <TabsTrigger value="photos" className={navCls}>
-            <ImageIcon className="h-4 w-4" /> Fotos
-            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
-              {assets.length}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="sets" className={navCls}>
-            <FolderTree className="h-4 w-4" /> Sets
-            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
-              {sets.length}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="selections" className={navCls}>
-            <Heart className="h-4 w-4" /> Selecciones
-            {submittedCount > 0 && (
-              <span className="ml-auto rounded-full bg-brand px-1.5 py-0.5 text-[9px] font-bold text-brand-foreground tabular-nums">
-                {submittedCount}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="delivery" className={navCls}>
-            <Truck className="h-4 w-4" /> Entrega
-          </TabsTrigger>
-          {printsSlot && (
-            <TabsTrigger value="prints" className={navCls}>
-              <Printer className="h-4 w-4" /> Impresiones
-            </TabsTrigger>
-          )}
-          <TabsTrigger value="pins" className={navCls}>
-            <KeyRound className="h-4 w-4" /> PINs
-          </TabsTrigger>
-          <TabsTrigger value="watermark" className={navCls}>
-            <Droplet className="h-4 w-4" /> Marca de agua
-          </TabsTrigger>
-          <TabsTrigger value="appearance" className={navCls}>
-            <Palette className="h-4 w-4" /> Apariencia
-          </TabsTrigger>
-          <TabsTrigger value="share" className={navCls}>
-            <Share2 className="h-4 w-4" /> Compartir
-          </TabsTrigger>
-          <TabsTrigger value="activity" className={navCls}>
-            <Activity className="h-4 w-4" /> Actividad
-          </TabsTrigger>
-        </TabsList>
+  const [modal, setModal] = React.useState<
+    null | "entrega" | "seleccion" | "sets" | "impresiones" | "ajustes"
+  >(null)
+  const closeModal = () => setModal(null)
+  const deliveryCount = assets.filter(
+    (a) => a.delivery_track === "social" || a.delivery_track === "high_quality",
+  ).length
+  const selectedHint =
+    submittedCount > 0
+      ? `${submittedCount} enviada${submittedCount > 1 ? "s" : ""}`
+      : favoritesCount > 0
+        ? `${favoritesCount} elegidas`
+        : "sin selección"
 
-        <div className="min-w-0 flex-1 [&>[role=tabpanel]]:mt-0">
-        <TabsContent value="photos" className="mt-5">
-          <PhotosTab gallery={gallery} assets={assets} studioId={studioId} />
-        </TabsContent>
-
-        <TabsContent value="sets" className="mt-5">
-          <SetsTab galleryId={gallery.id} sets={sets} assets={assets} />
-        </TabsContent>
-
-        <TabsContent value="selections" className="mt-5">
-          <SelectionsTab
-            galleryId={gallery.id}
-            collections={collections}
-            favorites={favoriteSelections}
-            assets={assets}
-            reselectionRounds={reselectionRounds}
-          />
-        </TabsContent>
-
-        <TabsContent value="delivery" className="mt-5">
+  // Bloque de ENTREGA (se muestra dentro del modal "Entrega"): habilitar, subir
+  // finales, links de compartir, enviar al cliente, validar + álbum/portada/mamá.
+  const deliveryBlock = (
           <div className="space-y-5">
             {/* Estado de entrega enviada: permite cancelar (des-publicar). */}
             {gallery.delivery_ready_at && (
@@ -433,68 +378,243 @@ export function GalleryDetailTabs({
             )}
             {deliverySlot}
           </div>
-        </TabsContent>
+  )
 
-        {printsSlot && (
-          <TabsContent value="prints" className="mt-5">
-            {printsSlot}
-          </TabsContent>
-        )}
-
-        <TabsContent value="pins" className="mt-5">
-          <PinsTab galleryId={gallery.id} pins={pins} />
-        </TabsContent>
-
-        <TabsContent value="watermark" className="mt-5">
-          <WatermarkTab gallery={gallery} />
-        </TabsContent>
-
-        <TabsContent value="appearance" className="mt-5">
-          <GalleryAppearanceTab
-            galleryId={gallery.id}
-            galleryType={gallery.gallery_type}
-            initial={{
-              templateId: gallery.template_id,
-              theme: gallery.theme,
-              coverConfig: gallery.cover_config,
-              subtitle: gallery.subtitle,
-              welcomeText: gallery.welcome_text,
-              coverImageUrl,
-              coverAssetId: (gallery as unknown as { cover_asset_id?: string | null }).cover_asset_id ?? null,
-            }}
-            assets={assets.filter((a) => a.status === "completed").map((a) => ({
-              id: a.id,
-              thumbUrl: a.thumbUrl,
-              webUrl: a.webUrl,
-              original_name: a.original_name,
-            }))}
-          />
-        </TabsContent>
-
-        <TabsContent value="share" className="mt-5">
-          <ShareTab
-            gallery={gallery}
-            publicToken={publicToken}
-            driveLink={driveLink}
-            client={client}
-            hasDeliveryAssets={hasDelivery}
-            deliveryEnabled={deliveryEnabled}
-            waSelectionTemplate={waSelectionTemplate}
-            waDeliveryTemplate={waDeliveryTemplate}
-            favoritesCount={favoritesCount}
-            reselection={reselection}
-            selectionSources={selectionSources}
-            motherMessage={motherMessage}
-            motherMessageFrom={motherMessageFrom}
-            motherMessageEnabled={motherMessageEnabled}
-          />
-        </TabsContent>
-
-        <TabsContent value="activity" className="mt-5">
-          <GalleryActivityTab activity={activity} />
-        </TabsContent>
+  return (
+    <div className="space-y-5 px-6 pb-12 pt-6 lg:px-8">
+      {/* Flujo de la sesión — botones compactos; cada uno abre su apartado en popup */}
+      <div className="rounded-2xl border border-border bg-card p-3.5">
+        <div className="mb-2.5 flex items-center justify-between gap-3">
+          <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Flujo de la sesión
+          </span>
+          {canDeliver && client && (
+            <button
+              onClick={() => setModal("entrega")}
+              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" /> Listo para entregar
+            </button>
+          )}
         </div>
-      </Tabs>
+        <div className="flex flex-wrap items-center gap-2">
+          <FlowChip
+            icon={<Truck className="h-4 w-4" />}
+            label="Entrega"
+            hint={hasDelivery ? `${deliveryCount} finales` : deliveryEnabled ? "en curso" : "sin habilitar"}
+            done={hasDelivery}
+            onClick={() => setModal("entrega")}
+          />
+          <FlowChip
+            icon={<Heart className="h-4 w-4" />}
+            label="Selección"
+            hint={selectedHint}
+            badge={submittedCount}
+            onClick={() => setModal("seleccion")}
+          />
+          <FlowChip
+            icon={<FolderTree className="h-4 w-4" />}
+            label="Sets"
+            hint={`${sets.length}`}
+            onClick={() => setModal("sets")}
+          />
+          {printsSlot && (
+            <FlowChip
+              icon={<Printer className="h-4 w-4" />}
+              label="Impresiones"
+              onClick={() => setModal("impresiones")}
+            />
+          )}
+          <button
+            onClick={() => setModal("ajustes")}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted"
+          >
+            <Settings2 className="h-3.5 w-3.5" /> Ajustes
+          </button>
+        </div>
+      </div>
+
+      {/* Canvas principal: las fotos */}
+      <PhotosTab gallery={gallery} assets={assets} studioId={studioId} />
+
+      {/* ── Popups (reusan el contenido de cada apartado) ───────────── */}
+      {modal === "entrega" && (
+        <FlowModal title="Entrega final" onClose={closeModal} wide>
+          {deliveryBlock}
+        </FlowModal>
+      )}
+      {modal === "seleccion" && (
+        <FlowModal title="Selecciones del cliente" onClose={closeModal} wide>
+          <SelectionsTab
+            galleryId={gallery.id}
+            collections={collections}
+            favorites={favoriteSelections}
+            assets={assets}
+            reselectionRounds={reselectionRounds}
+          />
+        </FlowModal>
+      )}
+      {modal === "sets" && (
+        <FlowModal title="Sets / carpetas" onClose={closeModal} wide>
+          <SetsTab galleryId={gallery.id} sets={sets} assets={assets} />
+        </FlowModal>
+      )}
+      {modal === "impresiones" && printsSlot && (
+        <FlowModal title="Impresiones" onClose={closeModal} wide>
+          {printsSlot}
+        </FlowModal>
+      )}
+      {modal === "ajustes" && (
+        <FlowModal title="Ajustes de la galería" onClose={closeModal} wide>
+          <Tabs defaultValue="share" className="flex flex-col gap-4">
+            <TabsList className="flex flex-row flex-wrap gap-1 rounded-none bg-transparent p-0">
+              <TabsTrigger value="share" className={navCls}>
+                <Share2 className="h-4 w-4" /> Compartir
+              </TabsTrigger>
+              <TabsTrigger value="pins" className={navCls}>
+                <KeyRound className="h-4 w-4" /> PINs
+              </TabsTrigger>
+              <TabsTrigger value="watermark" className={navCls}>
+                <Droplet className="h-4 w-4" /> Marca de agua
+              </TabsTrigger>
+              <TabsTrigger value="appearance" className={navCls}>
+                <Palette className="h-4 w-4" /> Apariencia
+              </TabsTrigger>
+              <TabsTrigger value="activity" className={navCls}>
+                <Activity className="h-4 w-4" /> Actividad
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="share" className="mt-0">
+              <ShareTab
+                gallery={gallery}
+                publicToken={publicToken}
+                driveLink={driveLink}
+                client={client}
+                hasDeliveryAssets={hasDelivery}
+                deliveryEnabled={deliveryEnabled}
+                waSelectionTemplate={waSelectionTemplate}
+                waDeliveryTemplate={waDeliveryTemplate}
+                favoritesCount={favoritesCount}
+                reselection={reselection}
+                selectionSources={selectionSources}
+                motherMessage={motherMessage}
+                motherMessageFrom={motherMessageFrom}
+                motherMessageEnabled={motherMessageEnabled}
+              />
+            </TabsContent>
+            <TabsContent value="pins" className="mt-0">
+              <PinsTab galleryId={gallery.id} pins={pins} />
+            </TabsContent>
+            <TabsContent value="watermark" className="mt-0">
+              <WatermarkTab gallery={gallery} />
+            </TabsContent>
+            <TabsContent value="appearance" className="mt-0">
+              <GalleryAppearanceTab
+                galleryId={gallery.id}
+                galleryType={gallery.gallery_type}
+                initial={{
+                  templateId: gallery.template_id,
+                  theme: gallery.theme,
+                  coverConfig: gallery.cover_config,
+                  subtitle: gallery.subtitle,
+                  welcomeText: gallery.welcome_text,
+                  coverImageUrl,
+                  coverAssetId: (gallery as unknown as { cover_asset_id?: string | null }).cover_asset_id ?? null,
+                }}
+                assets={assets.filter((a) => a.status === "completed").map((a) => ({
+                  id: a.id,
+                  thumbUrl: a.thumbUrl,
+                  webUrl: a.webUrl,
+                  original_name: a.original_name,
+                }))}
+              />
+            </TabsContent>
+            <TabsContent value="activity" className="mt-0">
+              <GalleryActivityTab activity={activity} />
+            </TabsContent>
+          </Tabs>
+        </FlowModal>
+      )}
+    </div>
+  )
+}
+
+/** Botón compacto del "Flujo de la sesión" que abre un apartado en popup. */
+function FlowChip({
+  icon,
+  label,
+  hint,
+  done,
+  badge,
+  onClick,
+}: {
+  icon: React.ReactNode
+  label: string
+  hint?: string
+  done?: boolean
+  badge?: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:border-brand/40 hover:bg-muted"
+    >
+      <span className="text-muted-foreground">{icon}</span>
+      {label}
+      {hint && (
+        <span className="text-[11px] tabular-nums text-muted-foreground">· {hint}</span>
+      )}
+      {done && <Check className="h-3.5 w-3.5 text-emerald-600" />}
+      {!!badge && badge > 0 && (
+        <span className="rounded-full bg-brand px-1.5 py-0.5 text-[9px] font-bold text-brand-foreground tabular-nums">
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
+/** Popup emergente reutilizable (patrón fixed inset-0 + cierre por fuera/Escape). */
+function FlowModal({
+  title,
+  onClose,
+  wide,
+  children,
+}: {
+  title: string
+  onClose: () => void
+  wide?: boolean
+  children: React.ReactNode
+}) {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose()
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [onClose])
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className={`my-4 w-full ${wide ? "max-w-4xl" : "max-w-2xl"} rounded-2xl border border-border bg-card shadow-xl`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+          <h3 className="text-[14px] font-semibold text-foreground">{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cerrar"
+            className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-[76vh] overflow-y-auto p-5">{children}</div>
+      </div>
     </div>
   )
 }

@@ -28,6 +28,7 @@ export function LuxuryBookPanel({
   galleryId,
   publicToken,
   initial,
+  deliveryPhotos = [],
 }: {
   galleryId: string
   publicToken: string | null
@@ -38,6 +39,8 @@ export function LuxuryBookPanel({
     coverImage: string | null
     settings: BookSettings
   }
+  /** Fotos de la ENTREGA final — para elegir la portada del álbum sin subir aparte. */
+  deliveryPhotos?: { id: string; thumbUrl: string | null; webUrl: string | null }[]
 }) {
   const [isPending, startTransition] = useTransition()
   const [enabled, setEnabled] = useState(initial.enabled)
@@ -219,7 +222,7 @@ export function LuxuryBookPanel({
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CoverField value={coverImage} onChange={setCoverImage} />
+            <CoverField value={coverImage} onChange={setCoverImage} deliveryPhotos={deliveryPhotos} />
             <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -278,11 +281,14 @@ const inp =
 function CoverField({
   value,
   onChange,
+  deliveryPhotos = [],
 }: {
   value: string
   onChange: (url: string) => void
+  deliveryPhotos?: { id: string; thumbUrl: string | null; webUrl: string | null }[]
 }) {
   const [busy, setBusy] = useState(false)
+  const [pickOpen, setPickOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -306,42 +312,83 @@ function CoverField({
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-muted/30">
-        {value ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="Portada" className="h-full w-full object-cover" />
-        ) : (
-          <ImageIcon className="size-5 text-muted-foreground" />
-        )}
-      </div>
-      <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60"
-        >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <UploadCloud className="size-3.5" />}
-          {value ? "Cambiar portada" : "Subir portada"}
-        </button>
-        {value && (
+    <div className="w-full">
+      <label className="mb-1.5 block text-xs font-medium text-foreground">Portada del álbum</label>
+      <div className="flex items-center gap-3">
+        <div className="grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-muted/30">
+          {value ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={value} alt="Portada" className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon className="size-5 text-muted-foreground" />
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {deliveryPhotos.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setPickOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-brand/40 bg-brand-soft/40 px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-brand-soft"
+            >
+              <ImageIcon className="size-3.5" /> Elegir de la entrega
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => onChange("")}
-            className="text-[11px] text-muted-foreground hover:text-foreground"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60"
           >
-            Quitar
+            {busy ? <Loader2 className="size-3.5 animate-spin" /> : <UploadCloud className="size-3.5" />}
+            {value ? "Cambiar" : "Subir"}
           </button>
-        )}
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              Quitar
+            </button>
+          )}
+        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={onPick}
+        />
       </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        className="hidden"
-        onChange={onPick}
-      />
+      {pickOpen && deliveryPhotos.length > 0 && (
+        <div className="mt-3 grid max-h-56 grid-cols-6 gap-2 overflow-y-auto rounded-lg border border-border bg-muted/20 p-2 sm:grid-cols-10">
+          {deliveryPhotos.map((p) => {
+            const url = p.webUrl ?? p.thumbUrl ?? ""
+            const active = !!url && value === url
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => {
+                  onChange(url)
+                  setPickOpen(false)
+                }}
+                className={`aspect-[3/4] overflow-hidden rounded-md border transition ${
+                  active ? "border-brand ring-2 ring-brand" : "border-border hover:border-brand/50"
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.thumbUrl ?? url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

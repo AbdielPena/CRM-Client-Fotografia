@@ -250,6 +250,11 @@ export default async function GalleryDetailPage({
   const hasDeliveryAssets = assetsWithUrls.some(
     (a) => a.delivery_track === "social" || a.delivery_track === "high_quality",
   )
+  // Fotos de la entrega final — para elegir la portada del álbum desde ahí
+  // (sin subir una imagen aparte). Se pasan al LuxuryBookPanel.
+  const deliveryPhotosForBook = assetsWithUrls
+    .filter((a) => a.delivery_track === "social" || a.delivery_track === "high_quality")
+    .map((a) => ({ id: a.id, thumbUrl: a.thumbUrl, webUrl: a.webUrl }))
   const deliveryReadyAt = (gallery as unknown as { delivery_ready_at?: string | null }).delivery_ready_at ?? null
   const showDeliveryPanels = hasDeliveryAssets || !!deliveryReadyAt
   // "Entrega habilitada" = ya existen las carpetas de entrega (Máxima Calidad /
@@ -292,6 +297,7 @@ export default async function GalleryDetailPage({
         <LuxuryBookPanel
           galleryId={galleryId}
           publicToken={activeToken?.token ?? null}
+          deliveryPhotos={deliveryPhotosForBook}
           initial={{
             enabled:
               (gallery as unknown as { book_enabled?: boolean }).book_enabled ?? false,
