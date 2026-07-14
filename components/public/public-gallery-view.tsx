@@ -36,6 +36,8 @@ type Asset = {
   lqip?: string | null
   aspect?: number | null
   deliveryTrack?: "social" | "high_quality" | null
+  /** Nombre del archivo original (p. ej. "APX07717.JPG") — se muestra al cliente. */
+  originalName?: string | null
 }
 
 type Gallery = {
@@ -982,6 +984,23 @@ export function PublicGalleryView({
             <Heart className={compact ? "h-4 w-4" : "h-[18px] w-[18px]"} fill={marked ? "currentColor" : "none"} />
           </button>
         )}
+        {/* Pie de la foto: NOMBRE DEL ARCHIVO (no el número de orden), para que el
+            cliente pueda identificar y referir cada foto por su nombre. */}
+        {a.originalName && (
+          <figcaption
+            className="pointer-events-none absolute inset-x-0 bottom-0 truncate px-2 py-1 text-center"
+            style={{
+              fontSize: compact ? "0.6rem" : "0.68rem",
+              letterSpacing: "0.02em",
+              color: "rgba(255,255,255,.95)",
+              background: "linear-gradient(to top, rgba(20,16,12,.6), rgba(20,16,12,0))",
+              fontVariantNumeric: "tabular-nums",
+            }}
+            title={a.originalName}
+          >
+            {a.originalName}
+          </figcaption>
+        )}
       </figure>
     )
   }
@@ -1737,8 +1756,23 @@ function Lightbox({
       onClick={onClose}
     >
       <div className="flex items-center justify-between px-4 py-4 text-white" onClick={(e) => e.stopPropagation()}>
-        <span className="tabular-nums uppercase" style={{ letterSpacing: "0.14em", fontSize: "0.72rem", color: "rgba(255,255,255,.66)" }}>
-          {index + 1} / {total}
+        {/* Se muestra el NOMBRE DEL ARCHIVO al cliente (no el número de orden),
+            para que pueda referirse a cada foto por su nombre. Se mantiene el
+            conteo pequeño al lado como contexto de navegación. */}
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span
+            className="truncate"
+            style={{ fontSize: "0.8rem", color: "rgba(255,255,255,.92)", maxWidth: "60vw" }}
+            title={asset.originalName ?? undefined}
+          >
+            {asset.originalName || `Foto ${index + 1}`}
+          </span>
+          <span
+            className="tabular-nums"
+            style={{ fontSize: "0.68rem", color: "rgba(255,255,255,.5)", whiteSpace: "nowrap" }}
+          >
+            {index + 1} / {total}
+          </span>
         </span>
         <div className="flex items-center gap-1.5">
           {!locked && onMark && (
