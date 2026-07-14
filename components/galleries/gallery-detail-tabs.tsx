@@ -63,6 +63,9 @@ import {
 import {
   createCollectionAction,
   deleteCollectionAction,
+  removeAssetFromCollectionAction,
+  removeFavoriteAction,
+  clearFavoritesAction,
 } from "@/server/actions/gallery-collection.actions"
 import {
   createPinAction,
@@ -934,12 +937,50 @@ function SelectionsTab({
   }
 
   const handleDelete = (id: string) => {
-    if (!confirm("¿Eliminar esta selección? Esta acción no se puede deshacer.")) return
+    if (!confirm("¿Eliminar esta selección? Solo se borra la lista del cliente, las fotos NO se tocan.")) return
     startTransition(async () => {
       try {
         await deleteCollectionAction(id, galleryId)
         toast.success("Selección eliminada")
         if (selectedColl === id) setSelectedColl(null)
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+
+  // Vaciar TODAS las favoritas ❤️ de un cliente (solo marcas, no fotos).
+  const handleClearFavorites = (clientEmail: string) => {
+    if (!confirm("¿Vaciar todas las favoritas de este cliente? Solo se quitan las marcas ❤️, las fotos NO se tocan.")) return
+    startTransition(async () => {
+      try {
+        const r = await clearFavoritesAction(galleryId, clientEmail)
+        toast.success(`${r.removed} favorita${r.removed === 1 ? "" : "s"} quitada${r.removed === 1 ? "" : "s"}`)
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+
+  // Quitar UNA foto de una selección (favoritas o lista). Solo la marca.
+  const handleRemoveFavorite = (clientEmail: string, assetId: string) => {
+    startTransition(async () => {
+      try {
+        await removeFavoriteAction(galleryId, clientEmail, assetId)
+        router.refresh()
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Error")
+      }
+    })
+  }
+  const handleRemoveFromCollection = (collectionId: string, assetId: string) => {
+    startTransition(async () => {
+      try {
+        await removeAssetFromCollectionAction(collectionId, assetId, galleryId)
+        // Actualiza la grilla local sin recargar toda la página.
+        setItems((prev) => prev.filter((i) => i.asset_id !== assetId))
         router.refresh()
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Error")
@@ -1319,6 +1360,14 @@ function SelectionsTab({
                   <Copy className="h-3 w-3" />
                   Copiar nombres
                 </button>
+                <button
+                  onClick={() => handleClearFavorites(activeFav.clientEmail)}
+                  disabled={pending || favItems.length === 0}
+                  title="Vaciar todas las favoritas (solo marcas, no fotos)"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12px] text-muted-foreground hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+                >
+                  <Trash2 className="h-3 w-3" /> Vaciar
+                </button>
               </div>
             </div>
 
@@ -1372,6 +1421,15 @@ function SelectionsTab({
                         className="h-full w-full object-cover"
                       />
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveFavorite(activeFav.clientEmail, a.id)}
+                      disabled={pending}
+                      title="Quitar de la selección (no borra la foto)"
+                      className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity hover:bg-danger group-hover:opacity-100 disabled:opacity-40"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                     <span className="pointer-events-none absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/70 to-transparent px-1.5 pb-1 pt-4 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
                       {a.original_name}
                     </span>
@@ -1452,6 +1510,15 @@ function SelectionsTab({
                           loading="lazy"
                         />
                       )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFromCollection(activeColl.id, item.asset_id)}
+                        disabled={pending}
+                        title="Quitar de esta selección (no borra la foto)"
+                        className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white opacity-0 transition-opacity hover:bg-danger group-hover:opacity-100 disabled:opacity-40"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
                         <p className="truncate text-[10px] font-medium text-white">
                           {item.original_name}

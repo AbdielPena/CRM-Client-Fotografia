@@ -2534,6 +2534,65 @@ export async function toggleFavorite(
   return { favorited: true }
 }
 
+/**
+ * Admin: quita UN favorito ❤️ (una foto) de la selección de un cliente en una
+ * galería. Solo borra la marca en `gallery_favorites`; la FOTO no se toca.
+ * Validado por studio_id de la galería (no cruza datos de otros clientes).
+ */
+export async function removeFavorite(
+  studioId: string,
+  galleryId: string,
+  clientEmail: string,
+  assetId: string,
+): Promise<void> {
+  const supabase = svc()
+  const { data: g } = await supabase
+    .from("galleries")
+    .select("id")
+    .eq("id", galleryId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (!g) throw new Error("Galería no encontrada")
+  const email = (clientEmail ?? "").trim().toLowerCase() || "anon@guest"
+  const { error } = await supabase
+    .from("gallery_favorites")
+    .delete()
+    .eq("gallery_id", galleryId)
+    .eq("client_email", email)
+    .eq("asset_id", assetId)
+  if (error) throw error
+}
+
+/**
+ * Admin: vacía TODAS las favoritas ❤️ de un cliente (por correo) en una galería.
+ * Solo borra marcas; las fotos permanecen. Devuelve cuántas se quitaron.
+ */
+export async function clearFavorites(
+  studioId: string,
+  galleryId: string,
+  clientEmail: string,
+): Promise<number> {
+  const supabase = svc()
+  const { data: g } = await supabase
+    .from("galleries")
+    .select("id")
+    .eq("id", galleryId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  if (!g) throw new Error("Galería no encontrada")
+  const email = (clientEmail ?? "").trim().toLowerCase() || "anon@guest"
+  const { data, error } = await supabase
+    .from("gallery_favorites")
+    .delete()
+    .eq("gallery_id", galleryId)
+    .eq("client_email", email)
+    .select("id")
+  if (error) throw error
+  return ((data ?? []) as unknown[]).length
+}
+
 export async function trackDownload(
   galleryId: string,
   assetId: string | null,

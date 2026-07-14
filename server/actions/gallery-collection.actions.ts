@@ -110,6 +110,58 @@ export async function removeAssetFromCollectionAction(
   return { success: true }
 }
 
+/**
+ * Admin: quita UN favorito ❤️ (una foto) de la selección de un cliente.
+ * Solo borra la marca; la foto no se toca.
+ */
+export async function removeFavoriteAction(
+  galleryId: string,
+  clientEmail: string,
+  assetId: string,
+): Promise<{ success: true }> {
+  const session = await requireStudioAuth()
+  const gid = uuidSchema.parse(galleryId)
+  const aid = uuidSchema.parse(assetId)
+  const { removeFavorite } = await import("@/server/services/gallery.service")
+  await removeFavorite(session.studioId, gid, clientEmail, aid)
+  revalidatePath(`/galleries/${gid}`)
+  return { success: true }
+}
+
+/**
+ * Admin: vacía TODAS las favoritas ❤️ de un cliente en una galería.
+ * Solo borra marcas; las fotos permanecen.
+ */
+export async function clearFavoritesAction(
+  galleryId: string,
+  clientEmail: string,
+): Promise<{ removed: number }> {
+  const session = await requireStudioAuth()
+  const gid = uuidSchema.parse(galleryId)
+  const { clearFavorites } = await import("@/server/services/gallery.service")
+  const removed = await clearFavorites(session.studioId, gid, clientEmail)
+  revalidatePath(`/galleries/${gid}`)
+  return { removed }
+}
+
+/**
+ * El CLIENTE borra una lista de selección que él creó (soft-delete). No requiere
+ * auth de studio; valida propiedad por correo dentro del servicio.
+ */
+export async function deleteCollectionAsClientAction(input: {
+  collectionId: string
+  clientEmail: string
+}): Promise<{ success: true }> {
+  const collectionId = uuidSchema.parse(input.collectionId)
+  const clientEmail = z.string().email().max(254).parse(input.clientEmail)
+  const { deleteCollectionAsClient } = await import(
+    "@/server/services/gallery-collection.service"
+  )
+  const { galleryId } = await deleteCollectionAsClient(collectionId, clientEmail)
+  revalidatePath(`/g/${galleryId}`)
+  return { success: true }
+}
+
 // ─── Public actions (cliente vía token) ─────────────────────────────────────
 // Estas NO requieren auth de studio. Validan vía token público.
 

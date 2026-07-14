@@ -442,6 +442,53 @@ export async function getCollectionsForClient(
   return (data ?? []) as GalleryCollectionRow[]
 }
 
+/**
+ * El CLIENTE borra (soft-delete) una lista que él mismo creó. Solo quita la
+ * lista + sus ítems de selección; las FOTOS de la galería no se tocan. Valida:
+ * la lista es editable por cliente, pertenece a su correo, y la galería no está
+ * bloqueada. No se puede borrar una lista de otro cliente.
+ */
+export async function deleteCollectionAsClient(
+  collectionId: string,
+  clientEmail: string,
+): Promise<{ galleryId: string }> {
+  const supabase = svc()
+  const { data: coll } = await supabase
+    .from("gallery_collections")
+    .select("id, gallery_id, client_email, is_client_editable")
+    .eq("id", collectionId)
+    .is("deleted_at", null)
+    .maybeSingle()
+  const c = coll as {
+    id: string
+    gallery_id: string
+    client_email: string | null
+    is_client_editable: boolean
+  } | null
+  if (!c) throw new Error("Selección no encontrada")
+  if (!c.is_client_editable) throw new Error("Esta selección no la puede borrar el cliente")
+  const email = (clientEmail ?? "").trim().toLowerCase()
+  // Solo su propia lista (si la lista tiene correo asignado, debe coincidir).
+  if (c.client_email && c.client_email !== email) {
+    throw new Error("No autorizado para borrar esta selección")
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: gal } = await (supabase as any)
+    .from("galleries")
+    .select("selection_locked")
+    .eq("id", c.gallery_id)
+    .maybeSingle()
+  if ((gal as { selection_locked?: boolean } | null)?.selection_locked) {
+    throw new Error("La galería está bloqueada")
+  }
+  const { error } = await supabase
+    .from("gallery_collections")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", collectionId)
+  if (error) throw error
+  return { galleryId: c.gallery_id }
+}
+
 export async function createCollectionAsClient(
   galleryId: string,
   data: { name: string; clientEmail: string; clientName?: string | null },

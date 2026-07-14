@@ -14,6 +14,7 @@ import {
   Check,
   Image as ImageIcon,
   MessageSquare,
+  Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -656,6 +657,36 @@ export function PublicGalleryView({
     }
   }, [email, newCollName, token, loadCollections])
 
+  // El cliente borra una lista que él creó (solo la lista, no las fotos).
+  const deleteCollection = useCallback(
+    async (collId: string, collName: string) => {
+      if (!email) return
+      if (
+        !confirm(
+          `¿Borrar la selección "${collName}"? Solo se borra la lista, tus fotos no se tocan.`,
+        )
+      )
+        return
+      try {
+        const res = await fetch(
+          `/api/galleries/public/${token}/collections/${collId}?email=${encodeURIComponent(email)}`,
+          { method: "DELETE" },
+        )
+        const data = (await res.json()) as { ok?: boolean; error?: string }
+        if (data.error) {
+          toast.error(data.error)
+          return
+        }
+        if (activeCollId === collId) setActiveCollId(null)
+        await loadCollections()
+        toast.success("Selección borrada")
+      } catch {
+        toast.error("Error borrando la selección")
+      }
+    },
+    [email, token, activeCollId, loadCollections],
+  )
+
   const submitActive = useCallback(async () => {
     setSubmitting(true)
     try {
@@ -1273,6 +1304,20 @@ export function PublicGalleryView({
               >
                 <Plus className="h-3 w-3" />
                 Nueva selección
+              </button>
+            )}
+
+            {/* Borrar la lista activa (solo listas del cliente, no "Favoritas"). */}
+            {activeColl && !gallery.selection_locked && (
+              <button
+                type="button"
+                onClick={() => void deleteCollection(activeColl.id, activeColl.name)}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-colors"
+                style={{ border: `1px solid ${ED.line}`, color: "#b4483c" }}
+                title="Borrar esta selección (no borra tus fotos)"
+              >
+                <Trash2 className="h-3 w-3" />
+                Borrar selección
               </button>
             )}
           </div>
