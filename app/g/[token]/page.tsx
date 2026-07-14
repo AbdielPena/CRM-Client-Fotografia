@@ -96,7 +96,7 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
   const { data: studioJoin } = await supabase
     .from("galleries")
     .select(
-      "studios(name, logo_url), download_pin_required, selection_submitted, selection_locked, project_id, mother_message, mother_message_from, mother_message_enabled",
+      "studios(name, logo_url), download_pin_required, selection_submitted, selection_locked, project_id, gallery_type, mother_message, mother_message_from, mother_message_enabled",
     )
     .eq("id", view.gallery.id)
     .maybeSingle()
@@ -107,11 +107,18 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
       selection_submitted?: boolean
       selection_locked?: boolean
       project_id?: string | null
+      gallery_type?: "selection" | "final_delivery" | null
       mother_message?: string | null
       mother_message_from?: string | null
       mother_message_enabled?: boolean
     } | null
   ) ?? null
+
+  // Módulos SEPARADOS: la Galería de Selección y la de Entrega Final son
+  // independientes (galerías distintas, enlaces distintos). El tipo manda el
+  // ruteo — una entrega SIEMPRE muestra la entrega (aunque aún no tenga
+  // `delivery_ready_at`), una selección NUNCA redirige a la entrega.
+  const isFinalDeliveryGallery = studioInfo?.gallery_type === "final_delivery"
 
   // Del proyecto: (a) nombre de la quinceañera para prellenar el nombre de la
   // lista (solo en la vista de selección) y (b) el mensaje de agradecimiento de
@@ -276,6 +283,7 @@ export default async function PublicGalleryPage({ params, searchParams }: PagePr
         token={params.token}
         gallery={{
           ...view.gallery,
+          galleryType: isFinalDeliveryGallery ? "final_delivery" : "selection",
           download_pin_required: studioInfo?.download_pin_required ?? false,
           selection_submitted: studioInfo?.selection_submitted ?? false,
           selection_locked: studioInfo?.selection_locked ?? false,

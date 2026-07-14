@@ -92,11 +92,49 @@ export async function enableFinalDeliveryAction(
 }
 
 /**
- * Habilita la entrega final DENTRO de la misma galería: crea los 2 sets
- * estándar si no existen. No crea una galería separada.
- * Alias de enableFinalDeliveryAction para mantener compatibilidad de imports.
+ * Habilita la Entrega Final como MÓDULO SEPARADO: crea una galería de entrega
+ * APARTE (su propia galería, su propio enlace) para el mismo cliente/proyecto
+ * que la galería de selección de origen. No convierte la selección en entrega ni
+ * mezcla las fotos. Devuelve el id + token de la nueva galería para redirigir.
+ * Idempotente: si ya existe la entrega para ese origen, devuelve la existente.
  */
-export const createDeliveryGalleryAction = enableFinalDeliveryAction
+export async function createDeliveryGalleryAction(
+  sourceGalleryId: string,
+): Promise<{ galleryId: string; token: string; reused: boolean }> {
+  const session = await requireStudioAuth()
+  const validSourceId = uuidSchema.parse(sourceGalleryId)
+
+  const { createDeliveryGallery } = await import("@/server/services/gallery.service")
+  const result = await createDeliveryGallery(session.studioId, session.userId, {
+    sourceGalleryId: validSourceId,
+  })
+
+  revalidatePath(`/galleries/${validSourceId}`)
+  revalidatePath(`/galleries/${result.galleryId}`)
+  revalidatePath("/galleries")
+  return result
+}
+
+/**
+ * Crea una Galería de Entrega Final directamente para un PROYECTO, sin exigir
+ * una selección previa (la entrega puede existir sola). Devuelve id + token.
+ */
+export async function createDeliveryGalleryForProjectAction(
+  projectId: string,
+): Promise<{ galleryId: string; token: string; reused: boolean }> {
+  const session = await requireStudioAuth()
+  const validProjectId = uuidSchema.parse(projectId)
+
+  const { createDeliveryGallery } = await import("@/server/services/gallery.service")
+  const result = await createDeliveryGallery(session.studioId, session.userId, {
+    projectId: validProjectId,
+  })
+
+  revalidatePath(`/projects/${validProjectId}`)
+  revalidatePath(`/galleries/${result.galleryId}`)
+  revalidatePath("/galleries")
+  return result
+}
 
 export async function createSetAction(
   galleryId: string,

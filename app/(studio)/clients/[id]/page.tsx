@@ -8,7 +8,8 @@ import {
   Instagram,
   Globe,
   FolderOpen,
-  Image as ImageIcon,
+  Heart,
+  Truck,
   FileText,
   Receipt,
   CreditCard,
@@ -88,7 +89,7 @@ export default async function ClientDetailPage({
   ] = await Promise.all([
     supabase
       .from("galleries")
-      .select("id, name, status, asset_count, cover_asset_id, created_at, expires_at")
+      .select("id, name, status, asset_count, cover_asset_id, created_at, expires_at, gallery_type, delivery_ready_at")
       .eq("studio_id", session.studioId)
       .eq("client_id", params.id)
       .is("deleted_at", null)
@@ -138,6 +139,9 @@ export default async function ClientDetailPage({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const galleries = (galleriesRes.data ?? []) as any[]
+  // Módulos SEPARADOS: Selección y Entrega Final son galerías distintas.
+  const selectionGalleries = galleries.filter((g) => g.gallery_type !== "final_delivery")
+  const deliveryGalleries = galleries.filter((g) => g.gallery_type === "final_delivery")
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const invoices = (invoicesRes.data ?? []) as any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -251,59 +255,54 @@ export default async function ClientDetailPage({
               title="Tareas del cliente"
             />
 
-            {/* Galerías */}
+            {/* Galería de SELECCIÓN — módulo separado */}
             <SectionCard
-              icon={<ImageIcon className="h-4 w-4 text-muted-foreground" />}
-              title={`Galerías (${galleries.length})`}
+              icon={<Heart className="h-4 w-4 text-muted-foreground" />}
+              title={`Selección (${selectionGalleries.length})`}
               actionHref={`/galleries/new?clientId=${client.id}`}
-              actionLabel="+ Nueva galería"
+              actionLabel="+ Nueva selección"
             >
-              {galleries.length === 0 ? (
+              {selectionGalleries.length === 0 ? (
                 <Empty
-                  icon={<ImageIcon className="h-8 w-8 text-muted-foreground" />}
-                  msg="Sin galerías vinculadas"
+                  icon={<Heart className="h-8 w-8 text-muted-foreground" />}
+                  msg="Sin galería de selección"
                   href={`/galleries/new?clientId=${client.id}`}
-                  cta="Crear primera galería →"
+                  cta="Crear galería de selección →"
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3">
-                  {galleries.map((g) => {
-                    const cover = g.cover_asset_id ? coverThumbs[g.cover_asset_id] : null
-                    return (
-                      <Link
-                        key={g.id}
-                        href={`/galleries/${g.id}`}
-                        className="group overflow-hidden rounded-lg border border-border bg-card transition-shadow hover:shadow-md"
-                      >
-                        <div className="relative aspect-[4/3] bg-muted">
-                          {cover ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={cover}
-                              alt={g.name}
-                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                              <ImageIcon className="h-6 w-6" />
-                            </div>
-                          )}
-                          <span className="absolute right-1.5 top-1.5">
-                            <StatusBadge status={String(g.status)} />
-                          </span>
-                        </div>
-                        <div className="p-2.5">
-                          <p className="truncate text-xs font-semibold text-foreground group-hover:text-primary">
-                            {g.name}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {g.asset_count ?? 0} foto
-                            {(g.asset_count ?? 0) === 1 ? "" : "s"}
-                          </p>
-                        </div>
-                      </Link>
-                    )
-                  })}
+                  {selectionGalleries.map((g) => (
+                    <ClientGalleryTile
+                      key={g.id}
+                      g={g}
+                      cover={g.cover_asset_id ? coverThumbs[g.cover_asset_id] : null}
+                      kind="selection"
+                    />
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+
+            {/* ENTREGA FINAL — módulo separado (su propia galería y enlace) */}
+            <SectionCard
+              icon={<Truck className="h-4 w-4 text-muted-foreground" />}
+              title={`Entrega Final (${deliveryGalleries.length})`}
+            >
+              {deliveryGalleries.length === 0 ? (
+                <Empty
+                  icon={<Truck className="h-8 w-8 text-muted-foreground" />}
+                  msg="Sin entrega final. Se crea desde la sesión."
+                />
+              ) : (
+                <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3">
+                  {deliveryGalleries.map((g) => (
+                    <ClientGalleryTile
+                      key={g.id}
+                      g={g}
+                      cover={g.cover_asset_id ? coverThumbs[g.cover_asset_id] : null}
+                      kind="delivery"
+                    />
+                  ))}
                 </div>
               )}
             </SectionCard>
@@ -723,6 +722,61 @@ export default async function ClientDetailPage({
 }
 
 // ─── helpers UI locales ─────────────────────────────────────────────────────
+
+/** Tarjeta de galería (selección o entrega) en el perfil del cliente. */
+function ClientGalleryTile({
+  g,
+  cover,
+  kind,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  g: any
+  cover: string | null | undefined
+  kind: "selection" | "delivery"
+}) {
+  const delivered = kind === "delivery" && !!g.delivery_ready_at
+  const badgeLabel =
+    kind === "delivery" ? (delivered ? "Entrega enviada" : "Entrega") : "Selección"
+  const badgeCls =
+    kind === "delivery"
+      ? "inline-flex rounded-full bg-brand-soft px-1.5 py-0.5 text-[9.5px] font-semibold text-brand"
+      : "inline-flex rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-medium text-muted-foreground"
+  return (
+    <Link
+      href={`/galleries/${g.id}`}
+      className="group overflow-hidden rounded-lg border border-border bg-card transition-shadow hover:shadow-md"
+    >
+      <div className="relative aspect-[4/3] bg-muted">
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={cover}
+            alt={g.name}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+            {kind === "delivery" ? <Truck className="h-6 w-6" /> : <Heart className="h-6 w-6" />}
+          </div>
+        )}
+        <span className="absolute right-1.5 top-1.5">
+          <StatusBadge status={String(g.status)} />
+        </span>
+      </div>
+      <div className="p-2.5">
+        <p className="truncate text-xs font-semibold text-foreground group-hover:text-primary">
+          {g.name}
+        </p>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span className={badgeCls}>{badgeLabel}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {g.asset_count ?? 0} foto{(g.asset_count ?? 0) === 1 ? "" : "s"}
+          </span>
+        </div>
+      </div>
+    </Link>
+  )
+}
 
 function SectionCard({
   icon,

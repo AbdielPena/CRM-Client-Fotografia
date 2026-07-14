@@ -28,6 +28,7 @@ import { ProjectCollaboratorsCard } from "@/components/collaborators/project-col
 import { EntityTasks } from "@/components/tasks/entity-tasks"
 import { getProjectPrintViews } from "@/server/services/print-selection.service"
 import { PrintProductionPanel } from "@/components/galleries/print-production-panel"
+import { CreateDeliveryButton } from "@/components/galleries/create-delivery-button"
 import {
   getPrintWaTemplate,
   getPrintsReadyWaTemplate,
@@ -49,8 +50,8 @@ import {
   Clock,
   CreditCard,
   Truck,
+  Heart,
   History,
-  Image as ImageIcon,
   User,
   Users,
   Shirt,
@@ -123,6 +124,14 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     .order("created_at", { ascending: false })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const galleries = (galleriesRaw ?? []) as any[]
+  // Módulos SEPARADOS: la Galería de Selección y la Entrega Final son galerías
+  // distintas. Se muestran en apartados separados en el perfil de la sesión.
+  const selectionGalleries = galleries.filter(
+    (g) => g.gallery_type !== "final_delivery",
+  )
+  const deliveryGalleries = galleries.filter(
+    (g) => g.gallery_type === "final_delivery",
+  )
   const coverIds = galleries
     .map((g) => g.cover_asset_id as string | null)
     .filter(Boolean) as string[]
@@ -516,79 +525,62 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             title="Tareas de la sesión"
           />
 
-          {/* Galerías del proyecto */}
+          {/* Galería de SELECCIÓN — el cliente elige sus fotos */}
           <div className="sf-card">
             <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
               <div className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                <Heart className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold text-foreground">
-                  Galerías ({galleries.length})
+                  Galería de Selección ({selectionGalleries.length})
                 </h2>
               </div>
               <Link
                 href={`/galleries/new?projectId=${project.id}${client?.id ? `&clientId=${client.id}` : ""}`}
                 className="text-xs font-medium text-primary hover:text-primary/80"
               >
-                + Nueva galería
+                + Nueva selección
               </Link>
             </div>
-            {galleries.length === 0 ? (
+            {selectionGalleries.length === 0 ? (
               <div className="py-8 text-center">
-                <ImageIcon className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+                <Heart className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  Sin galerías vinculadas a esta sesión
+                  Sin galería de selección en esta sesión
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3">
-                {galleries.map((g) => {
-                  const cover = g.cover_asset_id ? coverThumbs[g.cover_asset_id] : null
-                  return (
-                    <Link
-                      key={g.id}
-                      href={`/galleries/${g.id}`}
-                      className="group overflow-hidden rounded-lg border border-border bg-card transition-shadow hover:shadow-md"
-                    >
-                      <div className="relative aspect-[4/3] bg-muted">
-                        {cover ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={cover}
-                            alt={g.name}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                            <ImageIcon className="h-6 w-6" />
-                          </div>
-                        )}
-                        <span className="absolute right-1.5 top-1.5">
-                          <StatusBadge status={String(g.status)} />
-                        </span>
-                      </div>
-                      <div className="p-2.5">
-                        <p className="truncate text-xs font-semibold text-foreground group-hover:text-primary">
-                          {g.name}
-                        </p>
-                        <div className="mt-0.5 flex items-center gap-1.5">
-                          <span
-                            className={
-                              g.delivery_ready_at
-                                ? "inline-flex rounded-full bg-brand-soft px-1.5 py-0.5 text-[9.5px] font-semibold text-brand"
-                                : "inline-flex rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-medium text-muted-foreground"
-                            }
-                          >
-                            {g.delivery_ready_at ? "Entrega lista" : "Selección"}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {g.asset_count ?? 0} foto
-                            {(g.asset_count ?? 0) === 1 ? "" : "s"}
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
-                  )
-                })}
+                {selectionGalleries.map((g) => (
+                  <GalleryTile key={g.id} g={g} cover={g.cover_asset_id ? coverThumbs[g.cover_asset_id] : null} kind="selection" />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ENTREGA FINAL — módulo separado (su propia galería y enlace) */}
+          <div className="sf-card">
+            <div className="flex items-center justify-between border-b border-border/60 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <Truck className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold text-foreground">
+                  Entrega Final ({deliveryGalleries.length})
+                </h2>
+              </div>
+              <CreateDeliveryButton projectId={project.id as string} />
+            </div>
+            {deliveryGalleries.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <Truck className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Sin entrega final. Se crea aparte de la selección.
+                </p>
+                <CreateDeliveryButton projectId={project.id as string} variant="empty" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-3">
+                {deliveryGalleries.map((g) => (
+                  <GalleryTile key={g.id} g={g} cover={g.cover_asset_id ? coverThumbs[g.cover_asset_id] : null} kind="delivery" />
+                ))}
               </div>
             )}
           </div>
@@ -1122,5 +1114,60 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
       </div>
       </div>
     </>
+  )
+}
+
+/** Tarjeta de galería (selección o entrega) en el perfil de la sesión. */
+function GalleryTile({
+  g,
+  cover,
+  kind,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  g: any
+  cover: string | null | undefined
+  kind: "selection" | "delivery"
+}) {
+  const delivered = kind === "delivery" && !!g.delivery_ready_at
+  const badgeLabel =
+    kind === "delivery" ? (delivered ? "Entrega enviada" : "Entrega") : "Selección"
+  const badgeCls =
+    kind === "delivery"
+      ? "inline-flex rounded-full bg-brand-soft px-1.5 py-0.5 text-[9.5px] font-semibold text-brand"
+      : "inline-flex rounded-full bg-muted px-1.5 py-0.5 text-[9.5px] font-medium text-muted-foreground"
+  return (
+    <Link
+      href={`/galleries/${g.id}`}
+      className="group overflow-hidden rounded-lg border border-border bg-card transition-shadow hover:shadow-md"
+    >
+      <div className="relative aspect-[4/3] bg-muted">
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={cover}
+            alt={g.name}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+            {kind === "delivery" ? <Truck className="h-6 w-6" /> : <Heart className="h-6 w-6" />}
+          </div>
+        )}
+        <span className="absolute right-1.5 top-1.5">
+          <StatusBadge status={String(g.status)} />
+        </span>
+      </div>
+      <div className="p-2.5">
+        <p className="truncate text-xs font-semibold text-foreground group-hover:text-primary">
+          {g.name}
+        </p>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span className={badgeCls}>{badgeLabel}</span>
+          <span className="text-[11px] text-muted-foreground">
+            {g.asset_count ?? 0} foto{(g.asset_count ?? 0) === 1 ? "" : "s"}
+          </span>
+        </div>
+      </div>
+    </Link>
   )
 }

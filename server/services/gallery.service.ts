@@ -509,6 +509,114 @@ export async function createGallery(
   return gallery
 }
 
+/**
+ * Crea una Galería de ENTREGA FINAL como MÓDULO SEPARADO — su propia galería,
+ * su propio enlace — para el mismo cliente/proyecto que una galería de selección
+ * (`sourceGalleryId`) o directamente para un proyecto (`projectId`), sin exigir
+ * una selección previa. NO toca la galería de origen. Idempotente por origen:
+ * si ya existe una entrega para ese `sourceGalleryId`, devuelve la existente.
+ * Devuelve el id y el token público (view_mode='full').
+ */
+export async function createDeliveryGallery(
+  studioId: string,
+  actorId: string,
+  opts:
+    | { sourceGalleryId: string }
+    | { projectId: string; clientId?: string | null; name?: string },
+): Promise<{ galleryId: string; token: string; reused: boolean }> {
+  const db = srvc() as unknown as SupabaseClient
+
+  let name: string
+  let projectId: string | null = null
+  let clientId: string | null = null
+  let accentColor: string | null = null
+  let sourceGalleryId: string | null = null
+
+  if ("sourceGalleryId" in opts) {
+    sourceGalleryId = opts.sourceGalleryId
+    const { data: src, error } = await db
+      .from("galleries")
+      .select("name, project_id, client_id, accent_color")
+      .eq("id", opts.sourceGalleryId)
+      .eq("studio_id", studioId)
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (error) throw error
+    if (!src) throw new Error("Galería de origen no encontrada")
+    const s = src as {
+      name: string
+      project_id: string | null
+      client_id: string | null
+      accent_color: string | null
+    }
+    // Nombre limpio: si el origen ya trae "— Selección"/"— Entrega", lo quitamos.
+    const baseName = s.name.replace(/\s*[—-]\s*(Selecci[oó]n|Entrega).*$/i, "").trim()
+    name = `${baseName || s.name} — Entrega`
+    projectId = s.project_id
+    clientId = s.client_id
+    accentColor = s.accent_color
+
+    // Idempotencia: ¿ya hay una entrega separada para este origen?
+    const { data: existing } = await db
+      .from("galleries")
+      .select("id")
+      .eq("studio_id", studioId)
+      .eq("source_gallery_id", sourceGalleryId)
+      .eq("gallery_type", "final_delivery")
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (existing) {
+      const existingId = (existing as { id: string }).id
+      const { data: tok } = await db
+        .from("gallery_share_tokens")
+        .select("token")
+        .eq("gallery_id", existingId)
+        .is("revoked_at", null)
+        .limit(1)
+        .maybeSingle()
+      let token = (tok as { token: string } | null)?.token
+      if (!token) token = (await createGalleryShareToken(studioId, existingId)).token
+      return { galleryId: existingId, token, reused: true }
+    }
+  } else {
+    projectId = opts.projectId
+    clientId = opts.clientId ?? null
+    const { data: proj } = await db
+      .from("projects")
+      .select("name, client_id")
+      .eq("id", opts.projectId)
+      .eq("studio_id", studioId)
+      .maybeSingle()
+    const p = proj as { name: string | null; client_id: string | null } | null
+    clientId = clientId ?? p?.client_id ?? null
+    name = opts.name?.trim() || `${p?.name ?? "Sesión"} — Entrega`
+  }
+
+  const gallery = await createGallery(studioId, actorId, {
+    name,
+    projectId: projectId ?? undefined,
+    clientId: clientId ?? undefined,
+    galleryType: "final_delivery",
+    visibility: "private",
+    allowDownload: true,
+  })
+
+  // Publicar + enlazar al origen + heredar acento + habilitar toggle de álbum.
+  await db
+    .from("galleries")
+    .update({
+      status: "published",
+      source_gallery_id: sourceGalleryId,
+      accent_color: accentColor,
+      book_display_mode: "both",
+    })
+    .eq("id", gallery.id)
+    .eq("studio_id", studioId)
+
+  const { token } = await createGalleryShareToken(studioId, gallery.id)
+  return { galleryId: gallery.id, token, reused: false }
+}
+
 export type UpdateGalleryInput = Partial<
   Omit<CreateGalleryInput, "projectId" | "clientId">
 > & {

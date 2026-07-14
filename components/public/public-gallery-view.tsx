@@ -751,13 +751,21 @@ export function PublicGalleryView({
   }, [deliveryAssets])
   const hasTracks = deliveryAssets.length > 0
   const hasSelection = selectionAssets.length > 0
+  // Módulos SEPARADOS: una galería de ENTREGA FINAL es su propia galería (enlace
+  // propio). Si el tipo es final_delivery, SIEMPRE se muestra como entrega —
+  // aunque aún no tenga fotos con track ni `delivery_ready_at` — y nunca ofrece
+  // la selección. Una galería de selección nunca redirige a la entrega.
+  const isDeliveryGallery = gallery.galleryType === "final_delivery"
   // "Entregada" = ya hay fotos de entrega (con track) O la galería fue marcada
   // lista. Es la MISMA definición que usa el resto del sistema (badge/lista).
   // No se exige `delivery_ready_at`: si el estudio ya subió las fotos editadas,
   // el cliente debe poder verlas por el link (antes se quedaba en la selección).
-  const isDelivered = hasTracks || deliveryReady
-  // En modo "solo entrega" NO se muestra el toggle ni nada de selección.
-  const showBothSections = !deliveryOnly && hasSelection && isDelivered
+  const isDelivered = isDeliveryGallery || hasTracks || deliveryReady
+  // El toggle selección↔entrega solo tiene sentido en galerías legacy con AMBAS
+  // cosas; con módulos separados nunca aparece. Una galería de entrega jamás
+  // muestra la sección de selección.
+  const showBothSections =
+    !deliveryOnly && !isDeliveryGallery && hasSelection && isDelivered
   // Default: si ya hay entrega, se muestra la ENTREGA (las fotos editadas que el
   // cliente espera); el toggle deja volver a la selección para re-seleccionar.
   const [activeSection, setActiveSection] = useState<"selection" | "delivery">(
