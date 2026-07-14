@@ -33,6 +33,10 @@ import {
 import { toast } from "sonner"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  ClientCommentsList,
+  type AssetCommentItem,
+} from "@/components/galleries/client-comments-list"
 import { cn } from "@/lib/utils/cn"
 import { renderWaMessage } from "@/lib/share/wa-message"
 import type {
@@ -208,6 +212,8 @@ interface Props {
   /** Cuando ESTA galería es una ronda de selección HIJA, apunta a la galería de
    *  la SESIÓN (raíz) donde debe hacerse la entrega final. Null si es la sesión. */
   sessionGallery?: { id: string; name: string } | null
+  /** Comentarios que el cliente dejó por foto (galería de selección). */
+  assetComments?: AssetCommentItem[]
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -237,6 +243,7 @@ export function GalleryDetailTabs({
   deliverySlot = null,
   printsSlot = null,
   sessionGallery = null,
+  assetComments = [],
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -445,6 +452,7 @@ export function GalleryDetailTabs({
       )}
       {modal === "seleccion" && (
         <FlowModal title="Selecciones del cliente" onClose={closeModal} wide>
+          <ClientCommentsList items={assetComments} />
           <SelectionsTab
             galleryId={gallery.id}
             collections={collections}

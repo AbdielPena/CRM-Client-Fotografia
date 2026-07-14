@@ -13,6 +13,7 @@ import {
   KeyRound,
   Check,
   Image as ImageIcon,
+  MessageSquare,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -384,6 +385,9 @@ export function PublicGalleryView({
     }
   }, [email, token, activeCollId])
 
+  // Comentarios del cliente por foto (assetId → texto). Se cargan por email.
+  const [comments, setComments] = useState<Record<string, string>>({})
+
   const loadFavs = useCallback(async () => {
     if (!email) return
     try {
@@ -424,11 +428,50 @@ export function PublicGalleryView({
     }
   }, [email, token])
 
+  const loadComments = useCallback(async () => {
+    if (!email) return
+    try {
+      const res = await fetch(
+        `/api/galleries/public/${token}/comment?email=${encodeURIComponent(email)}`,
+      )
+      if (!res.ok) return
+      const data = (await res.json()) as { comments?: Record<string, string> }
+      if (data.comments) setComments(data.comments)
+    } catch {
+      // silent
+    }
+  }, [email, token])
+
+  const saveComment = useCallback(
+    async (assetId: string, body: string) => {
+      if (!email) return
+      const trimmed = body.trim()
+      // Optimista: refleja el cambio de una vez.
+      setComments((prev) => {
+        const next = { ...prev }
+        if (trimmed) next[assetId] = trimmed
+        else delete next[assetId]
+        return next
+      })
+      try {
+        await fetch(`/api/galleries/public/${token}/comment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assetId, clientEmail: email, body: trimmed }),
+        })
+      } catch {
+        // silent — se reintenta al recargar
+      }
+    },
+    [email, token],
+  )
+
   useEffect(() => {
     void loadCollections()
     void loadFavs()
     void loadQuota()
-  }, [loadCollections, loadFavs, loadQuota])
+    void loadComments()
+  }, [loadCollections, loadFavs, loadQuota, loadComments])
 
   // Recargar quota cuando cambia el conteo (favs o lista activa)
   useEffect(() => {
@@ -1480,6 +1523,12 @@ export function PublicGalleryView({
             setOpen((i) => (i === null ? null : Math.min(visibleAssets.length - 1, i + 1)))
           }
           onDownload={() => handleDownload(visibleAssets[open].id)}
+          comment={isShowingDelivery ? undefined : comments[visibleAssets[open].id] ?? ""}
+          onSaveComment={
+            isShowingDelivery || !email
+              ? undefined
+              : (body: string) => saveComment(visibleAssets[open].id, body)
+          }
         />
       )}
 
@@ -1609,6 +1658,8 @@ function Lightbox({
   onPrev,
   onNext,
   onDownload,
+  comment,
+  onSaveComment,
 }: {
   asset: Asset
   index: number
@@ -1622,6 +1673,8 @@ function Lightbox({
   onPrev: () => void
   onNext: () => void
   onDownload: () => void
+  comment?: string
+  onSaveComment?: (body: string) => void
 }) {
   const touchX = useRef<number | null>(null)
   return (
@@ -1705,6 +1758,76 @@ function Lightbox({
           <ChevronRight className="h-6 w-6" />
         </button>
       </div>
+
+      {onSaveComment && (
+        <LightboxComment
+          assetId={asset.id}
+          initial={comment ?? ""}
+          onSave={onSaveComment}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Caja de comentario del cliente dentro del visor (galería de selección). */
+function LightboxComment({
+  assetId,
+  initial,
+  onSave,
+}: {
+  assetId: string
+  initial: string
+  onSave: (body: string) => void
+}) {
+  const [val, setVal] = useState(initial)
+  const [dirty, setDirty] = useState(false)
+  // Reset al cambiar de foto o cuando llega el valor del servidor.
+  useEffect(() => {
+    setVal(initial)
+    setDirty(false)
+  }, [assetId, initial])
+
+  const commit = () => {
+    if (!dirty) return
+    onSave(val)
+    setDirty(false)
+  }
+
+  return (
+    <div
+      className="mx-auto w-full max-w-[680px] px-4 pb-5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <label
+        className="mb-1.5 flex items-center gap-1.5 text-[12px]"
+        style={{ color: "rgba(255,255,255,.72)" }}
+      >
+        <MessageSquare className="h-3.5 w-3.5" /> Comentario para el fotógrafo (opcional)
+      </label>
+      <textarea
+        value={val}
+        onChange={(e) => {
+          setVal(e.target.value)
+          setDirty(true)
+        }}
+        onBlur={commit}
+        rows={2}
+        maxLength={1000}
+        placeholder="Ej: esta me encanta, edítala un poco más clara…"
+        className="w-full resize-none rounded-lg border px-3 py-2 text-[13px] text-white outline-none placeholder:text-white/40"
+        style={{ background: "rgba(255,255,255,.08)", borderColor: "rgba(255,255,255,.18)" }}
+      />
+      {dirty && (
+        <button
+          type="button"
+          onClick={commit}
+          className="mt-1.5 rounded-full px-3.5 py-1 text-[12px] font-semibold"
+          style={{ background: ED.gold, color: "#fff" }}
+        >
+          Guardar comentario
+        </button>
+      )}
     </div>
   )
 }

@@ -2154,6 +2154,86 @@ export async function getClientFavorites(
 }
 
 /**
+ * Comentario del cliente en una FOTO (galería de selección). Uno por
+ * (galería, foto, correo); upsert. Cuerpo vacío = borra el comentario.
+ */
+export async function setAssetComment(
+  galleryId: string,
+  assetId: string,
+  clientEmail: string | null,
+  body: string,
+): Promise<{ ok: true; body: string }> {
+  const supabase = svc() as unknown as SupabaseClient
+  const email = (clientEmail ?? "").trim().toLowerCase() || "anon@guest"
+  const text = (body ?? "").trim().slice(0, 1000)
+  if (!text) {
+    await supabase
+      .from("gallery_asset_comments")
+      .delete()
+      .eq("gallery_id", galleryId)
+      .eq("asset_id", assetId)
+      .eq("client_email", email)
+    return { ok: true, body: "" }
+  }
+  const { error } = await supabase.from("gallery_asset_comments").upsert(
+    {
+      gallery_id: galleryId,
+      asset_id: assetId,
+      client_email: email,
+      body: text,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "gallery_id,asset_id,client_email" },
+  )
+  if (error) throw error
+  return { ok: true, body: text }
+}
+
+/** Comentarios de ESTE cliente en la galería → mapa { assetId: body }. */
+export async function getClientComments(
+  galleryId: string,
+  clientEmail: string | null,
+): Promise<Record<string, string>> {
+  const supabase = svc() as unknown as SupabaseClient
+  const email = (clientEmail ?? "").trim().toLowerCase() || "anon@guest"
+  const { data } = await supabase
+    .from("gallery_asset_comments")
+    .select("asset_id, body")
+    .eq("gallery_id", galleryId)
+    .eq("client_email", email)
+  const map: Record<string, string> = {}
+  for (const r of (data ?? []) as Array<{ asset_id: string; body: string }>) {
+    map[r.asset_id] = r.body
+  }
+  return map
+}
+
+/** TODOS los comentarios de la galería (para el fotógrafo). */
+export async function getGalleryComments(
+  galleryId: string,
+): Promise<{ assetId: string; email: string; body: string; createdAt: string }[]> {
+  const supabase = svc() as unknown as SupabaseClient
+  const { data } = await supabase
+    .from("gallery_asset_comments")
+    .select("asset_id, client_email, body, updated_at")
+    .eq("gallery_id", galleryId)
+    .order("updated_at", { ascending: false })
+  return (
+    (data ?? []) as Array<{
+      asset_id: string
+      client_email: string
+      body: string
+      updated_at: string
+    }>
+  ).map((r) => ({
+    assetId: r.asset_id,
+    email: r.client_email,
+    body: r.body,
+    createdAt: r.updated_at,
+  }))
+}
+
+/**
  * Marca la selección del cliente como enviada y notifica al fotógrafo.
  * No borra los favoritos — quedan como evidencia de la selección.
  */

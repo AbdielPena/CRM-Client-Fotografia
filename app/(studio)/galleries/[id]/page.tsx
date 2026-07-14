@@ -12,6 +12,7 @@ import {
   getGalleryActivity,
   getGalleryAssets,
   getGalleryById,
+  getGalleryComments,
   getRootGallery,
 } from "@/server/services/gallery.service"
 import { getCollectionsByGallery } from "@/server/services/gallery-collection.service"
@@ -242,6 +243,13 @@ export default async function GalleryDetailPage({
   const selectionRounds = await getSelectionRoundsForGallery(session.studioId, galleryId).catch(
     () => [],
   )
+  // Comentarios del cliente por foto (galería de selección) + miniatura de cada foto.
+  const galleryComments = await getGalleryComments(galleryId).catch(() => [])
+  const thumbByAssetId = new Map(assetsWithUrls.map((a) => [a.id, a.thumbUrl]))
+  const assetComments = galleryComments.map((c) => ({
+    ...c,
+    thumbUrl: thumbByAssetId.get(c.assetId) ?? null,
+  }))
 
   // Estado de selección de impresión + miniaturas (para el panel de producción).
   const printView = await getGalleryPrintAdminView(galleryId)
@@ -503,6 +511,7 @@ export default async function GalleryDetailPage({
         reselection={reselection}
         reselectionRounds={selectionRounds}
         sessionGallery={sessionGallery}
+        assetComments={assetComments}
         finalSelectionGalleryId={
           (gallery as unknown as { final_selection_gallery_id?: string | null })
             .final_selection_gallery_id ?? null
