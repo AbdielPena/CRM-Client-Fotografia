@@ -237,6 +237,43 @@ export default async function GalleryDetailPage({
   const rootGallery = await getRootGallery(session.studioId, galleryId)
   const sessionGallery =
     rootGallery && rootGallery.id !== galleryId ? rootGallery : null
+
+  // Enlace de navegación entre los MÓDULOS SEPARADOS (SOLO LECTURA — no modifica
+  // ningún dato). Desde una SELECCIÓN: la galería de ENTREGA que la referencia
+  // (source_gallery_id). Desde una ENTREGA: su galería de SELECCIÓN de origen.
+  // Alimenta el botón "Ir a la galería de entrega/selección".
+  let linkedDelivery: { id: string; name: string } | null = null
+  let linkedSelection: { id: string; name: string } | null = null
+  {
+    const sbLink = createSupabaseServiceClient()
+    if (gallery.gallery_type === "final_delivery") {
+      const srcId =
+        (gallery as unknown as { source_gallery_id?: string | null }).source_gallery_id ?? null
+      if (srcId) {
+        const { data } = await sbLink
+          .from("galleries")
+          .select("id, name")
+          .eq("id", srcId)
+          .eq("studio_id", session.studioId)
+          .is("deleted_at", null)
+          .maybeSingle()
+        if (data) linkedSelection = data as { id: string; name: string }
+      }
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (sbLink as any)
+        .from("galleries")
+        .select("id, name")
+        .eq("studio_id", session.studioId)
+        .eq("source_gallery_id", galleryId)
+        .eq("gallery_type", "final_delivery")
+        .is("deleted_at", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (data) linkedDelivery = data as { id: string; name: string }
+    }
+  }
   const reselection = await getReselectionForGallery(session.studioId, galleryId)
   // Todas las rondas de re-selección (2da, 3ra…) con sus fotos, para mostrarlas
   // como listas separadas en la pestaña Selecciones (todo en un solo lugar).
@@ -511,6 +548,8 @@ export default async function GalleryDetailPage({
         reselection={reselection}
         reselectionRounds={selectionRounds}
         sessionGallery={sessionGallery}
+        linkedDelivery={linkedDelivery}
+        linkedSelection={linkedSelection}
         assetComments={assetComments}
         finalSelectionGalleryId={
           (gallery as unknown as { final_selection_gallery_id?: string | null })

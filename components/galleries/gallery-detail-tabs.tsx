@@ -212,6 +212,11 @@ interface Props {
   /** Cuando ESTA galería es una ronda de selección HIJA, apunta a la galería de
    *  la SESIÓN (raíz) donde debe hacerse la entrega final. Null si es la sesión. */
   sessionGallery?: { id: string; name: string } | null
+  /** Módulos separados: desde una SELECCIÓN, la galería de ENTREGA ya creada
+   *  (source_gallery_id) — para el botón "Ir a la galería de entrega". */
+  linkedDelivery?: { id: string; name: string } | null
+  /** Desde una ENTREGA, su galería de SELECCIÓN de origen — para volver a ella. */
+  linkedSelection?: { id: string; name: string } | null
   /** Comentarios que el cliente dejó por foto (galería de selección). */
   assetComments?: AssetCommentItem[]
 }
@@ -243,6 +248,8 @@ export function GalleryDetailTabs({
   deliverySlot = null,
   printsSlot = null,
   sessionGallery = null,
+  linkedDelivery = null,
+  linkedSelection = null,
   assetComments = [],
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
@@ -332,6 +339,23 @@ export function GalleryDetailTabs({
                     Ir a «{sessionGallery.name}» para entregar →
                   </a>
                 </div>
+              ) : linkedDelivery ? (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-brand/25 bg-brand-soft/40 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-foreground">
+                      La entrega final ya está creada
+                    </p>
+                    <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                      Vive en su propia galería, independiente de esta selección.
+                    </p>
+                  </div>
+                  <Link
+                    href={`/galleries/${linkedDelivery.id}`}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+                  >
+                    <Truck className="h-3.5 w-3.5" /> Ir a la entrega
+                  </Link>
+                </div>
               ) : (
                 <EnableFinalDeliveryBanner galleryId={gallery.id} />
               ))}
@@ -395,15 +419,36 @@ export function GalleryDetailTabs({
           <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
             Flujo de la sesión
           </span>
-          {canDeliver && client && (
-            <button
-              type="button"
-              onClick={() => setModal("entrega")}
-              className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" /> Listo para entregar
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Módulos separados: si ESTA selección ya tiene su galería de ENTREGA,
+                botón directo para ir a ella (una vez realizada). */}
+            {linkedDelivery && (
+              <Link
+                href={`/galleries/${linkedDelivery.id}`}
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand px-3.5 py-1.5 text-[12.5px] font-semibold text-brand-foreground transition-opacity hover:opacity-90"
+              >
+                <Truck className="h-3.5 w-3.5" /> Ir a la galería de entrega
+              </Link>
+            )}
+            {/* Desde la ENTREGA, volver a su galería de SELECCIÓN de origen. */}
+            {linkedSelection && (
+              <Link
+                href={`/galleries/${linkedSelection.id}`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted"
+              >
+                <Heart className="h-3.5 w-3.5" /> Ver la selección
+              </Link>
+            )}
+            {canDeliver && client && (
+              <button
+                type="button"
+                onClick={() => setModal("entrega")}
+                className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> Listo para entregar
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <FlowChip
