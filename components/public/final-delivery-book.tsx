@@ -606,6 +606,37 @@ export function FinalDeliveryBook({
     ? (gallery.motherMessageFrom ?? "").trim()
     : studio.name
 
+  // AUTO-AJUSTE de la dedicatoria al largo del texto. La hoja del álbum es un
+  // lienzo de tamaño FIJO y sin scroll: con un mensaje largo (caso real: una
+  // madre escribió 1.992 caracteres) el texto se desbordaba y se cortaba.
+  // Modelo: con ancho medio de carácter ≈0.46·F y alto de línea ≈1.45·F, el
+  // bloque ocupa ≈ n·0.67·F²/anchoÚtil; despejando F para que quepa en el alto
+  // útil sale F ≈ √(altoÚtil·anchoÚtil / (n·0.85)) — el 0.85 deja holgura.
+  // Se calcula sobre `dims` (tamaño REAL de la hoja), así que sirve igual en
+  // móvil que en desktop. Textos cortos quedan clampeados al tamaño de siempre.
+  const dedFit = useMemo(() => {
+    const n = Math.max(1, dedicationText.length)
+    // Con texto largo achicamos también el margen para ganar caja.
+    const long = n > 700
+    const padX = long ? 0.06 : 0.09
+    const padY = long ? 0.07 : 0.11
+    // Ojo: en CSS el padding en % SIEMPRE es relativo al ANCHO del contenedor.
+    const innerW = Math.max(120, dims.w * (1 - padX * 2))
+    const innerH = Math.max(
+      120,
+      dims.h - dims.w * padY * 2 - (dedicationFrom ? 96 : 48), // rótulo + firma
+    )
+    const ideal = Math.sqrt((innerH * innerW) / (n * 0.85))
+    const size = Math.max(9, Math.min(24, ideal))
+    return {
+      size,
+      lh: size >= 20 ? 1.62 : size >= 15 ? 1.54 : 1.45,
+      gap: size >= 20 ? 20 : size >= 15 ? 14 : 10,
+      fromSize: Math.max(13, Math.min(26, size * 1.12)),
+      padding: `${(padY * 100).toFixed(0)}% ${(padX * 100).toFixed(0)}%`,
+    }
+  }, [dedicationText, dedicationFrom, dims])
+
   // En portrait (móvil/tablet) el flipbook muestra 1 sola hoja → sin lomos centrales.
   const isPortrait = dims.w < 520
 
@@ -858,7 +889,7 @@ export function FinalDeliveryBook({
                           position: "relative",
                           width: "100%",
                           height: "100%",
-                          padding: "11% 9%",
+                          padding: dedFit.padding,
                           boxSizing: "border-box",
                           display: "flex",
                           flexDirection: "column",
@@ -875,7 +906,7 @@ export function FinalDeliveryBook({
                             letterSpacing: "0.34em",
                             textTransform: "uppercase",
                             color: accent,
-                            marginBottom: 20,
+                            marginBottom: dedFit.gap,
                             fontWeight: 600,
                           }}
                         >
@@ -885,10 +916,13 @@ export function FinalDeliveryBook({
                           style={{
                             fontFamily: "var(--font-display), 'Cormorant Garamond', Georgia, serif",
                             fontStyle: "italic",
-                            fontSize: "clamp(16px,3.6vw,24px)",
-                            lineHeight: 1.6,
+                            // Tamaño auto-ajustado al largo del texto (ver dedFit).
+                            fontSize: dedFit.size,
+                            lineHeight: dedFit.lh,
                             color: tpl.ink,
-                            maxWidth: "34ch",
+                            // Sin tope en `ch`: a tipografía chica un ancho fijo en
+                            // `ch` estrecha la columna y volvería a desbordar.
+                            maxWidth: "100%",
                           }}
                         >
                           “{dedicationText}”
@@ -897,9 +931,9 @@ export function FinalDeliveryBook({
                           <p
                             style={{
                               fontFamily: "var(--font-script), 'Pinyon Script', cursive",
-                              fontSize: "clamp(18px,3.4vw,26px)",
+                              fontSize: dedFit.fromSize,
                               color: accent,
-                              marginTop: 22,
+                              marginTop: dedFit.gap + 2,
                             }}
                           >
                             {dedicationFrom}
