@@ -1445,8 +1445,12 @@ export function PublicGalleryView({
       )}
 
       {/* Dedicatoria de la madre (si escribió) o agradecimiento del estudio —
-          se muestra solo si el estudio habilitó el bloque. */}
+          se muestra solo si el estudio habilitó el bloque.
+          NO se muestra en el link de DESCARGA (?entrega=1 / ?descarga=1): esa
+          vista es utilitaria (bajar los archivos), no la experiencia editorial.
+          La dedicatoria vive en la galería de entrega y en el Álbum. */}
       {motherMessageEnabled &&
+        !deliveryOnly &&
         (() => {
           const msg = motherMessage?.trim() ?? ""
           const isDedication = msg.length > 0
