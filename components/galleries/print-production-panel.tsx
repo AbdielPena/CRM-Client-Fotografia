@@ -146,7 +146,10 @@ export function PrintProductionPanel({
             <CalendarDays className="h-3.5 w-3.5" /> {submittedAt}
           </span>
         )}
-        <span>{galleryName}</span>
+        {/* El nombre de la galería es solo CONTEXTO: en el perfil de la sesión el
+            título del panel ya ES el nombre (title={v.galleryName}) y se veía
+            repetido. Solo se muestra si aporta algo distinto al título. */}
+        {galleryName !== title && <span>{galleryName}</span>}
       </div>
 
       {/* Portada del álbum */}
