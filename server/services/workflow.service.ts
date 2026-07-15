@@ -145,7 +145,7 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
       .in("project_id", projectIds),
     sb
       .from("galleries")
-      .select("project_id, gallery_type, status, selection_submitted, delivery_ready_at")
+      .select("id, project_id, gallery_type, status, selection_submitted, delivery_ready_at")
       .eq("studio_id", studioId)
       .is("deleted_at", null)
       .in("project_id", projectIds),
@@ -164,10 +164,12 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
     estimated_delivery_date: string | null
   }>
   const galleries = (galRaw ?? []) as Array<{
+    id: string
     project_id: string | null
     gallery_type: string | null
     status: string | null
     selection_submitted: boolean | null
+    delivery_ready_at: string | null
   }>
   const tasks = (taskRaw ?? []) as Array<{
     id: string
@@ -176,6 +178,25 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
     status: string
     due_date: string | null
   }>
+
+  // En todo el sistema una galería está "entregada" si TIENE fotos de entrega o
+  // si se marcó la fecha de envío (badge de /galleries, vista pública). El
+  // pipeline solo miraba `delivery_ready_at`, que únicamente se escribe al pulsar
+  // "Enviar al cliente": si la entrega se hizo subiendo las fotos y pasando el
+  // link/Drive a mano, la edición se quedaba trabada. Mismo criterio aquí.
+  const galleryIds = galleries.map((g) => g.id)
+  const galleriesWithDeliveryPhotos = new Set<string>()
+  if (galleryIds.length > 0) {
+    const { data: dAssets } = await sb
+      .from("gallery_assets")
+      .select("gallery_id")
+      .in("gallery_id", galleryIds)
+      .in("delivery_track", ["social", "high_quality"])
+      .is("deleted_at", null)
+    for (const a of (dAssets ?? []) as Array<{ gallery_id: string }>) {
+      galleriesWithDeliveryPhotos.add(a.gallery_id)
+    }
+  }
 
   const clientById = new Map(clients.map((c) => [c.id, c]))
   const estByProject = new Map<string, string | null>()
@@ -192,7 +213,9 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
     const pGalleries = galleries.filter((g) => g.project_id === p.id)
     const selectionSubmitted = pGalleries.some((g) => g.selection_submitted === true)
     const finalGalleryPublished = pGalleries.some(
-      (g) => !!(g as any).delivery_ready_at && g.status === "published",
+      (g) =>
+        g.status === "published" &&
+        (!!g.delivery_ready_at || galleriesWithDeliveryPhotos.has(g.id)),
     )
     const pTasks = tasks.filter((t) => t.entity_id === p.id)
     const sendSelTask = pTasks.find((t) => t.workflow_stage === "send_selection") ?? null
