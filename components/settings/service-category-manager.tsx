@@ -26,6 +26,7 @@ export interface ServiceCategoryView {
   thankyouMessage: string | null
   dressIncludedAmount: number | null
   deliveryDays: number | null
+  printDeliveryDays: number | null
 }
 
 type FormMode = "create" | "edit" | null
@@ -335,6 +336,29 @@ function CategoryForm({
             La entrega se cuenta desde que el cliente hace su selección. Vacío = 21
             días (3 semanas). En quinceañeras, si el cumpleaños cae antes, se
             entrega 2 días antes del cumpleaños.
+          </p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Días para entregar impresiones{" "}
+            <span className="font-normal text-muted-foreground">
+              (desde la galería final)
+            </span>
+          </label>
+          <input
+            name="printDeliveryDays"
+            type="number"
+            min="1"
+            max="120"
+            step="1"
+            defaultValue={defaults?.printDeliveryDays ?? ""}
+            className={inputCls}
+            placeholder="28"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Plazo para entregar las impresiones, contado desde que publicas la
+            galería final. Fija el vencimiento de tu tarea «Enviar impresiones».
+            Vacío = 21 días.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-foreground">

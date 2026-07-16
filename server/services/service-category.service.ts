@@ -25,6 +25,8 @@ export interface ServiceCategory {
   thankyouMessage: string | null
   dressIncludedAmount: number | null
   deliveryDays: number | null
+  /** Días para entregar las IMPRESIONES desde que se publica la galería final. */
+  printDeliveryDays: number | null
 }
 
 function sanitizeFolder(s: string): string {
@@ -72,7 +74,7 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
   const { data } = await sb
     .from("service_categories")
     .select(
-      "id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order, thankyou_message, dress_included_amount, delivery_days",
+      "id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order, thankyou_message, dress_included_amount, delivery_days, print_delivery_days",
     )
     .eq("studio_id", studioId)
     .is("deleted_at", null)
@@ -92,6 +94,7 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
     thankyouMessage: r.thankyou_message ?? null,
     dressIncludedAmount: r.dress_included_amount ?? null,
     deliveryDays: r.delivery_days ?? null,
+    printDeliveryDays: r.print_delivery_days ?? null,
   }))
 }
 
@@ -146,6 +149,7 @@ export async function createServiceCategory(
       thankyou_message: input.thankyouMessage || null,
       dress_included_amount: input.dressIncludedAmount ?? null,
       delivery_days: input.deliveryDays ?? null,
+      print_delivery_days: input.printDeliveryDays ?? null,
     })
     .select("id")
     .single()
@@ -179,6 +183,8 @@ export async function updateServiceCategory(
   if (input.dressIncludedAmount !== undefined)
     patch.dress_included_amount = input.dressIncludedAmount ?? null
   if (input.deliveryDays !== undefined) patch.delivery_days = input.deliveryDays ?? null
+  if (input.printDeliveryDays !== undefined)
+    patch.print_delivery_days = input.printDeliveryDays ?? null
   const { error } = await sb
     .from("service_categories")
     .update(patch)

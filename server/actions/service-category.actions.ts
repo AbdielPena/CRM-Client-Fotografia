@@ -30,6 +30,7 @@ export async function createServiceCategoryAction(formData: FormData) {
     thankyouMessage: formData.get("thankyouMessage"),
     dressIncludedAmount: formData.get("dressIncludedAmount"),
     deliveryDays: formData.get("deliveryDays"),
+    printDeliveryDays: formData.get("printDeliveryDays"),
   }
   const parsed = createServiceCategorySchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? "Datos inválidos" }
@@ -53,6 +54,7 @@ export async function updateServiceCategoryAction(id: string, formData: FormData
     thankyouMessage: formData.get("thankyouMessage"),
     dressIncludedAmount: formData.get("dressIncludedAmount"),
     deliveryDays: formData.get("deliveryDays"),
+    printDeliveryDays: formData.get("printDeliveryDays"),
   }
   const parsed = updateServiceCategorySchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.errors[0]?.message ?? "Datos inválidos" }

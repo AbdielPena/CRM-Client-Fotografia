@@ -243,6 +243,7 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
       stages,
       nextActionLabel: client.completed_at != null ? null : current?.label ?? null,
       overdueCount,
+      status: p.status,
     }
 
     let card = cardByClient.get(p.client_id)
@@ -254,11 +255,13 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
         earliestDelivery: null,
         totalOverdue: 0,
         projects: [],
+        progress: 0,
       }
       cardByClient.set(p.client_id, card)
     }
     card.projects.push(projectPipeline)
     card.totalOverdue += overdueCount
+    card.progress = Math.max(card.progress, stages.filter((s) => s.state === "done").length)
     if (
       estimatedDeliveryDate &&
       (!card.earliestDelivery || estimatedDeliveryDate < card.earliestDelivery)
@@ -268,9 +271,11 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
   }
 
   const cards = [...cardByClient.values()]
-  // Orden: finalizados al final; el resto por fecha de entrega más próxima.
+  // Orden: finalizados al final; el resto por AVANCE (lo más cerca de terminar
+  // va primero) y, a igual avance, por la entrega más próxima.
   cards.sort((a, b) => {
     if (a.finalized !== b.finalized) return a.finalized ? 1 : -1
+    if (a.progress !== b.progress) return b.progress - a.progress
     const da = a.earliestDelivery ?? "9999-12-31"
     const db = b.earliestDelivery ?? "9999-12-31"
     if (da !== db) return da.localeCompare(db)

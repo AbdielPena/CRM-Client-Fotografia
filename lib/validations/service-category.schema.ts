@@ -22,6 +22,12 @@ export const createServiceCategorySchema = z.object({
     (v) => (v === "" || v === null || v === undefined ? undefined : v),
     z.coerce.number().int().min(1).max(120).optional(),
   ),
+  // Días para entregar las IMPRESIONES, contados desde que se publica la
+  // galería final (default 21). Es otro plazo, no el de la entrega digital.
+  printDeliveryDays: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(1).max(120).optional(),
+  ),
 })
 
 export const updateServiceCategorySchema = createServiceCategorySchema.partial()

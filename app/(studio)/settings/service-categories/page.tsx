@@ -43,6 +43,7 @@ export default async function ServiceCategoriesSettingsPage() {
             thankyouMessage: c.thankyouMessage,
             dressIncludedAmount: c.dressIncludedAmount,
             deliveryDays: c.deliveryDays,
+            printDeliveryDays: c.printDeliveryDays,
           }))}
         />
       </div>

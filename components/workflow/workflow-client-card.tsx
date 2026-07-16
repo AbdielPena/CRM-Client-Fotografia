@@ -31,7 +31,7 @@ import type {
   StageState,
 } from "@/lib/workflow/types"
 
-const STAGE_ICON: Record<StageKey, LucideIcon> = {
+export const STAGE_ICON: Record<StageKey, LucideIcon> = {
   session: Camera,
   send_selection: Send,
   editing: Pencil,

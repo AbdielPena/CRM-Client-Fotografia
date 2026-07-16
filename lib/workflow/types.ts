@@ -30,6 +30,14 @@ export interface ProjectPipeline {
   stages: PipelineStage[]
   nextActionLabel: string | null
   overdueCount: number
+  /**
+   * Estado personalizado de la sesión (`projects.status`): la ETIQUETA de un
+   * `project_statuses` ("En edición", "Entregado"…), no un enum. Es un eje
+   * distinto de `stages`: las etapas se derivan de los hechos (hay galería,
+   * se envió la selección…), el estado lo mueve el estudio a mano o por
+   * automatismo. El desplegable "Estado" del pipeline filtra por esto.
+   */
+  status: string | null
 }
 
 export interface ClientCard {
@@ -39,6 +47,11 @@ export interface ClientCard {
   earliestDelivery: string | null
   totalOverdue: number
   projects: ProjectPipeline[]
+  /**
+   * Cuántas etapas lleva completadas el proyecto MÁS avanzado del cliente.
+   * Ordena el pipeline: lo más cerca de terminar va primero.
+   */
+  progress: number
 }
 
 export const STAGE_LABELS: Record<StageKey, string> = {

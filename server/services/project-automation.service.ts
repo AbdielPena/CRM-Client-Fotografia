@@ -415,12 +415,36 @@ export async function onFinalDeliveryPublished(
   projectId: string,
 ): Promise<void> {
   await transitionProjectStatus(studioId, projectId, "entregado")
+  const days = await getPrintDeliveryDays(studioId, projectId)
   await createWorkflowTask(studioId, projectId, "send_prints", {
     title: "Enviar impresiones al cliente",
     description:
       "La galería de fotos finales está publicada. Coordina y envía las impresiones; al marcar esta tarea como completada, el cliente queda finalizado (si no le quedan otros proyectos pendientes).",
-    dueDate: new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10),
+    dueDate: new Date(Date.now() + days * 86400000).toISOString().slice(0, 10),
   })
+}
+
+/**
+ * Plazo para entregar las impresiones, en días desde que se publica la galería
+ * final. Lo fija la categoría de la sesión (Configuración → Categorías); 21 si
+ * no está configurada. Antes era un 3 fijo, que dejaba las quinceañeras y bodas
+ * (2 a 4 semanas de plazo real) marcadas como atrasadas desde el primer día.
+ */
+async function getPrintDeliveryDays(studioId: string, projectId: string): Promise<number> {
+  const DEFAULT_DAYS = 21
+  try {
+    const { data } = await untypedService()
+      .from("projects")
+      .select("service_category:service_categories(print_delivery_days)")
+      .eq("studio_id", studioId)
+      .eq("id", projectId)
+      .maybeSingle()
+    const cat = (data as any)?.service_category
+    const days = (Array.isArray(cat) ? cat[0] : cat)?.print_delivery_days
+    return typeof days === "number" && days > 0 ? days : DEFAULT_DAYS
+  } catch {
+    return DEFAULT_DAYS
+  }
 }
 
 /**
