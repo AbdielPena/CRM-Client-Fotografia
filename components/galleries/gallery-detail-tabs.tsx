@@ -222,6 +222,10 @@ interface Props {
   linkedSelection?: { id: string; name: string } | null
   /** Comentarios que el cliente dejó por foto (galería de selección). */
   assetComments?: AssetCommentItem[]
+  /** Categorías del portafolio, para "Añadir al Portafolio" desde la galería. */
+  portfolioCategories?: { id: string; name: string }[]
+  /** IDs de fotos de esta galería que ya están en el portafolio. */
+  portfolioAssetIds?: string[]
 }
 
 // ─── Main ───────────────────────────────────────────────────────────────────
@@ -254,6 +258,8 @@ export function GalleryDetailTabs({
   linkedDelivery = null,
   linkedSelection = null,
   assetComments = [],
+  portfolioCategories = [],
+  portfolioAssetIds = [],
 }: Props) {
   const submittedCount = collections.filter((c) => c.is_locked).length
   const hasDelivery = assets.some(
@@ -491,7 +497,13 @@ export function GalleryDetailTabs({
       </div>
 
       {/* Canvas principal: las fotos */}
-      <PhotosTab gallery={gallery} assets={assets} studioId={studioId} />
+      <PhotosTab
+        gallery={gallery}
+        assets={assets}
+        studioId={studioId}
+        portfolioCategories={portfolioCategories}
+        portfolioAssetIds={portfolioAssetIds}
+      />
 
       {/* ── Popups (reusan el contenido de cada apartado) ───────────── */}
       {modal === "entrega" && (
@@ -693,10 +705,14 @@ function PhotosTab({
   gallery,
   assets,
   studioId,
+  portfolioCategories = [],
+  portfolioAssetIds = [],
 }: {
   gallery: Gallery
   assets: Asset[]
   studioId: string
+  portfolioCategories?: { id: string; name: string }[]
+  portfolioAssetIds?: string[]
 }) {
   return (
     <div className="space-y-5">
@@ -709,6 +725,8 @@ function PhotosTab({
       {assets.length > 0 ? (
         <AssetGrid
           galleryId={gallery.id}
+          portfolioCategories={portfolioCategories}
+          inPortfolio={portfolioAssetIds}
           assets={assets.map((a) => ({
             id: a.id,
             thumbUrl: a.thumbUrl,

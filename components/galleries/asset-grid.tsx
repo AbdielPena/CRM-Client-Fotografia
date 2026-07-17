@@ -1,8 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Star, ZoomIn, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Star, ZoomIn, Trash2, ImagePlus, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+
+import { addToPortfolioAction } from "@/server/actions/portfolio.actions"
 
 interface Asset {
   id: string
@@ -15,13 +18,29 @@ interface Asset {
   height?: number
 }
 
+export interface PortfolioCategoryOption {
+  id: string
+  name: string
+}
+
 interface AssetGridProps {
   assets: Asset[]
   galleryId: string
   readOnly?: boolean
+  /** Si viene, aparece "Añadir al Portafolio" en la barra de selección. */
+  portfolioCategories?: PortfolioCategoryOption[]
+  /** IDs de fotos que YA están en el portafolio (para marcarlas). */
+  inPortfolio?: string[]
 }
 
-export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProps) {
+export function AssetGrid({
+  assets,
+  galleryId,
+  readOnly = false,
+  portfolioCategories,
+  inPortfolio = [],
+}: AssetGridProps) {
+  const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [favorites, setFavorites] = useState<Set<string>>(
     new Set(assets.filter((a) => a.isFavorite).map((a) => a.id))
@@ -29,6 +48,33 @@ export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProp
   const [lightbox, setLightbox] = useState<Asset | null>(null)
   // Anchor para selección por rango con shift+click
   const [lastClickedIdx, setLastClickedIdx] = useState<number | null>(null)
+  // Fotos ya en el portafolio (badge). Se actualiza en caliente al añadir.
+  const [portfolioIds, setPortfolioIds] = useState<Set<string>>(new Set(inPortfolio))
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [addingPortfolio, setAddingPortfolio] = useState(false)
+
+  const canPortfolio = !readOnly && !!portfolioCategories && portfolioCategories.length > 0
+
+  const addSelectedToPortfolio = async (categoryId: string) => {
+    const ids = Array.from(selected)
+    if (ids.length === 0) return
+    setAddingPortfolio(true)
+    const r = await addToPortfolioAction(ids, categoryId)
+    setAddingPortfolio(false)
+    setPickerOpen(false)
+    if ("error" in r) {
+      toast.error(r.error ?? "No se pudo añadir al portafolio")
+      return
+    }
+    setPortfolioIds((prev) => new Set([...prev, ...ids]))
+    const parts: string[] = []
+    if (r.added) parts.push(`${r.added} añadida${r.added === 1 ? "" : "s"}`)
+    if (r.skipped) parts.push(`${r.skipped} ya estaba${r.skipped === 1 ? "" : "n"}`)
+    if (r.failed) parts.push(`${r.failed} fallaron`)
+    toast.success(`Portafolio: ${parts.join(" · ") || "listo"} — en borrador`)
+    setSelected(new Set())
+    router.refresh()
+  }
 
   const toggleSelect = (id: string, idx: number, shiftKey: boolean) => {
     setSelected((prev) => {
@@ -139,6 +185,46 @@ export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProp
                 >
                   Cancelar
                 </button>
+                {canPortfolio && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setPickerOpen((o) => !o)}
+                      disabled={addingPortfolio}
+                      className="flex items-center gap-1.5 rounded-lg border border-brand/40 bg-brand/10 px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-brand/20 disabled:opacity-50"
+                    >
+                      {addingPortfolio ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ImagePlus className="h-3.5 w-3.5" />
+                      )}
+                      Añadir al Portafolio ({selected.size})
+                    </button>
+                    {pickerOpen && (
+                      <>
+                        {/* Click-fuera cierra */}
+                        <div
+                          className="fixed inset-0 z-20"
+                          onClick={() => setPickerOpen(false)}
+                        />
+                        <div className="absolute right-0 z-30 mt-1.5 w-56 rounded-xl border border-border bg-popover p-1.5 shadow-lg">
+                          <p className="px-2 py-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                            ¿En qué categoría?
+                          </p>
+                          {portfolioCategories!.map((c) => (
+                            <button
+                              key={c.id}
+                              onClick={() => addSelectedToPortfolio(c.id)}
+                              disabled={addingPortfolio}
+                              className="flex w-full items-center rounded-lg px-2 py-1.5 text-left text-[13px] text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                            >
+                              {c.name}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
                 <button
                   onClick={deleteSelected}
                   className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
@@ -157,6 +243,7 @@ export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProp
         {assets.map((asset, idx) => {
           const isSelected = selected.has(asset.id)
           const isFav = favorites.has(asset.id)
+          const inPort = portfolioIds.has(asset.id)
 
           return (
             <div
@@ -218,6 +305,16 @@ export function AssetGrid({ assets, galleryId, readOnly = false }: AssetGridProp
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
+              )}
+
+              {/* Ya en el portafolio */}
+              {inPort && !isSelected && (
+                <span
+                  className="absolute top-1.5 left-1.5 rounded-full bg-brand/95 px-1.5 py-0.5 text-[9px] font-semibold text-brand-foreground"
+                  title="Ya está en el portafolio"
+                >
+                  Portafolio
+                </span>
               )}
             </div>
           )

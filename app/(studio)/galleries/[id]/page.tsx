@@ -20,6 +20,10 @@ import { getSetsByGallery } from "@/server/services/gallery-set.service"
 import { getPinsByGallery } from "@/server/services/gallery-download-pin.service"
 import { getGallerySelectionQuota } from "@/server/services/selection-quota.service"
 import { getGalleryPrintAdminView } from "@/server/services/print-selection.service"
+import {
+  getPortfolioCategories,
+  getPortfolioAssetIds,
+} from "@/server/services/portfolio.service"
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 
@@ -291,6 +295,14 @@ export default async function GalleryDetailPage({
   // Estado de selección de impresión + miniaturas (para el panel de producción).
   const printView = await getGalleryPrintAdminView(galleryId)
 
+  // Para "Añadir al Portafolio" desde las fotos de la galería.
+  const [portfolioCategories, portfolioAssetIds] = await Promise.all([
+    getPortfolioCategories(session.studioId).catch(() => []),
+    getPortfolioAssetIds(session.studioId, galleryId)
+      .then((s) => [...s])
+      .catch(() => [] as string[]),
+  ])
+
   // Entrega a Google Drive (si la galería tiene assets de entrega o delivery_ready_at).
   const hasDeliveryAssets = assetsWithUrls.some(
     (a) => a.delivery_track === "social" || a.delivery_track === "high_quality",
@@ -551,6 +563,8 @@ export default async function GalleryDetailPage({
         linkedDelivery={linkedDelivery}
         linkedSelection={linkedSelection}
         assetComments={assetComments}
+        portfolioCategories={portfolioCategories.map((c) => ({ id: c.id, name: c.name }))}
+        portfolioAssetIds={portfolioAssetIds}
         finalSelectionGalleryId={
           (gallery as unknown as { final_selection_gallery_id?: string | null })
             .final_selection_gallery_id ?? null
