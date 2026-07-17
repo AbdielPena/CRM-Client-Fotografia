@@ -463,8 +463,19 @@ export function GalleryDetailTabs({
           <FlowChip
             icon={<Truck className="h-4 w-4" />}
             label="Entrega"
-            hint={hasDelivery ? `${deliveryCount} finales` : deliveryEnabled ? "en curso" : "sin habilitar"}
-            done={hasDelivery}
+            hint={
+              // La entrega vive en su propia galería (linkedDelivery). Si ya
+              // existe, la etiqueta debe decirlo — no "sin habilitar", que
+              // miente cuando la sesión ya fue entregada.
+              hasDelivery
+                ? `${deliveryCount} finales`
+                : linkedDelivery
+                  ? "creada — ver"
+                  : deliveryEnabled
+                    ? "en curso"
+                    : "sin habilitar"
+            }
+            done={hasDelivery || !!linkedDelivery}
             onClick={() => setModal("entrega")}
           />
           <FlowChip
