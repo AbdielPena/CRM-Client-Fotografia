@@ -70,6 +70,7 @@ interface GalleryRow {
   print_selection_enabled: boolean | null
   print_submitted_at: string | null
   print_locked: boolean | null
+  gallery_type: string | null
 }
 
 async function loadGallery(galleryId: string): Promise<GalleryRow | null> {
@@ -77,12 +78,32 @@ async function loadGallery(galleryId: string): Promise<GalleryRow | null> {
   const { data } = await sb
     .from("galleries")
     .select(
-      "id, studio_id, project_id, package_id, print_selection_enabled, print_submitted_at, print_locked",
+      "id, studio_id, project_id, package_id, print_selection_enabled, print_submitted_at, print_locked, gallery_type",
     )
     .eq("id", galleryId)
     .is("deleted_at", null)
     .maybeSingle()
   return (data as GalleryRow | null) ?? null
+}
+
+/**
+ * ¿Esta galería de SELECCIÓN ya tiene su galería de ENTREGA aparte?
+ *
+ * Las impresiones se eligen SIEMPRE desde la entrega final. Una galería de
+ * selección con entrega propia no debe ofrecer impresiones: su link llevaría al
+ * cliente a las fotos sin editar. Pasó con Massiel — al partir las galerías
+ * unificadas, las banderas `print_*` se quedaron en la de selección.
+ */
+async function hasSeparateDeliveryGallery(galleryId: string): Promise<boolean> {
+  const sb = untypedService()
+  const { data } = await sb
+    .from("galleries")
+    .select("id")
+    .eq("source_gallery_id", galleryId)
+    .eq("gallery_type", "final_delivery")
+    .is("deleted_at", null)
+    .limit(1)
+  return ((data ?? []) as Array<{ id: string }>).length > 0
 }
 
 export async function resolveGalleryEntitlements(
@@ -159,7 +180,12 @@ export async function getGalleryPrintState(
   const entitlements = await resolveGalleryEntitlements(gallery)
 
   const sb = untypedService()
-  const deliveredCount = await countDeliveredAssets(galleryId)
+  const [deliveredCount, supersededBySeparateDelivery] = await Promise.all([
+    countDeliveredAssets(galleryId),
+    gallery.gallery_type === "final_delivery"
+      ? Promise.resolve(false)
+      : hasSeparateDeliveryGallery(galleryId),
+  ])
   const { data: selRaw } = await sb
     .from("gallery_print_selections")
     .select("id, asset_id, selection_type, spec")
@@ -203,9 +229,12 @@ export async function getGalleryPrintState(
     // Disponible si el plan incluye impresos Y (ya se habilitó explícitamente al
     // publicar la entrega O ya hay fotos de entrega). Así aparece en toda galería
     // entregada de un plan con impresos, sin depender del flag de publicación.
+    // Nunca en una galería de selección que ya tiene su entrega aparte: ahí se
+    // elegiría sobre las fotos sin editar.
     enabled:
       entitlements.enabled &&
       hasPrintEntitlements(entitlements) &&
+      !supersededBySeparateDelivery &&
       ((gallery.print_selection_enabled ?? false) || deliveredCount > 0),
     packageId: gallery.package_id,
     submitted: !!gallery.print_submitted_at,
@@ -561,6 +590,7 @@ interface PrintGalleryRow {
   print_locked: boolean | null
   delivery_ready_at: string | null
   delivery_date: string | null
+  gallery_type: string | null
 }
 
 const PRINT_GALLERY_COLS =
@@ -751,8 +781,27 @@ async function buildPrintItems(
     }
   }
 
+  // Galerías de SELECCIÓN que ya tienen su galería de ENTREGA aparte: las
+  // impresiones se eligen SIEMPRE desde la entrega, así que la de selección no
+  // debe aparecer aquí. Si no se excluyen, su link manda al cliente a las fotos
+  // sin editar (le pasó a Massiel: banderas `print_*` que quedaron en la
+  // selección al partir las galerías unificadas).
+  const supersededByDelivery = new Set<string>()
+  {
+    const { data } = await sb
+      .from("galleries")
+      .select("source_gallery_id")
+      .eq("gallery_type", "final_delivery")
+      .is("deleted_at", null)
+      .not("source_gallery_id", "is", null)
+    for (const r of (data ?? []) as Array<{ source_gallery_id: string | null }>) {
+      if (r.source_gallery_id) supersededByDelivery.add(r.source_gallery_id)
+    }
+  }
+
   const items: StudioPrintItem[] = []
   for (const g of galleries) {
+    if (g.gallery_type !== "final_delivery" && supersededByDelivery.has(g.id)) continue
     const pkgId = resolvePkg(g)
     const ent = pkgId ? entByPkg.get(pkgId) : undefined
     if (!ent || !ent.enabled || !hasPrintEntitlements(ent)) continue

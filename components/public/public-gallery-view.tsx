@@ -784,6 +784,14 @@ export function PublicGalleryView({
   }, [deliveryAssets])
   const hasTracks = deliveryAssets.length > 0
   const hasSelection = selectionAssets.length > 0
+  // Fotos sobre las que el cliente puede elegir impresiones: SIEMPRE las de la
+  // entrega final, jamás las de la selección (elegiría fotos sin editar). Si la
+  // galería ES de entrega, sus propias fotos ya son las finales aunque todavía
+  // no tengan track.
+  const printableAssets = useMemo(() => {
+    if (deliveryAssets.length > 0) return deliveryAssets
+    return gallery.galleryType === "final_delivery" ? assets : []
+  }, [deliveryAssets, assets, gallery.galleryType])
   // Módulos SEPARADOS: una galería de ENTREGA FINAL es su propia galería (enlace
   // propio). Si el tipo es final_delivery, SIEMPRE se muestra como entrega —
   // aunque aún no tenga fotos con track ni `delivery_ready_at` — y nunca ofrece
@@ -1628,13 +1636,14 @@ export function PublicGalleryView({
       )}
 
       {/* Selección para impresión (si el plan la incluye y está habilitada).
-          Desde las fotos de ENTREGA FINAL: los tracks si existen; si la galería
-          es de entrega sin tracks, todas sus fotos (nunca la selección cuando
-          coexisten ambas). */}
-      {printState?.enabled && (deliveryAssets.length > 0 || isDelivered) && (
+          SIEMPRE sobre fotos de ENTREGA FINAL, nunca de la selección: si hay
+          fotos con track se usan esas; si la galería ES de entrega y aún no
+          tiene tracks, sus propias fotos ya son las finales. En cualquier otro
+          caso no hay de dónde elegir y el panel no se muestra. */}
+      {printState?.enabled && printableAssets.length > 0 && (
         <PrintSelectionPanel
           token={token}
-          assets={(deliveryAssets.length > 0 ? deliveryAssets : assets).map((a) => ({
+          assets={printableAssets.map((a) => ({
             id: a.id,
             thumbUrl: a.thumbUrl,
           }))}
