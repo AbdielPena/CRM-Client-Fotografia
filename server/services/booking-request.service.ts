@@ -763,6 +763,30 @@ async function convertBookingToClientBundle(params: {
     }
   }
 
+  // Factura al ACEPTAR (no solo al firmar): TODOS los planes deben generar su
+  // factura y enviársela al cliente en cuanto se acepta la reserva — muchas
+  // sesiones (exterior, estudio…) no llevan firma de contrato, así que esperar
+  // a la firma dejaba a esos clientes sin factura. Reusa el MISMO flujo que la
+  // firma (generate_booking_invoice + correo); es idempotente y el correo solo
+  // sale la primera vez, así que cuando además se firme no se duplica nada.
+  try {
+    const { generateInvoiceAndAdvanceBooking } = await import(
+      "./contract-post-sign.service"
+    )
+    await generateInvoiceAndAdvanceBooking({
+      studioId: params.studioId,
+      projectId: result.project_id,
+      bookingRequestId: params.requestId,
+    })
+  } catch (invErr) {
+    // Best-effort: si falla, la reserva ya quedó creada. La red de seguridad
+    // (ensureBookingInvoice al abrir la sesión) la genera después.
+    console.error(
+      "[convertBookingToClientBundle] generar factura al aceptar falló:",
+      invErr,
+    )
+  }
+
   return {
     clientId: result.client_id,
     projectId: result.project_id,

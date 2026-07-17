@@ -91,36 +91,66 @@ export async function ensureBookingInvoice(
 ): Promise<void> {
   try {
     const supabase = createSupabaseServiceClient()
-    const { data: signed } = await supabase
-      .from("contracts")
-      .select("id")
-      .eq("project_id", projectId)
-      .eq("status", "signed")
-      .limit(1)
-      .maybeSingle()
-    if (!signed) return
+
+    // ¿Ya tiene factura? Nada que hacer (idempotente).
     const { count } = await supabase
       .from("invoices")
       .select("id", { count: "exact", head: true })
       .eq("project_id", projectId)
       .neq("status", "cancelled")
     if ((count ?? 0) > 0) return
-    const { untypedService } = await import("@/server/supabase/untyped")
-    await untypedService().rpc("generate_booking_invoice", {
-      p_studio_id: studioId,
-      p_project_id: projectId,
+
+    // Generar solo para RESERVAS REALES: un proyecto que vino de una solicitud
+    // aceptada, O con contrato firmado. (No para un lead suelto sin reserva.)
+    // Antes exigía contrato FIRMADO, así que las sesiones sin firma (exterior,
+    // estudio…) se quedaban sin factura para siempre.
+    const { data: br } = await supabase
+      .from("booking_requests")
+      .select("id")
+      .eq("project_id", projectId)
+      .limit(1)
+      .maybeSingle()
+    const bookingRequestId = (br as { id?: string } | null)?.id ?? null
+    if (!bookingRequestId) {
+      const { data: signed } = await supabase
+        .from("contracts")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("status", "signed")
+        .limit(1)
+        .maybeSingle()
+      if (!signed) return
+    }
+
+    // Genera + envía la factura (mismo flujo que aceptar/firmar; el correo solo
+    // sale la primera vez). Recupera cualquier reserva que no la haya generado.
+    await generateInvoiceAndAdvanceBooking({
+      studioId,
+      projectId,
+      bookingRequestId,
     })
   } catch (err) {
     console.error("[ensureBookingInvoice] failed", err)
   }
 }
 
-async function generateInvoiceAndAdvanceBooking(params: {
+export async function generateInvoiceAndAdvanceBooking(params: {
   studioId: string
   projectId: string
   bookingRequestId: string | null
 }): Promise<void> {
   const supabase = createSupabaseServiceClient()
+
+  // ¿Ya existía factura ANTES de generar? Se llama en DOS momentos: al aceptar
+  // la reserva y al firmar el contrato. El correo al cliente solo debe salir la
+  // PRIMERA vez (cuando la factura es nueva); si ya existía, la RPC la devuelve
+  // y NO reenviamos el correo — así el cliente no recibe la factura dos veces.
+  const { count: preexisting } = await supabase
+    .from("invoices")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", params.projectId)
+    .neq("status", "cancelled")
+  const wasNew = (preexisting ?? 0) === 0
 
   // 1. Generar (o recuperar) la factura única del proyecto — idempotente.
   //    untypedService: la RPC generate_booking_invoice no está en los tipos
@@ -159,18 +189,19 @@ async function generateInvoiceAndAdvanceBooking(params: {
     const i = inv as any
     const client = Array.isArray(i?.client) ? i.client[0] : i?.client
     const studio = Array.isArray(i?.studio) ? i.studio[0] : i?.studio
-    if (i && client?.email && studio) {
+    if (wasNew && i && client?.email && studio) {
       const payUrl = `${appBaseUrl()}/i/${invoiceId}`
       const amount = formatCurrency(Number(i.total ?? 0), i.currency ?? "DOP")
       const firstName = (client.name ?? "").trim().split(/\s+/)[0] || "¡Hola!"
 
       // Mismo marco luxury minimalista que el resto de los correos (header con
-      // logo del estudio, tipografía, footer con redes/WhatsApp).
+      // logo del estudio, tipografía, footer con redes/WhatsApp). Texto NEUTRAL:
+      // este correo sale al RESERVAR (aceptar la sesión), no solo al firmar.
       const branding = await getEmailBranding(params.studioId)
       const inner = `
-        <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Contrato firmado</p>
-        <h1>¡Gracias por firmar, ${escapeHtml(firstName)}!</h1>
-        <p>Tu contrato ya quedó firmado. Solo falta <strong>un último paso</strong> para dejar tu sesión <strong>100% confirmada</strong>: completar el pago de tu factura.</p>
+        <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#A1A1A6">Reserva confirmada</p>
+        <h1>¡Ya casi está, ${escapeHtml(firstName)}!</h1>
+        <p>Tu sesión ya quedó reservada. Solo falta <strong>un último paso</strong> para dejarla <strong>100% confirmada</strong>: completar el pago de tu factura.</p>
         <div style="margin:26px 0;padding:22px 24px;background:#F7F7F9;border:1px solid #ECECEF;border-radius:16px;text-align:center">
           <p style="margin:0 0 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#A1A1A6">Total a pagar</p>
           <p style="margin:0;font-size:30px;font-weight:600;color:#1C1C1C;letter-spacing:-.02em">${escapeHtml(amount)}</p>
