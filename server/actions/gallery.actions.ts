@@ -669,10 +669,14 @@ export async function notifyClientFinalDeliveryAction(input: {
 }
 
 /**
- * Cancela la entrega final de una galería: limpia `delivery_ready_at` y revierte
- * `gallery_type` a "selection". Las fotos y la selección quedan intactas; solo
- * se "des-publica" la entrega (el cliente deja de ver la sección de entrega y
- * el banner de "fotos finales listas"). Reversible volviendo a enviar.
+ * Cancela (des-envía) la entrega final: SOLO limpia `delivery_ready_at`, para
+ * que el cliente deje de ver el banner de "fotos finales listas". Reversible
+ * volviendo a enviar. Las fotos, la galería y su TIPO quedan intactos.
+ *
+ * ⚠️ NUNCA tocar `gallery_type`: en el modelo separado la entrega es su PROPIA
+ * galería (final_delivery). Ponerla en "selection" la corrompía — dejaba de
+ * comportarse como entrega (mostraba "Selección", etc.) y era irreversible sin
+ * arreglo manual. (Bug real: le pasó a Mari XV — Entrega, 18 jul.)
  */
 export async function cancelDeliveryAction(input: {
   galleryId: string
@@ -685,12 +689,12 @@ export async function cancelDeliveryAction(input: {
 
   await sb
     .from("galleries")
-    .update({ delivery_ready_at: null, gallery_type: "selection" })
+    .update({ delivery_ready_at: null })
     .eq("id", galleryId)
     .eq("studio_id", ctx.studioId)
 
   revalidatePath(`/galleries/${galleryId}`)
-  revalidatePath("/galleries") // vuelve la galería a "Activas" (quita badge Entregada)
+  revalidatePath("/galleries") // refresca el badge/toggle de la lista
   return { ok: true }
 }
 
