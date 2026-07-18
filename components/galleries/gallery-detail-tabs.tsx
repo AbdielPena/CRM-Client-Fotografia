@@ -281,6 +281,9 @@ export function GalleryDetailTabs({
         }))
       : undefined
   const canDeliver = !!uploadTargets && assets.length > 0 && !!client
+  // Una galería de ENTREGA FINAL es su propio módulo: NO tiene "selección"
+  // (esa vive en su galería de origen) y su subida agrega fotos FINALES.
+  const isDeliveryGallery = gallery.gallery_type === "final_delivery"
   // "Entrega habilitada" = ya existen las carpetas de entrega (aunque aún sin
   // fotos), o ya hay fotos/entrega marcada. Con esto el mensaje de la madre se
   // puede preparar apenas se habilita, sin esperar a subir las fotos.
@@ -478,13 +481,17 @@ export function GalleryDetailTabs({
             done={hasDelivery || !!linkedDelivery}
             onClick={() => setModal("entrega")}
           />
-          <FlowChip
-            icon={<Heart className="h-4 w-4" />}
-            label="Selección"
-            hint={selectedHint}
-            badge={submittedCount}
-            onClick={() => setModal("seleccion")}
-          />
+          {/* La "Selección" no existe en una galería de ENTREGA: esa galería ES
+              la entrega. Solo se muestra en galerías de selección. */}
+          {!isDeliveryGallery && (
+            <FlowChip
+              icon={<Heart className="h-4 w-4" />}
+              label="Selección"
+              hint={selectedHint}
+              badge={submittedCount}
+              onClick={() => setModal("seleccion")}
+            />
+          )}
           <FlowChip
             icon={<FolderTree className="h-4 w-4" />}
             label="Sets"
@@ -514,6 +521,9 @@ export function GalleryDetailTabs({
         studioId={studioId}
         portfolioCategories={portfolioCategories}
         portfolioAssetIds={portfolioAssetIds}
+        // En la galería de ENTREGA, subir desde "Fotos" agrega fotos FINALES
+        // (con selector de pista Máxima Calidad / Redes), no fotos base.
+        uploadTargets={isDeliveryGallery ? uploadTargets : undefined}
       />
 
       {/* ── Popups (reusan el contenido de cada apartado) ───────────── */}
@@ -718,18 +728,21 @@ function PhotosTab({
   studioId,
   portfolioCategories = [],
   portfolioAssetIds = [],
+  uploadTargets,
 }: {
   gallery: Gallery
   assets: Asset[]
   studioId: string
   portfolioCategories?: { id: string; name: string }[]
   portfolioAssetIds?: string[]
+  /** Si viene (galería de ENTREGA), la subida agrega fotos finales con pista. */
+  uploadTargets?: UploadTarget[]
 }) {
   return (
     <div className="space-y-5">
-      {/* Solo fotos base de la galería. Toda la ENTREGA (subir finales + enviar
-          al cliente + validar) vive en la pestaña "Entrega". */}
-      <AssetUploader galleryId={gallery.id} studioId={studioId} />
+      {/* En una galería de SELECCIÓN: fotos base (sin pista). En la de ENTREGA:
+          fotos finales con selector de pista (Máxima Calidad / Redes). */}
+      <AssetUploader galleryId={gallery.id} studioId={studioId} targets={uploadTargets} />
       {assets.length > 1 && (
         <SortByNameButton galleryId={gallery.id} />
       )}
