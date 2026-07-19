@@ -12,6 +12,7 @@ import { setProjectStatus } from "@/server/services/project-status.service"
  */
 export type ProjectIntent =
   | "consulta"
+  | "pendiente_pago"
   | "reservado"
   | "sesion_realizada"
   | "esperando_seleccion"
@@ -20,6 +21,11 @@ export type ProjectIntent =
 
 const INTENT_KEYWORDS: Record<ProjectIntent, string[]> = {
   consulta: ["consulta", "inquiry", "lead", "inicial"],
+  // "Pendiente de pago": reserva aceptada, aún sin pago. Se pone al aceptar; el
+  // pago la mueve a "reservado". El match real es por auto_intent='pendiente_pago'
+  // (findStatusLabelByIntent); estas keywords son fallback y van NORMALIZADAS
+  // (normalize() quita espacios/acentos) para que hagan match sin chocar con otros.
+  pendiente_pago: ["pendientedepago", "pendientepago", "porconfirmar", "sinpagar"],
   reservado: ["reserv", "booked", "agendad", "confirm", "abonad"],
   sesion_realizada: ["sesion", "shoot", "captur", "realiz"],
   esperando_seleccion: ["esperand", "selecc", "waiting"],

@@ -763,6 +763,23 @@ async function convertBookingToClientBundle(params: {
     }
   }
 
+  // Estado del tablero: aceptar la reserva NO debe saltar a "Reservado" sin
+  // pago. La RPC crea el proyecto en 'booked'; lo movemos a "Pendiente de pago".
+  // El pago (onPaymentRecorded) lo lleva a "Reservado". Solo afecta reservas
+  // NUEVAS (esta función); los clientes ya existentes/migrados no se tocan. Si
+  // el estudio no tiene ese estado, la transición no hace nada (queda en booked).
+  try {
+    const { transitionProjectStatus } = await import("./project-automation.service")
+    await transitionProjectStatus(
+      params.studioId,
+      result.project_id,
+      "pendiente_pago",
+      { dispatch: false },
+    )
+  } catch (stErr) {
+    console.error("[convertBookingToClientBundle] mover a pendiente_pago falló:", stErr)
+  }
+
   // Factura al ACEPTAR (no solo al firmar): TODOS los planes deben generar su
   // factura y enviársela al cliente en cuanto se acepta la reserva — muchas
   // sesiones (exterior, estudio…) no llevan firma de contrato, así que esperar
