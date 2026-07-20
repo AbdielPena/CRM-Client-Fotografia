@@ -76,3 +76,8 @@ tsconfig.tsbuildinfo
 *.tsbuildinfo
 .deploy-tmp/
 .git-commit-msg.txt
+
+# Artefactos de build y ficheros scratch de herramientas (no versionar)
+next-deploy*.zip
+.gh-*.json
+.pr-*.json
