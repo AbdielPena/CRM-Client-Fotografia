@@ -1,0 +1,29 @@
+{
+  "total_count": 2,
+  "workflows": [
+    {
+      "id": 271636047,
+      "node_id": "W_kwDOSRFP584QMNZP",
+      "name": "Deploy Web to BanaHosting",
+      "path": ".github/workflows/deploy-web.yml",
+      "state": "active",
+      "created_at": "2026-05-05T21:17:30.000Z",
+      "updated_at": "2026-05-05T21:17:30.000Z",
+      "url": "https://api.github.com/repos/AbdielPena/CRM-Client-Fotografia/actions/workflows/271636047",
+      "html_url": "https://github.com/AbdielPena/CRM-Client-Fotografia/blob/main/.github/workflows/deploy-web.yml",
+      "badge_url": "https://github.com/AbdielPena/CRM-Client-Fotografia/workflows/Deploy%20Web%20to%20BanaHosting/badge.svg"
+    },
+    {
+      "id": 271632260,
+      "node_id": "W_kwDOSRFP584QMMeE",
+      "name": "Release Desktop App",
+      "path": ".github/workflows/release.yml",
+      "state": "active",
+      "created_at": "2026-05-05T21:08:20.000Z",
+      "updated_at": "2026-05-05T21:08:20.000Z",
+      "url": "https://api.github.com/repos/AbdielPena/CRM-Client-Fotografia/actions/workflows/271632260",
+      "html_url": "https://github.com/AbdielPena/CRM-Client-Fotografia/blob/main/.github/workflows/release.yml",
+      "badge_url": "https://github.com/AbdielPena/CRM-Client-Fotografia/workflows/Release%20Desktop%20App/badge.svg"
+    }
+  ]
+}

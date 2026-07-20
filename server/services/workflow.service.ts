@@ -34,8 +34,24 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+/**
+ * ¿Hay evidencia de que la sesión SÍ ocurrió? Que pase la fecha no basta: una
+ * reserva que el cliente nunca pagó y a la que nunca se le subió una foto no se
+ * hizo, y darla por realizada arrastraba todo el pipeline (además de generarle
+ * al estudio la tarea "Enviar selección" de una sesión inexistente).
+ *
+ * Se acepta cualquiera de las dos señales para no castigar a quien cobró en
+ * efectivo sin registrarlo (esos igual tienen su galería) ni a los clientes
+ * migrados del PDF.
+ */
+function sessionHappened(input: { hasPayment: boolean; hasGallery: boolean }): boolean {
+  return input.hasPayment || input.hasGallery
+}
+
 function deriveStages(input: {
   eventDate: string | null
+  hasPayment: boolean
+  hasGallery: boolean
   clientFinalized: boolean
   selectionSubmitted: boolean
   finalGalleryPublished: boolean
@@ -46,6 +62,8 @@ function deriveStages(input: {
   const today = todayStr()
   const {
     eventDate,
+    hasPayment,
+    hasGallery,
     clientFinalized,
     selectionSubmitted,
     finalGalleryPublished,
@@ -54,8 +72,11 @@ function deriveStages(input: {
     estimatedDeliveryDate,
   } = input
 
+  const datePassed = !!eventDate && eventDate < today
+  const happened = sessionHappened({ hasPayment, hasGallery })
+
   const done: Record<StageKey, boolean> = {
-    session: !!eventDate && eventDate < today,
+    session: datePassed && happened,
     send_selection: sendSelTask?.status === "completada" || selectionSubmitted,
     editing: finalGalleryPublished,
     final_gallery: finalGalleryPublished,
@@ -79,6 +100,10 @@ function deriveStages(input: {
   return order.map((key) => {
     const isDone = done[key]
     let state: StageState = isDone ? "done" : key === firstPending ? "current" : "todo"
+
+    // La fecha ya pasó pero no hay ni pago ni fotos: la sesión no se hizo. No
+    // es "pendiente" sin más — hay que mirarla, así que sale en rojo.
+    if (key === "session" && !isDone && datePassed) state = "overdue"
 
     const task =
       key === "send_selection" ? sendSelTask : key === "send_prints" ? sendPrintsTask : null
@@ -198,6 +223,31 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
     }
   }
 
+  // Pagos completados por proyecto: junto con las galerías son la evidencia de
+  // que la sesión ocurrió de verdad (ver sessionHappened).
+  const paidProjects = new Set<string>()
+  const { data: invRaw } = await sb
+    .from("invoices")
+    .select("id, project_id")
+    .eq("studio_id", studioId)
+    .in("project_id", projectIds)
+  const invoices = (invRaw ?? []) as Array<{ id: string; project_id: string | null }>
+  if (invoices.length > 0) {
+    const projectByInvoice = new Map(invoices.map((i) => [i.id, i.project_id]))
+    const { data: payRaw } = await sb
+      .from("payments")
+      .select("invoice_id")
+      .eq("status", "completed")
+      .in(
+        "invoice_id",
+        invoices.map((i) => i.id),
+      )
+    for (const p of (payRaw ?? []) as Array<{ invoice_id: string }>) {
+      const pid = projectByInvoice.get(p.invoice_id)
+      if (pid) paidProjects.add(pid)
+    }
+  }
+
   const clientById = new Map(clients.map((c) => [c.id, c]))
   const estByProject = new Map<string, string | null>()
   for (const d of deliveries) {
@@ -224,6 +274,8 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
 
     const stages = deriveStages({
       eventDate: p.event_date,
+      hasPayment: paidProjects.has(p.id),
+      hasGallery: pGalleries.length > 0,
       clientFinalized: client.completed_at != null,
       selectionSubmitted,
       finalGalleryPublished,
@@ -315,21 +367,28 @@ export async function processWorkflowStages(): Promise<{
   const projectIds = cands.map((p) => p.id)
   const sb = untypedService()
 
-  const [{ data: existingRaw }, { data: subsRaw }] = await Promise.all([
-    sb
-      .from("tasks")
-      .select("entity_id")
-      .eq("workflow_stage", "send_selection")
-      .eq("entity_type", "project")
-      .is("deleted_at", null)
-      .in("entity_id", projectIds),
-    supabase
-      .from("galleries")
-      .select("project_id")
-      .is("deleted_at", null)
-      .eq("selection_submitted", true)
-      .in("project_id", projectIds),
-  ])
+  const [{ data: existingRaw }, { data: subsRaw }, { data: anyGalRaw }, { data: invRaw }] =
+    await Promise.all([
+      sb
+        .from("tasks")
+        .select("entity_id")
+        .eq("workflow_stage", "send_selection")
+        .eq("entity_type", "project")
+        .is("deleted_at", null)
+        .in("entity_id", projectIds),
+      supabase
+        .from("galleries")
+        .select("project_id")
+        .is("deleted_at", null)
+        .eq("selection_submitted", true)
+        .in("project_id", projectIds),
+      supabase
+        .from("galleries")
+        .select("project_id")
+        .is("deleted_at", null)
+        .in("project_id", projectIds),
+      sb.from("invoices").select("id, project_id").in("project_id", projectIds),
+    ])
   const hasTask = new Set(
     ((existingRaw ?? []) as Array<{ entity_id: string }>).map((t) => t.entity_id),
   )
@@ -339,11 +398,39 @@ export async function processWorkflowStages(): Promise<{
       .filter((x): x is string => !!x),
   )
 
+  // Evidencia de que la sesión ocurrió: sin ella no se genera la tarea "Enviar
+  // selección" — le pasó a una reserva sin pagar que nunca se fotografió.
+  const withGallery = new Set(
+    ((anyGalRaw ?? []) as Array<{ project_id: string | null }>)
+      .map((g) => g.project_id)
+      .filter((x): x is string => !!x),
+  )
+  const withPayment = new Set<string>()
+  const invoices2 = (invRaw ?? []) as Array<{ id: string; project_id: string | null }>
+  if (invoices2.length > 0) {
+    const projectByInvoice = new Map(invoices2.map((i) => [i.id, i.project_id]))
+    const { data: payRaw } = await sb
+      .from("payments")
+      .select("invoice_id")
+      .eq("status", "completed")
+      .in(
+        "invoice_id",
+        invoices2.map((i) => i.id),
+      )
+    for (const p of (payRaw ?? []) as Array<{ invoice_id: string }>) {
+      const pid = projectByInvoice.get(p.invoice_id)
+      if (pid) withPayment.add(pid)
+    }
+  }
+
   const { recomputeProjectDelivery } = await import("./delivery.service")
 
   let created = 0
   for (const p of cands) {
     if (hasTask.has(p.id) || selectionDone.has(p.id)) continue
+    // Sin pago ni fotos, la sesión no se hizo: no hay nada que seleccionar.
+    if (!sessionHappened({ hasPayment: withPayment.has(p.id), hasGallery: withGallery.has(p.id) }))
+      continue
     const due = new Date(new Date(p.event_date).getTime() + 86400000)
       .toISOString()
       .slice(0, 10)
