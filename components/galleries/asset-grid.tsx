@@ -71,7 +71,7 @@ export function AssetGrid({
     if (r.added) parts.push(`${r.added} añadida${r.added === 1 ? "" : "s"}`)
     if (r.skipped) parts.push(`${r.skipped} ya estaba${r.skipped === 1 ? "" : "n"}`)
     if (r.failed) parts.push(`${r.failed} fallaron`)
-    toast.success(`Portafolio: ${parts.join(" · ") || "listo"} — en borrador`)
+    toast.success(`Portafolio: ${parts.join(" · ") || "listo"} — publicadas en la web`)
     setSelected(new Set())
     router.refresh()
   }

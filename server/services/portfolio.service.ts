@@ -187,6 +187,29 @@ export async function addGalleryAssetsToPortfolio(
     ]),
   )
 
+  // Nombre de la quinceañera de la sesión de origen → se usa como pie de foto
+  // en la vitrina pública ("se ve todo lo que se logró para esa niña"). Solo
+  // aplica a sesiones de quinceañera (las demás no tienen quinceanera_name).
+  const projectIds = [
+    ...new Set(
+      [...projectByGallery.values()].filter((v): v is string => !!v),
+    ),
+  ]
+  const quinceNameByProject = new Map<string, string>()
+  if (projectIds.length > 0) {
+    const { data: projRows } = await sb
+      .from("projects")
+      .select("id, quinceanera_name")
+      .in("id", projectIds)
+    for (const p of ((projRows ?? []) as Array<{
+      id: string
+      quinceanera_name: string | null
+    }>)) {
+      const nm = (p.quinceanera_name ?? "").trim()
+      if (nm) quinceNameByProject.set(String(p.id), nm)
+    }
+  }
+
   // sort_order: al final de la categoría, respetando lo que ya hay.
   const { data: last } = await sb
     .from("portfolio_items")
@@ -223,17 +246,23 @@ export async function addGalleryAssetsToPortfolio(
         continue
       }
 
+      const srcProjectId = projectByGallery.get(a.gallery_id) ?? null
+      const quinceName = srcProjectId ? quinceNameByProject.get(srcProjectId) ?? null : null
       const { error } = await sb.from("portfolio_items").insert({
         studio_id: studioId,
         category_id: categoryId,
         gallery_asset_id: a.id,
-        project_id: projectByGallery.get(a.gallery_id) ?? null,
+        project_id: srcProjectId,
         image_key: key,
         width: a.width,
         height: a.height,
-        title: null,
+        // Pie de foto en la vitrina: el nombre de la quinceañera (si la sesión
+        // lo tiene). En bodas u otras sin nombre queda sin pie.
+        title: quinceName,
         sort_order: nextOrder++,
-        published: false, // nace en borrador: el estudio decide cuándo publicar
+        // Se publica al marcar: aparece de una vez en la web. El estudio puede
+        // quitarla luego desde el panel de Portafolio.
+        published: true,
       })
       if (error) {
         failed++
