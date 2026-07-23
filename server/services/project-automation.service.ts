@@ -505,4 +505,19 @@ export async function maybeFinalizeClient(
     .eq("id", clientId)
     .eq("studio_id", studioId)
     .is("completed_at", null)
+
+  // El cliente quedó finalizado: sus entregas ya no son "pendientes". Se marcan
+  // realizadas para limpiar las alertas de próximas entregas (mismo criterio
+  // que al pasar la sesión a "Entregado" en el pipeline).
+  await sb
+    .from("client_deliveries")
+    .update({
+      status: "entregada",
+      delivered_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("studio_id", studioId)
+    .in("project_id", projectIds)
+    .is("deleted_at", null)
+    .neq("status", "entregada")
 }

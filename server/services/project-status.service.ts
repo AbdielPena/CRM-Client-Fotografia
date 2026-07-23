@@ -183,7 +183,37 @@ export async function setProjectStatus(
 
   if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
 
-  if (opts?.dispatch !== false && fromStatus !== newStatusLabel) {
+  const statusChanged = fromStatus !== newStatusLabel
+
+  // Cuando la sesión pasa a un estado "entregado/completado", su entrega
+  // (client_deliveries) se marca como realizada. Así, marcar la sesión como
+  // entregada en el pipeline LIMPIA las alertas de "próximas entregas", que
+  // hasta ahora vivían desconectadas del estado. Corre siempre (aunque
+  // dispatch:false) porque es consistencia de datos, no un evento.
+  if (statusChanged) {
+    void (async () => {
+      try {
+        const { isCompletedStatusLabel } = await import('./engagement-feedback.service')
+        if (!isCompletedStatusLabel(newStatusLabel) || isCompletedStatusLabel(fromStatus)) return
+        const sb = createSupabaseServiceClient()
+        await sb
+          .from('client_deliveries')
+          .update({
+            status: 'entregada',
+            delivered_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('studio_id', studioId)
+          .eq('project_id', projectId)
+          .is('deleted_at', null)
+          .neq('status', 'entregada')
+      } catch (err) {
+        console.error('[project-status] marcar entrega realizada falló', err)
+      }
+    })()
+  }
+
+  if (opts?.dispatch !== false && statusChanged) {
     void (async () => {
       try {
         const { dispatchAutomationEvent } = await import('./automation.service')
