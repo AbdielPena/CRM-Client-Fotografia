@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Clock,
   Shirt,
+  Archive,
 } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -71,7 +72,7 @@ type ProjectRow = {
 }
 
 type ViewMode = "grid" | "kanban"
-type Scope = "active" | "completed"
+type Scope = "active" | "completed" | "finalized"
 
 export default async function ProjectsPage({
   searchParams,
@@ -90,10 +91,15 @@ export default async function ProjectsPage({
   const search = searchParams.q
   const category = searchParams.category
   const page = Number(searchParams.page ?? 1)
-  const scope: Scope = searchParams.scope === "completed" ? "completed" : "active"
+  const scope: Scope =
+    searchParams.scope === "completed"
+      ? "completed"
+      : searchParams.scope === "finalized"
+        ? "finalized"
+        : "active"
   const viewParam: ViewMode = searchParams.view === "kanban" ? "kanban" : "grid"
-  // En "Completados" siempre usamos grid (no hay pipeline que arrastrar).
-  const view: ViewMode = scope === "completed" ? "grid" : viewParam
+  // En "Completados"/"Finalizadas" siempre grid (no hay pipeline que arrastrar).
+  const view: ViewMode = scope === "active" ? viewParam : "grid"
   // El filtro por estado solo aplica en la vista de activos.
   const status = scope === "active" ? searchParams.status : undefined
 
@@ -145,11 +151,14 @@ export default async function ProjectsPage({
   // Label terminal para la columna "Completar" del kanban (si existe el estado).
   const terminalLabel = completedStatuses[0]?.label ?? null
 
-  // Filtro de proyectos según scope.
+  // Filtro de proyectos según scope. Las FINALIZADAS (finalized_at) salen de
+  // "activas" y "completadas"; su propia pestaña las muestra en exclusiva.
   const scopeFilter =
-    scope === "completed"
-      ? { onlyStatuses: completedLabels }
-      : { excludeStatuses: completedLabels }
+    scope === "finalized"
+      ? { finalized: "only" as const }
+      : scope === "completed"
+        ? { onlyStatuses: completedLabels, finalized: "exclude" as const }
+        : { excludeStatuses: completedLabels, finalized: "exclude" as const }
 
   const fetchOpts =
     view === "kanban"
@@ -168,20 +177,27 @@ export default async function ProjectsPage({
           }
         : { search, status, serviceCategoryId: category, page, ...scopeFilter }
 
-  const [data, activeCount, completedCount] = await Promise.all([
+  const [data, activeCount, completedCount, finalizedCount] = await Promise.all([
     getProjects(session.studioId, fetchOpts),
     countProjects(session.studioId, {
       search,
       serviceCategoryId: category,
       excludeStatuses: completedLabels,
+      finalized: "exclude",
     }),
     completedLabels.length
       ? countProjects(session.studioId, {
           search,
           serviceCategoryId: category,
           onlyStatuses: completedLabels,
+          finalized: "exclude",
         })
       : Promise.resolve(0),
+    countProjects(session.studioId, {
+      search,
+      serviceCategoryId: category,
+      finalized: "only",
+    }),
   ])
 
   // Orden por cercanía SOLO en la grilla de activos: las próximas a hoy primero
@@ -222,6 +238,7 @@ export default async function ProjectsPage({
             search,
             serviceCategoryId: category,
             excludeStatuses: completedLabels,
+            finalized: "exclude",
             dateFrom: WHEN_RANGES[k].from,
             dateTo: WHEN_RANGES[k].to,
           }),
@@ -247,7 +264,7 @@ export default async function ProjectsPage({
       page: undefined,
       view,
       when,
-      scope: scope === "completed" ? "completed" : undefined,
+      scope: scope === "active" ? undefined : scope,
       ...overrides,
     }
     for (const [k, v] of Object.entries(merged)) {
@@ -272,6 +289,13 @@ export default async function ProjectsPage({
     if (search) params.set("q", search)
     if (category) params.set("category", category)
     params.set("scope", "completed")
+    return `/projects?${params.toString()}`
+  })()
+  const finalizedScopeHref = (() => {
+    const params = new URLSearchParams()
+    if (search) params.set("q", search)
+    if (category) params.set("category", category)
+    params.set("scope", "finalized")
     return `/projects?${params.toString()}`
   })()
 
@@ -351,6 +375,26 @@ export default async function ProjectsPage({
               )}
             >
               {completedCount}
+            </span>
+          </Link>
+          <Link
+            href={finalizedScopeHref}
+            prefetch={false}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
+              scope === "finalized"
+                ? "bg-slate-600 text-white"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <Archive className="h-3.5 w-3.5" /> Finalizadas
+            <span
+              className={cn(
+                "ml-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                scope === "finalized" ? "bg-white/20" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {finalizedCount}
             </span>
           </Link>
         </div>
@@ -442,25 +486,31 @@ export default async function ProjectsPage({
           <div className="rounded-xl border border-border bg-card">
             <EmptyState
               icon={
-                scope === "completed" ? (
+                scope === "finalized" ? (
+                  <Archive className="h-5 w-5" />
+                ) : scope === "completed" ? (
                   <CheckCircle2 className="h-5 w-5" />
                 ) : (
                   <FolderOpen className="h-5 w-5" />
                 )
               }
               title={
-                scope === "completed"
-                  ? "Aún no hay sesiones completadas"
-                  : search || status || category
-                    ? "No encontramos sesiones"
-                    : "Aún no tienes sesiones"
+                scope === "finalized"
+                  ? "Aún no hay sesiones finalizadas"
+                  : scope === "completed"
+                    ? "Aún no hay sesiones completadas"
+                    : search || status || category
+                      ? "No encontramos sesiones"
+                      : "Aún no tienes sesiones"
               }
               description={
-                scope === "completed"
-                  ? "Cuando marques una sesión como “Completada” aparecerá aquí, separada de las pendientes."
-                  : search || status || category
-                    ? "Prueba ajustando tu búsqueda o limpia los filtros."
-                    : "Crea tu primera sesión para empezar a organizar tu trabajo."
+                scope === "finalized"
+                  ? "Cuando finalices una sesión, se archiva aquí con todo su historial y desaparece de las demás áreas."
+                  : scope === "completed"
+                    ? "Cuando marques una sesión como “Completada” aparecerá aquí, separada de las pendientes."
+                    : search || status || category
+                      ? "Prueba ajustando tu búsqueda o limpia los filtros."
+                      : "Crea tu primera sesión para empezar a organizar tu trabajo."
               }
               accent={scope === "active" && !search && !status && !category}
             >

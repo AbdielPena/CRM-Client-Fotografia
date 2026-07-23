@@ -18,6 +18,7 @@ import {
   ExternalLink,
   MessageCircle,
   Printer,
+  Archive,
 } from "lucide-react"
 import { formatDoPhone } from "@/lib/whatsapp/templates"
 
@@ -25,6 +26,7 @@ import { requireStudioAuth } from "@/server/middleware/auth"
 import { getClientById } from "@/server/services/client.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
+import { untypedService } from "@/server/supabase/untyped"
 import { getAssetThumbUrl } from "@/server/services/gallery.service"
 import { listClientPrintOverview } from "@/server/services/print-selection.service"
 import { getPrintWaTemplate } from "@/server/services/share-message.service"
@@ -74,9 +76,41 @@ export default async function ClientDetailPage({
   if (!client) notFound()
 
   const supabase = createSupabaseServiceClient()
-  const projects = (client.projects ?? []) as Array<Record<string, unknown>>
+  const allProjects = (client.projects ?? []) as Array<Record<string, unknown>>
   const notes = (client.notes_rel ?? []) as Array<Record<string, unknown>>
-  const projectIds = projects.map((p) => String(p.id))
+  const projectIds = allProjects.map((p) => String(p.id))
+
+  // Banderas de finalización (columnas nuevas, fuera de los tipos generados):
+  // se cargan con el cliente sin tipar y se mezclan a cada proyecto.
+  const finalizedMap = new Map<string, { finalized_at: string | null; files_purged_at: string | null }>()
+  if (projectIds.length > 0) {
+    const { data: finRows } = await untypedService()
+      .from("projects")
+      .select("id, finalized_at, files_purged_at")
+      .in("id", projectIds)
+    for (const r of ((finRows ?? []) as Array<{
+      id: string
+      finalized_at: string | null
+      files_purged_at: string | null
+    }>)) {
+      finalizedMap.set(String(r.id), {
+        finalized_at: r.finalized_at ?? null,
+        files_purged_at: r.files_purged_at ?? null,
+      })
+    }
+  }
+  for (const p of allProjects) {
+    const f = finalizedMap.get(String(p.id))
+    if (f) {
+      p.finalized_at = f.finalized_at
+      p.files_purged_at = f.files_purged_at
+    }
+  }
+  // Sesiones finalizadas (archivadas): salen de la lista activa y viven en su
+  // propio apartado "Finalizadas" con todo su historial. Los IDs siguen
+  // contando para las secciones agregadas (facturas, pagos, totales).
+  const projects = allProjects.filter((p) => !p.finalized_at)
+  const finalizedProjects = allProjects.filter((p) => !!p.finalized_at)
 
   // Cargar todo lo relacionado en paralelo
   const [
@@ -245,6 +279,52 @@ export default async function ClientDetailPage({
                 </div>
               )}
             </SectionCard>
+
+            {/* Sesiones finalizadas (archivadas) — separadas de las activas */}
+            {finalizedProjects.length > 0 && (
+              <SectionCard
+                icon={<Archive className="h-4 w-4 text-muted-foreground" />}
+                title={`Finalizadas (${finalizedProjects.length})`}
+              >
+                <div className="divide-y divide-border/40">
+                  {finalizedProjects.map((project) => {
+                    const eventType = (project.event_type as string | null) ?? null
+                    const finalizedAt =
+                      (project.files_purged_at as string | null) ??
+                      (project.finalized_at as string | null)
+                    const purged = !!(project.files_purged_at as string | null)
+                    return (
+                      <Link
+                        key={String(project.id)}
+                        href={`/projects/${project.id}`}
+                        className="group flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40"
+                      >
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
+                          <Archive className="h-5 w-5 text-slate-500" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary">
+                            {String(project.name)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {(eventType && PROJECT_TYPE_LABELS[eventType]) ??
+                              eventType ??
+                              "Sesión"}
+                            {finalizedAt
+                              ? ` · ${purged ? "Finalizado total" : "Finalizada"} ${formatDate(finalizedAt)}`
+                              : ""}
+                          </p>
+                        </div>
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:border-slate-600/40 dark:bg-slate-800/40 dark:text-slate-300">
+                          <Archive className="h-3 w-3" />
+                          {purged ? "Finalizado total" : "Finalizada"}
+                        </span>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </SectionCard>
+            )}
 
             {/* Tareas del cliente */}
             <EntityTasks

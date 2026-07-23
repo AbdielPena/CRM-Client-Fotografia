@@ -140,6 +140,9 @@ export async function getClientPipelines(studioId: string): Promise<ClientCard[]
       .select("id, name, client_id, event_date, status")
       .eq("studio_id", studioId)
       .is("deleted_at", null)
+      // Las sesiones finalizadas salen del pipeline (viven en "Finalizadas").
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .is("finalized_at" as any, null)
       .not("client_id", "is", null),
   ])
 

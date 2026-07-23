@@ -67,6 +67,8 @@ async function getDashboardData(studioId: string) {
       .select("id", { count: "exact", head: true })
       .eq("studio_id", studioId)
       .is("deleted_at", null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .is("finalized_at" as any, null)
       .in("status", ["booked", "in_progress", "editing"]),
     supabase
       .from("invoices")
@@ -86,6 +88,8 @@ async function getDashboardData(studioId: string) {
       .select(`id, name, event_date, event_time, status, client:clients(name)`)
       .eq("studio_id", studioId)
       .is("deleted_at", null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .is("finalized_at" as any, null)
       .not("event_date", "is", null)
       .gte("event_date", now.toISOString().slice(0, 10))
       .in("status", ["booked", "in_progress"])

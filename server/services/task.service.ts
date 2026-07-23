@@ -83,17 +83,35 @@ async function attachClientNames(
     ...new Set(rows.filter((t) => t.entity_type === "client" && t.entity_id).map((t) => t.entity_id!)),
   ]
 
-  // project → client_id
+  // project → client_id (+ set de proyectos FINALIZADOS, para esconder sus tareas)
   const projectClient: Record<string, string> = {}
+  const finalizedProjects = new Set<string>()
   if (projectIds.length) {
     const { data } = await sb
       .from("projects")
-      .select("id, client_id")
+      .select("id, client_id, finalized_at")
       .eq("studio_id", studioId)
       .in("id", projectIds)
-    for (const p of (data ?? []) as Array<{ id: string; client_id: string | null }>) {
+    for (const p of (data ?? []) as Array<{
+      id: string
+      client_id: string | null
+      finalized_at: string | null
+    }>) {
       if (p.client_id) projectClient[p.id] = p.client_id
+      if (p.finalized_at) finalizedProjects.add(p.id)
     }
+  }
+
+  // Descarta las tareas cuya sesión está finalizada (viven en "Finalizadas").
+  if (finalizedProjects.size > 0) {
+    rows = rows.filter(
+      (t) =>
+        !(
+          (t.entity_type === "project" || t.entity_type === "session") &&
+          t.entity_id &&
+          finalizedProjects.has(t.entity_id)
+        ),
+    )
   }
 
   const allClientIds = [

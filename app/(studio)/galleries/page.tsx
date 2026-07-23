@@ -161,12 +161,29 @@ export default async function GalleriesPage({
     getGalleries(session.studioId, { limit: 100 }),
     countUnreadNotifications(session.studioId),
   ])
-  const allGalleries = rows as unknown as GalleryListRow[]
-
   // Portada de cada tarjeta: cover_asset_id explícito → book_cover_image →
   // primer asset de la galería (igual que la vista pública). Resuelve a URL.
   const { createSupabaseServiceClient } = await import("@/server/supabase/service")
   const sb = createSupabaseServiceClient()
+
+  let allGalleries = rows as unknown as GalleryListRow[]
+  // Excluir galerías de sesiones FINALIZADAS (viven en el apartado Finalizadas).
+  {
+    const pids = [
+      ...new Set(allGalleries.map((g) => g.project_id).filter(Boolean)),
+    ] as string[]
+    if (pids.length > 0) {
+      const { data: fp } = await sb
+        .from("projects")
+        .select("id")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .not("finalized_at" as any, "is", null)
+        .in("id", pids)
+      const fin = new Set(((fp ?? []) as Array<{ id: string }>).map((p) => p.id))
+      if (fin.size > 0)
+        allGalleries = allGalleries.filter((g) => !g.project_id || !fin.has(g.project_id))
+    }
+  }
 
   // "Entregada" = la galería ya tiene fotos de ENTREGA subidas (delivery_track)
   // o se marcó la entrega lista (delivery_ready_at). Es la señal real de "ya

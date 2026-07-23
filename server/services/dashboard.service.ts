@@ -561,7 +561,7 @@ export async function getTasksThisWeek(
     entity_type: string | null
     entity_id: string | null
   }
-  const rows = (data as Row[] | null) ?? []
+  let rows = (data as Row[] | null) ?? []
 
   // Resolver nombre del cliente: proyecto → client_id → clients.name, o cliente directo.
   const projectIds = [
@@ -575,15 +575,33 @@ export async function getTasksThisWeek(
     ...new Set(rows.filter((t) => t.entity_type === 'client' && t.entity_id).map((t) => t.entity_id as string)),
   ]
   const projectClient: Record<string, string> = {}
+  const finalizedProjects = new Set<string>()
   if (projectIds.length) {
     const { data: projs } = await supabase
       .from('projects')
-      .select('id, client_id')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .select('id, client_id, finalized_at' as any)
       .eq('studio_id', studioId)
       .in('id', projectIds)
-    for (const p of (projs as Array<{ id: string; client_id: string | null }> | null) ?? []) {
+    for (const p of (projs as Array<{
+      id: string
+      client_id: string | null
+      finalized_at: string | null
+    }> | null) ?? []) {
       if (p.client_id) projectClient[p.id] = p.client_id
+      if (p.finalized_at) finalizedProjects.add(p.id)
     }
+  }
+  // Esconde las tareas de sesiones finalizadas.
+  if (finalizedProjects.size > 0) {
+    rows = rows.filter(
+      (t) =>
+        !(
+          (t.entity_type === 'project' || t.entity_type === 'session') &&
+          t.entity_id &&
+          finalizedProjects.has(t.entity_id as string)
+        ),
+    )
   }
   const clientIds = [...new Set([...directClientIds, ...Object.values(projectClient)])]
   const clientName: Record<string, string> = {}

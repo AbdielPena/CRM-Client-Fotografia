@@ -135,7 +135,7 @@ export async function listDeliveries(
     .select(
       `id, project_id, client_id, status, session_date, birthday, delivery_days,
        estimated_delivery_date, commitment_started_at,
-       client:clients(name), project:projects(name, event_type)`,
+       client:clients(name), project:projects(name, event_type, finalized_at)`,
     )
     .eq("studio_id", studioId)
     .is("deleted_at", null)
@@ -151,7 +151,15 @@ export async function listDeliveries(
   const pickOne = (v: any) => (Array.isArray(v) ? (v[0] ?? null) : v)
   const today = new Date()
 
-  const rows: UpcomingDelivery[] = ((data as unknown[]) ?? []).map((raw) => {
+  const rows: UpcomingDelivery[] = ((data as unknown[]) ?? [])
+    // Excluir entregas de sesiones FINALIZADAS (archivadas): salen de todas las
+    // vistas activas. Las entregas de galería sin proyecto se conservan.
+    .filter((raw) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const proj = pickOne((raw as any).project)
+      return !proj?.finalized_at
+    })
+    .map((raw) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const r = raw as any
     const status = (r.status as DeliveryStatus) ?? "pendiente"

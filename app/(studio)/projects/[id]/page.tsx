@@ -38,6 +38,7 @@ import {
   evaluateRequirements,
   type RequirementStatus,
 } from "@/lib/collaborators/requirements"
+import { isCompletedStatusLabel } from "@/server/services/engagement-feedback.service"
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/utils/currency"
 import {
   Cake,
@@ -60,6 +61,7 @@ import {
   Instagram,
   Globe,
   FolderOpen,
+  Archive,
 } from "lucide-react"
 import Link from "next/link"
 import type { Metadata } from "next"
@@ -132,6 +134,17 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const deliveryGalleries = galleries.filter(
     (g) => g.gallery_type === "final_delivery",
   )
+  // Finalización (archivo): bandera + si se puede finalizar (ya entregada).
+  // El gate real lo revalida la acción con isProjectDelivered; esto solo
+  // habilita/oculta el botón en la interfaz.
+  const finalizedAt = (project.finalized_at as string | null) ?? null
+  const isFinalized = !!finalizedAt
+  const filesPurgedAt = (project.files_purged_at as string | null) ?? null
+  const hasDeliveryReady = galleries.some((g) => !!g.delivery_ready_at)
+  const canFinalize =
+    hasDeliveryReady ||
+    deliveryGalleries.length > 0 ||
+    isCompletedStatusLabel(project.status as string)
   const coverIds = galleries
     .map((g) => g.cover_asset_id as string | null)
     .filter(Boolean) as string[]
@@ -386,12 +399,32 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 name: project.name as string,
                 client_id: (project.client_id as string | undefined) ?? undefined,
               }}
+              finalized={isFinalized}
+              canFinalize={canFinalize}
             />
           </>
         }
       />
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
+      {/* Banner de sesión finalizada (archivada): fuera de todas las vistas activas */}
+      {isFinalized && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm dark:border-slate-600/40 dark:bg-slate-800/40">
+          <Archive className="h-5 w-5 shrink-0 text-slate-500" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-slate-700 dark:text-slate-200">
+              {filesPurgedAt ? "Finalizado total" : "Sesión finalizada"}
+              {" · "}
+              {formatDate(filesPurgedAt ?? finalizedAt)}
+            </p>
+            <p className="text-[12.5px] text-slate-500 dark:text-slate-400">
+              {filesPurgedAt
+                ? "Los archivos locales se liberaron para ahorrar espacio (el respaldo en Google Drive queda intacto). Todo el historial se conserva aquí."
+                : "Está archivada: no aparece en sesiones, pipeline, tareas ni galerías. Todo su historial se conserva aquí."}
+            </p>
+          </div>
+        </div>
+      )}
       {/* Pendientes por completar (hora en toda sesión; nombre/colaboradores/vestido/cumpleaños en quinceañera) */}
       {(missingTime || missingQuinceName || missingCollaborators || missingDress || missingBirthday || requirementsWaived) && (
         <div className="flex flex-wrap items-center gap-2">
