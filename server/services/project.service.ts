@@ -95,9 +95,42 @@ export async function getProjects(
   const { data, count, error } = await query
   if (error) throwServiceError("PROJECT_OP_FAILED", error)
 
+  // hasPayment por proyecto: mismo criterio canónico que onPaymentRecorded
+  // (≥1 pago 'completed' sobre una factura no borrada). Lo usa el Kanban para
+  // enrutar "Reservado sin pagar" a la columna "Pendiente de pago". Se calcula
+  // por LOTE (dos queries) para no hacer N+1.
+  const rows = (data ?? []) as Array<{ id: string } & Record<string, unknown>>
+  const paidProjects = new Set<string>()
+  if (rows.length) {
+    const projectIds = rows.map((p) => p.id)
+    const { data: invRows } = await supabase
+      .from("invoices")
+      .select("id, project_id")
+      .eq("studio_id", studioId)
+      .is("deleted_at", null)
+      .in("project_id", projectIds)
+    const invoices = (invRows ?? []) as Array<{ id: string; project_id: string | null }>
+    if (invoices.length) {
+      const projectByInvoice = new Map(invoices.map((i) => [i.id, i.project_id]))
+      const { data: payRows } = await supabase
+        .from("payments")
+        .select("invoice_id")
+        .eq("status", "completed")
+        .in(
+          "invoice_id",
+          invoices.map((i) => i.id),
+        )
+      for (const p of (payRows ?? []) as Array<{ invoice_id: string }>) {
+        const pid = projectByInvoice.get(p.invoice_id)
+        if (pid) paidProjects.add(pid)
+      }
+    }
+  }
+  const items = rows.map((p) => ({ ...p, hasPayment: paidProjects.has(p.id) }))
+
   const total = count ?? 0
   return {
-    items: data ?? [],
+    items,
     total,
     page,
     pageSize,

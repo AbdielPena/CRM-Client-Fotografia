@@ -35,6 +35,9 @@ export type ProjectCard = {
   event_type: string | null
   event_date: string | null
   client: { name: string } | { name: string }[] | null
+  /** ≥1 pago completado. Si falta y cae en "Reservado", el tablero lo muestra
+   *  en "Pendiente de pago". */
+  hasPayment?: boolean
 }
 
 interface ProjectKanbanViewProps {
@@ -119,16 +122,48 @@ export function ProjectKanbanView({
     [statuses],
   )
 
+  // Columnas "Reservado" y "Pendiente de pago" del estudio (por keyword), para
+  // enrutar una reserva SIN pago a "Pendiente de pago" aunque su status diga
+  // "Reservado"/"booked". Solo aplica a esa columna; etapas posteriores no.
+  const { reservadoLabel, pendingPaymentLabel } = React.useMemo(() => {
+    const norm = (s: string) => s.toLowerCase().replace(/[_\s-]+/g, "")
+    const pending =
+      statuses.find((s) => {
+        const l = norm(s.label)
+        return (
+          l.includes("pendientedepago") ||
+          l.includes("pendientepago") ||
+          l.includes("porpagar") ||
+          l.includes("sinpagar")
+        )
+      })?.label ?? null
+    const reservado =
+      statuses.find((s) => {
+        const l = norm(s.label)
+        return l.includes("reserv") || l.includes("booked") || l.includes("agendad")
+      })?.label ?? null
+    return { reservadoLabel: reservado, pendingPaymentLabel: pending }
+  }, [statuses])
+
   const grouped = React.useMemo(() => {
     const map: Record<string, ProjectCard[]> = {}
     for (const s of statuses) map[s.label] = []
     for (const p of projects) {
-      const key = resolveStatus(p.status)
+      let key = resolveStatus(p.status)
+      // Reservado sin pago → Pendiente de pago (petición del dueño).
+      if (
+        pendingPaymentLabel &&
+        reservadoLabel &&
+        key === reservadoLabel &&
+        p.hasPayment === false
+      ) {
+        key = pendingPaymentLabel
+      }
       if (!map[key]) map[key] = []
       map[key]!.push(p)
     }
     return map
-  }, [projects, statuses, resolveStatus])
+  }, [projects, statuses, resolveStatus, reservadoLabel, pendingPaymentLabel])
 
   const activeProject = activeId
     ? projects.find((p) => p.id === activeId) ?? null
