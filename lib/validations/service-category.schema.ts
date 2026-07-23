@@ -28,6 +28,12 @@ export const createServiceCategorySchema = z.object({
     (v) => (v === "" || v === null || v === undefined ? undefined : v),
     z.coerce.number().int().min(1).max(120).optional(),
   ),
+  // Meses de conservación de los archivos locales tras la entrega. Al vencer,
+  // el sistema borra las fotos del servidor (Drive queda como respaldo).
+  retentionMonths: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(1).max(120).optional(),
+  ),
 })
 
 export const updateServiceCategorySchema = createServiceCategorySchema.partial()

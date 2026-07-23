@@ -44,6 +44,7 @@ export default async function ServiceCategoriesSettingsPage() {
             dressIncludedAmount: c.dressIncludedAmount,
             deliveryDays: c.deliveryDays,
             printDeliveryDays: c.printDeliveryDays,
+            retentionMonths: c.retentionMonths,
           }))}
         />
       </div>

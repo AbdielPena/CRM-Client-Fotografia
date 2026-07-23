@@ -27,6 +27,8 @@ export interface ServiceCategory {
   deliveryDays: number | null
   /** Días para entregar las IMPRESIONES desde que se publica la galería final. */
   printDeliveryDays: number | null
+  /** Meses de conservación de archivos locales tras la entrega. null = default. */
+  retentionMonths: number | null
 }
 
 function sanitizeFolder(s: string): string {
@@ -74,7 +76,7 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
   const { data } = await sb
     .from("service_categories")
     .select(
-      "id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order, thankyou_message, dress_included_amount, delivery_days, print_delivery_days",
+      "id, name, slug, color, icon, description, drive_folder_name, is_active, sort_order, thankyou_message, dress_included_amount, delivery_days, print_delivery_days, retention_months",
     )
     .eq("studio_id", studioId)
     .is("deleted_at", null)
@@ -95,6 +97,7 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
     dressIncludedAmount: r.dress_included_amount ?? null,
     deliveryDays: r.delivery_days ?? null,
     printDeliveryDays: r.print_delivery_days ?? null,
+    retentionMonths: r.retention_months ?? null,
   }))
 }
 
@@ -150,6 +153,7 @@ export async function createServiceCategory(
       dress_included_amount: input.dressIncludedAmount ?? null,
       delivery_days: input.deliveryDays ?? null,
       print_delivery_days: input.printDeliveryDays ?? null,
+      retention_months: input.retentionMonths ?? null,
     })
     .select("id")
     .single()
@@ -185,6 +189,7 @@ export async function updateServiceCategory(
   if (input.deliveryDays !== undefined) patch.delivery_days = input.deliveryDays ?? null
   if (input.printDeliveryDays !== undefined)
     patch.print_delivery_days = input.printDeliveryDays ?? null
+  if (input.retentionMonths !== undefined) patch.retention_months = input.retentionMonths ?? null
   const { error } = await sb
     .from("service_categories")
     .update(patch)

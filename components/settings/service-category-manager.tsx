@@ -27,6 +27,7 @@ export interface ServiceCategoryView {
   dressIncludedAmount: number | null
   deliveryDays: number | null
   printDeliveryDays: number | null
+  retentionMonths: number | null
 }
 
 type FormMode = "create" | "edit" | null
@@ -359,6 +360,27 @@ function CategoryForm({
             Plazo para entregar las impresiones, contado desde que publicas la
             galería final. Fija el vencimiento de tu tarea «Enviar impresiones».
             Vacío = 21 días.
+          </p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Meses de conservación de archivos{" "}
+            <span className="font-normal text-muted-foreground">(desde la entrega)</span>
+          </label>
+          <input
+            name="retentionMonths"
+            type="number"
+            min="1"
+            max="120"
+            step="1"
+            defaultValue={defaults?.retentionMonths ?? ""}
+            className={inputCls}
+            placeholder="6"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Tiempo que las fotos se conservan en el servidor tras la entrega. Al
+            vencer, se eliminan del sistema (Google Drive queda como respaldo).
+            Vacío = 6 meses.
           </p>
         </div>
         <label className="flex items-center gap-2 text-sm text-foreground">
