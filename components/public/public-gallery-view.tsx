@@ -883,6 +883,69 @@ export function PublicGalleryView({
     [token],
   )
 
+  // "Guardar en Fotos" (iPhone): manda las fotos directo al carrete con el menú
+  // de compartir de iOS (navigator.share con archivos). Un solo share con TODAS
+  // (iOS exige el gesto del usuario; por lotes se perdería). Solo se muestra en
+  // navegadores que lo soportan (Safari móvil); en desktop no hay app "Fotos".
+  const [canSharePhotos, setCanSharePhotos] = useState(false)
+  const [saveBusy, setSaveBusy] = useState<string | null>(null)
+  useEffect(() => {
+    try {
+      const probe = [new File([new Uint8Array(1)], "t.jpg", { type: "image/jpeg" })]
+      setCanSharePhotos(
+        typeof navigator !== "undefined" &&
+          typeof navigator.canShare === "function" &&
+          navigator.canShare({ files: probe }),
+      )
+    } catch {
+      setCanSharePhotos(false)
+    }
+  }, [])
+  const saveToPhotos = useCallback(
+    async (key: string, assetIds: string[], resolution: "web" | "original") => {
+      if (assetIds.length === 0) {
+        toast.error("No hay fotos para guardar")
+        return
+      }
+      if (assetIds.length > 80) {
+        toast.error("Son muchas fotos para guardar de una — usá el botón de ZIP.")
+        return
+      }
+      setSaveBusy(key)
+      try {
+        const res = await fetch(`/api/galleries/public/${token}/originals`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assetIds, resolution }),
+        })
+        if (!res.ok) throw new Error("No se pudieron preparar las fotos")
+        const { photos } = (await res.json()) as {
+          photos: { id: string; url: string; filename: string }[]
+        }
+        if (photos.length > 1) toast.info(`Preparando ${photos.length} fotos…`)
+        const files: File[] = []
+        for (const p of photos) {
+          const r = await fetch(p.url)
+          if (!r.ok) continue
+          const blob = await r.blob()
+          files.push(new File([blob], p.filename, { type: blob.type || "image/jpeg" }))
+        }
+        if (!files.length) throw new Error("No se pudieron cargar las fotos")
+        if (!navigator.canShare?.({ files })) throw new Error("compartir no disponible")
+        await navigator.share({ files, title: gallery.name })
+      } catch (e) {
+        const err = e as Error
+        if (err.name === "AbortError") return // el usuario cerró el menú de compartir
+        toast.error(
+          "No se pudo guardar directo. En iPhone: abre una foto y toca “Guardar en Fotos”, o baja el ZIP.",
+        )
+      } finally {
+        setSaveBusy(null)
+      }
+    },
+    [token, gallery.name],
+  )
+
   // Keyboard navigation in lightbox
   useEffect(() => {
     if (open === null) return
@@ -1133,6 +1196,32 @@ export function PublicGalleryView({
               Descarga tus fotos
             </p>
             <div className="flex flex-wrap items-center gap-2.5">
+              {/* iPhone: guardar directo en la app Fotos (sin ZIP ni Archivos). */}
+              {isShowingDelivery && gallery.allow_download && canSharePhotos && (
+                <button
+                  type="button"
+                  disabled={saveBusy !== null}
+                  onClick={() =>
+                    saveToPhotos(
+                      "save",
+                      (hasTracks && byTrack.high_quality.length > 0
+                        ? byTrack.high_quality
+                        : visibleAssets
+                      ).map((a) => a.id),
+                      "original",
+                    )
+                  }
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
+                  style={{ background: ED.gold, color: "#1a1206", border: `1px solid ${ED.gold}` }}
+                >
+                  {saveBusy === "save" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Guardar en Fotos
+                </button>
+              )}
               {isShowingDelivery && gallery.allow_download && (
                 hasTracks ? (
                   <>
@@ -1191,7 +1280,9 @@ export function PublicGalleryView({
 
             {isShowingDelivery && gallery.allow_download && (
               <p className="mt-3 text-[11.5px]" style={{ color: ED.muted }}>
-                Se guardan directamente en tu teléfono. El ZIP puede tardar un momento según la cantidad de fotos.
+                {canSharePhotos
+                  ? "En iPhone, «Guardar en Fotos» envía tus fotos directo a la app Fotos. El ZIP se guarda en la app Archivos."
+                  : "El ZIP se descarga a tu dispositivo. En teléfono se guarda en tu carpeta de descargas / Archivos."}
               </p>
             )}
           </div>
