@@ -465,6 +465,27 @@ export async function notifyClientFinalDeliveryAction(input: {
     .eq("id", galleryId)
     .eq("studio_id", ctx.studioId)
 
+  // Pre-generar el ZIP de "Redes" (resolución web) para que quede LISTO al enviar
+  // el correo — descarga instantánea, sin espera. Solo la web (liviana); el ZIP
+  // de máxima calidad (originales, varios GB) se sirve en STREAMING bajo demanda
+  // para no tumbar el server (processZipExport bufferiza en memoria). Idempotente
+  // por naturaleza (crea un export nuevo 'ready'); fire-and-forget.
+  void (async () => {
+    try {
+      const { createZipExport } = await import(
+        "@/server/services/gallery-collections.service"
+      )
+      await createZipExport(
+        ctx.studioId,
+        ctx.userId,
+        { galleryId, scope: "gallery", resolution: "web" },
+        { process: true },
+      )
+    } catch (err) {
+      console.error("[delivery] pre-generación del ZIP web falló", err)
+    }
+  })()
+
   // 1) Token público — reusar si ya existe uno activo
   const { data: existingTokens } = await sb
     .from("gallery_share_tokens")
