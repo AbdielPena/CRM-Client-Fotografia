@@ -10,6 +10,7 @@
 import "server-only"
 
 import { createSupabaseServiceClient } from "@/server/supabase/service"
+import { resolveRetentionMonths } from "@/lib/retention"
 
 export type PlaceholderVars = Record<string, string>
 
@@ -78,9 +79,10 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
     .select(
       `id, studio_id, project_id, signed_at, signed_name, signed_email, signature_image_url,
        project:projects(
-         id, name, event_type, event_date, location, package_id,
+         id, name, event_type, event_date, location, package_id, retention_months,
          client:clients(id, name, email, phone, address, city, country),
-         package:packages(id, name, price, currency, deposit_percent)
+         package:packages(id, name, price, currency, deposit_percent),
+         service_category:service_categories(retention_months)
        )`,
     )
     .eq("id", contractId)
@@ -194,6 +196,11 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
   const p = (project ?? {}) as Record<string, unknown>
   const pk = (pkg ?? {}) as Record<string, unknown>
   const s = (studio ?? {}) as Record<string, unknown>
+  const svcCat = project ? pickOne((project as { service_category?: unknown }).service_category) : null
+  const retentionMonths = resolveRetentionMonths(
+    (p.retention_months as number | null | undefined) ?? null,
+    (svcCat as { retention_months?: number | null } | null)?.retention_months ?? null,
+  )
 
   // Número sin símbolo de moneda (las plantillas usan "{{moneda}} {{paquete_precio}}")
   const FORMAT_NUM = (n: number | string | null | undefined): string => {
@@ -281,6 +288,11 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
     estudio_telefono: String(s.phone ?? ""),
     studio_address: String(s.address ?? ""),
     estudio_direccion: String(s.address ?? ""),
+
+    // Conservación de archivos (plazo dinámico por categoría/sesión)
+    meses_conservacion: String(retentionMonths),
+    retention_months: String(retentionMonths),
+    politica_conservacion: `Conservación de archivos: Las fotografías permanecerán disponibles en nuestro sistema durante ${retentionMonths} ${retentionMonths === 1 ? "mes" : "meses"} después de la entrega. Transcurrido ese tiempo, los archivos serán eliminados de nuestros servidores y no podremos garantizar su recuperación. Recomendamos descargar y respaldar todas sus fotografías inmediatamente después de la entrega.`,
 
     // Fechas del contrato
     contract_date: todayStr,
