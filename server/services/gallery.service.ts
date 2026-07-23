@@ -32,6 +32,7 @@ const svc = createSupabaseServiceClient
 
 const ORIGINALS_BUCKET = "gallery-originals"
 const RENDITIONS_BUCKET = "gallery-renditions"
+const ZIPS_BUCKET = "gallery-zips"
 const SIGNED_UPLOAD_TTL = 60 * 10 // 10 min
 
 const ALLOWED_MIME = new Set([
@@ -1592,6 +1593,70 @@ export async function deleteAsset(
         await supabase.storage.from(RENDITIONS_BUCKET).remove(renditions).catch(() => {})
       }
     }
+  }
+}
+
+/**
+ * PURGA los archivos físicos de storage de una galería (originales, thumb, web,
+ * web-clean + sus ZIP almacenados) SIN tocar las filas de la BD ni Google Drive.
+ * Para el ciclo de vida de archivos por retención: libera espacio conservando
+ * todo el registro administrativo. Enumera keys (no borra por prefijo, que
+ * Supabase no soporta) e incluye el `web-clean.webp` derivado (no está en
+ * columnas). Idempotente y tolerante a archivos faltantes.
+ */
+export async function purgeGalleryStorageFiles(
+  studioId: string,
+  galleryId: string,
+): Promise<{ removedOriginals: number; removedRenditions: number; removedZips: number }> {
+  const supabase = createSupabaseServiceClient()
+
+  const { data: assetRows } = await supabase
+    .from("gallery_assets")
+    .select("id, original_key, thumb_key, web_key")
+    .eq("gallery_id", galleryId)
+  const assets = (assetRows ?? []) as Array<{
+    id: string
+    original_key: string | null
+    thumb_key: string | null
+    web_key: string | null
+  }>
+
+  const originals: string[] = []
+  const renditions: string[] = []
+  for (const a of assets) {
+    if (a.original_key) originals.push(a.original_key)
+    if (a.thumb_key) renditions.push(a.thumb_key)
+    if (a.web_key) renditions.push(a.web_key)
+    // web-clean.webp se escribe en storage pero su key NO se persiste → derivar.
+    renditions.push(webCleanKey(studioId, galleryId, a.id))
+  }
+
+  const { data: zipRows } = await supabase
+    .from("gallery_zip_exports")
+    .select("zip_key")
+    .eq("gallery_id", galleryId)
+    .not("zip_key", "is", null)
+  const zips = ((zipRows ?? []) as Array<{ zip_key: string | null }>)
+    .map((z) => z.zip_key)
+    .filter((k): k is string => !!k)
+
+  const removeFrom = async (bucket: string, keys: string[]) => {
+    if (keys.length === 0) return
+    if (isLocalStorage()) {
+      await localRemove(bucket, keys).catch(() => {})
+    } else {
+      await supabase.storage.from(bucket).remove(keys).catch(() => {})
+    }
+  }
+
+  await removeFrom(ORIGINALS_BUCKET, originals)
+  await removeFrom(RENDITIONS_BUCKET, renditions)
+  await removeFrom(ZIPS_BUCKET, zips)
+
+  return {
+    removedOriginals: originals.length,
+    removedRenditions: renditions.length,
+    removedZips: zips.length,
   }
 }
 
