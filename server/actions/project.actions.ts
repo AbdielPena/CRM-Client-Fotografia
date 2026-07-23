@@ -184,6 +184,57 @@ export async function setRequirementsWaivedAction(
 }
 
 /**
+ * Finaliza (archiva) una sesión: sale de TODAS las vistas activas y queda solo
+ * en el apartado "Finalizadas". Gated: solo si ya está entregada. Reversible.
+ */
+export async function finalizeProjectAction(
+  projectId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const { isProjectDelivered, finalizeProject } = await import(
+      "@/server/services/project.service"
+    )
+    const delivered = await isProjectDelivered(session.studioId, projectId)
+    if (!delivered) {
+      return { ok: false, error: "Solo puedes finalizar una sesión que ya esté entregada." }
+    }
+    await finalizeProject(session.studioId, projectId)
+    revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/clients")
+    revalidatePath("/deliveries")
+    revalidatePath("/tasks")
+    revalidatePath("/galleries")
+    revalidatePath("/dashboard")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
+/** Reabre una sesión finalizada (vuelve a las vistas activas). */
+export async function reopenProjectAction(
+  projectId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const { unfinalizeProject } = await import("@/server/services/project.service")
+    await unfinalizeProject(session.studioId, projectId)
+    revalidatePath("/projects")
+    revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/clients")
+    revalidatePath("/deliveries")
+    revalidatePath("/tasks")
+    revalidatePath("/galleries")
+    revalidatePath("/dashboard")
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
+/**
  * Guarda los datos de la quinceañera en la sesión: nombre (se usa como nombre
  * por defecto al crear galerías) y cumpleaños (define la entrega pautada: 2
  * días antes del cumpleaños / 3 semanas después de la sesión, lo que ocurra

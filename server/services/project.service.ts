@@ -3,6 +3,7 @@ import 'server-only'
 import { projectsRepo } from '@/server/repositories'
 import { createSupabaseServerClient } from '@/server/supabase/server'
 import { createSupabaseServiceClient } from '@/server/supabase/service'
+import { untypedService } from '@/server/supabase/untyped'
 import type {
   CreateProjectInput,
   UpdateProjectInput,
@@ -40,6 +41,8 @@ export async function getProjects(
     dateTo?: string
     /** Orden por fecha del evento. Default: descendente (más reciente primero). */
     orderBy?: "event_date_asc" | "event_date_desc"
+    /** Filtro por finalización: 'exclude' = solo activas; 'only' = solo finalizadas. */
+    finalized?: "exclude" | "only"
   } = {},
 ) {
   const {
@@ -53,6 +56,7 @@ export async function getProjects(
     dateFrom,
     dateTo,
     orderBy,
+    finalized,
   } = opts
   const supabase = createSupabaseServerClient()
   const from = (page - 1) * pageSize
@@ -77,6 +81,11 @@ export async function getProjects(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (status) query = query.eq('status', status as any)
+  // finalized_at es columna nueva (no en tipos) → cast. Default: sin filtro.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (finalized === "exclude") query = query.is('finalized_at' as any, null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  else if (finalized === "only") query = query.not('finalized_at' as any, 'is', null)
   // service_category_id es columna nueva (no en tipos) → cast
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (serviceCategoryId) query = query.eq('service_category_id' as any, serviceCategoryId)
@@ -151,9 +160,10 @@ export async function countProjects(
     excludeStatuses?: string[]
     dateFrom?: string
     dateTo?: string
+    finalized?: "exclude" | "only"
   } = {},
 ): Promise<number> {
-  const { search, serviceCategoryId, onlyStatuses, excludeStatuses, dateFrom, dateTo } =
+  const { search, serviceCategoryId, onlyStatuses, excludeStatuses, dateFrom, dateTo, finalized } =
     opts
   const supabase = createSupabaseServerClient()
 
@@ -163,6 +173,10 @@ export async function countProjects(
     .eq('studio_id', studioId)
     .is('deleted_at', null)
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (finalized === "exclude") query = query.is('finalized_at' as any, null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  else if (finalized === "only") query = query.not('finalized_at' as any, 'is', null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (serviceCategoryId) query = query.eq('service_category_id' as any, serviceCategoryId)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -179,6 +193,75 @@ export async function countProjects(
   const { count, error } = await query
   if (error) throwServiceError('PROJECT_OP_FAILED', error)
   return count ?? 0
+}
+
+/**
+ * ¿La sesión ya está ENTREGADA? Gate para poder finalizar. Señales (cualquiera):
+ * una galería de entrega con delivery_ready_at o fotos delivery_track, o su
+ * entrega marcada 'entregada' en client_deliveries, o status entregado/completado.
+ */
+export async function isProjectDelivered(studioId: string, projectId: string): Promise<boolean> {
+  const sb = untypedService()
+  const { data: gal } = await sb
+    .from("galleries")
+    .select("id, delivery_ready_at")
+    .eq("studio_id", studioId)
+    .eq("project_id", projectId)
+    .is("deleted_at", null)
+  const galleries = (gal ?? []) as Array<{ id: string; delivery_ready_at: string | null }>
+  if (galleries.some((g) => !!g.delivery_ready_at)) return true
+  if (galleries.length > 0) {
+    const { data: da } = await sb
+      .from("gallery_assets")
+      .select("id")
+      .in("gallery_id", galleries.map((g) => g.id))
+      .in("delivery_track", ["social", "high_quality"])
+      .is("deleted_at", null)
+      .limit(1)
+    if (((da ?? []) as unknown[]).length > 0) return true
+  }
+  const { data: cd } = await sb
+    .from("client_deliveries")
+    .select("id")
+    .eq("studio_id", studioId)
+    .eq("project_id", projectId)
+    .eq("status", "entregada")
+    .is("deleted_at", null)
+    .limit(1)
+  if (((cd ?? []) as unknown[]).length > 0) return true
+  const { data: p } = await sb
+    .from("projects")
+    .select("status")
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const status = (p as { status?: string } | null)?.status ?? ""
+  const { isCompletedStatusLabel } = await import("./engagement-feedback.service")
+  return isCompletedStatusLabel(status)
+}
+
+/** Finaliza (archiva) una sesión: sale de las vistas activas. Reversible. */
+export async function finalizeProject(studioId: string, projectId: string): Promise<void> {
+  const sb = untypedService()
+  await sb
+    .from("projects")
+    .update({ finalized_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
+    .is("finalized_at", null)
+}
+
+/** Reabre una sesión finalizada (vuelve a las vistas activas). El borrado de
+ *  archivos, si ya ocurrió, NO se revierte. */
+export async function unfinalizeProject(studioId: string, projectId: string): Promise<void> {
+  const sb = untypedService()
+  await sb
+    .from("projects")
+    .update({ finalized_at: null, updated_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+    .is("deleted_at", null)
 }
 
 export async function getProjectById(studioId: string, projectId: string) {
