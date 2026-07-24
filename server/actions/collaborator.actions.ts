@@ -29,6 +29,10 @@ import {
   COLLAB_PAYMENT_CONCEPTS,
   type CollabPaymentConcept,
 } from "@/server/services/collaborator-payments.service"
+import {
+  registerAssignmentPayment,
+  listAssignmentPayments,
+} from "@/server/services/collaborator-debt.service"
 import { syncProjectById } from "@/server/services/google-calendar.service"
 
 // Re-sincroniza el evento de Google Calendar del proyecto (best-effort, no
@@ -157,6 +161,63 @@ export async function cancelCollaboratorPaymentAction(paymentId: string) {
   await cancelCollaboratorPayment(session.studioId, paymentId)
   revalidatePath("/colaboradores")
   return { ok: true as const }
+}
+
+/**
+ * Registra un pago al colaborador por una sesión: completo, PARCIAL o manual.
+ *
+ * - Sin `amount`: paga el saldo completo (pago "por asistencia").
+ * - Con `amount` menor al saldo: abono parcial; la asignación queda 'partial'.
+ *
+ * El gasto se espeja en FinanzApp y se envía el recibo al colaborador.
+ */
+export async function registerAssignmentPaymentAction(
+  assignmentId: string,
+  formData: FormData,
+) {
+  const session = await requireStudioAuth()
+  const rawAmount = (formData.get("amount") as string) || ""
+  const amount = rawAmount.trim() === "" ? null : Number(rawAmount)
+  if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
+    return { ok: false as const, error: "Indica un monto válido" }
+  }
+  try {
+    const result = await registerAssignmentPayment(
+      session.studioId,
+      session.userId,
+      {
+        assignmentId,
+        amount,
+        method: (formData.get("method") as string) || null,
+        paidOn: (formData.get("paidOn") as string) || null,
+        note: (formData.get("note") as string) || null,
+        accountId: (formData.get("accountId") as string) || null,
+        sendReceipt: formData.get("sendReceipt") !== "0",
+      },
+    )
+    revalidatePath("/colaboradores")
+    const projectId = (formData.get("projectId") as string) || ""
+    if (projectId) revalidatePath(`/projects/${projectId}`)
+    return { ...result, ok: true as const }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "PAYMENT_FAILED"
+    const human =
+      msg === "ASSIGNMENT_ALREADY_PAID"
+        ? "Este trabajo ya está pagado por completo."
+        : msg === "INVALID_AMOUNT"
+          ? "Indica un monto válido."
+          : msg === "ASSIGNMENT_NOT_FOUND"
+            ? "No se encontró la asignación."
+            : "No se pudo registrar el pago."
+    return { ok: false as const, error: human }
+  }
+}
+
+/** Abonos ya registrados de una asignación (para el modal de pago). */
+export async function listAssignmentPaymentsAction(assignmentId: string) {
+  const session = await requireStudioAuth()
+  const items = await listAssignmentPayments(session.studioId, assignmentId)
+  return { ok: true as const, items }
 }
 
 // ── Asignaciones por proyecto ────────────────────────────────────────────────

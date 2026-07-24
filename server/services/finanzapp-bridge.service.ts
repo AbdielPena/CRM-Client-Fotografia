@@ -486,6 +486,64 @@ export async function cancelDressPayable(
   return { ok: true }
 }
 
+/**
+ * Registra un ABONO (pago parcial o total) del colaborador en FinanzApp.
+ *
+ * `settleCollaboratorPayable` sirve solo para el pago COMPLETO de una vez: crea
+ * el gasto por el monto total con la referencia `crm-collab-pay:<assignmentId>`.
+ * Para abonos hace falta un gasto por CADA pago (cada uno con su referencia
+ * propia) y cerrar la cuenta por pagar solo cuando se completa. De eso se
+ * encarga la RPC `finz_record_collab_payment` (migración 20260724200000), que
+ * es NUEVA: las existentes no se tocaron.
+ *
+ * Idempotente por `crm-collab-pay:<entryId>` (índice único en FinanzApp): si el
+ * mismo abono se reintenta, no se duplica el gasto.
+ */
+export async function recordCollaboratorPartialPayment(
+  studioId: string,
+  input: {
+    /** id del abono en collaborator_payment_entries — clave de idempotencia. */
+    entryId: string
+    /** Asignación a la que se abona (para cerrar su cuenta por pagar). */
+    assignmentId: string
+    monto: number
+    fecha?: string | null
+    accountId?: string | null
+    descripcion?: string | null
+    notas?: string | null
+    /** true = con este abono la deuda queda saldada. */
+    settle: boolean
+  },
+): Promise<FinzResult & { transactionId?: string; alreadyExisted?: boolean }> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+
+  const sb = untypedService()
+  const { data, error } = await sb.rpc("finz_record_collab_payment", {
+    p_workspace_id: workspaceId,
+    p_external_reference: `crm-collab-pay:${input.entryId}`,
+    p_payable_reference: collabRef(input.assignmentId),
+    p_monto: input.monto,
+    p_fecha: (input.fecha ?? new Date().toISOString()).slice(0, 10),
+    p_cuenta_id: input.accountId ?? null,
+    p_descripcion: input.descripcion ?? "Pago a colaborador (CRM)",
+    p_notas: input.notas ?? null,
+    p_settle: input.settle,
+  })
+  if (error)
+    throwServiceError("FINZ_COLLAB_PAYMENT_FAILED", error, {
+      studioId,
+      entryId: input.entryId,
+    })
+
+  const r = data as { transaction_id?: string; already_existed?: boolean } | null
+  return {
+    ok: true,
+    transactionId: r?.transaction_id,
+    alreadyExisted: r?.already_existed === true,
+  }
+}
+
 /** Reabre el payable (vuelve a pendiente; anula el gasto). */
 export async function reopenCollaboratorPayable(
   studioId: string,

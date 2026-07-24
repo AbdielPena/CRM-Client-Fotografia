@@ -35,6 +35,9 @@ export type TemplateSlug =
   | "payment_pending"
   | "session_balance_reminder"
   | "session_time_changed"
+  // Colaboradores (pagos)
+  | "collaborator_pending_payment"
+  | "collaborator_payment_receipt"
   // Galería
   | "gallery_available"
   | "gallery_selection_pending"
@@ -282,6 +285,47 @@ export const TEMPLATE_CATALOG: Record<
       { key: "total_price", label: "Monto", example: "$1,500.00" },
       { key: "due_date", label: "Vencimiento", example: "15 jun" },
       { key: "payment_url", label: "Link de pago", example: "https://..." },
+    ],
+  },
+  collaborator_pending_payment: {
+    label: "Colaborador — trabajo realizado, pago pendiente",
+    description:
+      "Se envía al colaborador cuando la fecha de la sesión ya pasó, con el monto que se le debe.",
+    category: "invoice",
+    defaultSubject: "Tu pago pendiente — {{session_name}}",
+    defaultBodyHtml:
+      `<p>Hola {{collaborator_name}},</p><p>¡Gracias por tu trabajo en <strong>{{session_name}}</strong> ({{service_date}})! 💛</p><p>Queda registrado a tu favor un pago pendiente de <strong>{{pending_amount}}</strong>.</p><p>Te avisaremos apenas se realice el pago y recibirás tu recibo por este mismo medio. Si algo no coincide, escríbenos y lo revisamos.</p>`,
+    variables: [
+      { key: "collaborator_name", label: "Colaborador", example: "Scarlet" },
+      { key: "session_name", label: "Sesión", example: "Amaya Sánchez — Premium" },
+      { key: "service_date", label: "Fecha del trabajo", example: "05 de agosto" },
+      { key: "agreed_amount", label: "Pago acordado", example: "RD$2,500.00" },
+      { key: "pending_amount", label: "Pendiente", example: "RD$2,500.00" },
+      { key: "studio_name", label: "Estudio", example: "AbbyPixel" },
+    ],
+  },
+  collaborator_payment_receipt: {
+    label: "Colaborador — recibo de pago",
+    description:
+      "Recibo que se envía al colaborador cada vez que se le registra un pago (total o parcial).",
+    category: "invoice",
+    defaultSubject: "Recibo de pago {{receipt_number}} — {{amount_paid}}",
+    defaultBodyHtml:
+      `<p>Hola {{collaborator_name}},</p><p>Confirmamos el pago de <strong>{{amount_paid}}</strong> por tu trabajo en <strong>{{session_name}}</strong> ({{service_date}}).</p><p><strong>Recibo:</strong> {{receipt_number}}<br/><strong>Fecha del pago:</strong> {{payment_date}}<br/><strong>Método:</strong> {{payment_method}}<br/><strong>Pago acordado:</strong> {{agreed_amount}}</p><p>{{balance_note}}</p><p>¡Gracias por tu trabajo! 💛</p>`,
+    variables: [
+      { key: "collaborator_name", label: "Colaborador", example: "Scarlet" },
+      { key: "amount_paid", label: "Monto pagado", example: "RD$1,500.00" },
+      { key: "session_name", label: "Sesión", example: "Amaya Sánchez — Premium" },
+      { key: "service_date", label: "Fecha del trabajo", example: "05 de agosto" },
+      { key: "receipt_number", label: "Nº de recibo", example: "REC-000012" },
+      { key: "payment_date", label: "Fecha del pago", example: "24 de julio" },
+      { key: "payment_method", label: "Método", example: "Transferencia" },
+      { key: "agreed_amount", label: "Pago acordado", example: "RD$2,500.00" },
+      {
+        key: "balance_note",
+        label: "Nota de saldo",
+        example: "Queda un saldo pendiente de RD$1,000.00.",
+      },
     ],
   },
   session_balance_reminder: {

@@ -267,6 +267,14 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     id: a.id,
     role: a.role,
     agreedPay: Number(a.agreed_pay ?? 0),
+    paidAmount: Number(
+      (a as unknown as { paid_amount?: number | string }).paid_amount ?? 0,
+    ),
+    // La deuda "nace" cuando la sesión ya pasó (barrido diario). Hasta
+    // entonces es solo un acuerdo, no un pendiente.
+    debtRegistered:
+      (a as unknown as { debt_registered_at?: string | null })
+        .debt_registered_at != null,
     payStatus: a.pay_status,
     confirmStatus: a.confirm_status,
     serviceDate: a.service_date,
@@ -285,12 +293,13 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     .filter((a) => a.payStatus !== "cancelled")
     .reduce((s, a) => s + a.agreedPay, 0)
   // Desglose pagado vs deuda pendiente (para la tarjeta de finanzas de la sesión).
+  // Con abonos parciales, "pagado" es lo realmente abonado y "pendiente" el resto.
   const collaboratorPaid = projectCollaborators
-    .filter((a) => a.payStatus === "paid")
-    .reduce((s, a) => s + a.agreedPay, 0)
+    .filter((a) => a.payStatus !== "cancelled")
+    .reduce((s, a) => s + a.paidAmount, 0)
   const collaboratorPending = projectCollaborators
-    .filter((a) => a.payStatus !== "paid" && a.payStatus !== "cancelled")
-    .reduce((s, a) => s + a.agreedPay, 0)
+    .filter((a) => a.payStatus !== "cancelled")
+    .reduce((s, a) => s + Math.max(0, a.agreedPay - a.paidAmount), 0)
 
   // Validación de requisitos del plan (Fase 2): el plan del proyecto puede
   // exigir N colaboradores de cierto tipo → avisar si faltan.

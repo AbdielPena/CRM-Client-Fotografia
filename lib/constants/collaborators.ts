@@ -34,6 +34,7 @@ export const CONFIRM_STATUS_LABELS: Record<string, string> = {
 
 export const PAY_STATUS_LABELS: Record<string, string> = {
   pending: "Pago pendiente",
+  partial: "Pago parcial",
   paid: "Pagado",
   cancelled: "Cancelado",
 }

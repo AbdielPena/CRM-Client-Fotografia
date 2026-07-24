@@ -166,7 +166,7 @@ async function reconcileProjectPayments(
   const sb = untypedService()
   const { data: rows } = await sb
     .from("project_collaborators")
-    .select("id, pay_status, finanzapp_payable_ref")
+    .select("id, pay_status, agreed_pay, paid_amount, finanzapp_payable_ref")
     .eq("studio_id", studioId)
     .eq("project_id", projectId)
     .is("deleted_at", null)
@@ -174,16 +174,25 @@ async function reconcileProjectPayments(
   const pend = ((rows ?? []) as Array<{
     id: string
     pay_status: string
+    agreed_pay: number | string
+    paid_amount: number | string | null
     finanzapp_payable_ref: string | null
-  }>).filter((r) => r.pay_status === "pending" && r.finanzapp_payable_ref)
+  }>).filter(
+    (r) =>
+      (r.pay_status === "pending" || r.pay_status === "partial") &&
+      r.finanzapp_payable_ref,
+  )
   if (pend.length === 0) return
   const statuses = await listCollaboratorPayableStatuses(studioId)
   for (const r of pend) {
     if (statuses[r.finanzapp_payable_ref as string] === "pagada") {
+      // Se saldó por fuera (directo en FinanzApp): el acumulado del CRM debe
+      // quedar cuadrado con lo acordado, si no el saldo seguiría descuadrado.
       await sb
         .from("project_collaborators")
         .update({
           pay_status: "paid",
+          paid_amount: Number(r.agreed_pay ?? 0),
           paid_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -264,11 +273,22 @@ export async function assignCollaborator(
 
   const created = row as ProjectCollaboratorRow
   const agreed = Number(created.agreed_pay ?? 0)
-  // Fase 3: registrar la deuda en FinanzApp (best-effort, no bloquea).
-  if (agreed > 0) {
+
+  // La deuda NO nace al asignar (cambio 2026-07-24). Antes se empujaba el
+  // payable a FinanzApp en este punto, así que una sesión de septiembre ya
+  // figuraba como deuda en julio. Ahora la crea `runCollaboratorDebtSweep`
+  // cuando la fecha de la sesión ya pasó.
+  //
+  // Única excepción: si la asignación se registra YA PAGADA, el gasto es real
+  // hoy y sí debe reflejarse de inmediato.
+  if (agreed > 0 && created.pay_status === "paid") {
     await sb
       .from("project_collaborators")
-      .update({ finanzapp_payable_ref: `crm-collab:${created.id}` })
+      .update({
+        finanzapp_payable_ref: `crm-collab:${created.id}`,
+        debt_registered_at: new Date().toISOString(),
+        paid_amount: agreed,
+      })
       .eq("id", created.id)
     const acreedor = created.collaborator?.name ?? "Colaborador"
     try {
@@ -279,12 +299,10 @@ export async function assignCollaborator(
         dueDate: created.service_date,
         notas: created.role ? `Colaborador: ${created.role}` : null,
       })
-      if (created.pay_status === "paid") {
-        await settleCollaboratorPayable(studioId, {
-          assignmentId: created.id,
-          descripcion: `Pago a colaborador: ${acreedor}`,
-        })
-      }
+      await settleCollaboratorPayable(studioId, {
+        assignmentId: created.id,
+        descripcion: `Pago a colaborador: ${acreedor}`,
+      })
     } catch (err) {
       console.error("[collab→finanzapp] assign sync failed", err)
     }
@@ -300,7 +318,9 @@ export async function updateAssignment(
   const sb = untypedService()
   const { data: existing } = await sb
     .from("project_collaborators")
-    .select("agreed_pay, pay_status, service_date, collaborator:collaborators(name)")
+    .select(
+      "agreed_pay, pay_status, service_date, debt_registered_at, paid_amount, collaborator:collaborators(name)",
+    )
     .eq("id", assignmentId)
     .eq("studio_id", studioId)
     .maybeSingle()
@@ -309,6 +329,8 @@ export async function updateAssignment(
     agreed_pay: number
     pay_status: string
     service_date: string | null
+    debt_registered_at: string | null
+    paid_amount: number | null
     collaborator: { name: string } | { name: string }[] | null
   }
 
@@ -330,7 +352,15 @@ export async function updateAssignment(
     data.agreedPay !== undefined
       ? data.agreedPay ?? 0
       : Number(prev.agreed_pay ?? 0)
-  if (newAgreed > 0) patch.finanzapp_payable_ref = `crm-collab:${assignmentId}`
+  // La referencia a FinanzApp solo existe si la deuda YA nació (sesión pasada).
+  // Ponerla antes dejaría apuntando a una cuenta por pagar inexistente.
+  const deudaNacida = prev.debt_registered_at != null
+  if (newAgreed > 0 && deudaNacida)
+    patch.finanzapp_payable_ref = `crm-collab:${assignmentId}`
+  // Marcar pagado a mano (sin pasar por el registro de abonos) deja el
+  // acumulado cuadrado con el acordado.
+  if (data.payStatus === "paid" && newAgreed > 0) patch.paid_amount = newAgreed
+  if (data.payStatus === "pending") patch.paid_amount = 0
 
   const { error } = await sb
     .from("project_collaborators")
@@ -352,7 +382,10 @@ export async function updateAssignment(
       ? emptyToNull(data.serviceDate)
       : prev.service_date
   try {
-    if (newAgreed > 0 && newPay !== "cancelled") {
+    // Solo se sincroniza si la deuda ya nació (o si se está marcando pagada:
+    // ahí el gasto es real y hay que crear la cuenta por pagar para saldarla).
+    const debeSincronizar = deudaNacida || newPay === "paid"
+    if (newAgreed > 0 && newPay !== "cancelled" && debeSincronizar) {
       await recordCollaboratorPayable(studioId, {
         assignmentId,
         acreedor,
@@ -360,15 +393,28 @@ export async function updateAssignment(
         dueDate,
         notas: null,
       })
+      if (!deudaNacida) {
+        await sb
+          .from("project_collaborators")
+          .update({
+            debt_registered_at: new Date().toISOString(),
+            finanzapp_payable_ref: `crm-collab:${assignmentId}`,
+          })
+          .eq("id", assignmentId)
+      }
     }
     if (newPay === "paid" && prev.pay_status !== "paid" && newAgreed > 0) {
       await settleCollaboratorPayable(studioId, {
         assignmentId,
         descripcion: `Pago a colaborador: ${acreedor}`,
       })
-    } else if (newPay === "pending" && prev.pay_status === "paid") {
+    } else if (
+      newPay === "pending" &&
+      prev.pay_status === "paid" &&
+      deudaNacida
+    ) {
       await reopenCollaboratorPayable(studioId, assignmentId)
-    } else if (newPay === "cancelled") {
+    } else if (newPay === "cancelled" && deudaNacida) {
       await cancelCollaboratorPayable(studioId, assignmentId)
     }
   } catch (err) {
@@ -381,6 +427,17 @@ export async function removeAssignment(
   assignmentId: string,
 ): Promise<void> {
   const sb = untypedService()
+  // Solo hay algo que cancelar en FinanzApp si la deuda llegó a nacer.
+  const { data: before } = await sb
+    .from("project_collaborators")
+    .select("debt_registered_at")
+    .eq("id", assignmentId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const deudaNacida =
+    (before as { debt_registered_at: string | null } | null)
+      ?.debt_registered_at != null
+
   const { error } = await sb
     .from("project_collaborators")
     .update({ deleted_at: new Date().toISOString() })
@@ -392,10 +449,12 @@ export async function removeAssignment(
       assignmentId,
     })
   // Fase 3: cancelar la deuda en FinanzApp (best-effort).
-  try {
-    await cancelCollaboratorPayable(studioId, assignmentId)
-  } catch (err) {
-    console.error("[collab→finanzapp] remove cancel failed", err)
+  if (deudaNacida) {
+    try {
+      await cancelCollaboratorPayable(studioId, assignmentId)
+    } catch (err) {
+      console.error("[collab→finanzapp] remove cancel failed", err)
+    }
   }
 }
 
@@ -494,20 +553,31 @@ export async function getCollaboratorTotals(
   const sb = untypedService()
   const { data } = await sb
     .from("project_collaborators")
-    .select("collaborator_id, agreed_pay, pay_status")
+    .select(
+      "collaborator_id, agreed_pay, paid_amount, pay_status, debt_registered_at",
+    )
     .eq("studio_id", studioId)
     .is("deleted_at", null)
   const out: Record<string, { assignments: number; pending: number; paid: number }> = {}
   for (const r of (data ?? []) as Array<{
     collaborator_id: string
     agreed_pay: number
+    paid_amount: number | null
     pay_status: string
+    debt_registered_at: string | null
   }>) {
     const t = (out[r.collaborator_id] ??= { assignments: 0, pending: 0, paid: 0 })
     t.assignments += 1
-    const amt = Number(r.agreed_pay ?? 0)
-    if (r.pay_status === "paid") t.paid += amt
-    else if (r.pay_status === "pending") t.pending += amt
+    if (r.pay_status === "cancelled") continue
+
+    const acordado = Number(r.agreed_pay ?? 0)
+    const abonado = Number(r.paid_amount ?? 0)
+    // Lo abonado siempre cuenta como pagado, haya nacido o no la deuda.
+    t.paid += abonado
+    // PENDIENTE solo si la deuda YA NACIÓ (la sesión ocurrió y es posterior a
+    // la fecha de corte). Antes se sumaba todo el histórico —incluidas sesiones
+    // futuras y viejas—, que es justo lo que había que dejar de contar.
+    if (r.debt_registered_at) t.pending += Math.max(0, acordado - abonado)
   }
   return out
 }

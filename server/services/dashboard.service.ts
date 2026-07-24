@@ -666,11 +666,14 @@ export async function getSessionFinanceStats(
   const supabase = untypedServer()
 
   const [collab, dresses] = await Promise.all([
+    // Solo deudas YA NACIDAS (la sesión ocurrió). Antes se sumaba también lo
+    // acordado de sesiones futuras, inflando la deuda del panel.
     supabase
       .from('project_collaborators')
-      .select('agreed_pay')
+      .select('agreed_pay, paid_amount')
       .eq('studio_id', studioId)
-      .eq('pay_status', 'pending')
+      .in('pay_status', ['pending', 'partial'])
+      .not('debt_registered_at', 'is', null)
       .is('deleted_at', null),
     supabase
       .from('projects')
@@ -681,8 +684,16 @@ export async function getSessionFinanceStats(
       .gt('dress_cost', 0),
   ])
 
-  const collabRows = (collab.data as Array<{ agreed_pay: number | string }> | null) ?? []
-  const collaboratorDebt = collabRows.reduce((s, r) => s + Number(r.agreed_pay ?? 0), 0)
+  const collabRows =
+    (collab.data as Array<{
+      agreed_pay: number | string
+      paid_amount: number | string | null
+    }> | null) ?? []
+  // Deuda = lo acordado MENOS lo ya abonado (los pagos parciales descuentan).
+  const collaboratorDebt = collabRows.reduce(
+    (s, r) => s + Math.max(0, Number(r.agreed_pay ?? 0) - Number(r.paid_amount ?? 0)),
+    0,
+  )
 
   const dressRows =
     (dresses.data as Array<{ dress_cost: number | string; dress_pay_status: string | null }> | null) ??
