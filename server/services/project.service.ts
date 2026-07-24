@@ -420,9 +420,32 @@ export async function updateProject(
   if (data.name !== undefined) patch.name = data.name
   if (data.eventType !== undefined) patch.event_type = data.eventType
   if (data.status !== undefined) patch.status = data.status
-  if (data.eventDate !== undefined) patch.event_date = data.eventDate || null
-  if (data.eventTime !== undefined) patch.event_time = data.eventTime || null
-  if (data.eventEndTime !== undefined) patch.event_end_time = data.eventEndTime || null
+  // Normalizar fecha/hora: algunos inputs mandan `datetime-local`
+  // ("2026-08-16T07:00") en vez de fecha y hora por separado. Postgres lo
+  // toleraba al guardar, pero al armar el evento de Google quedaba un
+  // timestamp malformado ("2026-08-16T07:00T08:00:00") y Google lo rechazaba
+  // con 400 "Invalid start time" → el CRM cambiaba pero el calendario NO.
+  const onlyDate = (v: string) => v.trim().slice(0, 10) // YYYY-MM-DD
+  const onlyTime = (v: string) => {
+    const s = v.trim()
+    const m = s.match(/(\d{2}:\d{2})(?::\d{2})?$/) // toma HH:mm aunque venga con fecha
+    return m ? m[1] : s.slice(0, 5)
+  }
+  if (data.eventDate !== undefined)
+    patch.event_date = data.eventDate ? onlyDate(data.eventDate) : null
+  if (data.eventTime !== undefined)
+    patch.event_time = data.eventTime ? onlyTime(data.eventTime) : null
+  if (data.eventEndTime !== undefined)
+    patch.event_end_time = data.eventEndTime ? onlyTime(data.eventEndTime) : null
+  // Si la fecha venía con hora pegada y no se mandó hora aparte, usar esa hora.
+  if (
+    data.eventDate &&
+    data.eventDate.includes('T') &&
+    (data.eventTime === undefined || !data.eventTime)
+  ) {
+    const t = onlyTime(data.eventDate)
+    if (/^\d{2}:\d{2}$/.test(t)) patch.event_time = t
+  }
   if (data.location !== undefined) patch.location = data.location || null
   if (data.notes !== undefined) patch.notes = data.notes || null
   if (data.packageId !== undefined) patch.package_id = data.packageId || null
