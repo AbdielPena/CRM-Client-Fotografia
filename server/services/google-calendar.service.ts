@@ -857,6 +857,141 @@ export async function syncProjectById(
   }
 }
 
+/** Correos que deben ir de invitados en el evento: cliente + colaboradores. */
+async function getProjectAttendeeEmails(
+  studioId: string,
+  projectId: string,
+): Promise<string[]> {
+  const sb = untypedService()
+  const { data: proj } = await sb
+    .from('projects')
+    .select('client:clients(email)')
+    .eq('id', projectId)
+    .eq('studio_id', studioId)
+    .maybeSingle()
+  const cli = (proj as { client?: unknown } | null)?.client
+  const clientEmail = (
+    Array.isArray(cli) ? (cli[0] as { email?: string } | undefined) : (cli as { email?: string } | null)
+  )?.email
+  const { data: rows } = await sb
+    .from('project_collaborators')
+    .select('collaborator:collaborators(email)')
+    .eq('project_id', projectId)
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+  const collabEmails = ((rows ?? []) as Array<{ collaborator?: unknown }>).map((r) => {
+    const c = Array.isArray(r.collaborator)
+      ? (r.collaborator[0] as { email?: string } | undefined)
+      : (r.collaborator as { email?: string } | null)
+    return c?.email ?? null
+  })
+  return Array.from(
+    new Set(
+      [clientEmail, ...collabEmails]
+        .map((e) => (e ?? '').trim().toLowerCase())
+        .filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)),
+    ),
+  )
+}
+
+/**
+ * RE-SYNC SOLO DE INVITADOS de las sesiones FUTURAS que ya tienen evento en
+ * Google. Manda un PATCH con ÚNICAMENTE el campo `attendees`, así Google NO
+ * toca fecha, hora, título ni descripción (PATCH = actualización parcial).
+ * Sirve para completar el roster de eventos creados antes de que se invitara a
+ * los colaboradores. Conserva el "aceptó/rechazó" de quien ya estaba y solo
+ * notifica (sendUpdates=all) si se suma alguien nuevo.
+ */
+export async function resyncUpcomingEventAttendees(
+  studioId: string,
+  opts: { dryRun?: boolean; limit?: number } = {},
+): Promise<{
+  scanned: number
+  wouldUpdate: number
+  updated: number
+  unchanged: number
+  errors: number
+  details: Array<{ project: string; add: string[]; total: number; status: string }>
+}> {
+  const dryRun = opts.dryRun !== false
+  const out = {
+    scanned: 0, wouldUpdate: 0, updated: 0, unchanged: 0, errors: 0,
+    details: [] as Array<{ project: string; add: string[]; total: number; status: string }>,
+  }
+  const integration = await loadIntegration(studioId)
+  if (!integration?.config.calendarId) return out
+  const token = await getAccessToken(studioId)
+  if (!token) return out
+
+  const sb = untypedService()
+  const today = new Date().toISOString().slice(0, 10)
+  const { data: rows } = await sb
+    .from('projects')
+    .select('id, name, event_date, google_event_id, google_calendar_id')
+    .eq('studio_id', studioId)
+    .is('deleted_at', null)
+    .not('google_event_id', 'is', null)
+    .gte('event_date', today)
+    .order('event_date', { ascending: true })
+    .limit(opts.limit ?? 200)
+
+  for (const r of (rows ?? []) as Array<Record<string, unknown>>) {
+    out.scanned++
+    const projectId = String(r.id)
+    const eventId = String(r.google_event_id)
+    const calId = String(r.google_calendar_id ?? integration.config.calendarId)
+    const label = `${String(r.name ?? '')} (${String(r.event_date ?? '')})`
+    try {
+      const want = await getProjectAttendeeEmails(studioId, projectId)
+      if (want.length === 0) { out.unchanged++; continue }
+
+      const base = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calId)}/events`
+      const cur = await fetch(`${base}/${encodeURIComponent(eventId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!cur.ok) { out.errors++; out.details.push({ project: label, add: [], total: 0, status: `GET ${cur.status}` }); continue }
+      const ev = (await cur.json()) as {
+        attendees?: Array<{ email?: string; responseStatus?: string }>
+      }
+      const prev = new Map<string, string>()
+      for (const a of ev.attendees ?? []) {
+        if (a.email) prev.set(a.email.toLowerCase(), a.responseStatus ?? 'needsAction')
+      }
+      const add = want.filter((e) => !prev.has(e))
+      if (add.length === 0) { out.unchanged++; continue }
+
+      // Conserva a todos los que ya estaban (con su respuesta) + los nuevos.
+      const attendees = [
+        ...Array.from(prev.entries()).map(([email, responseStatus]) => ({ email, responseStatus })),
+        ...add.map((email) => ({ email })),
+      ]
+      out.wouldUpdate++
+      out.details.push({ project: label, add, total: attendees.length, status: dryRun ? 'pendiente' : 'ok' })
+      if (dryRun) continue
+
+      // PATCH SOLO con attendees → no toca fecha/hora/título/descripción.
+      const res = await fetch(
+        `${base}/${encodeURIComponent(eventId)}?sendUpdates=all`,
+        {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attendees }),
+        },
+      )
+      if (!res.ok) {
+        out.errors++
+        out.details[out.details.length - 1].status = `PATCH ${res.status}`
+      } else {
+        out.updated++
+      }
+    } catch (e) {
+      out.errors++
+      out.details.push({ project: label, add: [], total: 0, status: e instanceof Error ? e.message : 'error' })
+    }
+  }
+  return out
+}
+
 /**
  * BACKFILL: empuja a Google todas las sesiones (proyectos) FUTURAS que aún no
  * tienen evento en Google. Resuelve el caso "recibí reservas con Google
