@@ -204,3 +204,115 @@ export async function changeSessionTime(
 
   return { ok: true, oldTime, newTime: norm, emailed, whatsappApi, ownerNotified, waLink }
 }
+
+/**
+ * Avisa al cliente que la FECHA y/o la HORA de su sesión cambió.
+ *
+ * A diferencia de `changeSessionTime` (que solo cubre la hora y se dispara con
+ * el botón "Cambiar hora"), esta se llama desde `updateProject` cuando el
+ * fotógrafo edita la sesión y toca `event_date` / `event_time`. El evento de
+ * Google ya se re-sincroniza solo en `updateProject`; esto añade el aviso al
+ * cliente por correo + WhatsApp, que antes no se enviaba.
+ *
+ * Best-effort: nunca rompe el guardado de la sesión.
+ */
+export async function notifyScheduleChange(
+  studioId: string,
+  projectId: string,
+  prev: { date: string | null; time: string | null },
+  next: { date: string | null; time: string | null },
+  reason = "",
+): Promise<{ emailed: boolean; whatsappApi: boolean; waLink: string | null }> {
+  const out = { emailed: false, whatsappApi: false, waLink: null as string | null }
+  const sb = untypedService()
+  const { data } = await sb
+    .from("projects")
+    .select("id, name, client:clients(name,email,phone)")
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const p = data as { name?: string; client?: unknown } | null
+  if (!p) return out
+  const client = (Array.isArray(p.client) ? p.client[0] : p.client) as
+    | { name?: string; email?: string; phone?: string }
+    | null
+  const firstName = (client?.name ?? "").trim().split(/\s+/)[0] || ""
+  const dateChanged = (prev.date ?? "") !== (next.date ?? "")
+  const timeChanged = (prev.time ?? "") !== (next.time ?? "")
+  if (!dateChanged && !timeChanged) return out
+
+  const newDateLabel = next.date ? fmtDateLong(next.date) : ""
+  const oldDateLabel = prev.date ? fmtDateLong(prev.date) : ""
+  const oldTimeLabel = prev.time ? fmtTime12(String(prev.time).slice(0, 5)) : ""
+  const newTimeLabel = next.time ? fmtTime12(String(next.time).slice(0, 5)) : ""
+  // Si cambió la fecha, se antepone al motivo para que el cliente lo vea claro.
+  const detail = dateChanged
+    ? `La fecha pasó de ${oldDateLabel} a ${newDateLabel}.${reason ? " " + reason : ""}`
+    : reason
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://my.abbypixel.com"
+
+  if (client?.email) {
+    try {
+      const { enqueueEmail } = await import("./email.service")
+      const { resolveTemplate, TEMPLATE_CATALOG } = await import("./email-template.service")
+      const d = TEMPLATE_CATALOG.session_time_changed
+      const tpl = await resolveTemplate(
+        studioId,
+        "session_time_changed",
+        {
+          client_name: firstName || client.name || "",
+          session_name: p.name ?? "",
+          session_date: newDateLabel,
+          old_time: oldTimeLabel || oldDateLabel,
+          new_time: newTimeLabel || newDateLabel,
+          reason: detail,
+          portal_url: `${appUrl}/portal/login`,
+        },
+        { subject: d.defaultSubject, bodyHtml: d.defaultBodyHtml },
+      )
+      await enqueueEmail({
+        studioId,
+        toEmail: client.email,
+        toName: client.name,
+        subject: tpl.subject,
+        bodyHtml: tpl.bodyHtml,
+        fromName: tpl.fromName,
+        replyTo: tpl.replyTo,
+        templateSlug: "session_time_changed",
+        relatedEntityType: "project",
+        relatedEntityId: projectId,
+      })
+      out.emailed = true
+    } catch (e) {
+      console.error("[schedule-change] email", e instanceof Error ? e.message : e)
+    }
+  }
+
+  const msg =
+    `Hola ${firstName}, te confirmamos un cambio en tu sesión: ` +
+    (dateChanged ? `nueva fecha ${newDateLabel}` : `nueva hora ${newTimeLabel}`) +
+    (dateChanged && newTimeLabel ? ` a las ${newTimeLabel}` : "") +
+    `. ${reason} — AbbyPixel`
+  if (client?.phone) {
+    try {
+      const { getWhatsAppStatus, sendTextMessage } = await import(
+        "./whatsapp/cloud-api.service"
+      )
+      const status = await getWhatsAppStatus(studioId)
+      if (status.connected) {
+        const r = await sendTextMessage(studioId, client.phone, msg)
+        if (r.ok) out.whatsappApi = true
+      }
+    } catch (e) {
+      console.error("[schedule-change] whatsapp", e instanceof Error ? e.message : e)
+    }
+    if (!out.whatsappApi) {
+      const digits = String(client.phone).replace(/\D/g, "")
+      out.waLink = `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`
+    }
+  }
+  return out
+}

@@ -430,6 +430,19 @@ export async function updateProject(
     patch.service_category_id = data.serviceCategoryId || null
   if (data.totalAmount !== undefined) patch.total_amount = data.totalAmount
 
+  // Fecha/hora ANTES de guardar, para saber si cambiaron y avisar al cliente.
+  let prevSchedule: { date: string | null; time: string | null } | null = null
+  if (data.eventDate !== undefined || data.eventTime !== undefined) {
+    const { data: before } = await untypedService()
+      .from('projects')
+      .select('event_date, event_time')
+      .eq('id', projectId)
+      .eq('studio_id', studioId)
+      .maybeSingle()
+    const b = before as { event_date?: string | null; event_time?: string | null } | null
+    prevSchedule = { date: b?.event_date ?? null, time: b?.event_time ?? null }
+  }
+
   const project = await projectsRepo.update(projectId, patch)
 
   await logActivity({
@@ -455,6 +468,27 @@ export async function updateProject(
     await deleteProjectEventSafe(studioId, project.id)
   } else if (touchedEventFields && project.event_date) {
     await syncProjectById(studioId, project.id).catch(() => {})
+  }
+
+  // Si cambió la FECHA o la HORA, avisar al cliente (correo + WhatsApp). El
+  // evento de Google ya se re-sincronizó arriba; esto es el aviso, que antes
+  // solo existía en el botón "Cambiar hora" y no al editar la sesión.
+  if (prevSchedule && data.status !== 'cancelled') {
+    const next = {
+      date: (project.event_date as string | null) ?? null,
+      time: (project.event_time as string | null) ?? null,
+    }
+    if (
+      (prevSchedule.date ?? '') !== (next.date ?? '') ||
+      (prevSchedule.time ?? '') !== (next.time ?? '')
+    ) {
+      try {
+        const { notifyScheduleChange } = await import('./session-schedule.service')
+        await notifyScheduleChange(studioId, project.id, prevSchedule, next)
+      } catch (e) {
+        console.error('[updateProject] aviso de cambio de fecha/hora', e)
+      }
+    }
   }
 
   return project
