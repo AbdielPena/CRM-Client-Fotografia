@@ -15,6 +15,8 @@ import { countUnreadNotifications } from "@/server/services/notification.service
 import { StatusBadge } from "@/components/shared/status-badge"
 import { NoteForm } from "@/components/shared/note-form"
 import { ProjectDetailActions } from "@/components/projects/project-detail-actions"
+import { ChangePackageCard } from "@/components/projects/change-package-card"
+import { getPackages } from "@/server/services/package.service"
 import { ClientPortalAccessCard } from "@/components/projects/client-portal-access-card"
 import { ensureClientAccessCode } from "@/server/services/client-portal.service"
 import { WhatsAppSendMenu } from "@/components/whatsapp/whatsapp-send-menu"
@@ -134,6 +136,18 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const deliveryGalleries = galleries.filter(
     (g) => g.gallery_type === "final_delivery",
   )
+  // Planes disponibles para el selector de "Cambiar plan".
+  const planOptions = (
+    (await getPackages(session.studioId).catch(() => [])) as Array<Record<string, unknown>>
+  )
+    .filter((p) => p.is_active !== false && !p.deleted_at)
+    .map((p) => ({
+      id: String(p.id),
+      name: String(p.name ?? "Plan"),
+      price: p.price != null ? Number(p.price) : null,
+      currency: (p.currency as string | null) ?? null,
+    }))
+
   // Finalización (archivo): bandera + si se puede finalizar (ya entregada).
   // El gate real lo revalida la acción con isProjectDelivered; esto solo
   // habilita/oculta el botón en la interfaz.
@@ -891,6 +905,18 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 </div>
               )}
             </dl>
+            {/* Cambiar de plan: reajusta monto, factura, entrega, categoría y nombre */}
+            {planOptions.length > 0 && (
+              <div className="mt-4 border-t border-border/60 pt-3">
+                <ChangePackageCard
+                  projectId={project.id as string}
+                  currentPackageId={(project.package_id as string | null) ?? null}
+                  currentPackageName={(pkg?.name as string | null) ?? null}
+                  packages={planOptions}
+                  currency={currency}
+                />
+              </div>
+            )}
           </div>
 
           {/* Ganancia neta (ingreso − vestido − colaboradores) */}

@@ -213,6 +213,51 @@ export async function finalizeProjectAction(
   }
 }
 
+/**
+ * Resumen de lo que cambiaría al mover la sesión a otro plan (no aplica nada).
+ * Se muestra al fotógrafo para que confirme antes de tocar dinero.
+ */
+export async function previewProjectPackageChangeAction(
+  projectId: string,
+  newPackageId: string,
+) {
+  const session = await requireStudioAuth()
+  const { previewPackageChange } = await import(
+    "@/server/services/package-change.service"
+  )
+  return previewPackageChange(session.studioId, projectId, newPackageId)
+}
+
+/**
+ * Cambia el plan de la sesión y reajusta monto, factura (con su espejo en
+ * Facturación), entrega, categoría y nombre. Impresiones, colaboradores y
+ * vestido se leen del plan en vivo, así que se ajustan solos.
+ */
+export async function changeProjectPackageAction(
+  projectId: string,
+  newPackageId: string,
+) {
+  const session = await requireStudioAuth()
+  const { applyPackageChange } = await import(
+    "@/server/services/package-change.service"
+  )
+  const result = await applyPackageChange(
+    session.studioId,
+    session.userId,
+    projectId,
+    newPackageId,
+  )
+  if (result.ok) {
+    revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/projects")
+    revalidatePath("/clients")
+    revalidatePath("/invoices")
+    revalidatePath("/deliveries")
+    revalidatePath("/dashboard")
+  }
+  return result
+}
+
 /** Reabre una sesión finalizada (vuelve a las vistas activas). */
 export async function reopenProjectAction(
   projectId: string,
