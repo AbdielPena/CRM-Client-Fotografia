@@ -603,18 +603,55 @@ export async function syncProjectToEvent(
   const existingEventId = project?.google_event_id
   const existingCalId = project?.google_calendar_id ?? calendarId
 
-  const body = buildEventBody(payload)
+  const body = buildEventBody(payload) as Record<string, unknown> & {
+    attendees?: Array<{ email: string; responseStatus?: string }>
+  }
   const base = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(existingCalId)}/events`
-  // CREAR (POST) → sendUpdates=all: Google le manda la invitación al cliente
-  // (attendee) para que agregue la sesión a su calendario.
-  // EDITAR (PATCH) → sendUpdates=none: actualiza el evento en silencio (el
-  // calendario del cliente se mueve solo) SIN spamear un correo en cada edición.
-  // Los cambios importantes (p.ej. la hora) se avisan con nuestro correo+WhatsApp.
+  // CREAR (POST) → sendUpdates=all: Google le manda la invitación a TODOS los
+  // invitados (cliente + colaboradores) del MISMO evento.
+  // EDITAR (PATCH) → sendUpdates=none por defecto: actualiza en silencio SIN
+  // spamear un correo en cada edición. EXCEPCIÓN: si se sumó un invitado nuevo,
+  // se manda `all` para que esa persona sí reciba su invitación.
   const isUpdate = !!existingEventId
+  let sendUpdates: 'all' | 'none' = isUpdate ? 'none' : 'all'
+
+  if (isUpdate && existingEventId && Array.isArray(body.attendees)) {
+    // Al hacer PATCH, Google REEMPLAZA la lista de invitados: si mandamos solo
+    // los correos, borraría el "aceptó/rechazó" de cada quien. Por eso leemos el
+    // evento actual para (a) conservar la respuesta de los que ya estaban y
+    // (b) detectar si hay alguien nuevo al que sí hay que invitar.
+    try {
+      const cur = await fetch(`${base}/${encodeURIComponent(existingEventId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (cur.ok) {
+        const curEvent = (await cur.json()) as {
+          attendees?: Array<{ email?: string; responseStatus?: string }>
+        }
+        const prev = new Map<string, string>()
+        for (const a of curEvent.attendees ?? []) {
+          if (a.email) prev.set(a.email.toLowerCase(), a.responseStatus ?? 'needsAction')
+        }
+        let added = false
+        body.attendees = body.attendees.map((a) => {
+          const known = prev.get(a.email.toLowerCase())
+          if (!known) {
+            added = true
+            return a
+          }
+          return { ...a, responseStatus: known }
+        })
+        if (added) sendUpdates = 'all'
+      }
+    } catch {
+      /* best-effort: si falla la lectura, se actualiza igual en silencio */
+    }
+  }
+
   const url =
     (existingEventId
       ? `${base}/${encodeURIComponent(existingEventId)}`
-      : base) + `?sendUpdates=${isUpdate ? 'none' : 'all'}`
+      : base) + `?sendUpdates=${sendUpdates}`
   const method = isUpdate ? 'PATCH' : 'POST'
 
   const res = await fetch(url, {
@@ -761,7 +798,7 @@ export async function syncProjectById(
     // Cliente sin tipar: project_collaborators no está en los tipos generados.
     const { data: collabRows } = await untypedService()
       .from('project_collaborators')
-      .select('role, confirm_status, collaborator:collaborators(name, type)')
+      .select('role, confirm_status, collaborator:collaborators(name, type, email)')
       .eq('project_id', project.id)
       .eq('studio_id', studioId)
       .is('deleted_at', null)
@@ -769,20 +806,34 @@ export async function syncProjectById(
       role: string | null
       confirm_status: string | null
       collaborator:
-        | { name: string; type: string }
-        | { name: string; type: string }[]
+        | { name: string; type: string; email: string | null }
+        | { name: string; type: string; email: string | null }[]
         | null
     }
-    const collaborators: EventCollaborator[] = ((collabRows ?? []) as CollabRow[])
-      .map((r) => {
-        const c = Array.isArray(r.collaborator) ? r.collaborator[0] : r.collaborator
-        return {
-          name: c?.name ?? '',
-          role: r.role || collaboratorTypeLabel(c?.type),
-          confirmStatus: r.confirm_status ?? 'pending',
-        }
-      })
+    const collabList = ((collabRows ?? []) as CollabRow[]).map((r) => {
+      const c = Array.isArray(r.collaborator) ? r.collaborator[0] : r.collaborator
+      return {
+        name: c?.name ?? '',
+        email: c?.email ?? null,
+        role: r.role || collaboratorTypeLabel(c?.type),
+        confirmStatus: r.confirm_status ?? 'pending',
+      }
+    })
+    const collaborators: EventCollaborator[] = collabList
       .filter((x) => x.name)
+      .map(({ name, role, confirmStatus }) => ({ name, role, confirmStatus }))
+
+    // UN SOLO evento con TODOS: cliente + colaboradores asignados. Así el
+    // estudio ve en su Google Calendar quién está invitado y quién aceptó
+    // (Google lleva el "aceptó/rechazó" por invitado). GUEST_LOCK impide que
+    // los invitados se vean entre sí o editen el evento.
+    const attendeeEmails = Array.from(
+      new Set(
+        [clientEmail, ...collabList.map((c) => c.email)]
+          .map((e) => (e ?? '').trim().toLowerCase())
+          .filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)),
+      ),
+    )
 
     const result = await syncProjectToEvent({
       projectId: project.id,
@@ -796,7 +847,7 @@ export async function syncProjectById(
       startTime: project.event_time ? String(project.event_time).slice(0, 5) : null,
       endTime: project.event_end_time ? String(project.event_end_time).slice(0, 5) : null,
       location: project.location ?? undefined,
-      attendeeEmails: clientEmail ? [clientEmail] : undefined,
+      attendeeEmails: attendeeEmails.length > 0 ? attendeeEmails : undefined,
     })
     return !!result
   } catch (err) {
