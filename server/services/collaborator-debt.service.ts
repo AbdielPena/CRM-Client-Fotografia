@@ -567,6 +567,77 @@ export async function registerAssignmentPayment(
   }
 }
 
+export type CollaboratorJob = {
+  id: string
+  sessionName: string
+  serviceDate: string | null
+  agreedPay: number
+  paidAmount: number
+  pending: number
+  payStatus: string
+  /** true = la sesión ya pasó y la deuda está activa. */
+  debtRegistered: boolean
+  projectId: string
+}
+
+/**
+ * Trabajos (sesiones) de un colaborador con su saldo, para la pantalla de
+ * Colaboradores: es ahí donde Abdiel lleva el control de lo que le debe a cada
+ * persona y desde donde registra los pagos.
+ */
+export async function listCollaboratorJobs(
+  studioId: string,
+  collaboratorId: string,
+): Promise<CollaboratorJob[]> {
+  const sb = untypedService()
+  const { data } = await sb
+    .from("project_collaborators")
+    .select(
+      "id, agreed_pay, paid_amount, pay_status, service_date, debt_registered_at, " +
+        "project:projects(id, name, event_date, deleted_at)",
+    )
+    .eq("studio_id", studioId)
+    .eq("collaborator_id", collaboratorId)
+    .is("deleted_at", null)
+    .gt("agreed_pay", 0)
+
+  const rows = (data ?? []) as Array<Record<string, unknown>>
+  return rows
+    .map((r) => {
+      const p = one(
+        r.project as
+          | { id: string; name: string; event_date: string | null; deleted_at: string | null }
+          | Array<{
+              id: string
+              name: string
+              event_date: string | null
+              deleted_at: string | null
+            }>
+          | null,
+      )
+      const agreed = Number(r.agreed_pay ?? 0)
+      const paid = Number(r.paid_amount ?? 0)
+      return {
+        id: String(r.id),
+        sessionName: p?.name ?? "Sesión",
+        serviceDate: (r.service_date as string) ?? p?.event_date ?? null,
+        agreedPay: agreed,
+        paidAmount: paid,
+        pending: Math.max(0, agreed - paid),
+        payStatus: String(r.pay_status ?? "pending"),
+        debtRegistered: r.debt_registered_at != null,
+        projectId: p?.id ?? "",
+        _deleted: p?.deleted_at != null,
+      }
+    })
+    .filter((j) => !j._deleted)
+    .map(({ _deleted, ...j }) => {
+      void _deleted
+      return j
+    })
+    .sort((a, b) => (a.serviceDate ?? "").localeCompare(b.serviceDate ?? ""))
+}
+
 /** Abonos registrados de una asignación (para el detalle en el CRM). */
 export async function listAssignmentPayments(
   studioId: string,

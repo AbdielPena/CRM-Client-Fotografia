@@ -32,6 +32,7 @@ import {
 import {
   registerAssignmentPayment,
   listAssignmentPayments,
+  listCollaboratorJobs,
 } from "@/server/services/collaborator-debt.service"
 import { syncProjectById } from "@/server/services/google-calendar.service"
 
@@ -211,6 +212,13 @@ export async function registerAssignmentPaymentAction(
             : "No se pudo registrar el pago."
     return { ok: false as const, error: human }
   }
+}
+
+/** Trabajos (sesiones) del colaborador con su saldo — pantalla Colaboradores. */
+export async function loadCollaboratorJobsAction(collaboratorId: string) {
+  const session = await requireStudioAuth()
+  const jobs = await listCollaboratorJobs(session.studioId, collaboratorId)
+  return { ok: true as const, jobs }
 }
 
 /** Abonos ya registrados de una asignación (para el modal de pago). */

@@ -8,10 +8,24 @@ import { cn } from "@/lib/utils/cn"
 import { formatCurrency } from "@/lib/utils/currency"
 import {
   loadCollaboratorPaymentsAction,
+  loadCollaboratorJobsAction,
   createCollaboratorPaymentAction,
   markCollaboratorPaymentPaidAction,
   cancelCollaboratorPaymentAction,
 } from "@/server/actions/collaborator.actions"
+import { AssignmentPaymentModal } from "./assignment-payment-modal"
+
+type Job = {
+  id: string
+  sessionName: string
+  serviceDate: string | null
+  agreedPay: number
+  paidAmount: number
+  pending: number
+  payStatus: string
+  debtRegistered: boolean
+  projectId: string
+}
 
 type Payment = {
   id: string
@@ -73,6 +87,8 @@ export function CollaboratorPaymentsModal({
   onChanged: () => void
 }) {
   const [payments, setPayments] = React.useState<Payment[] | null>(null)
+  const [jobs, setJobs] = React.useState<Job[] | null>(null)
+  const [payJob, setPayJob] = React.useState<Job | null>(null)
   const [status, setStatus] = React.useState<"pending" | "paid">("pending")
   const [pending, startTransition] = React.useTransition()
 
@@ -80,6 +96,10 @@ export function CollaboratorPaymentsModal({
     loadCollaboratorPaymentsAction(collaboratorId)
       .then((r) => setPayments(r.payments))
       .catch(() => setPayments([]))
+    // Trabajos (sesiones) con su saldo: es lo que Abdiel viene a pagar aquí.
+    loadCollaboratorJobsAction(collaboratorId)
+      .then((r) => setJobs(r.jobs))
+      .catch(() => setJobs([]))
   }, [collaboratorId])
 
   React.useEffect(() => {
@@ -142,7 +162,7 @@ export function CollaboratorPaymentsModal({
       >
         <div className="mb-1 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <Wallet className="h-4 w-4 text-brand" /> Pagos adicionales
+            <Wallet className="h-4 w-4 text-brand" /> Pagos de {collaboratorName}
           </h3>
           <button
             onClick={onClose}
@@ -151,10 +171,94 @@ export function CollaboratorPaymentsModal({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="mb-4 text-xs text-muted-foreground">
-          {collaboratorName} · bonos, ajustes, reembolsos u otros pagos no ligados a una sesión.
-          Se reflejan en Finanzas y en el portal del colaborador.
-        </p>
+
+        {/* ── Trabajos por sesión: lo que se le debe y el registro del pago ── */}
+        <div className="mb-6">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-foreground">
+              Trabajos (sesiones)
+            </h4>
+            {jobs && jobs.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                Por pagar:{" "}
+                <strong className="text-amber-600">
+                  {formatCurrency(
+                    jobs
+                      .filter((j) => j.debtRegistered && j.payStatus !== "cancelled")
+                      .reduce((s, j) => s + j.pending, 0),
+                    "DOP",
+                  )}
+                </strong>
+              </span>
+            )}
+          </div>
+
+          {jobs === null ? (
+            <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando trabajos…
+            </div>
+          ) : jobs.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
+              Sin trabajos con pago acordado.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {jobs.map((j) => {
+                const saldado = j.pending <= 0 || j.payStatus === "paid"
+                return (
+                  <div
+                    key={j.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-foreground">
+                        {j.sessionName}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        {j.serviceDate ?? "sin fecha"} ·{" "}
+                        {formatCurrency(j.agreedPay, "DOP")}
+                        {j.paidAmount > 0 && (
+                          <> · abonado {formatCurrency(j.paidAmount, "DOP")}</>
+                        )}
+                      </p>
+                      {!saldado && !j.debtRegistered && (
+                        <p className="mt-0.5 text-[10.5px] text-muted-foreground">
+                          Aún no se debe — la sesión no ha pasado
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      {saldado ? (
+                        <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+                          Pagado
+                        </span>
+                      ) : (
+                        <>
+                          <span className="text-xs font-semibold text-amber-600">
+                            {formatCurrency(j.pending, "DOP")}
+                          </span>
+                          <button
+                            onClick={() => setPayJob(j)}
+                            className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground hover:opacity-90"
+                          >
+                            Pagar
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="mb-2 border-t border-border/60 pt-4">
+          <h4 className="text-sm font-semibold text-foreground">Pagos adicionales</h4>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Bonos, ajustes o reembolsos que no van ligados a una sesión.
+          </p>
+        </div>
 
         {/* Alta */}
         <form
@@ -307,6 +411,27 @@ export function CollaboratorPaymentsModal({
           )}
         </div>
       </div>
+
+      {payJob && (
+        <AssignmentPaymentModal
+          row={{
+            id: payJob.id,
+            agreedPay: payJob.agreedPay,
+            paidAmount: payJob.paidAmount,
+            collaboratorName,
+            sessionName: payJob.sessionName,
+            serviceDate: payJob.serviceDate,
+          }}
+          projectId={payJob.projectId}
+          financeAccounts={financeAccounts}
+          onClose={() => setPayJob(null)}
+          onSaved={() => {
+            setPayJob(null)
+            reload()
+            onChanged()
+          }}
+        />
+      )}
     </div>
   )
 }
