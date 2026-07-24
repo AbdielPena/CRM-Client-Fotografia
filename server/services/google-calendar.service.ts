@@ -470,15 +470,20 @@ const GUEST_LOCK = {
 
 function buildEventBody(p: ProjectEventPayload) {
   const tz = p.timezone ?? 'America/Santo_Domingo'
-  // Si no hay hora → evento all-day
+  // Si no hay hora → evento all-day.
+  // IMPORTANTE: al hacer PATCH, Google NO acepta `start.date` y `start.dateTime`
+  // a la vez. Si el evento existente era timed y ahora pasa a all-day (o al
+  // revés), hay que ANULAR explícitamente el campo contrario (`dateTime: null`
+  // / `date: null`); si no, Google responde 400 "Invalid start time" y el
+  // calendario no se actualiza. Este era el bug de las fechas desincronizadas.
   if (!p.startTime) {
     const end = p.date // all-day
     return {
       summary: p.title,
       description: p.description ?? undefined,
       location: p.location ?? undefined,
-      start: { date: p.date },
-      end: { date: end },
+      start: { date: p.date, dateTime: null },
+      end: { date: end, dateTime: null },
       attendees: p.attendeeEmails?.map((email) => ({ email })),
       ...GUEST_LOCK,
       source: { title: 'PixelOS', url: process.env.NEXT_PUBLIC_APP_URL ?? '' },
@@ -494,8 +499,8 @@ function buildEventBody(p: ProjectEventPayload) {
     summary: p.title,
     description: p.description ?? undefined,
     location: p.location ?? undefined,
-    start: { dateTime: startDateTime, timeZone: tz },
-    end: { dateTime: endDateTime, timeZone: tz },
+    start: { dateTime: startDateTime, timeZone: tz, date: null },
+    end: { dateTime: endDateTime, timeZone: tz, date: null },
     attendees: p.attendeeEmails?.map((email) => ({ email })),
     ...GUEST_LOCK,
     source: { title: 'PixelOS', url: process.env.NEXT_PUBLIC_APP_URL ?? '' },
