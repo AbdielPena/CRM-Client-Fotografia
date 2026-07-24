@@ -81,3 +81,6 @@ tsconfig.tsbuildinfo
 next-deploy*.zip
 .gh-*.json
 .pr-*.json
+
+# Auditoría de seguridad (mapa de debilidades — no versionar)
+security-audit/

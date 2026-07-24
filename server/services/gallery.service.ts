@@ -6,6 +6,7 @@
 // Processing es inline (Sharp en Node runtime) post-upload. Para volúmenes
 // grandes mover a una Edge Function de Supabase con la misma lógica.
 
+import { safeEqual } from "@/lib/utils/timing-safe"
 import "server-only"
 
 import { randomUUID } from "node:crypto"
@@ -2175,7 +2176,11 @@ export async function getEmbeddableGallery(
   }
 
   const internalKey = process.env["INTERNAL_API_KEY"] ?? null
-  const keyOk = (!!key && key === g.embed_token) || (!!internalKey && key === internalKey)
+  // Comparación en tiempo constante (igual que el resto de /api/internal), para
+  // no filtrar el token ni la clave interna por diferencias de tiempo.
+  const keyOk =
+    (!!key && safeEqual(key, g.embed_token as string | null)) ||
+    (!!internalKey && safeEqual(key, internalKey))
   if (!keyOk) return { ok: false, reason: "forbidden" }
 
   const page = Math.max(1, opts.page ?? 1)

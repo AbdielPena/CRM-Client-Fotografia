@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { resendBookingApproval } from "@/server/services/booking-request.service"
 import { untypedService } from "@/server/supabase/untyped"
+import { safeEqual } from "@/lib/utils/timing-safe"
 
 /**
  * POST /api/internal/v1/booking-resend-approval?id=<bookingRequestId>
@@ -13,10 +14,20 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function POST(req: NextRequest) {
-  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
-  const expected = process.env.DRIVE_CRON_TOKEN || process.env.TASK_REMINDERS_CRON_TOKEN
-  if (!expected) return NextResponse.json({ error: "token no configurado" }, { status: 500 })
-  if (token !== expected) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Mismo guardia que el resto de /api/internal: INTERNAL_API_KEY (que SÍ está
+  // definida en producción) comparada en tiempo constante. Se acepta el header
+  // `x-internal-key` o `Authorization: Bearer` para no romper llamadores viejos.
+  const expected = process.env.INTERNAL_API_KEY ?? null
+  if (!expected) {
+    return NextResponse.json({ error: "INTERNAL_API_KEY no configurada" }, { status: 500 })
+  }
+  const provided =
+    req.headers.get("x-internal-key") ??
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
+    null
+  if (!safeEqual(provided, expected)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   const id = new URL(req.url).searchParams.get("id")
   if (!id) return NextResponse.json({ error: "falta ?id" }, { status: 400 })

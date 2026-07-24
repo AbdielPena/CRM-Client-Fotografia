@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server"
 
 import { wrapLuxuryEmail, emailButton } from "@/lib/email/luxury-layout"
 import { sendEmail } from "@/server/services/smtp.service"
+import { safeEqual } from "@/lib/utils/timing-safe"
 
 /**
  * POST /api/internal/v1/email-test?to=correo
@@ -111,10 +112,19 @@ const SAMPLES: { key: string; subject: string; inner: string }[] = [
 ]
 
 export async function POST(req: NextRequest) {
-  const token = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "")
-  const expected = process.env.DRIVE_CRON_TOKEN || process.env.TASK_REMINDERS_CRON_TOKEN
-  if (!expected) return NextResponse.json({ error: "token no configurado" }, { status: 500 })
-  if (token !== expected) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Mismo guardia que el resto de /api/internal: INTERNAL_API_KEY comparada en
+  // tiempo constante (acepta `x-internal-key` o `Authorization: Bearer`).
+  const expected = process.env.INTERNAL_API_KEY ?? null
+  if (!expected) {
+    return NextResponse.json({ error: "INTERNAL_API_KEY no configurada" }, { status: 500 })
+  }
+  const provided =
+    req.headers.get("x-internal-key") ??
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
+    null
+  if (!safeEqual(provided, expected)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
 
   const to = new URL(req.url).searchParams.get("to") || DEFAULT_TO
 
