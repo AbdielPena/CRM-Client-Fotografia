@@ -53,6 +53,19 @@ export async function createQuoteAction(formData: FormData) {
     return { ok: false as const, error: "El presupuesto tiene un formato inválido" }
   }
 
+  let deliverables: string[] = []
+  try {
+    const raw = String(formData.get("deliverables") ?? "")
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        deliverables = parsed.map((d) => String(d ?? "").trim()).filter(Boolean)
+      }
+    }
+  } catch {
+    deliverables = []
+  }
+
   const amount = rawAmount === "" ? null : Number(rawAmount)
   if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
     return { ok: false as const, error: "El precio acordado no es válido" }
@@ -66,6 +79,7 @@ export async function createQuoteAction(formData: FormData) {
       packageId: packageId || null,
       title: title || null,
       items,
+      deliverables,
       eventDate,
       amount,
       note: String(formData.get("note") ?? "").trim() || null,

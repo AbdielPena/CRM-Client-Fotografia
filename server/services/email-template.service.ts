@@ -296,13 +296,14 @@ export const TEMPLATE_CATALOG: Record<
     category: "booking",
     defaultSubject: "Tu cotización para {{event_date}} — {{studio_name}}",
     defaultBodyHtml:
-      `<p>Hola {{client_name}},</p><p>¡Gracias por confiar en nosotros! 💛 Aquí tienes la cotización de lo que conversamos:</p><p><strong>{{package_name}}</strong><br/>Fecha: {{event_date}}<br/>Inversión: <strong>{{quote_amount}}</strong></p><p>{{quote_note}}</p><p>Para reservar tu fecha solo completa tus datos en este enlace. Al terminar recibirás el contrato para firmar:</p><p><a href="{{quote_url}}" class="btn">Completar y reservar mi fecha</a></p><p>Si algo no coincide con lo que hablamos, respóndenos este correo y lo ajustamos.</p>`,
+      `<p>Hola {{client_name}},</p><p>¡Gracias por confiar en nosotros! 💛 Aquí tienes la cotización de lo que conversamos:</p><p><strong>{{package_name}}</strong><br/>Fecha: {{event_date}}<br/>Inversión: <strong>{{quote_amount}}</strong></p><p>{{quote_note}}</p>{{deliverables}}<p>Para reservar tu fecha solo completa tus datos en este enlace. Al terminar recibirás el contrato para firmar:</p><p><a href="{{quote_url}}" class="btn">Completar y reservar mi fecha</a></p><p>Si algo no coincide con lo que hablamos, respóndenos este correo y lo ajustamos.</p>`,
     variables: [
       { key: "client_name", label: "Cliente", example: "María" },
       { key: "package_name", label: "Plan", example: "Experiencia Editorial" },
       { key: "event_date", label: "Fecha de la sesión", example: "15 de septiembre de 2026" },
       { key: "quote_amount", label: "Precio acordado", example: "RD$58,600.00" },
       { key: "quote_note", label: "Nota tuya", example: "Incluye 2 vestidos" },
+      { key: "deliverables", label: "Qué incluye (lista)", example: "• 200 fotos digitales…" },
       { key: "quote_url", label: "Link para reservar", example: "https://..." },
       { key: "studio_name", label: "Estudio", example: "AbbyPixel" },
     ],

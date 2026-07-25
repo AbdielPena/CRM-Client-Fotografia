@@ -135,6 +135,21 @@ export default async function CotizacionPage({
               Precio acordado
             </p>
           )}
+          {quote.deliverables.length > 0 && (
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                Qué incluye
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {quote.deliverables.map((d, i) => (
+                  <li key={i} className="flex gap-2 text-[13px] text-gray-700">
+                    <span className="text-emerald-600">✓</span>
+                    <span>{d}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {quote.note && (
             <p className="mt-3 rounded-lg bg-gray-50 p-3 text-[13px] text-gray-600">
               {quote.note}

@@ -41,6 +41,8 @@ export type CreateQuoteInput = {
   title?: string | null
   /** Desglose del presupuesto (cotización libre). */
   items?: QuoteItem[]
+  /** Qué recibe el cliente: digitales, plazos, impresiones, álbum, marcos… */
+  deliverables?: string[]
   eventDate: string
   /** Precio acordado. Si no viene: el del plan, o la suma de las líneas. */
   amount?: number | null
@@ -109,6 +111,9 @@ export async function createManualQuote(
     }))
     .filter((i) => i.concept !== "" || i.price > 0)
   const itemsTotal = items.reduce((s2, i) => s2 + i.qty * i.price, 0)
+  const deliverables = (input.deliverables ?? [])
+    .map((d) => String(d ?? "").trim())
+    .filter((d) => d !== "")
 
   // Plan (opcional). Sin plan hace falta un título: es lo que nombra la sesión.
   type QuotePkg = {
@@ -184,6 +189,7 @@ export async function createManualQuote(
       quote_amount: amount,
       quote_title: title,
       quote_items: items,
+      quote_deliverables: deliverables,
       quote_note: input.note?.trim() || null,
       quote_created_by: actorId,
       quote_sent_at: nowIso,
@@ -216,6 +222,12 @@ export async function createManualQuote(
         event_date: dateLabel(input.eventDate),
         quote_amount: money(amount),
         quote_note: input.note?.trim() || "",
+        deliverables:
+          deliverables.length > 0
+            ? `<p style="margin:12px 0 4px"><strong>Qué incluye:</strong></p><ul style="margin:0;padding-left:18px">${deliverables
+                .map((d) => `<li>${d}</li>`)
+                .join("")}</ul>`
+            : "",
         quote_url: url,
         studio_name: studio.name,
       },
@@ -269,6 +281,7 @@ export type QuoteForForm = {
   packageName: string
   title: string
   items: QuoteItem[]
+  deliverables: string[]
   currency: string
   alreadyAccepted: boolean
 }
@@ -286,7 +299,7 @@ export async function getQuoteByToken(
     .from("booking_requests")
     .select(
       "id, status, client_name, client_email, client_phone, event_date, " +
-        "quote_amount, quote_note, quote_accepted_at, quote_title, quote_items, " +
+        "quote_amount, quote_note, quote_accepted_at, quote_title, quote_items, quote_deliverables, " +
         "pricing_snapshot, studio:studios(slug, name, currency), package:packages(name, slug)",
     )
     .eq("quote_token", token)
@@ -319,6 +332,9 @@ export async function getQuoteByToken(
     packageName: pkg?.name ?? String(r.quote_title ?? "Cotización"),
     title: String(r.quote_title ?? pkg?.name ?? "Cotización"),
     items: Array.isArray(r.quote_items) ? (r.quote_items as QuoteItem[]) : [],
+    deliverables: Array.isArray(r.quote_deliverables)
+      ? (r.quote_deliverables as string[])
+      : [],
     currency: studio.currency ?? "DOP",
     // Si ya la aceptó, el formulario no debe volver a procesarla.
     alreadyAccepted:
@@ -361,7 +377,7 @@ export async function acceptQuote(params: {
     .from("booking_requests")
     .select(
       "id, studio_id, status, quote_amount, quote_accepted_at, metadata, " +
-        "quote_created_by, quote_title, package_id",
+        "quote_created_by, quote_title, package_id, quote_deliverables",
     )
     .eq("quote_token", params.token)
     .maybeSingle()
@@ -377,6 +393,7 @@ export async function acceptQuote(params: {
     quote_created_by: string | null
     quote_title: string | null
     package_id: string | null
+    quote_deliverables: string[] | null
   }
   if (q.quote_accepted_at || q.status !== "quoted") {
     return { status: "already_accepted", requestId: q.id }
@@ -447,6 +464,13 @@ export async function acceptQuote(params: {
         }
         // Sin plan, la sesión se llama como el trabajo cotizado.
         if (!q.package_id && q.quote_title) patch.name = q.quote_title
+        // Lo acordado queda escrito en la sesión (constancia de qué incluye).
+        const ent = Array.isArray(q.quote_deliverables) ? q.quote_deliverables : []
+        if (ent.length > 0) {
+          patch.notes =
+            "Incluye (según cotización):\n" +
+            ent.map((d) => "• " + d).join("\n")
+        }
         await sb.from("projects").update(patch).eq("id", projectId)
       }
     } catch (e) {

@@ -188,7 +188,14 @@ function QuoteModal({
   const [items, setItems] = React.useState<
     Array<{ concept: string; qty: string; price: string }>
   >([{ concept: "", qty: "1", price: "" }])
+  const [deliverables, setDeliverables] = React.useState<string[]>([""])
   const [saving, setSaving] = React.useState(false)
+
+  const setDeliv = (i: number, v: string) =>
+    setDeliverables((p2) => p2.map((d, j) => (j === i ? v : d)))
+  const addDeliv = () => setDeliverables((p2) => [...p2, ""])
+  const removeDeliv = (i: number) =>
+    setDeliverables((p2) => (p2.length === 1 ? p2 : p2.filter((_, j) => j !== i)))
 
   const itemsTotal = items.reduce(
     (t, i) => t + (Number(i.qty) || 1) * (Number(i.price) || 0),
@@ -239,6 +246,10 @@ function QuoteModal({
     } else {
       fd.delete("title")
     }
+    fd.set(
+      "deliverables",
+      JSON.stringify(deliverables.map((d) => d.trim()).filter((d) => d !== "")),
+    )
     try {
       const r = await createQuoteAction(fd)
       if (!r.ok) {
@@ -437,6 +448,49 @@ function QuoteModal({
                 : `Está ${formatCurrency(diferencia, currency)} por encima del precio de lista.`}
             </p>
           )}
+
+          {/* Qué recibe el cliente. Texto libre: cada estudio y cada trabajo
+              incluyen cosas distintas. */}
+          <div>
+            <label className={labelCls}>Qué incluye (entregables)</label>
+            <div className="space-y-2">
+              {deliverables.map((d, i) => (
+                <div key={i} className="flex gap-2">
+                  <input
+                    value={d}
+                    onChange={(e) => setDeliv(i, e.target.value)}
+                    className={inputCls}
+                    placeholder={
+                      i === 0
+                        ? "Ej: 200 fotos digitales editadas en alta resolución"
+                        : i === 1
+                          ? "Ej: Entrega final a los 21 días de la selección"
+                          : "Ej: Álbum 30x30 de 20 páginas"
+                    }
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeDeliv(i)}
+                    className="rounded-md px-2 text-muted-foreground hover:bg-muted"
+                    title="Quitar"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={addDeliv}
+              className="mt-2 text-xs font-medium text-primary hover:opacity-80"
+            >
+              + Agregar entregable
+            </button>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Digitales, plazos de entrega, impresiones, álbum, enmarcado… Lo que
+              escribas aquí lo ve el cliente y queda guardado en la sesión.
+            </p>
+          </div>
 
           <div>
             <label className={labelCls}>Nota para el cliente</label>
