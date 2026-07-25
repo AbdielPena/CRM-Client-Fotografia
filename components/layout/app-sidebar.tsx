@@ -102,6 +102,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Clientes y sesiones",
     items: [
       { type: "link", href: "/bookings", label: "Solicitudes", icon: Inbox },
+      { type: "link", href: "/cotizaciones", label: "Cotizaciones", icon: FileText },
       { type: "link", href: "/leads", label: "Leads", icon: UserPlus },
       { type: "link", href: "/clients", label: "Clientes", icon: Users },
       { type: "link", href: "/projects", label: "Sesiones", icon: FolderOpen },

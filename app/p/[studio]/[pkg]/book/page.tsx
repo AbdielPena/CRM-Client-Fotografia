@@ -5,6 +5,10 @@ import { ArrowLeft, CalendarCheck2 } from "lucide-react"
 import { createSupabasePublicClient } from "@/server/supabase/server"
 import { formatCurrency } from "@/lib/utils/currency"
 import { createBookingRequestSchema } from "@/lib/validations/booking-request.schema"
+import {
+  getQuoteByToken,
+  acceptQuote,
+} from "@/server/services/booking-quote.service"
 import { createPublicBookingRequest } from "@/server/services/booking-request.service"
 import { getBookingFormConfigBySlug } from "@/server/services/booking-form.service"
 import { validateFormData } from "@/lib/forms/types"
@@ -164,6 +168,24 @@ async function submitBookingRequest(formData: FormData) {
     null
   const userAgent = hdrs.get("user-agent") ?? null
 
+  // Cotización: completa la solicitud que YA existe y se auto-aprueba.
+  const quoteToken = String(formData.get("quoteToken") ?? "").trim()
+  if (quoteToken) {
+    const accepted = await acceptQuote({
+      token: quoteToken,
+      data: parsed.data,
+      customFields,
+      ip,
+      userAgent,
+    })
+    if (accepted.status === "not_found") notFound()
+    redirect(
+      `/p/${raw.studioSlug}/${raw.packageSlug}/book/success?rid=${accepted.requestId}${
+        accepted.status === "already_accepted" ? "&dup=1" : ""
+      }`,
+    )
+  }
+
   const result = await createPublicBookingRequest(parsed.data, {
     ip: ip ?? undefined,
     userAgent: userAgent ?? undefined,
@@ -195,7 +217,7 @@ export default async function BookingFormPage({
   searchParams,
 }: {
   params: PageParams
-  searchParams?: { error?: string }
+  searchParams?: { error?: string; q?: string }
 }) {
   const data = await fetchPackageSummary(params.studio, params.pkg)
   if (!data) notFound()
@@ -224,6 +246,22 @@ export default async function BookingFormPage({
   const config = await getBookingFormConfigBySlug(params.studio).catch(
     (): BookingFormConfig => ({}),
   )
+  // Cotización (link ?q=): el estudio ya acordó el trato por WhatsApp y solo
+  // falta que el cliente complete sus datos. Se prellena y se muestra el
+  // precio ACORDADO en vez del precio de lista.
+  const quote = searchParams?.q ? await getQuoteByToken(searchParams.q) : null
+  const quoteValid =
+    quote && !quote.alreadyAccepted && quote.packageSlug === params.pkg
+  const prefill: Record<string, string> | undefined = quoteValid
+    ? {
+        clientName: quote.clientName,
+        clientEmail: quote.clientEmail,
+        clientPhone: quote.clientPhone ?? "",
+        clientWhatsapp: quote.clientPhone ?? "",
+        eventDate: quote.eventDate,
+      }
+    : undefined
+
   const builtins = resolveBuiltins(config)
   const clientFields = builtins.filter((b) => b.group === "client" && b.enabled)
   const eventFields = builtins.filter((b) => b.group === "event" && b.enabled)
@@ -291,6 +329,42 @@ export default async function BookingFormPage({
             {/* Hidden: slugs del path */}
             <input type="hidden" name="studioSlug" value={params.studio} />
             <input type="hidden" name="packageSlug" value={params.pkg} />
+            {quoteValid && (
+              <input type="hidden" name="quoteToken" value={searchParams?.q ?? ""} />
+            )}
+
+            {quoteValid && quote && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <p className="text-sm font-semibold text-emerald-900">
+                  Tu cotización está lista 💛
+                </p>
+                <p className="mt-1 text-sm text-emerald-800">
+                  {quote.packageName} ·{" "}
+                  <strong>
+                    {new Intl.NumberFormat("es-DO", {
+                      style: "currency",
+                      currency,
+                      minimumFractionDigits: 2,
+                    }).format(quote.amount)}
+                  </strong>
+                </p>
+                {quote.note && (
+                  <p className="mt-1 text-[13px] text-emerald-800">{quote.note}</p>
+                )}
+                <p className="mt-2 text-[12px] text-emerald-700">
+                  Completa tus datos y recibirás el contrato para firmar.
+                </p>
+              </div>
+            )}
+
+            {quote?.alreadyAccepted && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm text-amber-900">
+                  Esta cotización ya fue completada. Si necesitas cambiar algo,
+                  escríbenos y con gusto te ayudamos.
+                </p>
+              </div>
+            )}
 
             {/* Honeypot invisible para humanos — oculto vía CSS y tabIndex */}
             <div
@@ -327,6 +401,7 @@ export default async function BookingFormPage({
                       f={f}
                       minDate={minDate}
                       pkgEventType={pkg.event_type}
+                      prefill={prefill}
                     />
                   ))}
                 </div>
@@ -346,6 +421,7 @@ export default async function BookingFormPage({
                       f={f}
                       minDate={minDate}
                       pkgEventType={pkg.event_type}
+                      prefill={prefill}
                     />
                   ))}
                 </div>
@@ -501,11 +577,15 @@ function BuiltinInput({
   f,
   minDate,
   pkgEventType,
+  prefill,
 }: {
   f: ResolvedBuiltin
   minDate: string
   pkgEventType: string | null
+  /** Valores que llegan de una cotización (link ?q=) para no pedirlos otra vez. */
+  prefill?: Record<string, string>
 }) {
+  const pre = prefill?.[f.key]
   const inner =
     f.input === "textarea" ? (
       <label className="block">
@@ -518,6 +598,7 @@ function BuiltinInput({
           rows={4}
           maxLength={2000}
           required={f.required}
+          defaultValue={pre}
           placeholder={f.placeholder}
           className={INPUT_CLS}
           style={{ boxShadow: "none" }}
@@ -534,7 +615,7 @@ function BuiltinInput({
           f.key === "eventType" ? pkgEventType ?? "Ej: Quinceañera" : f.placeholder
         }
         hint={f.hint}
-        defaultValue={f.key === "eventType" ? pkgEventType ?? "" : undefined}
+        defaultValue={pre ?? (f.key === "eventType" ? pkgEventType ?? "" : undefined)}
         min={f.key === "eventDate" ? minDate : f.key === "guestCount" ? 0 : undefined}
       />
     )
