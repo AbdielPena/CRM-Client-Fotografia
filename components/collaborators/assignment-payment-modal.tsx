@@ -218,7 +218,9 @@ export function AssignmentPaymentModal({
                 onChange={(e) => setAccountId(e.target.value)}
                 className={inputCls}
               >
-                <option value="">(usar la cuenta por defecto)</option>
+                <option value="">
+                  Sin cuenta — no descuenta de ningún banco
+                </option>
                 {financeAccounts.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}

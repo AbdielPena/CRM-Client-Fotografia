@@ -513,10 +513,18 @@ export async function recordCollaboratorPartialPayment(
     notas?: string | null
     /** true = con este abono la deuda queda saldada. */
     settle: boolean
+    /** Lo que queda por pagar tras este abono (baja la cuenta por pagar). */
+    saldoPendiente?: number
+    /** Desglose acordado/abonado/resta que se guarda en la cuenta por pagar. */
+    payableNotas?: string | null
   },
 ): Promise<FinzResult & { transactionId?: string; alreadyExisted?: boolean }> {
   const workspaceId = await getFinanzAppWorkspaceId(studioId)
   if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+
+  // Si no se indicó cuenta, se usa la cuenta por defecto del estudio. Sin
+  // cuenta el gasto queda registrado pero NO descuenta de ningún banco.
+  const cuenta = await resolveFinanzAppAccount(studioId, input.accountId)
 
   const sb = untypedService()
   const { data, error } = await sb.rpc("finz_record_collab_payment", {
@@ -525,10 +533,12 @@ export async function recordCollaboratorPartialPayment(
     p_payable_reference: collabRef(input.assignmentId),
     p_monto: input.monto,
     p_fecha: (input.fecha ?? new Date().toISOString()).slice(0, 10),
-    p_cuenta_id: input.accountId ?? null,
+    p_cuenta_id: cuenta,
     p_descripcion: input.descripcion ?? "Pago a colaborador (CRM)",
     p_notas: input.notas ?? null,
     p_settle: input.settle,
+    p_saldo_pendiente: input.saldoPendiente ?? null,
+    p_payable_notas: input.payableNotas ?? null,
   })
   if (error)
     throwServiceError("FINZ_COLLAB_PAYMENT_FAILED", error, {

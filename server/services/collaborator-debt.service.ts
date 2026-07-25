@@ -466,6 +466,15 @@ export async function registerAssignmentPayment(
       }`,
       notas: `Recibo ${receiptNumber} · Registrado desde el CRM`,
       settle: payStatus === "paid",
+      // Con esto la cuenta por pagar de FinanzApp muestra el saldo REAL que
+      // queda, no el total acordado.
+      saldoPendiente: pending,
+      payableNotas:
+        payStatus === "paid"
+          ? `Saldado. Acordado ${money(agreed)} — pagado completo. Último recibo ${receiptNumber}.`
+          : `Acordado ${money(agreed)} · abonado ${money(paidTotal)} · resta ${money(
+              pending,
+            )}. Último recibo ${receiptNumber}.`,
     })
     finanzapp = r.ok === true
     if (finanzapp) {
