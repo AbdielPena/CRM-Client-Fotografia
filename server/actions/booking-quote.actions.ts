@@ -21,8 +21,37 @@ export async function createQuoteAction(formData: FormData) {
   if (!clientName) return { ok: false as const, error: "Escribe el nombre del cliente" }
   if (!clientEmail || !clientEmail.includes("@"))
     return { ok: false as const, error: "Escribe un correo válido: ahí le llega la cotización" }
-  if (!packageId) return { ok: false as const, error: "Elige el plan" }
   if (!eventDate) return { ok: false as const, error: "Elige la fecha de la sesión" }
+
+  // Cotización LIBRE: sin plan, con su propio presupuesto por líneas.
+  const title = String(formData.get("title") ?? "").trim()
+  if (!packageId && !title) {
+    return {
+      ok: false as const,
+      error: "Escribe el título del trabajo que estás cotizando",
+    }
+  }
+  let items: Array<{ concept: string; qty: number; price: number }> = []
+  try {
+    const raw = String(formData.get("items") ?? "")
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        items = parsed
+          .map((i) => {
+            const o = i as Record<string, unknown>
+            return {
+              concept: String(o.concept ?? "").trim(),
+              qty: Number(o.qty) > 0 ? Number(o.qty) : 1,
+              price: Number(o.price) || 0,
+            }
+          })
+          .filter((i) => i.concept !== "" || i.price > 0)
+      }
+    }
+  } catch {
+    return { ok: false as const, error: "El presupuesto tiene un formato inválido" }
+  }
 
   const amount = rawAmount === "" ? null : Number(rawAmount)
   if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
@@ -34,7 +63,9 @@ export async function createQuoteAction(formData: FormData) {
       clientName,
       clientEmail,
       clientPhone: String(formData.get("clientPhone") ?? "").trim() || null,
-      packageId,
+      packageId: packageId || null,
+      title: title || null,
+      items,
       eventDate,
       amount,
       note: String(formData.get("note") ?? "").trim() || null,
@@ -49,7 +80,11 @@ export async function createQuoteAction(formData: FormData) {
         ? "No se encontró ese plan."
         : msg === "QUOTE_DATE_REQUIRED"
           ? "Falta la fecha de la sesión."
-          : "No se pudo crear la cotización."
+          : msg === "QUOTE_TITLE_REQUIRED"
+            ? "Escribe el título del trabajo cotizado."
+            : msg === "QUOTE_AMOUNT_REQUIRED"
+              ? "El presupuesto no puede quedar en cero."
+              : "No se pudo crear la cotización."
     return { ok: false as const, error: human }
   }
 }

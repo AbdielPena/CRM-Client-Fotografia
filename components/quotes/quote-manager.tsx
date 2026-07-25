@@ -180,11 +180,31 @@ function QuoteModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const [mode, setMode] = React.useState<"plan" | "libre">("plan")
   const [packageId, setPackageId] = React.useState(packages[0]?.id ?? "")
   const [amount, setAmount] = React.useState(
     packages[0] ? String(packages[0].price) : "",
   )
+  const [items, setItems] = React.useState<
+    Array<{ concept: string; qty: string; price: string }>
+  >([{ concept: "", qty: "1", price: "" }])
   const [saving, setSaving] = React.useState(false)
+
+  const itemsTotal = items.reduce(
+    (t, i) => t + (Number(i.qty) || 1) * (Number(i.price) || 0),
+    0,
+  )
+  // En modo libre el total sale del presupuesto (editable después).
+  React.useEffect(() => {
+    if (mode === "libre") setAmount(itemsTotal > 0 ? String(itemsTotal) : "")
+  }, [mode, itemsTotal])
+
+  const setItem = (i: number, k: "concept" | "qty" | "price", v: string) =>
+    setItems((prev) => prev.map((it, j) => (j === i ? { ...it, [k]: v } : it)))
+  const addItem = () =>
+    setItems((prev) => [...prev, { concept: "", qty: "1", price: "" }])
+  const removeItem = (i: number) =>
+    setItems((prev) => (prev.length === 1 ? prev : prev.filter((_, j) => j !== i)))
 
   const pkg = packages.find((p) => p.id === packageId)
   const listPrice = pkg?.price ?? 0
@@ -202,6 +222,23 @@ function QuoteModal({
     e.preventDefault()
     setSaving(true)
     const fd = new FormData(e.currentTarget)
+    if (mode === "libre") {
+      fd.delete("packageId")
+      fd.set(
+        "items",
+        JSON.stringify(
+          items
+            .map((i) => ({
+              concept: i.concept.trim(),
+              qty: Number(i.qty) || 1,
+              price: Number(i.price) || 0,
+            }))
+            .filter((i) => i.concept !== "" || i.price > 0),
+        ),
+      )
+    } else {
+      fd.delete("title")
+    }
     try {
       const r = await createQuoteAction(fd)
       if (!r.ok) {
@@ -262,22 +299,111 @@ function QuoteModal({
             </div>
           </div>
 
-          <div>
-            <label className={labelCls}>Plan *</label>
-            <select
-              name="packageId"
-              value={packageId}
-              onChange={(e) => onPackageChange(e.target.value)}
-              className={inputCls}
-              required
-            >
-              {packages.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} — {formatCurrency(p.price, currency)}
-                </option>
-              ))}
-            </select>
+          {/* Plan de la lista o presupuesto propio */}
+          <div className="flex gap-2 rounded-lg bg-muted/50 p-1">
+            {(["plan", "libre"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={cn(
+                  "flex-1 rounded-md px-3 py-1.5 text-xs font-medium",
+                  mode === m
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {m === "plan" ? "Desde un plan" : "Presupuesto libre"}
+              </button>
+            ))}
           </div>
+
+          {mode === "plan" ? (
+            <div>
+              <label className={labelCls}>Plan *</label>
+              <select
+                name="packageId"
+                value={packageId}
+                onChange={(e) => onPackageChange(e.target.value)}
+                className={inputCls}
+                required
+              >
+                {packages.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — {formatCurrency(p.price, currency)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className={labelCls}>¿Qué estás cotizando? *</label>
+                <input
+                  name="title"
+                  className={inputCls}
+                  placeholder="Ej: Sesión familiar en la playa"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className={labelCls}>Presupuesto</label>
+                <div className="space-y-2">
+                  {items.map((it, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input
+                        value={it.concept}
+                        onChange={(e) => setItem(i, "concept", e.target.value)}
+                        placeholder="Concepto"
+                        className={cn(inputCls, "flex-1")}
+                      />
+                      <input
+                        value={it.qty}
+                        onChange={(e) => setItem(i, "qty", e.target.value)}
+                        type="number"
+                        min="1"
+                        className={cn(inputCls, "w-14 text-center")}
+                        title="Cantidad"
+                      />
+                      <input
+                        value={it.price}
+                        onChange={(e) => setItem(i, "price", e.target.value)}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        className={cn(inputCls, "w-28")}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeItem(i)}
+                        className="rounded-md px-2 text-muted-foreground hover:bg-muted"
+                        title="Quitar línea"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={addItem}
+                    className="text-xs font-medium text-primary hover:opacity-80"
+                  >
+                    + Agregar línea
+                  </button>
+                  <span className="text-xs text-muted-foreground">
+                    Suma:{" "}
+                    <strong className="text-foreground">
+                      {formatCurrency(itemsTotal, currency)}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -299,7 +425,7 @@ function QuoteModal({
             </div>
           </div>
 
-          {diferencia !== 0 && monto > 0 && (
+          {mode === "plan" && diferencia !== 0 && monto > 0 && (
             <p
               className={cn(
                 "text-[11px]",

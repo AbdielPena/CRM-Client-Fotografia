@@ -24,13 +24,25 @@ import { logActivity } from "./activity.service"
  * plan: se aplica al proyecto después de aprobar, y de ahí lo toma la factura.
  */
 
+/** Una línea del presupuesto libre. */
+export type QuoteItem = {
+  concept: string
+  qty: number
+  price: number
+}
+
 export type CreateQuoteInput = {
   clientName: string
   clientEmail: string
   clientPhone?: string | null
-  packageId: string
+  /** Plan de la lista. Vacío = cotización LIBRE (con su propio presupuesto). */
+  packageId?: string | null
+  /** Título del trabajo cotizado. Obligatorio si no hay plan. */
+  title?: string | null
+  /** Desglose del presupuesto (cotización libre). */
+  items?: QuoteItem[]
   eventDate: string
-  /** Precio acordado. Si no viene, se usa el del plan. */
+  /** Precio acordado. Si no viene: el del plan, o la suma de las líneas. */
   amount?: number | null
   /** Nota visible para el cliente ("incluye 2 vestidos", "precio especial"). */
   note?: string | null
@@ -88,15 +100,18 @@ export async function createManualQuote(
   if (!email) throw new Error("QUOTE_EMAIL_REQUIRED")
   if (!input.eventDate) throw new Error("QUOTE_DATE_REQUIRED")
 
-  // Plan + estudio (para el precio de lista y los slugs del link público).
-  const { data: pkgRow } = await sb
-    .from("packages")
-    .select("id, name, slug, price, currency, event_type, studio_id")
-    .eq("id", input.packageId)
-    .eq("studio_id", studioId)
-    .maybeSingle()
-  if (!pkgRow) throw new Error("QUOTE_PACKAGE_NOT_FOUND")
-  const pkg = pkgRow as {
+  // Presupuesto libre: líneas propias, sin plan de la lista.
+  const items = (input.items ?? [])
+    .map((i) => ({
+      concept: String(i.concept ?? "").trim(),
+      qty: Number(i.qty) > 0 ? Number(i.qty) : 1,
+      price: Number(i.price) || 0,
+    }))
+    .filter((i) => i.concept !== "" || i.price > 0)
+  const itemsTotal = items.reduce((s2, i) => s2 + i.qty * i.price, 0)
+
+  // Plan (opcional). Sin plan hace falta un título: es lo que nombra la sesión.
+  type QuotePkg = {
     id: string
     name: string
     slug: string
@@ -104,6 +119,20 @@ export async function createManualQuote(
     currency: string | null
     event_type: string | null
   }
+  let pkg: QuotePkg | null = null
+  if (input.packageId) {
+    const { data: pkgRow } = await sb
+      .from("packages")
+      .select("id, name, slug, price, currency, event_type, studio_id")
+      .eq("id", input.packageId)
+      .eq("studio_id", studioId)
+      .maybeSingle()
+    if (!pkgRow) throw new Error("QUOTE_PACKAGE_NOT_FOUND")
+    pkg = pkgRow as QuotePkg
+  } else if (!input.title?.trim()) {
+    throw new Error("QUOTE_TITLE_REQUIRED")
+  }
+  const title = input.title?.trim() || pkg?.name || "Cotización"
 
   const { data: studioRow } = await sb
     .from("studios")
@@ -113,11 +142,12 @@ export async function createManualQuote(
   const studio = studioRow as { name: string; slug: string } | null
   if (!studio) throw new Error("QUOTE_STUDIO_NOT_FOUND")
 
-  const listPrice = Number(pkg.price ?? 0)
+  const listPrice = pkg ? Number(pkg.price ?? 0) : itemsTotal
   const amount =
     input.amount != null && Number.isFinite(input.amount) && input.amount > 0
       ? Math.round(Number(input.amount) * 100) / 100
       : listPrice
+  if (amount <= 0) throw new Error("QUOTE_AMOUNT_REQUIRED")
 
   const token = randomBytes(24).toString("base64url")
   const nowIso = new Date().toISOString()
@@ -126,7 +156,7 @@ export async function createManualQuote(
     .from("booking_requests")
     .insert({
       studio_id: studioId,
-      package_id: pkg.id,
+      package_id: pkg?.id ?? null,
       status: "quoted",
       client_name: input.clientName.trim(),
       client_email: email,
@@ -134,21 +164,26 @@ export async function createManualQuote(
       event_date: input.eventDate.slice(0, 10),
       // Fotografía del plan y del precio al momento de cotizar: si mañana
       // cambia la lista de precios, la cotización enviada no se altera.
-      package_snapshot: {
-        id: pkg.id,
-        name: pkg.name,
-        slug: pkg.slug,
-        event_type: pkg.event_type,
-        list_price: listPrice,
-      },
+      package_snapshot: pkg
+        ? {
+            id: pkg.id,
+            name: pkg.name,
+            slug: pkg.slug,
+            event_type: pkg.event_type,
+            list_price: listPrice,
+          }
+        : { custom: true, title },
       pricing_snapshot: {
         list_price: listPrice,
         agreed_price: amount,
-        currency: pkg.currency ?? "DOP",
+        items,
+        currency: pkg?.currency ?? "DOP",
       },
       metadata: { source: "cotizacion_manual" },
       quote_token: token,
       quote_amount: amount,
+      quote_title: title,
+      quote_items: items,
       quote_note: input.note?.trim() || null,
       quote_created_by: actorId,
       quote_sent_at: nowIso,
@@ -158,7 +193,10 @@ export async function createManualQuote(
   if (error) throwServiceError("QUOTE_CREATE_FAILED", error, { studioId })
 
   const quoteId = String((row as { id: string }).id)
-  const url = `${appUrl()}/p/${studio.slug}/${pkg.slug}/book?q=${token}`
+  // Con plan: el formulario público de ese plan. Sin plan: ruta propia.
+  const url = pkg
+    ? `${appUrl()}/p/${studio.slug}/${pkg.slug}/book?q=${token}`
+    : `${appUrl()}/cotizacion/${token}`
 
   // Correo al cliente con la cotización y el link al formulario.
   let emailed = false
@@ -174,7 +212,7 @@ export async function createManualQuote(
       "booking_quote_sent",
       {
         client_name: firstName || input.clientName,
-        package_name: pkg.name,
+        package_name: title,
         event_date: dateLabel(input.eventDate),
         quote_amount: money(amount),
         quote_note: input.note?.trim() || "",
@@ -207,7 +245,7 @@ export async function createManualQuote(
       entityType: "booking_request",
       entityId: quoteId,
       action: "booking_quote.created",
-      metadata: { amount, list_price: listPrice, package: pkg.name, emailed },
+      metadata: { amount, list_price: listPrice, package: pkg?.name ?? null, title, emailed },
     })
   } catch {
     /* el historial no bloquea */
@@ -219,6 +257,8 @@ export async function createManualQuote(
 export type QuoteForForm = {
   id: string
   studioSlug: string
+  studioName: string
+  /** Vacío en cotizaciones libres (sin plan). */
   packageSlug: string
   clientName: string
   clientEmail: string
@@ -227,6 +267,9 @@ export type QuoteForForm = {
   amount: number
   note: string | null
   packageName: string
+  title: string
+  items: QuoteItem[]
+  currency: string
   alreadyAccepted: boolean
 }
 
@@ -243,30 +286,40 @@ export async function getQuoteByToken(
     .from("booking_requests")
     .select(
       "id, status, client_name, client_email, client_phone, event_date, " +
-        "quote_amount, quote_note, quote_accepted_at, package_snapshot, " +
-        "studio:studios(slug), package:packages(name, slug)",
+        "quote_amount, quote_note, quote_accepted_at, quote_title, quote_items, " +
+        "pricing_snapshot, studio:studios(slug, name, currency), package:packages(name, slug)",
     )
     .eq("quote_token", token)
     .maybeSingle()
   if (!data) return null
   const r = data as Record<string, unknown>
-  const studio = one(r.studio as { slug: string } | { slug: string }[] | null)
+  const studio = one(
+    r.studio as
+      | { slug: string; name: string; currency: string | null }
+      | Array<{ slug: string; name: string; currency: string | null }>
+      | null,
+  )
   const pkg = one(
     r.package as { name: string; slug: string } | Array<{ name: string; slug: string }> | null,
   )
-  if (!studio || !pkg) return null
+  // Sin plan es válido (cotización libre); sin estudio no.
+  if (!studio) return null
 
   return {
     id: String(r.id),
     studioSlug: studio.slug,
-    packageSlug: pkg.slug,
+    studioName: studio.name,
+    packageSlug: pkg?.slug ?? "",
     clientName: String(r.client_name ?? ""),
     clientEmail: String(r.client_email ?? ""),
     clientPhone: (r.client_phone as string) ?? null,
     eventDate: String(r.event_date ?? "").slice(0, 10),
     amount: Number(r.quote_amount ?? 0),
     note: (r.quote_note as string) ?? null,
-    packageName: pkg.name,
+    packageName: pkg?.name ?? String(r.quote_title ?? "Cotización"),
+    title: String(r.quote_title ?? pkg?.name ?? "Cotización"),
+    items: Array.isArray(r.quote_items) ? (r.quote_items as QuoteItem[]) : [],
+    currency: studio.currency ?? "DOP",
     // Si ya la aceptó, el formulario no debe volver a procesarla.
     alreadyAccepted:
       r.quote_accepted_at != null || String(r.status ?? "") !== "quoted",
@@ -307,7 +360,8 @@ export async function acceptQuote(params: {
   const { data: found } = await sb
     .from("booking_requests")
     .select(
-      "id, studio_id, status, quote_amount, quote_accepted_at, metadata, quote_created_by",
+      "id, studio_id, status, quote_amount, quote_accepted_at, metadata, " +
+        "quote_created_by, quote_title, package_id",
     )
     .eq("quote_token", params.token)
     .maybeSingle()
@@ -321,6 +375,8 @@ export async function acceptQuote(params: {
     quote_accepted_at: string | null
     metadata: Record<string, unknown> | null
     quote_created_by: string | null
+    quote_title: string | null
+    package_id: string | null
   }
   if (q.quote_accepted_at || q.status !== "quoted") {
     return { status: "already_accepted", requestId: q.id }
@@ -385,10 +441,13 @@ export async function acceptQuote(params: {
         .maybeSingle()
       const projectId = (created as { id: string } | null)?.id
       if (projectId) {
-        await sb
-          .from("projects")
-          .update({ total_amount: acordado, updated_at: nowIso })
-          .eq("id", projectId)
+        const patch: Record<string, unknown> = {
+          total_amount: acordado,
+          updated_at: nowIso,
+        }
+        // Sin plan, la sesión se llama como el trabajo cotizado.
+        if (!q.package_id && q.quote_title) patch.name = q.quote_title
+        await sb.from("projects").update(patch).eq("id", projectId)
       }
     } catch (e) {
       console.error(
@@ -442,7 +501,7 @@ export async function listQuotes(studioId: string): Promise<QuoteListItem[]> {
     .from("booking_requests")
     .select(
       "id, client_name, client_email, event_date, status, quote_amount, " +
-        "quote_token, quote_sent_at, quote_accepted_at, " +
+        "quote_token, quote_sent_at, quote_accepted_at, quote_title, package_id, " +
         "package:packages(name, slug)",
     )
     .eq("studio_id", studioId)
@@ -460,11 +519,13 @@ export async function listQuotes(studioId: string): Promise<QuoteListItem[]> {
       clientEmail: String(r.client_email ?? ""),
       eventDate: String(r.event_date ?? "").slice(0, 10),
       amount: Number(r.quote_amount ?? 0),
-      packageName: pkg?.name ?? "—",
+      packageName: pkg?.name ?? String(r.quote_title ?? "Cotización libre"),
       status: String(r.status ?? ""),
       sentAt: (r.quote_sent_at as string) ?? null,
       acceptedAt: (r.quote_accepted_at as string) ?? null,
-      url: `${appUrl()}/p/${studioSlug}/${pkg?.slug ?? ""}/book?q=${String(r.quote_token ?? "")}`,
+      url: r.package_id
+        ? `${appUrl()}/p/${studioSlug}/${pkg?.slug ?? ""}/book?q=${String(r.quote_token ?? "")}`
+        : `${appUrl()}/cotizacion/${String(r.quote_token ?? "")}`,
     }
   })
 }

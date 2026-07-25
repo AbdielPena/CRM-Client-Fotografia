@@ -39,7 +39,7 @@ function getSystemTheme(): ResolvedTheme {
 // registro): SIEMPRE en claro. Un visitante con el celular en modo oscuro NO
 // debe ver el formulario negro. NO incluye /g (galería, tiene su propio tema)
 // ni el CRM (respeta la preferencia del fotógrafo).
-const FORCE_LIGHT_RE = /^\/(f|r|fb|sign|p|b|booking|i|q|colab|vestidos)(\/|$)/
+const FORCE_LIGHT_RE = /^\/(f|r|fb|sign|p|b|booking|i|q|colab|vestidos|cotizacion)(\/|$)/
 
 function isForcedLightPath(): boolean {
   return typeof window !== "undefined" && FORCE_LIGHT_RE.test(window.location.pathname)
