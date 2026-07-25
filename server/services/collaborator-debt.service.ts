@@ -577,6 +577,16 @@ export type CollaboratorJob = {
   payStatus: string
   /** true = la sesión ya pasó y la deuda está activa. */
   debtRegistered: boolean
+  /**
+   * Por qué (no) cuenta como deuda hoy:
+   *  - `owed`          → se debe y suma al pendiente
+   *  - `future`        → la sesión todavía no ocurre
+   *  - `before_cutoff` → la sesión pasó pero es anterior a la fecha de corte
+   *  - `settled`       → ya está saldada
+   */
+  debtState: "owed" | "future" | "before_cutoff" | "settled"
+  /** Fecha de corte del estudio, para explicarlo en pantalla. */
+  cutoffDate: string | null
   projectId: string
 }
 
@@ -590,6 +600,16 @@ export async function listCollaboratorJobs(
   collaboratorId: string,
 ): Promise<CollaboratorJob[]> {
   const sb = untypedService()
+  const hoy = todayRD()
+  const { data: studioRow } = await sb
+    .from("studios")
+    .select("collab_debt_start_date")
+    .eq("id", studioId)
+    .maybeSingle()
+  const corte =
+    (studioRow as { collab_debt_start_date: string | null } | null)
+      ?.collab_debt_start_date ?? null
+
   const { data } = await sb
     .from("project_collaborators")
     .select(
@@ -617,15 +637,31 @@ export async function listCollaboratorJobs(
       )
       const agreed = Number(r.agreed_pay ?? 0)
       const paid = Number(r.paid_amount ?? 0)
+      const pending = Math.max(0, agreed - paid)
+      const fecha = (r.service_date as string) ?? p?.event_date ?? null
+      const registrada = r.debt_registered_at != null
+
+      // Motivo exacto por el que (no) cuenta. Antes la pantalla decía siempre
+      // "la sesión no ha pasado", que era falso para las sesiones viejas
+      // excluidas por la fecha de corte.
+      let debtState: "owed" | "future" | "before_cutoff" | "settled"
+      if (pending <= 0 || r.pay_status === "paid") debtState = "settled"
+      else if (registrada) debtState = "owed"
+      else if (!fecha || fecha >= hoy) debtState = "future"
+      else if (corte && fecha < corte) debtState = "before_cutoff"
+      else debtState = "future"
+
       return {
         id: String(r.id),
         sessionName: p?.name ?? "Sesión",
-        serviceDate: (r.service_date as string) ?? p?.event_date ?? null,
+        serviceDate: fecha,
         agreedPay: agreed,
         paidAmount: paid,
-        pending: Math.max(0, agreed - paid),
+        pending,
         payStatus: String(r.pay_status ?? "pending"),
-        debtRegistered: r.debt_registered_at != null,
+        debtRegistered: registrada,
+        debtState,
+        cutoffDate: corte,
         projectId: p?.id ?? "",
         _deleted: p?.deleted_at != null,
       }

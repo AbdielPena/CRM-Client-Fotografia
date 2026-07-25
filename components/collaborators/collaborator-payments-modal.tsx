@@ -24,6 +24,8 @@ type Job = {
   pending: number
   payStatus: string
   debtRegistered: boolean
+  debtState: "owed" | "future" | "before_cutoff" | "settled"
+  cutoffDate: string | null
   projectId: string
 }
 
@@ -184,7 +186,7 @@ export function CollaboratorPaymentsModal({
                 <strong className="text-amber-600">
                   {formatCurrency(
                     jobs
-                      .filter((j) => j.debtRegistered && j.payStatus !== "cancelled")
+                      .filter((j) => j.debtState === "owed")
                       .reduce((s, j) => s + j.pending, 0),
                     "DOP",
                   )}
@@ -204,7 +206,18 @@ export function CollaboratorPaymentsModal({
           ) : (
             <div className="space-y-2">
               {jobs.map((j) => {
-                const saldado = j.pending <= 0 || j.payStatus === "paid"
+                const saldado = j.debtState === "settled"
+                const seDebe = j.debtState === "owed"
+                // Solo lo que se debe HOY va en naranja; lo demás en gris para
+                // que no parezca deuda (el total de arriba tampoco lo suma).
+                const nota =
+                  j.debtState === "future"
+                    ? "Aún no se debe — la sesión no ha pasado"
+                    : j.debtState === "before_cutoff"
+                      ? `No cuenta como deuda — la sesión es anterior al inicio del control${
+                          j.cutoffDate ? ` (${j.cutoffDate})` : ""
+                        }`
+                      : null
                 return (
                   <div
                     key={j.id}
@@ -221,9 +234,9 @@ export function CollaboratorPaymentsModal({
                           <> · abonado {formatCurrency(j.paidAmount, "DOP")}</>
                         )}
                       </p>
-                      {!saldado && !j.debtRegistered && (
+                      {nota && (
                         <p className="mt-0.5 text-[10.5px] text-muted-foreground">
-                          Aún no se debe — la sesión no ha pasado
+                          {nota}
                         </p>
                       )}
                     </div>
@@ -234,12 +247,27 @@ export function CollaboratorPaymentsModal({
                         </span>
                       ) : (
                         <>
-                          <span className="text-xs font-semibold text-amber-600">
+                          <span
+                            className={cn(
+                              "text-xs font-semibold",
+                              seDebe ? "text-amber-600" : "text-muted-foreground",
+                            )}
+                          >
                             {formatCurrency(j.pending, "DOP")}
                           </span>
                           <button
                             onClick={() => setPayJob(j)}
-                            className="rounded-md bg-primary px-2.5 py-1 text-[11px] font-semibold text-primary-foreground hover:opacity-90"
+                            title={
+                              seDebe
+                                ? "Registrar pago"
+                                : "Pagar de todos modos (no está en el pendiente)"
+                            }
+                            className={cn(
+                              "rounded-md px-2.5 py-1 text-[11px] font-semibold",
+                              seDebe
+                                ? "bg-primary text-primary-foreground hover:opacity-90"
+                                : "border border-border text-foreground hover:bg-muted",
+                            )}
                           >
                             Pagar
                           </button>
