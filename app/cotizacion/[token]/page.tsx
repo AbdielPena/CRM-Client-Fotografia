@@ -151,7 +151,7 @@ export default async function CotizacionPage({
             </div>
           )}
           {quote.note && (
-            <p className="mt-3 rounded-lg bg-gray-50 p-3 text-[13px] text-gray-600">
+            <p className="mt-3 whitespace-pre-line rounded-lg bg-gray-50 p-3 text-[13px] leading-relaxed text-gray-600">
               {quote.note}
             </p>
           )}

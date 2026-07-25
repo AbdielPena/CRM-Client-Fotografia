@@ -83,6 +83,15 @@ function appUrl(): string {
   )
 }
 
+/** Texto del usuario dentro de HTML: se escapa y se respetan los saltos. */
+function textoHtml(s: string): string {
+  const esc = s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+  return esc.replace(/\r?\n/g, "<br/>")
+}
+
 function one<T>(v: T | T[] | null | undefined): T | null {
   if (!v) return null
   return Array.isArray(v) ? (v[0] ?? null) : v
@@ -221,11 +230,11 @@ export async function createManualQuote(
         package_name: title,
         event_date: dateLabel(input.eventDate),
         quote_amount: money(amount),
-        quote_note: input.note?.trim() || "",
+        quote_note: input.note?.trim() ? textoHtml(input.note.trim()) : "",
         deliverables:
           deliverables.length > 0
             ? `<p style="margin:12px 0 4px"><strong>Qué incluye:</strong></p><ul style="margin:0;padding-left:18px">${deliverables
-                .map((d) => `<li>${d}</li>`)
+                .map((d) => `<li>${textoHtml(d)}</li>`)
                 .join("")}</ul>`
             : "",
         quote_url: url,

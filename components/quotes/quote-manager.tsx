@@ -459,6 +459,22 @@ function QuoteModal({
                   <input
                     value={d}
                     onChange={(e) => setDeliv(i, e.target.value)}
+                    onPaste={(e) => {
+                      // Pegar un bloque de varias líneas crea una línea por
+                      // cada una, en vez de aplastarlo todo en un renglón.
+                      const txt = e.clipboardData.getData("text")
+                      if (!txt.includes("\n")) return
+                      e.preventDefault()
+                      const partes = txt
+                        .split(/\r?\n/)
+                        .map((t) => t.trim())
+                        .filter(Boolean)
+                      setDeliverables((prev) => [
+                        ...prev.slice(0, i),
+                        ...partes,
+                        ...prev.slice(i + 1),
+                      ])
+                    }}
                     className={inputCls}
                     placeholder={
                       i === 0
@@ -494,10 +510,11 @@ function QuoteModal({
 
           <div>
             <label className={labelCls}>Nota para el cliente</label>
-            <input
+            <textarea
               name="note"
+              rows={6}
               className={inputCls}
-              placeholder="Ej: incluye 2 vestidos y álbum digital"
+              placeholder={"Puedes pegar aquí tu mensaje de WhatsApp tal cual. Los saltos de línea se respetan."}
             />
           </div>
 
