@@ -213,7 +213,9 @@ export async function buildContractPlaceholders(contractId: string): Promise<{
   const clientEmail = String(c.email ?? contract.signed_email ?? "")
   const clientPhone = String(c.phone ?? "")
   const studioName = String(s.name ?? "")
-  const pkgName = String(pk.name ?? "")
+  // Sin plan (cotización libre), el nombre del trabajo es el de la sesión: si
+  // no, el contrato quedaba con "correspondiente al plan ." en blanco.
+  const pkgName = String(pk.name ?? p.name ?? "")
   const eventType = String(p.event_type ?? "")
   const eventDateStr = FORMAT_DATE(p.event_date as string | null)
   const eventTimeStr = FORMAT_TIME(p.event_date as string | null)
