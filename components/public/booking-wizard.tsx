@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
+import { parseDateOnly } from "@/lib/utils/currency"
 import { SignaturePad, type SignaturePadHandle } from "@/components/public/signature-pad"
 import { notifyPaymentIntentAction } from "@/server/actions/booking-flow.actions"
 import type { FormField, FormSchema } from "@/lib/forms/types"
@@ -52,7 +53,15 @@ function money(n: number, currency: string) {
 function fmtDate(d: string | null) {
   if (!d) return null
   try {
-    return new Date(d).toLocaleDateString("es", { year: "numeric", month: "long", day: "numeric" })
+    // "2026-10-25" es un día, no un instante: interpretarlo como hora local
+    // (o UTC) hacía que en RD (UTC-4) se mostrara el día anterior.
+    const dt = parseDateOnly(d)
+    if (!dt) return d
+    return dt.toLocaleDateString("es", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })
   } catch {
     return d
   }
