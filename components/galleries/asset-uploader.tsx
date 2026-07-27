@@ -403,7 +403,7 @@ export function AssetUploader({ galleryId, studioId, targets }: AssetUploaderPro
   }
 
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejected: FileRejection[]) => {
+    async (acceptedFiles: File[], rejected: FileRejection[]) => {
       if (rejected.length > 0) {
         toast.error(
           `${rejected.length} archivo(s) no se aceptaron (formato no soportado o más de 50MB)`,
@@ -415,8 +415,36 @@ export function AssetUploader({ galleryId, studioId, targets }: AssetUploaderPro
         toast.error("Elegí primero a qué carpeta van las fotos")
         return
       }
+
+      // Salta las que ya están en la galería. Así, si una subida se corta, se
+      // vuelve a soltar la carpeta ENTERA y solo entran las que faltan.
+      let toUpload = acceptedFiles
+      try {
+        const res = await fetch(`/api/galleries/${galleryId}/asset-names`)
+        if (res.ok) {
+          const { names } = (await res.json()) as { names?: string[] }
+          const existing = new Set(names ?? [])
+          // También evita repetidas dentro de esta misma tanda.
+          const enCola = new Set(filesRef.current.map((f) => f.file.name))
+          const filtered = acceptedFiles.filter(
+            (f) => !existing.has(f.name) && !enCola.has(f.name),
+          )
+          const skipped = acceptedFiles.length - filtered.length
+          if (skipped > 0) {
+            toast.info(`${skipped} foto(s) ya estaban en la galería — se saltan`)
+          }
+          toUpload = filtered
+        }
+      } catch {
+        // Si no se pudo consultar, se sube todo (comportamiento anterior).
+      }
+      if (toUpload.length === 0) {
+        toast.success("La galería ya tiene todas esas fotos")
+        return
+      }
+
       const stamp = Date.now()
-      const newFiles: UploadFile[] = acceptedFiles.map((file, i) => ({
+      const newFiles: UploadFile[] = toUpload.map((file, i) => ({
         id: `${file.name}-${stamp}-${i}`,
         file,
         status: "pending",
