@@ -75,6 +75,11 @@ type BookingDetail = {
   } | null
   pricing_snapshot: Record<string, unknown>
   package_snapshot: Record<string, unknown>
+  /** Cotización manual libre: sin plan, todo escrito a mano. */
+  quote_title: string | null
+  quote_amount: number | string | null
+  quote_deliverables: string[] | null
+  quote_note: string | null
 }
 
 // Server Actions
@@ -605,6 +610,39 @@ export default async function BookingRequestDetailPage({
                   >
                     Ver paquete en /settings →
                   </Link>
+                </>
+              ) : req.quote_title || req.quote_amount ? (
+                // Cotización libre: no hay plan, todo se escribió a mano.
+                <>
+                  <p className="mb-1 font-semibold text-foreground">
+                    {req.quote_title ?? "Cotización a medida"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Cotización libre · sin plan de la lista
+                  </p>
+                  {req.quote_amount ? (
+                    <p className="mt-3 text-sm text-foreground">
+                      Monto acordado:{" "}
+                      <span className="font-semibold">
+                        {formatCurrency(Number(req.quote_amount), currency)}
+                      </span>
+                    </p>
+                  ) : null}
+                  {req.quote_deliverables && req.quote_deliverables.length > 0 ? (
+                    <ul className="mt-3 space-y-1">
+                      {req.quote_deliverables.map((d, i) => (
+                        <li key={i} className="flex gap-2 text-xs text-muted-foreground">
+                          <span className="text-emerald-600">✓</span>
+                          <span>{d}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {req.quote_note ? (
+                    <p className="mt-3 whitespace-pre-line rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+                      {req.quote_note}
+                    </p>
+                  ) : null}
                 </>
               ) : (
                 <p className="text-xs text-muted-foreground">

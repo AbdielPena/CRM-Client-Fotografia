@@ -362,6 +362,9 @@ export type BookingRequestListItem = {
     price: number | string
     currency: string | null
   } | null
+  /** Cotización libre (sin plan): monto acordado y nombre del trabajo. */
+  quote_amount: number | string | null
+  quote_title: string | null
 }
 
 export async function listBookingRequestsForStudio(
@@ -376,7 +379,8 @@ export async function listBookingRequestsForStudio(
       id, status, client_name, client_email, client_phone,
       event_type, event_date, event_time, event_location,
       guest_count, additional_notes, created_at,
-      package:packages!inner ( id, name, slug, price, currency )
+      quote_amount, quote_title,
+      package:packages ( id, name, slug, price, currency )
     `,
     )
     .eq('studio_id', studioId)
@@ -410,7 +414,7 @@ export async function getBookingRequestById(
     .select(
       `
       *,
-      package:packages!inner ( id, name, slug, price, currency, duration_hours, edited_photos, includes, event_type )
+      package:packages ( id, name, slug, price, currency, duration_hours, edited_photos, includes, event_type )
     `,
     )
     .eq('id', requestId)
@@ -462,7 +466,7 @@ async function loadContextForEmail(studioId: string, requestId: string) {
   const { data: request } = await svc
     .from('booking_requests')
     .select(
-      'id, client_name, client_email, event_date, pricing_snapshot, package_id, package:packages!inner ( name )',
+      'id, client_name, client_email, event_date, pricing_snapshot, package_id, package:packages ( name )',
     )
     .eq('id', requestId)
     .eq('studio_id', studioId)

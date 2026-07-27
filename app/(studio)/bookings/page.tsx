@@ -131,7 +131,7 @@ export default async function BookingsListPage({
                     </Link>
                   </DataTableCell>
                   <DataTableCell className="hidden md:table-cell">
-                    {req.package?.name ?? (
+                    {req.package?.name ?? req.quote_title ?? (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </DataTableCell>
@@ -152,7 +152,10 @@ export default async function BookingsListPage({
                           Number(req.package.price),
                           req.package.currency ?? "DOP",
                         )
-                      : "—"}
+                      : req.quote_amount
+                        ? // Cotización libre: el monto acordado a mano.
+                          formatCurrency(Number(req.quote_amount), "DOP")
+                        : "—"}
                   </DataTableCell>
                   <DataTableCell>
                     <StatusBadge status={req.status} />
