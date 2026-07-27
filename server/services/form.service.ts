@@ -390,10 +390,17 @@ export async function createFormResponsesForBooking(params: {
   bookingRequestId: string
   /** Proyecto recién creado en la aprobación; liga el form al proyecto desde el inicio. */
   projectId?: string | null
-  packageId: string
+  /**
+   * Nulo en una cotización libre (sin plan). Ahí no hay formularios ligados al
+   * plan: las preguntas del estudio ya se respondieron en la página de la
+   * cotización, así que no se crea ninguno.
+   */
+  packageId: string | null
   clientEmail: string
   actorId?: string | null
 }): Promise<Array<{ id: string; templateId: string; accessToken: string }>> {
+  if (!params.packageId) return []
+
   const svc = createSupabaseServiceClient()
 
   // Fuente 1: formulario vinculado DIRECTAMENTE al paquete

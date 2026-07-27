@@ -204,12 +204,31 @@ export async function createClient(
 
 export async function createClientWithBooking(
   studioId: string,
-  _actorId: string,
+  actorId: string,
   data: CreateClientWithBookingInput,
+  opts?: {
+    /**
+     * Escribe con permisos de servicio y declara el actor en el payload.
+     * Para flujos disparados por el CLIENTE (aceptar una cotización manual):
+     * ahí no hay sesión del CRM y la RPC exige saber quién es el responsable.
+     */
+    elevated?: boolean
+    /** Cotización libre: sin plan de la lista, con monto y nombre escritos a mano. */
+    packageless?: { totalAmount: number; label: string }
+  },
 ) {
-  const supabase = createSupabaseServerClient()
+  const supabase = opts?.elevated
+    ? createSupabaseServiceClient()
+    : createSupabaseServerClient()
 
   const payload = {
+    ...(opts?.elevated ? { actor_id: actorId } : {}),
+    ...(opts?.packageless
+      ? {
+          total_amount: opts.packageless.totalAmount,
+          package_label: opts.packageless.label,
+        }
+      : {}),
     name: data.name,
     email: data.email ?? null,
     phone: data.phone ?? null,
@@ -220,7 +239,7 @@ export async function createClientWithBooking(
     country: data.country ?? null,
     instagram_handle: data.instagramHandle ?? null,
     website_url: data.websiteUrl ?? null,
-    package_id: data.packageId,
+    package_id: opts?.packageless ? null : data.packageId,
     event_type: data.eventType,
     event_date: data.eventDate,
     project_name: data.projectName ?? null,

@@ -569,6 +569,8 @@ async function convertBookingToClientBundle(params: {
   studioId: string
   requestId: string
   actorId: string
+  /** Disparado desde una ruta pública (cotización aceptada por el cliente). */
+  elevated?: boolean
   row: {
     client_id: string | null
     project_id: string | null
@@ -576,7 +578,8 @@ async function convertBookingToClientBundle(params: {
     client_email: string
     client_phone: string | null
     additional_notes: string | null
-    package_id: string
+    /** Nulo en una cotización libre: el trabajo no sale de un plan de la lista. */
+    package_id: string | null
     event_type: string | null
     event_date: string
     event_location: string | null
@@ -681,6 +684,19 @@ async function convertBookingToClientBundle(params: {
     console.error('[convertBookingToClientBundle] ensure default template', tplErr)
   }
 
+  // Cotización libre: sin plan, el monto y el nombre del trabajo salen de lo
+  // que se escribió al cotizar.
+  const quote = row as unknown as {
+    quote_amount?: number | string | null
+    quote_title?: string | null
+  }
+  const packageless = row.package_id
+    ? undefined
+    : {
+        totalAmount: Number(quote.quote_amount ?? 0),
+        label: (quote.quote_title ?? '').trim() || 'Servicio fotográfico',
+      }
+
   let result: Awaited<ReturnType<typeof createClientWithBooking>>
   try {
     result = await createClientWithBooking(
@@ -692,7 +708,7 @@ async function convertBookingToClientBundle(params: {
         phone: row.client_phone || undefined,
         source: 'public_link',
         notes: row.additional_notes || undefined,
-        packageId: row.package_id,
+        packageId: row.package_id ?? '',
         eventType,
         eventDate: row.event_date,
         location: row.event_location || undefined,
@@ -701,6 +717,7 @@ async function convertBookingToClientBundle(params: {
         // cuando el cliente firma el contrato (ver onContractSigned / Fase C).
         skipInvoices: true,
       },
+      { elevated: params.elevated, packageless },
     )
   } catch (convErr) {
     // Si la conversión falla, LIBERAMOS el lock para que sea reintentable
@@ -1014,6 +1031,7 @@ export async function approveBookingRequest(params: {
       studioId: params.studioId,
       requestId: params.requestId,
       actorId: params.actorId,
+      elevated: params.elevated,
       row: current,
     })
     if (conversionBundle) {
