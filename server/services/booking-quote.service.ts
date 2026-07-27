@@ -439,12 +439,30 @@ export async function acceptQuote(params: {
   if (upErr) throwServiceError("QUOTE_ACCEPT_FAILED", upErr, { id: q.id })
 
   // Aprobación automática: reusa TODA la cadena existente.
+  //
+  // `approved_by` es una FK a auth.users: NUNCA se puede mandar el id del
+  // estudio como actor (violaría la FK). Si la cotización no guardó quién la
+  // creó, se usa al dueño del estudio.
+  let actorId = q.quote_created_by
+  if (!actorId) {
+    const { data: owner } = await sb
+      .from("studio_members")
+      .select("user_id")
+      .eq("studio_id", q.studio_id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    actorId = (owner as { user_id: string } | null)?.user_id ?? null
+  }
   try {
+    if (!actorId) throw new Error("el estudio no tiene usuario dueño")
     const { approveBookingRequest } = await import("./booking-request.service")
     await approveBookingRequest({
       studioId: q.studio_id,
       requestId: q.id,
-      actorId: q.quote_created_by ?? q.studio_id,
+      actorId,
+      // Ruta pública: sin sesión del CRM, la RLS bloquearía el UPDATE.
+      elevated: true,
     })
   } catch (e) {
     // Si la aprobación falla, la solicitud queda en revisión: Abdiel la ve en
@@ -459,13 +477,17 @@ export async function acceptQuote(params: {
   const acordado = Number(q.quote_amount ?? 0)
   if (acordado > 0) {
     try {
+      // `projects` no guarda la solicitud; el enlace vive en el contrato que
+      // la conversión acaba de crear (contracts.booking_request_id).
       const { data: created } = await sb
-        .from("projects")
-        .select("id, total_amount")
+        .from("contracts")
+        .select("project_id")
         .eq("booking_request_id", q.id)
-        .is("deleted_at", null)
+        .not("project_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle()
-      const projectId = (created as { id: string } | null)?.id
+      const projectId = (created as { project_id: string } | null)?.project_id
       if (projectId) {
         const patch: Record<string, unknown> = {
           total_amount: acordado,

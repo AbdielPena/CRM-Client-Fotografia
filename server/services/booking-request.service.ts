@@ -918,6 +918,14 @@ export async function approveBookingRequest(params: {
   studioId: string
   requestId: string
   actorId: string
+  /**
+   * Escribe con permisos de servicio en vez de los del usuario de la sesión.
+   * Necesario cuando la aprobación la dispara una ruta PÚBLICA (el cliente
+   * aceptando una cotización manual): ahí no hay usuario del CRM y la RLS
+   * rechaza el UPDATE en silencio (0 filas → "transición ilegal"). La
+   * autorización ya la garantiza el chequeo de studio_id de arriba.
+   */
+  elevated?: boolean
 }) {
   // Validación: no se puede aprobar una solicitud con fecha pasada.
   // Cargamos mínimo el event_date para chequear.
@@ -950,6 +958,7 @@ export async function approveBookingRequest(params: {
       approved_at: new Date().toISOString(),
       approved_by: params.actorId,
     },
+    opts: params.elevated ? { elevated: true } : undefined,
   })
 
   // Audit log
