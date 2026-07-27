@@ -60,21 +60,37 @@ async function submit(formData: FormData) {
     .filter((c) => c.value !== "")
 
   const hdrs = headers()
-  const result = await acceptQuote({
-    token,
-    data: {
-      clientName,
-      clientEmail,
-      clientPhone: String(formData.get("clientPhone") ?? "").trim(),
-      clientWhatsapp: String(formData.get("clientPhone") ?? "").trim(),
-      eventDate: quote.eventDate,
-      eventLocation: String(formData.get("eventLocation") ?? "").trim(),
-      additionalNotes: String(formData.get("additionalNotes") ?? "").trim(),
-    },
-    customFields,
-    ip: hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
-    userAgent: hdrs.get("user-agent") ?? null,
-  })
+  // Si algo falla del lado del servidor, el cliente NO debe ver la pantalla de
+  // "Application error": se le muestra un aviso en su idioma y puede reintentar.
+  // El `redirect` va fuera del try porque en Next se implementa lanzando.
+  let result: Awaited<ReturnType<typeof acceptQuote>> | null = null
+  try {
+    result = await acceptQuote({
+      token,
+      data: {
+        clientName,
+        clientEmail,
+        clientPhone: String(formData.get("clientPhone") ?? "").trim(),
+        clientWhatsapp: String(formData.get("clientPhone") ?? "").trim(),
+        eventDate: quote.eventDate,
+        eventLocation: String(formData.get("eventLocation") ?? "").trim(),
+        additionalNotes: String(formData.get("additionalNotes") ?? "").trim(),
+      },
+      customFields,
+      ip: hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+      userAgent: hdrs.get("user-agent") ?? null,
+    })
+  } catch (e) {
+    console.error("[cotizacion] aceptar falló", e instanceof Error ? e.message : e)
+  }
+
+  if (!result) {
+    redirect(
+      `/cotizacion/${token}?error=${encodeURIComponent(
+        "No pudimos completar tu reserva en este momento. Inténtalo de nuevo en un minuto o escríbenos y lo resolvemos enseguida.",
+      )}`,
+    )
+  }
   if (result.status === "not_found") notFound()
   redirect(`/cotizacion/${token}/listo`)
 }
