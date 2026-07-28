@@ -173,6 +173,18 @@ export async function onPaymentRecorded(
       console.error("[onPaymentRecorded] confirmBookingAfterPayment failed", err)
     }
   }
+
+  // Apartado del 10% definido en el plan: se registra en Finanzas cuando la
+  // sesión queda SALDADA. El propio servicio comprueba el saldo y no hace nada
+  // si el plan no define monto. Best-effort.
+  try {
+    const { recordTitheSetAsideIfFullyPaid } = await import(
+      "./tithe-setaside.service"
+    )
+    await recordTitheSetAsideIfFullyPaid(studioId, projectId)
+  } catch (err) {
+    console.error("[onPaymentRecorded] apartado del 10% falló", err)
+  }
 }
 
 /**

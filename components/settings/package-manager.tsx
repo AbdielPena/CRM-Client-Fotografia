@@ -47,6 +47,7 @@ interface Package {
   balanceDueOffsetDays?: number
   includesDress?: boolean
   dressIncludedAmount?: number
+  titheAmount?: number
   includes?: string
   isActive: boolean
   contractTemplateId?: string
@@ -821,6 +822,26 @@ function PackageForm({
             Monto de vestido incluido en el plan (ej. RD$17,000). Si el vestido de
             la sesión cuesta más, el excedente se factura como costo extra. Vacío =
             usa el monto de la categoría.
+          </p>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Apartado del 10% (Finanzas)
+          </label>
+          <input
+            name="titheAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={defaultValues?.titheAmount ?? ""}
+            className={inputCls}
+            placeholder="ej. 3000"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Cuánto apartas de una sesión de este plan. Cuando el cliente termina
+            de pagar, el monto se suma solo al apartado del 10% en Finanzas.
+            Vacío = este plan no aparta nada.
           </p>
         </div>
 

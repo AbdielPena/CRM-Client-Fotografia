@@ -33,6 +33,9 @@ export const createPackageSchema = z.object({
   // Monto de vestido incluido en el plan (ej. 17000). Si el vestido de la sesión
   // cuesta más, el excedente se factura como costo extra.
   dressIncludedAmount: z.coerce.number().min(0).optional(),
+  // Apartado del 10%: monto fijo que se separa cuando una sesión de este plan
+  // queda SALDADA. Vacío o 0 = este plan no aparta nada.
+  titheAmount: z.coerce.number().min(0).optional(),
   includes: z.string().max(2000).optional().or(z.literal("")),
   isActive: z.boolean().default(true),
   // Plantilla de contrato y formulario que se aplican por defecto cuando un
