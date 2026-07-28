@@ -174,16 +174,16 @@ export async function onPaymentRecorded(
     }
   }
 
-  // Apartado del 10% definido en el plan: se registra en Finanzas cuando la
-  // sesión queda SALDADA. El propio servicio comprueba el saldo y no hace nada
-  // si el plan no define monto. Best-effort.
+  // Ganancia declarada en el plan: se registra en Finanzas cuando la sesión
+  // queda SALDADA. El propio servicio comprueba el saldo y no hace nada si el
+  // plan no define ganancia. Best-effort.
   try {
-    const { recordTitheSetAsideIfFullyPaid } = await import(
-      "./tithe-setaside.service"
+    const { recordSessionProfitIfFullyPaid } = await import(
+      "./session-profit.service"
     )
-    await recordTitheSetAsideIfFullyPaid(studioId, projectId)
+    await recordSessionProfitIfFullyPaid(studioId, projectId)
   } catch (err) {
-    console.error("[onPaymentRecorded] apartado del 10% falló", err)
+    console.error("[onPaymentRecorded] ganancia de la sesión falló", err)
   }
 }
 

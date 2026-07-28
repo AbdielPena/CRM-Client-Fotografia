@@ -47,7 +47,7 @@ interface Package {
   balanceDueOffsetDays?: number
   includesDress?: boolean
   dressIncludedAmount?: number
-  titheAmount?: number
+  profitAmount?: number
   includes?: string
   isActive: boolean
   contractTemplateId?: string
@@ -827,21 +827,21 @@ function PackageForm({
 
         <div className="sm:col-span-2">
           <label className="mb-1 block text-sm font-medium text-foreground">
-            Apartado del 10% (Finanzas)
+            Ganancia de este plan
           </label>
           <input
-            name="titheAmount"
+            name="profitAmount"
             type="number"
             min="0"
             step="0.01"
-            defaultValue={defaultValues?.titheAmount ?? ""}
+            defaultValue={defaultValues?.profitAmount ?? ""}
             className={inputCls}
             placeholder="ej. 3000"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            Cuánto apartas de una sesión de este plan. Cuando el cliente termina
-            de pagar, el monto se suma solo al apartado del 10% en Finanzas.
-            Vacío = este plan no aparta nada.
+            Lo que te queda limpio por una sesión de este plan, ya descontado
+            todo. Cuando el cliente termina de pagar, se suma solo a la ganancia
+            del mes en Finanzas. Vacío = este plan no reporta ganancia.
           </p>
         </div>
 

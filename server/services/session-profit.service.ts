@@ -4,20 +4,20 @@ import { untypedService } from "@/server/supabase/untyped"
 import { getFinanzAppWorkspaceId } from "./finanzapp-bridge.service"
 
 /**
- * Apartado del 10% definido a mano en cada plan.
+ * Ganancia por plan.
  *
  * Cómo funciona:
- *   · En el plan se escribe cuánto se aparta por una sesión de ese plan.
- *   · Cuando la sesión queda TOTALMENTE PAGADA, ese monto viaja a FinanzApp
- *     y se suma a lo que hay que apartar del mes.
+ *   · En el plan se escribe cuánto le queda LIMPIO al estudio por una sesión de
+ *     ese plan (ya descontado todo: colaboradores, vestido, gastos).
+ *   · Cuando la sesión queda TOTALMENTE PAGADA, ese monto viaja a FinanzApp y
+ *     suma a la ganancia del mes ("este mes ganaste X").
  *   · Si el plan no tiene monto (o es 0), no pasa nada.
  *
- * Los pagos del CRM ya entran a FinanzApp con `aplica_diezmo = false`, así que
- * este monto no se suma a ningún porcentaje automático: es el único apartado
- * que genera la sesión.
+ * Es un número que el dueño declara, no calculado: se suma tal cual.
  *
- * Idempotente: la clave es `crm-tithe:<projectId>`. Si se vuelve a llamar (otro
- * pago, un reintento), actualiza la misma fila en vez de duplicarla.
+ * Idempotente: la clave es `crm-profit:<projectId>`. Si se vuelve a llamar (otro
+ * pago, un reintento, un cambio de monto en el plan), actualiza la misma fila
+ * en vez de duplicarla.
  */
 
 /** Mes actual en RD, en formato 'YYYY-MM'. */
@@ -34,7 +34,7 @@ type ProjectFinance = {
   projectName: string
   clientName: string | null
   packageName: string | null
-  titheAmount: number
+  profitAmount: number
   totalAmount: number
   paidAmount: number
 }
@@ -49,7 +49,7 @@ async function loadProjectFinance(
   const { data: proj } = await sb
     .from("projects")
     .select(
-      "id, name, total_amount, package_id, client:clients(name), package:packages(name, tithe_amount)",
+      "id, name, total_amount, package_id, client:clients(name), package:packages(name, profit_amount)",
     )
     .eq("id", projectId)
     .eq("studio_id", studioId)
@@ -62,15 +62,15 @@ async function loadProjectFinance(
     total_amount: number | string | null
     client: { name?: string } | Array<{ name?: string }> | null
     package:
-      | { name?: string; tithe_amount?: number | string | null }
-      | Array<{ name?: string; tithe_amount?: number | string | null }>
+      | { name?: string; profit_amount?: number | string | null }
+      | Array<{ name?: string; profit_amount?: number | string | null }>
       | null
   }
   const pkg = Array.isArray(p.package) ? p.package[0] : p.package
   const cli = Array.isArray(p.client) ? p.client[0] : p.client
 
-  const titheAmount = Number(pkg?.tithe_amount ?? 0)
-  if (!Number.isFinite(titheAmount) || titheAmount <= 0) return null
+  const profitAmount = Number(pkg?.profit_amount ?? 0)
+  if (!Number.isFinite(profitAmount) || profitAmount <= 0) return null
 
   // Cobrado real = pagos confirmados de las facturas de la sesión.
   const { data: invoices } = await sb
@@ -97,22 +97,22 @@ async function loadProjectFinance(
     projectName: p.name,
     clientName: cli?.name ?? null,
     packageName: pkg?.name ?? null,
-    titheAmount,
+    profitAmount,
     totalAmount: Number(p.total_amount ?? 0),
     paidAmount,
   }
 }
 
 /**
- * Registra el apartado si la sesión ya quedó saldada. Best-effort: nunca
+ * Registra la ganancia si la sesión ya quedó saldada. Best-effort: nunca
  * bloquea el registro del pago.
  */
-export async function recordTitheSetAsideIfFullyPaid(
+export async function recordSessionProfitIfFullyPaid(
   studioId: string,
   projectId: string,
 ): Promise<{ recorded: boolean; reason?: string }> {
   const fin = await loadProjectFinance(studioId, projectId)
-  if (!fin) return { recorded: false, reason: "el plan no define monto a apartar" }
+  if (!fin) return { recorded: false, reason: "el plan no define ganancia" }
 
   // "Saldada" con un margen de un peso, para que un redondeo no lo impida.
   if (fin.totalAmount <= 0 || fin.paidAmount + 1 < fin.totalAmount) {
@@ -127,16 +127,16 @@ export async function recordTitheSetAsideIfFullyPaid(
     : fin.projectName
 
   const sb = untypedService()
-  const { error } = await sb.rpc("finz_record_tithe_setaside", {
+  const { error } = await sb.rpc("finz_record_session_profit", {
     p_workspace_id: workspaceId,
     p_periodo: periodoRD(),
     p_descripcion: descripcion,
-    p_monto: fin.titheAmount,
-    p_external_reference: `crm-tithe:${projectId}`,
-    p_notas: "Apartado definido en el plan · sesión saldada (CRM)",
+    p_monto: fin.profitAmount,
+    p_external_reference: `crm-profit:${projectId}`,
+    p_notas: "Ganancia declarada en el plan · sesión saldada (CRM)",
   })
   if (error) {
-    console.error("[tithe-setaside] no se pudo registrar", error)
+    console.error("[session-profit] no se pudo registrar", error)
     return { recorded: false, reason: "error al registrar en Finanzas" }
   }
 

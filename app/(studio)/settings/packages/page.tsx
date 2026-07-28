@@ -85,9 +85,9 @@ export default async function PackagesSettingsPage() {
             dressIncludedAmount:
               (p as unknown as { dress_included_amount?: number | null })
                 .dress_included_amount ?? undefined,
-            titheAmount:
-              (p as unknown as { tithe_amount?: number | null }).tithe_amount ??
-              undefined,
+            profitAmount:
+              (p as unknown as { profit_amount?: number | null })
+                .profit_amount ?? undefined,
             includes: p.includes ? p.includes.join("\n") : undefined,
             isActive: p.is_active,
             contractTemplateId: p.default_contract_template_id ?? undefined,

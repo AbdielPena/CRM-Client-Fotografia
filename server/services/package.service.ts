@@ -117,8 +117,8 @@ export async function createPackage(
   // includes_dress: el plan incluye el vestido (Luxury) → resta/gasto del vestido.
   ;(insert as Record<string, unknown>).includes_dress = data.includesDress ?? false
   ;(insert as Record<string, unknown>).dress_included_amount = data.dressIncludedAmount ?? null
-  // tithe_amount: apartado del 10% al saldarse la sesión.
-  ;(insert as Record<string, unknown>).tithe_amount = data.titheAmount ?? null
+  // profit_amount: ganancia limpia declarada para el plan.
+  ;(insert as Record<string, unknown>).profit_amount = data.profitAmount ?? null
   if (printEntitlements !== undefined) {
     ;(insert as Record<string, unknown>).print_entitlements = printEntitlements
   }
@@ -168,8 +168,8 @@ export async function updatePackage(
   if (data.includesDress !== undefined) patch.includes_dress = data.includesDress
   if (data.dressIncludedAmount !== undefined)
     patch.dress_included_amount = data.dressIncludedAmount ?? null
-  if (data.titheAmount !== undefined)
-    patch.tithe_amount = data.titheAmount ?? null
+  if (data.profitAmount !== undefined)
+    patch.profit_amount = data.profitAmount ?? null
 
   // Slug: si el user lo escribe explícito → usamos su valor (sanitizado).
   // Si cambia el nombre sin slug explícito → regeneramos para mantener SEO-friendly.
