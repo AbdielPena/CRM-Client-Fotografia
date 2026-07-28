@@ -149,6 +149,20 @@ function webCleanKey(studioId: string, galleryId: string, assetId: string): stri
   return `${studioId}/${galleryId}/${assetId}/web-clean.webp`
 }
 
+/**
+ * Copia sin marca de agua de la miniatura. La marca también va en las
+ * miniaturas (el mosaico de selección es lo primero que ve el cliente), así
+ * que hace falta guardar el limpio aparte para poder rehacer la marca sin
+ * volver a bajar el original.
+ */
+export function thumbCleanKey(
+  studioId: string,
+  galleryId: string,
+  assetId: string,
+): string {
+  return `${studioId}/${galleryId}/${assetId}/thumb-clean.webp`
+}
+
 function extFromMime(mime: string): string {
   switch (mime) {
     case "image/jpeg":
@@ -1324,7 +1338,7 @@ async function processAssetSafely(
     // decompression bombs en el procesamiento mismo.
     const sharpOpts = { limitInputPixels: MAX_PIXELS }
 
-    const thumbBuf = await sharp(buffer, sharpOpts)
+    let thumbBuf = await sharp(buffer, sharpOpts)
       .rotate()
       .resize({ width: 400, height: 400, fit: "cover", withoutEnlargement: true })
       .webp({ quality: 75 })
@@ -1336,17 +1350,20 @@ async function processAssetSafely(
       .webp({ quality: 82 })
       .toBuffer()
 
-    // Copia limpia del web rendition (sin watermark) para portada/OG.
+    // Copias limpias (sin marca) para portada/OG y para rehacer la marca.
     const webCleanBuf = Buffer.from(webBuf)
+    const thumbCleanBuf = Buffer.from(thumbBuf)
 
-    // Watermark si la galería lo tiene activo. Solo afecta el web rendition;
-    // thumb queda limpio (no vale la pena en 400px) y el original también.
+    // Marca de agua si corresponde (solo galerías de selección; las de entrega
+    // devuelven null). Va en la foto grande Y en la miniatura: el mosaico de
+    // selección es lo primero que ve el cliente. El original nunca se toca.
     const { getWatermarkConfig, applyWatermark } = await import(
       "./gallery-watermark.service"
     )
     const watermarkCfg = await getWatermarkConfig(galleryId)
     if (watermarkCfg) {
       webBuf = await applyWatermark(webBuf, watermarkCfg)
+      thumbBuf = await applyWatermark(thumbBuf, watermarkCfg, { quality: 75 })
     }
 
     // LQIP: placeholder diminuto (data URI ~1KB) para evitar el "pop-in" gris
@@ -1367,11 +1384,15 @@ async function processAssetSafely(
     const tKey = thumbKey(studioId, galleryId, assetId)
     const wKey = webKey(studioId, galleryId, assetId)
     const wcKey = webCleanKey(studioId, galleryId, assetId)
+    const tcKey = thumbCleanKey(studioId, galleryId, assetId)
 
     if (isLocalStorage()) {
       await localWrite(RENDITIONS_BUCKET, tKey, thumbBuf)
       await localWrite(RENDITIONS_BUCKET, wKey, webBuf)
-      if (watermarkCfg) await localWrite(RENDITIONS_BUCKET, wcKey, webCleanBuf)
+      if (watermarkCfg) {
+        await localWrite(RENDITIONS_BUCKET, wcKey, webCleanBuf)
+        await localWrite(RENDITIONS_BUCKET, tcKey, thumbCleanBuf)
+      }
     } else {
       const upThumb = await supabase.storage
         .from(RENDITIONS_BUCKET)
@@ -1387,6 +1408,10 @@ async function processAssetSafely(
         await supabase.storage
           .from(RENDITIONS_BUCKET)
           .upload(wcKey, webCleanBuf, { contentType: "image/webp", upsert: true })
+          .catch(() => {})
+        await supabase.storage
+          .from(RENDITIONS_BUCKET)
+          .upload(tcKey, thumbCleanBuf, { contentType: "image/webp", upsert: true })
           .catch(() => {})
       }
     }
