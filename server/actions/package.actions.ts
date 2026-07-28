@@ -52,6 +52,8 @@ export async function createPackageAction(formData: FormData) {
     includes: formData.get("includes"),
     includesDress: formData.get("includesDress") === "true",
     dressIncludedAmount: formData.get("dressIncludedAmount"),
+    // Vacío = sin ganancia definida (null), no 0.
+    profitAmount: formData.get("profitAmount") || undefined,
     isActive: formData.get("isActive") !== "false",
     contractTemplateId: formData.get("contractTemplateId"),
     formTemplateId: formData.get("formTemplateId"),
@@ -88,6 +90,8 @@ export async function updatePackageAction(packageId: string, formData: FormData)
     includes: formData.get("includes"),
     includesDress: formData.get("includesDress") === "true",
     dressIncludedAmount: formData.get("dressIncludedAmount"),
+    // Vacío = sin ganancia definida (null), no 0.
+    profitAmount: formData.get("profitAmount") || undefined,
     isActive: formData.get("isActive") !== "false",
     contractTemplateId: formData.get("contractTemplateId"),
     formTemplateId: formData.get("formTemplateId"),
