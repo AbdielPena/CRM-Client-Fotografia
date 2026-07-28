@@ -32,6 +32,11 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import {
+  WatermarkSettings,
+  type WatermarkConfig,
+} from "@/components/settings/watermark-settings"
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   ClientCommentsList,
@@ -96,6 +101,15 @@ type Gallery = {
   watermark_text: string | null
   watermark_position: string
   watermark_opacity: number
+  // Marca de agua: modo, imagen y ajustes finos (tamaño, giro, margen).
+  watermark_mode?: string
+  watermark_image_key?: string | null
+  watermark_scale?: number
+  watermark_rotation?: number
+  watermark_margin?: number
+  /** true = hereda la marca del estudio (lo normal). */
+  watermark_use_studio_default?: boolean
+  asset_count?: number
   download_pin_required: boolean
   selection_submitted: boolean
   selection_locked: boolean
@@ -1964,287 +1978,62 @@ function PinsTab({ galleryId, pins }: { galleryId: string; pins: PinRow[] }) {
 
 // ─── Watermark tab ──────────────────────────────────────────────────────────
 
-type WatermarkMode = "text" | "image"
-type WatermarkPosition =
-  | "top-left"
-  | "top-right"
-  | "center"
-  | "bottom-left"
-  | "bottom-right"
-  | "tile"
-
+/**
+ * Marca de agua de ESTA galería. Reusa el mismo panel que Configuración →
+ * Marca de agua: por defecto hereda la del estudio y aquí se puede
+ * personalizar. Las galerías de entrega nunca llevan marca.
+ */
 function WatermarkTab({ gallery }: { gallery: Gallery }) {
-  const router = useRouter()
-  const [savingState, setSavingState] = React.useState<"idle" | "saving" | "uploading">(
-    "idle",
-  )
-  const [enabled, setEnabled] = React.useState(gallery.watermark_enabled)
-  const [mode, setMode] = React.useState<WatermarkMode>(
-    ((gallery as unknown as { watermark_mode?: string }).watermark_mode as WatermarkMode) ??
-      "text",
-  )
-  const [text, setText] = React.useState(gallery.watermark_text ?? "")
-  const [imageKey, setImageKey] = React.useState<string | null>(
-    (gallery as unknown as { watermark_image_key?: string | null }).watermark_image_key ??
-      null,
-  )
-  const [position, setPosition] = React.useState<WatermarkPosition>(
-    (gallery.watermark_position as WatermarkPosition) || "bottom-right",
-  )
-  const [opacity, setOpacity] = React.useState(gallery.watermark_opacity)
-  const [reprocessAll, setReprocessAll] = React.useState(false)
-
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
-
-  const handleUploadLogo = async (file: File) => {
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Logo máximo 5MB")
-      return
-    }
-    setSavingState("uploading")
-    try {
-      const fd = new FormData()
-      fd.append("file", file)
-      const res = await fetch(`/api/galleries/${gallery.id}/watermark/upload`, {
-        method: "POST",
-        body: fd,
-      })
-      const data = (await res.json()) as { imageKey?: string; error?: string }
-      if (data.error || !data.imageKey) {
-        toast.error(data.error ?? "Error subiendo logo")
-        return
-      }
-      setImageKey(data.imageKey)
-      toast.success("Logo subido. No olvides guardar cambios.")
-    } catch {
-      toast.error("Error subiendo logo")
-    } finally {
-      setSavingState("idle")
-    }
+  const g = gallery as unknown as {
+    id: string
+    gallery_type?: string
+    asset_count?: number
+    watermark_use_studio_default?: boolean
+    watermark_enabled?: boolean
+    watermark_mode?: string
+    watermark_text?: string | null
+    watermark_image_key?: string | null
+    watermark_position?: string
+    watermark_opacity?: number
+    watermark_scale?: number
+    watermark_rotation?: number
+    watermark_margin?: number
   }
 
-  const handleSave = async () => {
-    if (mode === "image" && enabled && !imageKey) {
-      toast.error("Sube un logo o cambia a modo texto")
-      return
-    }
-    if (mode === "text" && enabled && !text.trim()) {
-      toast.error("Escribe un texto para la marca de agua")
-      return
-    }
-    setSavingState("saving")
-    try {
-      const res = await fetch(`/api/galleries/${gallery.id}/watermark`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          enabled,
-          mode,
-          text: text || null,
-          imageKey: imageKey || null,
-          position,
-          opacity,
-          reprocessAll,
-        }),
-      })
-      const data = (await res.json()) as { ok?: boolean; error?: string; reprocessed?: number }
-      if (data.error) {
-        toast.error(data.error)
-        return
-      }
-      toast.success(
-        data.reprocessed
-          ? `Guardado. Re-procesando ${data.reprocessed} fotos…`
-          : "Marca de agua actualizada",
-      )
-      router.refresh()
-    } catch {
-      toast.error("Error guardando")
-    } finally {
-      setSavingState("idle")
-    }
+  if (g.gallery_type === "final_delivery") {
+    return (
+      <div className="max-w-2xl rounded-2xl border border-border bg-card p-6">
+        <h3 className="text-[14px] font-semibold text-foreground">
+          Esta es una galería de entrega
+        </h3>
+        <p className="mt-1.5 text-[13px] text-muted-foreground">
+          Las fotos de entrega nunca llevan marca de agua: ya son del cliente.
+          La marca solo se aplica a las galerías de selección.
+        </p>
+      </div>
+    )
   }
-
-  const pending = savingState !== "idle"
 
   return (
-    <div className="max-w-2xl space-y-5">
-      <div className="rounded-xl border border-border bg-card p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-[14px] font-semibold text-foreground">
-              Marca de agua automática
-            </h3>
-            <p className="mt-1 text-[12.5px] text-muted-foreground">
-              Se aplica al rendition web (lo que ven los clientes). Las descargas
-              con PIN se sirven sin marca de agua.
-            </p>
-          </div>
-          <label className="relative inline-flex cursor-pointer items-center">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(e) => setEnabled(e.target.checked)}
-              className="peer sr-only"
-            />
-            <div className="peer h-5 w-9 rounded-full bg-muted after:absolute after:start-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-card after:shadow after:transition-all peer-checked:bg-brand peer-checked:after:translate-x-full" />
-          </label>
-        </div>
-
-        {enabled && (
-          <div className="mt-4 space-y-4">
-            {/* Modo: texto vs imagen */}
-            <div>
-              <label className="mb-1.5 block text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Tipo
-              </label>
-              <div className="inline-flex rounded-lg border border-border bg-background p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setMode("text")}
-                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                    mode === "text"
-                      ? "bg-brand text-brand-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Texto
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("image")}
-                  className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                    mode === "image"
-                      ? "bg-brand text-brand-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Logo (imagen)
-                </button>
-              </div>
-            </div>
-
-            {mode === "text" ? (
-              <div>
-                <label className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Texto
-                </label>
-                <input
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="© Tu Estudio"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                />
-              </div>
-            ) : (
-              <div>
-                <label className="mb-1.5 block text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Logo
-                </label>
-                <div className="flex items-center gap-3">
-                  {imageKey ? (
-                    <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
-                      <span className="inline-block h-8 w-8 rounded bg-checkered" />
-                      <span className="font-mono text-[11px] text-muted-foreground">
-                        {imageKey.split("/").pop()}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-[12.5px] text-muted-foreground">
-                      Aún no has subido un logo.
-                    </span>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/png,image/webp,image/svg+xml,image/jpeg"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) void handleUploadLogo(f)
-                      if (fileInputRef.current) fileInputRef.current.value = ""
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={savingState === "uploading"}
-                    className="rounded-md border border-border bg-background px-3 py-2 text-sm hover:bg-muted disabled:opacity-50"
-                  >
-                    {savingState === "uploading"
-                      ? "Subiendo…"
-                      : imageKey
-                        ? "Cambiar logo"
-                        : "Subir logo"}
-                  </button>
-                </div>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  PNG con transparencia recomendado. Máximo 5MB.
-                </p>
-              </div>
-            )}
-
-            <div>
-              <label className="mb-1 block text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Posición
-              </label>
-              <select
-                value={position}
-                onChange={(e) => setPosition(e.target.value as WatermarkPosition)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              >
-                <option value="top-left">Arriba izquierda</option>
-                <option value="top-right">Arriba derecha</option>
-                <option value="center">Centro</option>
-                <option value="bottom-left">Abajo izquierda</option>
-                <option value="bottom-right">Abajo derecha</option>
-                <option value="tile">Mosaico (cubre toda la foto)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1 flex items-center justify-between text-[11.5px] font-semibold uppercase tracking-wide text-muted-foreground">
-                <span>Opacidad</span>
-                <span className="font-mono text-foreground tabular-nums">
-                  {Math.round(opacity * 100)}%
-                </span>
-              </label>
-              <input
-                type="range"
-                min={0.1}
-                max={1}
-                step={0.05}
-                value={opacity}
-                onChange={(e) => setOpacity(Number(e.target.value))}
-                className="w-full accent-brand"
-              />
-            </div>
-
-            <label className="flex items-center gap-2 text-[12.5px] text-foreground">
-              <input
-                type="checkbox"
-                checked={reprocessAll}
-                onChange={(e) => setReprocessAll(e.target.checked)}
-                className="rounded border-border accent-brand"
-              />
-              Re-procesar fotos existentes con esta marca de agua
-            </label>
-          </div>
-        )}
-
-        <div className="mt-5 flex items-center gap-2">
-          <button
-            onClick={() => void handleSave()}
-            disabled={pending}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90 disabled:opacity-50"
-          >
-            {savingState === "saving" ? "Guardando…" : "Guardar cambios"}
-          </button>
-          <p className="text-[11.5px] text-muted-foreground">
-            Aplica automáticamente a cada foto nueva al subirla.
-          </p>
-        </div>
-      </div>
+    <div className="max-w-5xl">
+      <WatermarkSettings
+        scope="gallery"
+        galleryId={g.id}
+        photoCount={g.asset_count ?? 0}
+        initialUseStudioDefault={g.watermark_use_studio_default ?? true}
+        initial={{
+          enabled: g.watermark_enabled ?? false,
+          mode: g.watermark_mode === "image" ? "image" : "text",
+          text: g.watermark_text ?? null,
+          imageKey: g.watermark_image_key ?? null,
+          position: (g.watermark_position ??
+            "bottom-right") as WatermarkConfig["position"],
+          opacity: Number(g.watermark_opacity ?? 0.5),
+          scale: Number(g.watermark_scale ?? 25),
+          rotation: Number(g.watermark_rotation ?? 0),
+          margin: Number(g.watermark_margin ?? 4),
+        }}
+      />
     </div>
   )
 }

@@ -520,6 +520,26 @@ export default async function GalleryDetailPage({
           watermark_opacity: Number(
             (gallery as unknown as { watermark_opacity: number }).watermark_opacity ?? 0.5,
           ),
+          // Marca de agua: modo, imagen y ajustes de tamaño/giro/margen. Sin
+          // esto el panel arrancaba siempre con los valores por defecto.
+          watermark_mode:
+            (gallery as unknown as { watermark_mode?: string }).watermark_mode ?? "text",
+          watermark_image_key:
+            (gallery as unknown as { watermark_image_key?: string | null })
+              .watermark_image_key ?? null,
+          watermark_scale: Number(
+            (gallery as unknown as { watermark_scale?: number }).watermark_scale ?? 25,
+          ),
+          watermark_rotation: Number(
+            (gallery as unknown as { watermark_rotation?: number }).watermark_rotation ?? 0,
+          ),
+          watermark_margin: Number(
+            (gallery as unknown as { watermark_margin?: number }).watermark_margin ?? 4,
+          ),
+          watermark_use_studio_default:
+            (gallery as unknown as { watermark_use_studio_default?: boolean })
+              .watermark_use_studio_default ?? true,
+          asset_count: gallery.asset_count ?? 0,
           download_pin_required:
             (gallery as unknown as { download_pin_required: boolean }).download_pin_required ?? false,
           selection_submitted: gallery.selection_submitted ?? false,
