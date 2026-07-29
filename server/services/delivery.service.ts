@@ -42,6 +42,8 @@ export interface UpcomingDelivery {
   deliveryDays: number | null
   estimatedDeliveryDate: string | null
   commitmentStarted: boolean
+  /** El cliente aún no envió su selección: el plazo no ha empezado a correr. */
+  awaitingSelection: boolean
   status: DeliveryStatus
   // Derivados
   daysUntilDelivery: number | null
@@ -76,6 +78,12 @@ export function deriveDeliveryComputed(input: {
   status: DeliveryStatus
   birthday: string | null
   estimatedDeliveryDate: string | null
+  /**
+   * true = el cliente todavía no envió su selección. El plazo de entrega
+   * arranca CON la selección, así que hasta entonces la fecha es un estimado y
+   * NO puede estar vencida — la pelota está en la cancha del cliente.
+   */
+  awaitingSelection?: boolean
   today?: Date
 }): {
   daysUntilDelivery: number | null
@@ -95,6 +103,7 @@ export function deriveDeliveryComputed(input: {
 
   const overdue =
     input.status !== "entregada" &&
+    !input.awaitingSelection &&
     daysUntilDelivery !== null &&
     daysUntilDelivery < 0
 
@@ -134,7 +143,7 @@ export async function listDeliveries(
     .from("client_deliveries")
     .select(
       `id, project_id, client_id, status, session_date, birthday, delivery_days,
-       estimated_delivery_date, commitment_started_at,
+       estimated_delivery_date, commitment_started_at, awaiting_selection,
        client:clients(name), project:projects(name, event_type, finalized_at)`,
     )
     .eq("studio_id", studioId)
@@ -163,10 +172,12 @@ export async function listDeliveries(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const r = raw as any
     const status = (r.status as DeliveryStatus) ?? "pendiente"
+    const awaitingSelection = !!r.awaiting_selection
     const computed = deriveDeliveryComputed({
       status,
       birthday: r.birthday ?? null,
       estimatedDeliveryDate: r.estimated_delivery_date ?? null,
+      awaitingSelection,
       today,
     })
     return {
@@ -181,6 +192,7 @@ export async function listDeliveries(
       deliveryDays: r.delivery_days ?? null,
       estimatedDeliveryDate: r.estimated_delivery_date ?? null,
       commitmentStarted: !!r.commitment_started_at,
+      awaitingSelection,
       status,
       ...computed,
     }
@@ -244,6 +256,8 @@ export interface UpcomingDeliveryEntry {
   date: string | null // fecha de entrega (YYYY-MM-DD)
   priority: DeliveryPriority
   overdue: boolean
+  /** El cliente aún no envió su selección: la fecha es un estimado. */
+  awaitingSelection?: boolean
   href: string
 }
 
@@ -268,6 +282,7 @@ export async function listUpcomingDeliveryEntries(
     date: d.estimatedDeliveryDate,
     priority: d.priority,
     overdue: d.overdue,
+    awaitingSelection: d.awaitingSelection,
     href: d.projectId ? `/projects/${d.projectId}` : "/deliveries",
   }))
 

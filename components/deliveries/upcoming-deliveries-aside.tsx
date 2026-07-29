@@ -85,11 +85,21 @@ export function UpcomingDeliveriesAside({
                   </div>
                   <span
                     className={`flex shrink-0 items-center gap-1 text-[11px] font-medium ${
-                      e.overdue ? "text-red-600" : "text-muted-foreground"
+                      e.overdue
+                        ? "text-red-600"
+                        : e.awaitingSelection
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-muted-foreground"
                     }`}
+                    title={
+                      e.awaitingSelection
+                        ? "El cliente aún no envía su selección: el plazo de entrega empieza cuando la envíe. La fecha es un estimado."
+                        : undefined
+                    }
                   >
                     {e.overdue && <AlertTriangle className="h-3 w-3" />}
                     {e.overdue ? "Vencida · " : ""}
+                    {!e.overdue && e.awaitingSelection ? "Esperando selección · " : ""}
                     {dateLabel}
                   </span>
                 </Link>
