@@ -55,6 +55,8 @@ const VARIANTS = {
 } as const
 
 const LABELS: Record<string, string> = {
+  // Estado de galería que faltaba: salía crudo en inglés ("published").
+  PUBLISHED: "Publicada",
   NEW: "Nuevo",
   CONTACTED: "Contactado",
   MEETING_SCHEDULED: "Reunión",

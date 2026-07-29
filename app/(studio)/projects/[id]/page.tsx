@@ -1196,9 +1196,19 @@ function GalleryTile({
   cover: string | null | undefined
   kind: "selection" | "delivery"
 }) {
-  const delivered = kind === "delivery" && !!g.delivery_ready_at
+  // "Enviada" = ya salió al cliente (delivery_ready_at). Si tiene fotos pero
+  // todavía no se envió, se dice así en claro en vez de un genérico "Entrega".
+  const sent = kind === "delivery" && !!g.delivery_ready_at
+  const hasPhotos = (g.asset_count ?? 0) > 0
+  const delivered = sent
   const badgeLabel =
-    kind === "delivery" ? (delivered ? "Entrega enviada" : "Entrega") : "Selección"
+    kind === "delivery"
+      ? sent
+        ? "Entrega enviada"
+        : hasPhotos
+          ? "Fotos cargadas · sin enviar"
+          : "Entrega"
+      : "Selección"
   const badgeCls =
     kind === "delivery"
       ? "inline-flex rounded-full bg-brand-soft px-1.5 py-0.5 text-[9.5px] font-semibold text-brand"
