@@ -8,6 +8,7 @@ import {
   KanbanSquare,
   CircleDot,
   CheckCircle2,
+  CalendarCheck,
   AlertTriangle,
   Clock,
   Shirt,
@@ -72,7 +73,7 @@ type ProjectRow = {
 }
 
 type ViewMode = "grid" | "kanban"
-type Scope = "active" | "completed" | "finalized"
+type Scope = "active" | "completed" | "finalized" | "past"
 
 export default async function ProjectsPage({
   searchParams,
@@ -96,7 +97,9 @@ export default async function ProjectsPage({
       ? "completed"
       : searchParams.scope === "finalized"
         ? "finalized"
-        : "active"
+        : searchParams.scope === "past"
+          ? "past"
+          : "active"
   const viewParam: ViewMode = searchParams.view === "kanban" ? "kanban" : "grid"
   // En "Completados"/"Finalizadas" siempre grid (no hay pipeline que arrastrar).
   const view: ViewMode = scope === "active" ? viewParam : "grid"
@@ -153,12 +156,27 @@ export default async function ProjectsPage({
 
   // Filtro de proyectos según scope. Las FINALIZADAS (finalized_at) salen de
   // "activas" y "completadas"; su propia pestaña las muestra en exclusiva.
+  // "Sesiones pasadas": la fecha del evento ya pasó (las fotos están hechas) y
+  // el trabajo sigue en marcha — entrega digital o impresiones. Las completadas
+  // y finalizadas tienen su propio apartado, así que no se repiten aquí.
+  const yesterdayStr = (() => {
+    const d = new Date(`${todayStr}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() - 1)
+    return d.toISOString().slice(0, 10)
+  })()
+
   const scopeFilter =
     scope === "finalized"
       ? { finalized: "only" as const }
       : scope === "completed"
         ? { onlyStatuses: completedLabels, finalized: "exclude" as const }
-        : { excludeStatuses: completedLabels, finalized: "exclude" as const }
+        : scope === "past"
+          ? {
+              excludeStatuses: completedLabels,
+              finalized: "exclude" as const,
+              dateTo: yesterdayStr,
+            }
+          : { excludeStatuses: completedLabels, finalized: "exclude" as const }
 
   const fetchOpts =
     view === "kanban"
@@ -175,9 +193,18 @@ export default async function ProjectsPage({
             ...scopeFilter,
             ...(whenRange ? { dateFrom: whenRange.from, dateTo: whenRange.to } : {}),
           }
-        : { search, status, serviceCategoryId: category, page, ...scopeFilter }
+        : scope === "past"
+          ? {
+              search,
+              serviceCategoryId: category,
+              page: 1,
+              pageSize: 200,
+              ...scopeFilter,
+            }
+          : { search, status, serviceCategoryId: category, page, ...scopeFilter }
 
-  const [data, activeCount, completedCount, finalizedCount] = await Promise.all([
+  const [data, activeCount, completedCount, finalizedCount, pastCount] =
+    await Promise.all([
     getProjects(session.studioId, fetchOpts),
     countProjects(session.studioId, {
       search,
@@ -198,6 +225,13 @@ export default async function ProjectsPage({
       serviceCategoryId: category,
       finalized: "only",
     }),
+    countProjects(session.studioId, {
+      search,
+      serviceCategoryId: category,
+      excludeStatuses: completedLabels,
+      finalized: "exclude",
+      dateTo: yesterdayStr,
+    }),
   ])
 
   // Orden por cercanía SOLO en la grilla de activos: las próximas a hoy primero
@@ -214,6 +248,15 @@ export default async function ProjectsPage({
     ;(data.items as unknown as ProjectRow[]).sort(
       (a, b) => proximityKey(a.event_date) - proximityKey(b.event_date),
     )
+  }
+
+  // Sesiones pasadas: la más reciente primero (es la que toca entregar ya).
+  if (scope === "past") {
+    ;(data.items as unknown as ProjectRow[]).sort((a, b) => {
+      const ta = a.event_date ? Date.parse(String(a.event_date).slice(0, 10)) : 0
+      const tb = b.event_date ? Date.parse(String(b.event_date).slice(0, 10)) : 0
+      return tb - ta
+    })
   }
 
   // Badge "falta colaborador" (solo en grid): proyectos cuyo plan requiere
@@ -291,6 +334,13 @@ export default async function ProjectsPage({
     params.set("scope", "completed")
     return `/projects?${params.toString()}`
   })()
+  const pastScopeHref = (() => {
+    const params = new URLSearchParams()
+    if (search) params.set("q", search)
+    if (category) params.set("category", category)
+    params.set("scope", "past")
+    return `/projects?${params.toString()}`
+  })()
   const finalizedScopeHref = (() => {
     const params = new URLSearchParams()
     if (search) params.set("q", search)
@@ -314,7 +364,7 @@ export default async function ProjectsPage({
     <>
       <AppTopbar
         title="Sesiones"
-        description={`${activeCount} activo${activeCount === 1 ? "" : "s"} · ${completedCount} completado${completedCount === 1 ? "" : "s"}`}
+        description={`${activeCount} activo${activeCount === 1 ? "" : "s"} · ${pastCount} por entregar · ${completedCount} completado${completedCount === 1 ? "" : "s"}`}
         unreadNotifications={unread}
         actions={
           <div className="flex items-center gap-2">
@@ -355,6 +405,27 @@ export default async function ProjectsPage({
               )}
             >
               {activeCount}
+            </span>
+          </Link>
+          <Link
+            href={pastScopeHref}
+            prefetch={false}
+            title="Sesiones ya fotografiadas, en proceso de entrega"
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
+              scope === "past"
+                ? "bg-amber-600 text-white"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <CalendarCheck className="h-3.5 w-3.5" /> Sesiones pasadas
+            <span
+              className={cn(
+                "ml-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                scope === "past" ? "bg-white/20" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {pastCount}
             </span>
           </Link>
           <Link
@@ -488,6 +559,8 @@ export default async function ProjectsPage({
               icon={
                 scope === "finalized" ? (
                   <Archive className="h-5 w-5" />
+                ) : scope === "past" ? (
+                  <CalendarCheck className="h-5 w-5" />
                 ) : scope === "completed" ? (
                   <CheckCircle2 className="h-5 w-5" />
                 ) : (
@@ -497,7 +570,9 @@ export default async function ProjectsPage({
               title={
                 scope === "finalized"
                   ? "Aún no hay sesiones finalizadas"
-                  : scope === "completed"
+                  : scope === "past"
+                    ? "No hay sesiones pasadas pendientes"
+                    : scope === "completed"
                     ? "Aún no hay sesiones completadas"
                     : search || status || category
                       ? "No encontramos sesiones"
@@ -506,7 +581,9 @@ export default async function ProjectsPage({
               description={
                 scope === "finalized"
                   ? "Cuando finalices una sesión, se archiva aquí con todo su historial y desaparece de las demás áreas."
-                  : scope === "completed"
+                  : scope === "past"
+                    ? "Aquí salen las sesiones cuya fecha ya pasó y siguen en proceso de entrega — digital o impresiones. Si está vacío, estás al día."
+                    : scope === "completed"
                     ? "Cuando marques una sesión como “Completada” aparecerá aquí, separada de las pendientes."
                     : search || status || category
                       ? "Prueba ajustando tu búsqueda o limpia los filtros."
