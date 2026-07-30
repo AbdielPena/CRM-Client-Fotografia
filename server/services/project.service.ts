@@ -493,6 +493,25 @@ export async function updateProject(
     await syncProjectById(studioId, project.id).catch(() => {})
   }
 
+  // ── Al mover la FECHA, se arrastra todo lo que cuelga de ella ─────────────
+  // El calendario ya se re-sincronizó arriba. Falta lo que se calcula A PARTIR
+  // de la fecha de la sesión:
+  //   · La entrega estimada (plazo digital, tope del cumpleaños).
+  //   · El vencimiento de la factura del SALDO (se paga el día de la sesión,
+  //     con el desfase que tenga el plan).
+  // Los recordatorios de pago y la deuda de colaboradores leen la fecha en el
+  // momento de correr, así que se ajustan solos.
+  const fechaCambio =
+    prevSchedule &&
+    (prevSchedule.date ?? '') !== ((project.event_date as string | null) ?? '')
+  if (fechaCambio && data.status !== 'cancelled') {
+    try {
+      await recalcAfterDateChange(studioId, project.id)
+    } catch (e) {
+      console.error('[updateProject] recálculo por cambio de fecha', e)
+    }
+  }
+
   // Si cambió la FECHA o la HORA, avisar al cliente (correo + WhatsApp). El
   // evento de Google ya se re-sincronizó arriba; esto es el aviso, que antes
   // solo existía en el botón "Cambiar hora" y no al editar la sesión.
@@ -515,6 +534,57 @@ export async function updateProject(
   }
 
   return project
+}
+
+/**
+ * Recalcula lo que depende de la fecha de la sesión. Se llama al moverla.
+ *
+ * No toca nada ya cobrado ni ya entregado: solo mueve compromisos futuros.
+ */
+async function recalcAfterDateChange(
+  studioId: string,
+  projectId: string,
+): Promise<void> {
+  // untyped: la RPC y algunas columnas no están en los tipos generados.
+  const svc = untypedService()
+
+  // 1) Entrega estimada — misma cuenta que usa todo el sistema.
+  await svc.rpc('upsert_project_delivery', {
+    p_studio_id: studioId,
+    p_project_id: projectId,
+  })
+
+  // 2) Vencimiento del saldo: el día de la sesión ± el desfase del plan.
+  //    Solo facturas que aún no están pagadas ni anuladas.
+  const { data: proj } = await svc
+    .from('projects')
+    .select('event_date, package:packages(balance_due_offset_days)')
+    .eq('id', projectId)
+    .maybeSingle()
+  const p = proj as {
+    event_date: string | null
+    package:
+      | { balance_due_offset_days?: number | null }
+      | Array<{ balance_due_offset_days?: number | null }>
+      | null
+  } | null
+  const eventDate = p?.event_date ?? null
+  if (!eventDate) return
+
+  const pkg = Array.isArray(p?.package) ? p?.package[0] : p?.package
+  const offset = Number(pkg?.balance_due_offset_days ?? 0)
+  const due = new Date(`${eventDate}T00:00:00Z`)
+  due.setUTCDate(due.getUTCDate() + offset)
+  const dueStr = due.toISOString().slice(0, 10)
+
+  await svc
+    .from('invoices')
+    .update({ due_date: dueStr, updated_at: new Date().toISOString() })
+    .eq('studio_id', studioId)
+    .eq('project_id', projectId)
+    .eq('kind', 'balance')
+    .is('deleted_at', null)
+    .not('status', 'in', '("paid","cancelled","void")')
 }
 
 export async function deleteProject(
