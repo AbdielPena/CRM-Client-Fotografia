@@ -333,7 +333,14 @@ export function PublicGalleryView({
   // El correo es OBLIGATORIO para seleccionar: cada persona hace su propia
   // selección con su correo (los favoritos se guardan por correo, no compartidos).
   // La descarga (?entrega=1) NO lo pide. Ver restore de localStorage abajo.
-  const [emailPrompt, setEmailPrompt] = useState(!deliveryOnly)
+  // El correo SOLO se pide para guardar una SELECCIÓN (los favoritos se guardan
+  // por correo). Una galería de ENTREGA FINAL ya es del cliente: se abre directo
+  // con su enlace, sin pedirle nada. Se mira el TIPO de galería, no si ya se
+  // envió, para que también entre directo una entrega recién cargada.
+  const isFinalDeliveryGallery = gallery.galleryType === "final_delivery"
+  const [emailPrompt, setEmailPrompt] = useState(
+    !deliveryOnly && !isFinalDeliveryGallery && !deliveryReady,
+  )
 
   const [collections, setCollections] = useState<Collection[]>([])
   const [activeCollId, setActiveCollId] = useState<string | null>(null)
@@ -793,7 +800,7 @@ export function PublicGalleryView({
   // propio). Si el tipo es final_delivery, SIEMPRE se muestra como entrega —
   // aunque aún no tenga fotos con track ni `delivery_ready_at` — y nunca ofrece
   // la selección. Una galería de selección nunca redirige a la entrega.
-  const isDeliveryGallery = gallery.galleryType === "final_delivery"
+  const isDeliveryGallery = isFinalDeliveryGallery
   // "Entregada" = ya hay fotos de entrega (con track) O la galería fue marcada
   // lista. Es la MISMA definición que usa el resto del sistema (badge/lista).
   // No se exige `delivery_ready_at`: si el estudio ya subió las fotos editadas,
@@ -885,6 +892,9 @@ export function PublicGalleryView({
   // navegadores que lo soportan (Safari móvil); en desktop no hay app "Fotos".
   const [canSharePhotos, setCanSharePhotos] = useState(false)
   const [saveBusy, setSaveBusy] = useState<string | null>(null)
+  // Fotos ya descargadas esperando el segundo toque (ver saveToPhotos).
+  const readyFilesRef = useRef<{ key: string; files: File[] } | null>(null)
+  const [saveReadyKey, setSaveReadyKey] = useState<string | null>(null)
   useEffect(() => {
     try {
       const probe = [new File([new Uint8Array(1)], "t.jpg", { type: "image/jpeg" })]
@@ -897,6 +907,17 @@ export function PublicGalleryView({
       setCanSharePhotos(false)
     }
   }, [])
+  /**
+   * "Guardar en Fotos" en DOS toques.
+   *
+   * iOS solo deja abrir el menú de compartir DENTRO del toque del usuario. Antes
+   * se descargaban las fotos primero y recién después se abría el menú: para
+   * cuando terminaba (varios segundos con fotos grandes) Safari ya había
+   * caducado el permiso del toque y siempre daba error.
+   *
+   * Ahora: el primer toque descarga y deja las fotos listas; el segundo toque
+   * abre el menú de golpe, dentro de su propio toque. Así sí funciona.
+   */
   const saveToPhotos = useCallback(
     async (key: string, assetIds: string[], resolution: "web" | "original") => {
       if (assetIds.length === 0) {
@@ -907,6 +928,26 @@ export function PublicGalleryView({
         toast.error("Son muchas fotos para guardar de una — usá el botón de ZIP.")
         return
       }
+
+      // Segundo toque: ya están en memoria → compartir YA, sin nada asíncrono
+      // antes (esa es la condición que exige iOS).
+      const ready = readyFilesRef.current
+      if (ready && ready.key === key && ready.files.length > 0) {
+        readyFilesRef.current = null
+        setSaveReadyKey(null)
+        try {
+          await navigator.share({ files: ready.files, title: gallery.name })
+        } catch (e) {
+          const err = e as Error
+          if (err.name === "AbortError") return // cerró el menú, no es un fallo
+          toast.error(
+            "Tu teléfono no dejó guardar las fotos. Probá con el botón de ZIP.",
+          )
+        }
+        return
+      }
+
+      // Primer toque: preparar.
       setSaveBusy(key)
       try {
         const res = await fetch(`/api/galleries/public/${token}/originals`, {
@@ -927,13 +968,19 @@ export function PublicGalleryView({
           files.push(new File([blob], p.filename, { type: blob.type || "image/jpeg" }))
         }
         if (!files.length) throw new Error("No se pudieron cargar las fotos")
-        if (!navigator.canShare?.({ files })) throw new Error("compartir no disponible")
-        await navigator.share({ files, title: gallery.name })
+        if (!navigator.canShare?.({ files })) {
+          throw new Error("Tu navegador no permite guardar directo en Fotos")
+        }
+        readyFilesRef.current = { key, files }
+        setSaveReadyKey(key)
+        toast.success(
+          `${files.length} foto${files.length === 1 ? "" : "s"} lista${files.length === 1 ? "" : "s"} — tocá otra vez para guardarlas`,
+        )
       } catch (e) {
         const err = e as Error
-        if (err.name === "AbortError") return // el usuario cerró el menú de compartir
         toast.error(
-          "No se pudo guardar directo. En iPhone: abre una foto y toca “Guardar en Fotos”, o baja el ZIP.",
+          err.message ||
+            "No se pudo preparar la descarga. Probá con el botón de ZIP.",
         )
       } finally {
         setSaveBusy(null)
@@ -1215,7 +1262,11 @@ export function PublicGalleryView({
                   ) : (
                     <Download className="h-3.5 w-3.5" />
                   )}
-                  Guardar en Fotos
+                  {saveBusy === "save"
+                    ? "Preparando fotos…"
+                    : saveReadyKey === "save"
+                      ? "Tocá otra vez para guardar"
+                      : "Guardar en Fotos"}
                 </button>
               )}
               {isShowingDelivery && gallery.allow_download && (
