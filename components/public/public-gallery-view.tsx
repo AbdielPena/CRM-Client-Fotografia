@@ -275,22 +275,19 @@ function EditorialCover({
   )
 }
 
-/** Polling del export ZIP (endpoint público por token) hasta que está listo. */
-async function waitForZip(token: string, exportId: string): Promise<string> {
-  const base = `/api/galleries/public/${token}/zip/${exportId}`
-  for (let i = 0; i < 90; i++) {
-    await new Promise((r) => setTimeout(r, 2000))
-    const res = await fetch(base)
-    if (!res.ok) continue
-    const data = (await res.json()) as { status: string; error?: string | null }
-    if (data.status === "ready" || data.status === "completed") {
-      return `${base}?download=1`
-    }
-    if (data.status === "failed") {
-      throw new Error(data.error ?? "La descarga falló al generarse")
-    }
-  }
-  throw new Error("La descarga está tardando demasiado — intentá de nuevo en unos minutos")
+/**
+ * Dirección de descarga del ZIP.
+ *
+ * El ZIP se arma y se envía SOBRE LA MARCHA (no se guarda en el servidor
+ * primero), así que no hay ningún "listo" que esperar: se apunta directo al
+ * enlace y el navegador empieza a bajar.
+ *
+ * Antes esto hacía polling esperando que el estado pasara a "ready" — como con
+ * la descarga directa ese estado nunca llega, se quedaba 3 minutos girando y
+ * terminaba en "está tardando demasiado", aunque el archivo estaba disponible.
+ */
+function zipDownloadUrl(token: string, exportId: string): string {
+  return `/api/galleries/public/${token}/zip/${exportId}/stream`
 }
 
 export function PublicGalleryView({
@@ -870,9 +867,8 @@ export function PublicGalleryView({
           throw new Error(err?.error ?? "No se pudo iniciar la descarga")
         }
         const { exportId } = (await res.json()) as { exportId: string }
-        toast.info("Preparando tu ZIP… puede tardar un momento")
-        const url = await waitForZip(token, exportId)
-        window.location.href = url
+        toast.info("Preparando tu ZIP… la descarga arranca en unos segundos")
+        window.location.href = zipDownloadUrl(token, exportId)
         toast.success("¡Descarga iniciada!")
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Error al descargar")
