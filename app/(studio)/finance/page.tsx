@@ -1,12 +1,20 @@
 import Link from "next/link"
-import { ExternalLink, AlertTriangle, Wallet, TrendingUp } from "lucide-react"
+import { ExternalLink, AlertTriangle, Wallet, TrendingUp, Users, Shirt } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { getFinanceDashboard } from "@/server/services/finance-dashboard.service"
+import {
+  getMonthlyRevenue,
+  getTopPackages,
+  getSessionFinanceStats,
+} from "@/server/services/dashboard.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { StatCard } from "@/components/shared/stat-card"
+import { DashboardCard } from "@/components/dashboard/dashboard-card"
+import { RevenueLineChart } from "@/components/dashboard/revenue-line-chart"
+import { TopPackagesList } from "@/components/dashboard/top-packages-list"
 import { DefaultAccountBlock } from "@/components/finance/default-account-block"
 import { AssignAccountCell } from "@/components/finance/assign-account-cell"
 import { formatCurrency, formatDateShort } from "@/lib/utils/currency"
@@ -28,10 +36,23 @@ const METHOD_LABELS: Record<string, string> = {
 
 export default async function FinancePage() {
   const session = await requireStudioAuth()
-  const [data, unread] = await Promise.all([
-    getFinanceDashboard(session.studioId, { limit: 100 }),
-    countUnreadNotifications(session.studioId),
-  ])
+  // Todo lo de dinero vive AQUÍ: el dashboard quedó sin finanzas a propósito,
+  // así que la tendencia, los planes más vendidos y las deudas se muestran en
+  // esta pantalla.
+  const [data, unread, monthlyRevenue, topPackages, sessionFinance] =
+    await Promise.all([
+      getFinanceDashboard(session.studioId, { limit: 100 }),
+      countUnreadNotifications(session.studioId),
+      getMonthlyRevenue(session.studioId, 12).catch(() => []),
+      getTopPackages(session.studioId, 5, 5).catch(() => []),
+      getSessionFinanceStats(session.studioId).catch(() => ({
+        collaboratorDebt: 0,
+        collaboratorDebtCount: 0,
+        dressDebt: 0,
+        dressDebtCount: 0,
+        currency: "DOP",
+      })),
+    ])
 
   const accountOptions = data.accounts.map((a) => ({
     id: a.id,
@@ -96,6 +117,73 @@ export default async function FinancePage() {
             subtitle="YTD acumulado"
           />
         </div>
+
+        {/* Tendencia de ingresos (venía del dashboard) */}
+        <DashboardCard title="Tendencia de ingresos">
+          <RevenueLineChart buckets={monthlyRevenue} currency="DOP" />
+        </DashboardCard>
+
+        {/* Por pagar: deudas con colaboradores y vestidos */}
+        {(sessionFinance.collaboratorDebt > 0 || sessionFinance.dressDebt > 0) && (
+          <DashboardCard title="Por pagar">
+            <div className="space-y-3">
+              {sessionFinance.collaboratorDebt > 0 && (
+                <Link
+                  href="/colaboradores"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                >
+                  <span className="flex items-center gap-2 text-[13px] text-foreground">
+                    <Users className="h-4 w-4 text-violet-500" />
+                    Colaboradores
+                    <span className="text-[11px] text-muted-foreground">
+                      ({sessionFinance.collaboratorDebtCount})
+                    </span>
+                  </span>
+                  <span className="text-[13px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                    {formatCurrency(
+                      sessionFinance.collaboratorDebt,
+                      sessionFinance.currency,
+                    )}
+                  </span>
+                </Link>
+              )}
+              {sessionFinance.dressDebt > 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                  <span className="flex items-center gap-2 text-[13px] text-foreground">
+                    <Shirt className="h-4 w-4 text-pink-500" />
+                    Vestidos
+                    <span className="text-[11px] text-muted-foreground">
+                      ({sessionFinance.dressDebtCount})
+                    </span>
+                  </span>
+                  <span className="text-[13px] font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                    {formatCurrency(sessionFinance.dressDebt, sessionFinance.currency)}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                <span className="text-[13px] font-semibold text-foreground">
+                  Total por pagar
+                </span>
+                <span className="text-[14px] font-bold tabular-nums text-foreground">
+                  {formatCurrency(
+                    sessionFinance.collaboratorDebt + sessionFinance.dressDebt,
+                    sessionFinance.currency,
+                  )}
+                </span>
+              </div>
+            </div>
+          </DashboardCard>
+        )}
+
+        {/* Planes más vendidos (venía del dashboard) */}
+        <DashboardCard
+          title="Planes más vendidos"
+          href="/settings/packages"
+          hrefLabel="Ver planes"
+        >
+          <TopPackagesList items={topPackages} currency="DOP" />
+        </DashboardCard>
 
         {/* Pendientes */}
         {data.pendingCount > 0 && (
