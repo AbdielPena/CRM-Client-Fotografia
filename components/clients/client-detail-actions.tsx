@@ -18,6 +18,7 @@ interface ClientDetailActionsProps {
 
 export function ClientDetailActions({ client }: ClientDetailActionsProps) {
   const [open, setOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const router = useRouter()
 
   return (
@@ -44,27 +45,34 @@ export function ClientDetailActions({ client }: ClientDetailActionsProps) {
               Editar cliente
             </button>
             <hr className="my-1 border-border" />
-            <ConfirmDialog
-              title="Mover a la Papelera"
-              description={`¿Mover a "${client.name}" a la Papelera? Sus proyectos, contratos, facturas y galerías también se ocultarán. Podés restaurarlo en cualquier momento desde /trash.`}
-              confirmLabel="Mover a Papelera"
-              danger
-              onConfirm={async () => {
-                await deleteClientAction(client.id)
-                router.push("/clients")
+            <button
+              onClick={() => {
+                setOpen(false)
+                setConfirmOpen(true)
               }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
             >
-              <button
-                onClick={() => setOpen(false)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-                Eliminar cliente
-              </button>
-            </ConfirmDialog>
+              <Trash2 className="h-4 w-4" />
+              Eliminar cliente
+            </button>
           </div>
         </>
       )}
+
+      {/* El diálogo va FUERA del menú: si vive dentro, al cerrarse el menú se
+          desmonta en el mismo instante en que se abre y no pasa nada. */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Mover a la Papelera"
+        description={`¿Mover a "${client.name}" a la Papelera? Sus proyectos, contratos, facturas y galerías también se ocultarán. Podés restaurarlo en cualquier momento desde /trash.`}
+        confirmLabel="Mover a Papelera"
+        danger
+        onConfirm={async () => {
+          await deleteClientAction(client.id)
+          router.push("/clients")
+        }}
+      />
     </div>
   )
 }

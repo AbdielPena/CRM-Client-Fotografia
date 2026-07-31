@@ -20,6 +20,7 @@ interface LeadDetailActionsProps {
 
 export function LeadDetailActions({ lead }: LeadDetailActionsProps) {
   const [open, setOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const router = useRouter()
 
   const hasBeenConverted = !!lead.converted_to_client_id
@@ -63,25 +64,32 @@ export function LeadDetailActions({ lead }: LeadDetailActionsProps) {
                 Editar
               </button>
               <hr className="my-1 border-border" />
-              <ConfirmDialog
-                title="Eliminar lead"
-                description={`¿Estás seguro de eliminar "${lead.name}"? Esta acción no se puede deshacer.`}
-                confirmLabel="Eliminar"
-                danger
-                onConfirm={() => deleteLeadAction(lead.id)}
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  setConfirmOpen(true)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
               >
-                <button
-                  onClick={() => setOpen(false)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar lead
-                </button>
-              </ConfirmDialog>
+                <Trash2 className="h-4 w-4" />
+                Eliminar lead
+              </button>
             </div>
           </>
         )}
       </div>
+
+      {/* El diálogo va FUERA del menú: si vive dentro, al cerrarse el menú se
+          desmonta en el mismo instante en que se abre y no pasa nada. */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Eliminar lead"
+        description={`¿Estás seguro de eliminar "${lead.name}"? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={() => deleteLeadAction(lead.id)}
+      />
     </div>
   )
 }

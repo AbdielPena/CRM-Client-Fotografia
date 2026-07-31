@@ -12,6 +12,7 @@ interface InvoiceDetailActionsProps {
 
 export function InvoiceDetailActions({ invoice }: InvoiceDetailActionsProps) {
   const [open, setOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [isSending, startSend] = useTransition()
 
   const canSend = invoice.status === "draft"
@@ -61,25 +62,32 @@ export function InvoiceDetailActions({ invoice }: InvoiceDetailActionsProps) {
                 Exportar / Imprimir
               </button>
               <hr className="my-1 border-border" />
-              <ConfirmDialog
-                title="Eliminar factura"
-                description={`¿Eliminar la factura ${invoice.invoice_number}? Esta acción no se puede deshacer.`}
-                confirmLabel="Eliminar"
-                danger
-                onConfirm={() => deleteInvoiceAction(invoice.id)}
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  setConfirmOpen(true)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
               >
-                <button
-                  onClick={() => setOpen(false)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar factura
-                </button>
-              </ConfirmDialog>
+                <Trash2 className="h-4 w-4" />
+                Eliminar factura
+              </button>
             </div>
           </>
         )}
       </div>
+
+      {/* El diálogo va FUERA del menú: si vive dentro, al cerrarse el menú se
+          desmonta en el mismo instante en que se abre y no pasa nada. */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Eliminar factura"
+        description={`¿Eliminar la factura ${invoice.invoice_number}? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={() => deleteInvoiceAction(invoice.id)}
+      />
     </div>
   )
 }

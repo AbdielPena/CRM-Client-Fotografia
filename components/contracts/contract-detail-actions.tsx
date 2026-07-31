@@ -12,6 +12,8 @@ interface ContractDetailActionsProps {
 
 export function ContractDetailActions({ contract }: ContractDetailActionsProps) {
   const [open, setOpen] = useState(false)
+  const [voidOpen, setVoidOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [isSending, startSend] = useTransition()
 
   const canSend = contract.status === "draft"
@@ -52,43 +54,54 @@ export function ContractDetailActions({ contract }: ContractDetailActionsProps) 
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
             <div className="absolute right-0 top-full mt-1 w-48 bg-card rounded-lg border border-border shadow-lg z-20 py-1">
               {canVoid && (
-                <ConfirmDialog
-                  title="Anular contrato"
-                  description="¿Anular este contrato? El cliente no podrá firmarlo."
-                  confirmLabel="Anular"
-                  onConfirm={async () => {
-                    await voidContractAction(contract.id)
+                <button
+                  onClick={() => {
+                    setOpen(false)
+                    setVoidOpen(true)
                   }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
                 >
-                  <button
-                    onClick={() => setOpen(false)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
-                  >
-                    <XCircle className="h-4 w-4" />
-                    Anular contrato
-                  </button>
-                </ConfirmDialog>
+                  <XCircle className="h-4 w-4" />
+                  Anular contrato
+                </button>
               )}
               <hr className="my-1 border-border" />
-              <ConfirmDialog
-                title="Eliminar contrato"
-                description={`¿Eliminar "${contract.title}"?`}
-                confirmLabel="Eliminar"
-                danger
-                onConfirm={() => deleteContractAction(contract.id)}
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  setDeleteOpen(true)
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
               >
-                <button
-                  onClick={() => setOpen(false)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar
-                </button>
-              </ConfirmDialog>
+                <Trash2 className="h-4 w-4" />
+                Eliminar
+              </button>
             </div>
           </>
         )}
       </div>
+
+      {/* El diálogo va FUERA del menú: si vive dentro, al cerrarse el menú se
+          desmonta en el mismo instante en que se abre y no pasa nada. */}
+      <ConfirmDialog
+        open={voidOpen}
+        onOpenChange={setVoidOpen}
+        title="Anular contrato"
+        description="¿Anular este contrato? El cliente no podrá firmarlo."
+        confirmLabel="Anular"
+        onConfirm={async () => {
+          await voidContractAction(contract.id)
+        }}
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Eliminar contrato"
+        description={`¿Eliminar "${contract.title}"?`}
+        confirmLabel="Eliminar"
+        danger
+        onConfirm={() => deleteContractAction(contract.id)}
+      />
     </div>
   )
 }

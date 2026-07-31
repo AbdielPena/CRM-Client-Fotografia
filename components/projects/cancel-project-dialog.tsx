@@ -21,16 +21,26 @@ export function CancelProjectDialog({
   projectId,
   projectName,
   clientName,
+  open,
+  onClose,
   onDone,
-  children,
 }: {
   projectId: string
   projectName: string
   clientName?: string | null
+  /**
+   * Controlado desde el padre A PROPÓSITO: el botón que lo abre vive dentro de
+   * un menú desplegable que se cierra al tocarlo. Si el diálogo viviera ahí
+   * dentro, se desmontaría en el mismo instante en que se abre y no pasaría
+   * nada (que es justo el bug que tenía).
+   */
+  open: boolean
+  onClose: () => void
   onDone?: () => void
-  children: React.ReactNode
 }) {
-  const [open, setOpen] = useState(false)
+  const setOpen = (v: boolean) => {
+    if (!v) onClose()
+  }
   const [reason, setReason] = useState("")
   const [deposit, setDeposit] = useState<"kept" | "refunded">("kept")
   const [notifyClient, setNotifyClient] = useState(true)
@@ -89,10 +99,10 @@ export function CancelProjectDialog({
     })
   }
 
+  if (!open) return null
+
   return (
     <>
-      <span onClick={() => setOpen(true)}>{children}</span>
-
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
