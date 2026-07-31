@@ -957,7 +957,10 @@ export function PublicGalleryView({
    */
   const saveToPhotos = useCallback(
     async (key: string, assetIds: string[], resolution: "web" | "original") => {
-      const MAX_POR_TANDA = 5
+      // El límite que de verdad importa es el PESO (la memoria del menú de iOS),
+      // no la cantidad: 8 fotos livianas pasan sin problema, 3 pesadas no. El
+      // tope de cantidad es solo una red de seguridad.
+      const MAX_POR_TANDA = 8
       const MAX_BYTES_POR_TANDA = 30 * 1024 * 1024
 
       if (assetIds.length === 0) {
