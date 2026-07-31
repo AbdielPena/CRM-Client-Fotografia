@@ -12,6 +12,7 @@ import {
   Loader2,
   KeyRound,
   Check,
+  CheckSquare,
   Image as ImageIcon,
   MessageSquare,
   Trash2,
@@ -892,16 +893,21 @@ export function PublicGalleryView({
   // muestra en navegadores que lo soportan (Safari móvil); en desktop no hay
   // app "Fotos".
   const [canSharePhotos, setCanSharePhotos] = useState(false)
+  // Entrega: elegir fotos sueltas en vez de bajarlas todas.
+  const [pickMode, setPickMode] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const togglePick = useCallback((id: string) => {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
   /**
-   * Cola de guardado. Se llena mientras se descarga (el productor) y se vacía
-   * a medida que iOS acepta cada tanda (el consumidor) — las dos cosas corren
-   * a la vez, así el cliente empieza a guardar sin esperar a que bajen todas.
+   * Fotos ya descargadas, esperando el toque que abre el menú de compartir.
    */
-  const saveQueueRef = useRef<{
-    batches: File[][]
-    index: number
-    downloading: boolean
-  } | null>(null)
+  const saveQueueRef = useRef<{ files: File[] } | null>(null)
   /** true mientras hay un menú de compartir abierto (evita entrar dos veces). */
   const sharingRef = useRef(false)
   /** true cuando iOS pidió un toque nuevo y lo estamos esperando. */
@@ -933,13 +939,15 @@ export function PublicGalleryView({
   }, [])
 
   /**
-   * Va vaciando la cola SOLA, mientras iOS lo permita.
+   * Manda las fotos ya descargadas al carrete, TODAS de una sola vez.
    *
-   * iOS exige un gesto del usuario para abrir cada menú de compartir, y el
-   * gesto se consume al abrirlo. Por eso el intento siguiente puede fallar con
-   * `NotAllowedError`: cuando pasa NO se pierde nada — se para, sale el botón
-   * grande del centro, y al tocarlo esta misma función sigue desde donde iba.
-   * Si el teléfono deja encadenar, corre entero sin tocar nada.
+   * Un único `navigator.share` con el lote completo: así lo pidió Abdiel
+   * porque es lo que de verdad le funciona en su iPhone — sale una sola vez el
+   * menú de compartir, elige "Guardar imágenes" y entran todas.
+   *
+   * El toque aparte SÍ hace falta: iOS solo abre el menú de compartir dentro
+   * del gesto del usuario, y ese permiso caduca mientras se descargan las
+   * fotos. Por eso el primer toque descarga y el segundo comparte.
    */
   const runBatches = useCallback(async () => {
     const q = saveQueueRef.current
@@ -947,78 +955,50 @@ export function PublicGalleryView({
     sharingRef.current = true
     awaitingTapRef.current = false
     try {
-      while (q.index < q.batches.length) {
-        // Cancelaron (o arrancó otro guardado) mientras el menú estaba abierto.
-        if (saveQueueRef.current !== q) return
-        const tanda = q.batches[q.index]
-        setFlow((f) => (f ? { ...f, phase: "share", message: undefined } : f))
-        try {
-          await navigator.share({ files: tanda, title: gallery.name })
-        } catch (e) {
-          const err = e as Error
-          awaitingTapRef.current = true
-          setFlow((f) =>
-            f
-              ? {
-                  ...f,
-                  phase: "tap",
-                  nextCount: tanda.length,
-                  message:
-                    err.name === "AbortError"
-                      ? "Cerraste el menú antes de guardar. Tocá para intentarlo de nuevo."
-                      : undefined,
-                }
-              : f,
-          )
-          return // el índice NO avanzó: la misma tanda se reintenta
-        }
-        q.index += 1
-        const guardadas = q.batches
-          .slice(0, q.index)
-          .reduce((n, b) => n + b.length, 0)
+      const fotos = q.files
+      if (!fotos.length) return
+      setFlow((f) => (f ? { ...f, phase: "share", message: undefined } : f))
+      try {
+        await navigator.share({ files: fotos, title: gallery.name })
+      } catch (e) {
+        const err = e as Error
+        awaitingTapRef.current = true
         setFlow((f) =>
           f
-            ? { ...f, saved: guardadas, nextCount: q.batches[q.index]?.length ?? 0 }
+            ? {
+                ...f,
+                phase: "tap",
+                nextCount: fotos.length,
+                message:
+                  err.name === "AbortError"
+                    ? "Cerraste el menú antes de guardar. Tocá para intentarlo de nuevo."
+                    : undefined,
+              }
             : f,
         )
+        return // no se pierde nada: se puede reintentar
       }
-      // Se acabaron las tandas listas.
-      if (q.downloading) {
-        setFlow((f) => (f ? { ...f, phase: "download" } : f))
-      } else {
-        saveQueueRef.current = null
-        setFlow((f) => (f ? { ...f, phase: "done" } : f))
-      }
+      saveQueueRef.current = null
+      setFlow((f) => (f ? { ...f, saved: fotos.length, phase: "done" } : f))
     } finally {
       sharingRef.current = false
     }
   }, [gallery.name])
 
   /**
-   * "Guardar en Fotos": descarga las fotos y las va mandando al carrete.
+   * "Guardar en Fotos": descarga las fotos elegidas y las manda al carrete.
    *
-   * Dos límites de iOS mandan sobre este diseño:
-   *
-   *  1. `navigator.share` solo abre DENTRO del gesto del usuario. Descargar
-   *     todo primero y compartir después siempre daba error.
-   *  2. El menú de compartir tiene techo de memoria: con demasiado peso junto
-   *     guarda las que alcanza y DESCARTA el resto sin avisar (pasó de verdad:
-   *     18 fotos / 111 MB → solo se guardaron 9). Por eso van en tandas de
-   *     MAX_POR_TANDA fotos / MAX_BYTES_POR_TANDA.
-   *
-   * No "simplificar" a un solo share con todas: vuelven los dos bugs.
+   * Primer toque = descargar (con la pantalla de progreso, para que nadie
+   * cierre a medias). Segundo toque = abrir el menú de compartir con TODAS.
    */
   const saveToPhotos = useCallback(
     async (assetIds: string[], resolution: "web" | "original") => {
-      const MAX_POR_TANDA = 8
-      const MAX_BYTES_POR_TANDA = 30 * 1024 * 1024
-
       if (assetIds.length === 0) {
         toast.error("No hay fotos para guardar")
         return
       }
-      if (assetIds.length > 80) {
-        toast.error("Son muchas fotos para guardar de una — usá el botón de ZIP.")
+      if (assetIds.length > 200) {
+        toast.error("Son demasiadas fotos de una — usá el botón de ZIP.")
         return
       }
 
@@ -1061,56 +1041,28 @@ export function PublicGalleryView({
         return
       }
 
-      const q = { batches: [] as File[][], index: 0, downloading: true }
+      const q = { files: [] as File[] }
       saveQueueRef.current = q
 
-      let actual: File[] = []
-      let bytes = 0
-      let descargadas = 0
       let perdidas = 0
-
-      // Cierra la tanda en curso y, si nadie está compartiendo ni esperando un
-      // toque, arranca solo. Así el guardado empieza con las primeras fotos
-      // mientras el resto sigue bajando.
-      const cerrarTanda = () => {
-        if (!actual.length) return
-        q.batches.push(actual)
-        actual = []
-        bytes = 0
-        if (!sharingRef.current && !awaitingTapRef.current) void runBatches()
-      }
-
       for (const p of photos) {
         // Cancelaron: no seguir gastando datos del cliente.
         if (saveQueueRef.current !== q) return
-        let file: File | null = null
         try {
           const r = await fetch(p.url)
           if (r.ok) {
             const blob = await r.blob()
-            file = new File([blob], p.filename, { type: blob.type || "image/jpeg" })
+            q.files.push(
+              new File([blob], p.filename, { type: blob.type || "image/jpeg" }),
+            )
+          } else {
+            perdidas += 1
           }
         } catch {
-          // una foto caída no debe tumbar las demás
+          perdidas += 1 // una foto caída no debe tumbar las demás
         }
-        if (!file) {
-          perdidas += 1
-          continue
-        }
-        if (
-          actual.length > 0 &&
-          (actual.length >= MAX_POR_TANDA || bytes + file.size > MAX_BYTES_POR_TANDA)
-        ) {
-          cerrarTanda()
-        }
-        actual.push(file)
-        bytes += file.size
-        descargadas += 1
-        setFlow((f) => (f ? { ...f, downloaded: descargadas } : f))
+        setFlow((f) => (f ? { ...f, downloaded: q.files.length } : f))
       }
-      cerrarTanda()
-      q.downloading = false
-      setFlow((f) => (f ? { ...f, total: descargadas } : f))
 
       // Nunca callar una pérdida.
       if (perdidas > 0) {
@@ -1118,7 +1070,7 @@ export function PublicGalleryView({
           `${perdidas} foto${perdidas === 1 ? "" : "s"} no se pudo${perdidas === 1 ? "" : "n"} descargar. Bajá el ZIP para tenerlas todas.`,
         )
       }
-      if (!descargadas) {
+      if (!q.files.length) {
         saveQueueRef.current = null
         setFlow((f) =>
           f
@@ -1127,7 +1079,12 @@ export function PublicGalleryView({
         )
         return
       }
-      if (!sharingRef.current && !awaitingTapRef.current) void runBatches()
+
+      setFlow((f) =>
+        f ? { ...f, total: q.files.length, nextCount: q.files.length } : f,
+      )
+      // Se intenta solo; si iOS pide un toque nuevo sale el botón del centro.
+      await runBatches()
     },
     [token, runBatches],
   )
@@ -1183,18 +1140,24 @@ export function PublicGalleryView({
   // baja resolución de las previews no se nota. La entrega final NO usa compact
   // (flujo editorial grande).
   const renderTile = (a: Asset, i: number, compact = false) => {
-    const marked = !isShowingDelivery && !deliveryOnly && isMarked(a.id)
+    // En la ENTREGA, "elegir fotos" convierte el toque en marcar/desmarcar.
+    const picking = isShowingDelivery && pickMode
+    const isPicked = picked.has(a.id)
+    const marked =
+      (!isShowingDelivery && !deliveryOnly && isMarked(a.id)) ||
+      (picking && isPicked)
     const ar = a.width && a.height ? `${a.width}/${a.height}` : "4/5"
     return (
       <figure
         key={a.id}
         role="button"
         tabIndex={0}
-        onClick={() => setOpen(i)}
+        onClick={() => (picking ? togglePick(a.id) : setOpen(i))}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault()
-            setOpen(i)
+            if (picking) togglePick(a.id)
+            else setOpen(i)
           }
         }}
         className={cn(
@@ -1223,6 +1186,26 @@ export function PublicGalleryView({
             draggable={false}
             className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
           />
+        )}
+        {picking && (
+          <span
+            className={cn(
+              "absolute inline-flex items-center justify-center rounded-full backdrop-blur transition-all",
+              compact ? "right-1.5 top-1.5 h-7 w-7" : "right-3 top-3 h-9 w-9",
+            )}
+            style={
+              isPicked
+                ? { background: ED.gold, color: "#fff" }
+                : {
+                    background: "rgba(255,255,255,.92)",
+                    color: ED.ink,
+                    boxShadow: "inset 0 0 0 1px rgba(0,0,0,.12)",
+                  }
+            }
+            aria-hidden
+          >
+            {isPicked && <Check className="h-4 w-4" />}
+          </span>
         )}
         {!isShowingDelivery && !deliveryOnly && (
           <button
@@ -1381,68 +1364,149 @@ export function PublicGalleryView({
             <p className="mb-3 font-semibold uppercase" style={{ color: ED.gold, fontSize: "0.68rem", letterSpacing: "0.28em" }}>
               Descarga tus fotos
             </p>
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* iPhone: guardar directo en la app Fotos (sin ZIP ni Archivos). */}
-              {isShowingDelivery && gallery.allow_download && canSharePhotos && (
+            {/* Elegir fotos sueltas o llevarse todas. */}
+            {isShowingDelivery && gallery.allow_download && visibleAssets.length > 1 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2.5">
                 <button
                   type="button"
-                  disabled={flow !== null}
-                  onClick={() =>
-                    saveToPhotos(
-                      (hasTracks && byTrack.high_quality.length > 0
-                        ? byTrack.high_quality
-                        : visibleAssets
-                      ).map((a) => a.id),
-                      "original",
-                    )
+                  onClick={() => {
+                    setPickMode((v) => !v)
+                    setPicked(new Set())
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-[0.78rem] font-semibold transition-colors"
+                  style={
+                    pickMode
+                      ? { background: ED.ink, color: "#F7F3EC", border: `1px solid ${ED.ink}` }
+                      : { background: "#fff", color: ED.ink, border: `1px solid ${ED.line}` }
                   }
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
-                  style={{ background: ED.gold, color: "#1a1206", border: `1px solid ${ED.gold}` }}
                 >
-                  <Download className="h-3.5 w-3.5" />
-                  Guardar en Fotos
+                  <CheckSquare className="h-3.5 w-3.5" />
+                  {pickMode ? "Listo" : "Elegir fotos"}
                 </button>
-              )}
-              {isShowingDelivery && gallery.allow_download && (
-                hasTracks ? (
+                {pickMode && (
                   <>
-                    {byTrack.high_quality.length > 0 && (
+                    <span className="text-[12.5px]" style={{ color: ED.muted }}>
+                      {picked.size === 0
+                        ? "Tocá las fotos que quieras llevarte."
+                        : `${picked.size} de ${visibleAssets.length} elegidas`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPicked(
+                          picked.size === visibleAssets.length
+                            ? new Set()
+                            : new Set(visibleAssets.map((a) => a.id)),
+                        )
+                      }
+                      className="text-[12.5px] underline"
+                      style={{ color: ED.ink }}
+                    >
+                      {picked.size === visibleAssets.length
+                        ? "Quitar todas"
+                        : "Elegir todas"}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* ── Con fotos elegidas: los botones actúan SOLO sobre esas ── */}
+              {isShowingDelivery && gallery.allow_download && pickMode ? (
+                <>
+                  {canSharePhotos && (
+                    <button
+                      type="button"
+                      disabled={flow !== null || picked.size === 0}
+                      onClick={() => saveToPhotos([...picked], "original")}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-40"
+                      style={{ background: ED.gold, color: "#1a1206", border: `1px solid ${ED.gold}` }}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Guardar {picked.size || ""} en Fotos
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={zipBusy !== null || picked.size === 0}
+                    onClick={() => requestZip("elegidas", [...picked], "original")}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-40"
+                    style={{ background: ED.ink, color: "#F7F3EC", border: `1px solid ${ED.ink}` }}
+                  >
+                    {zipBusy === "elegidas" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    Descargar {picked.size || ""} (ZIP)
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* iPhone: guardar directo en la app Fotos (sin ZIP ni Archivos). */}
+                  {isShowingDelivery && gallery.allow_download && canSharePhotos && (
+                    <button
+                      type="button"
+                      disabled={flow !== null}
+                      onClick={() =>
+                        saveToPhotos(
+                          (hasTracks && byTrack.high_quality.length > 0
+                            ? byTrack.high_quality
+                            : visibleAssets
+                          ).map((a) => a.id),
+                          "original",
+                        )
+                      }
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
+                      style={{ background: ED.gold, color: "#1a1206", border: `1px solid ${ED.gold}` }}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Guardar todas en Fotos
+                    </button>
+                  )}
+                  {isShowingDelivery && gallery.allow_download && (
+                    hasTracks ? (
+                      <>
+                        {byTrack.high_quality.length > 0 && (
+                          <button
+                            type="button"
+                            disabled={zipBusy !== null}
+                            onClick={() => requestZip("hq", byTrack.high_quality.map((a) => a.id), "original")}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
+                            style={{ background: ED.ink, color: "#F7F3EC", border: `1px solid ${ED.ink}` }}
+                          >
+                            {zipBusy === "hq" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                            Máxima calidad ({byTrack.high_quality.length})
+                          </button>
+                        )}
+                        {byTrack.social.length > 0 && (
+                          <button
+                            type="button"
+                            disabled={zipBusy !== null}
+                            onClick={() => requestZip("social", byTrack.social.map((a) => a.id), "web")}
+                            className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-colors disabled:opacity-50"
+                            style={{ background: "#fff", color: ED.ink, border: `1px solid ${ED.ink}` }}
+                          >
+                            {zipBusy === "social" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                            Redes sociales ({byTrack.social.length})
+                          </button>
+                        )}
+                      </>
+                    ) : (
                       <button
                         type="button"
                         disabled={zipBusy !== null}
-                        onClick={() => requestZip("hq", byTrack.high_quality.map((a) => a.id), "original")}
+                        onClick={() => requestZip("todo", visibleAssets.map((a) => a.id), "original")}
                         className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
                         style={{ background: ED.ink, color: "#F7F3EC", border: `1px solid ${ED.ink}` }}
                       >
-                        {zipBusy === "hq" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                        Máxima calidad ({byTrack.high_quality.length})
+                        {zipBusy === "todo" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                        Descargar todas ({visibleAssets.length})
                       </button>
-                    )}
-                    {byTrack.social.length > 0 && (
-                      <button
-                        type="button"
-                        disabled={zipBusy !== null}
-                        onClick={() => requestZip("social", byTrack.social.map((a) => a.id), "web")}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-colors disabled:opacity-50"
-                        style={{ background: "#fff", color: ED.ink, border: `1px solid ${ED.ink}` }}
-                      >
-                        {zipBusy === "social" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                        Redes sociales ({byTrack.social.length})
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={zipBusy !== null}
-                    onClick={() => requestZip("todo", visibleAssets.map((a) => a.id), "original")}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
-                    style={{ background: ED.ink, color: "#F7F3EC", border: `1px solid ${ED.ink}` }}
-                  >
-                    {zipBusy === "todo" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    Descargar todas ({visibleAssets.length})
-                  </button>
-                )
+                    )
+                  )}
+                </>
               )}
 
               {finalDeliveryDriveLink && (
@@ -1462,8 +1526,8 @@ export function PublicGalleryView({
             {isShowingDelivery && gallery.allow_download && (
               <p className="mt-3 text-[11.5px]" style={{ color: ED.muted }}>
                 {canSharePhotos
-                  ? "En iPhone, «Guardar en Fotos» envía tus fotos directo a la app Fotos. El ZIP se guarda en la app Archivos."
-                  : "El ZIP se descarga a tu dispositivo. En teléfono se guarda en tu carpeta de descargas / Archivos."}
+                  ? "En iPhone, «Guardar en Fotos» las envía directo a tu app Fotos. Con «Elegir fotos» te llevas solo las que marques. El ZIP se guarda en la app Archivos."
+                  : "Con «Elegir fotos» te llevas solo las que marques. El ZIP se descarga a tu dispositivo; en teléfono queda en Archivos / descargas."}
               </p>
             )}
           </div>
@@ -2047,9 +2111,7 @@ export function PublicGalleryView({
                   {flow.saved === 0 && flow.phase === "download"
                     ? `Descargando ${flow.downloaded} de ${flow.total}…`
                     : `Guardadas ${flow.saved} de ${flow.total}`}
-                  {flow.saved > 0 && flow.downloaded < flow.total && (
-                    <> · bajando el resto ({flow.downloaded}/{flow.total})</>
-                  )}
+
                 </p>
 
                 {flow.phase === "tap" && (
@@ -2065,13 +2127,13 @@ export function PublicGalleryView({
                       className="w-full px-5 py-4 text-[0.9rem] font-semibold"
                       style={{ background: ED.gold, color: "#1a1206" }}
                     >
-                      Continuar · guardar {flow.nextCount} foto
-                      {flow.nextCount === 1 ? "" : "s"}
+                      Guardar {flow.nextCount} foto
+                      {flow.nextCount === 1 ? "" : "s"} en Fotos
                     </button>
                     <p className="mt-3 text-[12px]" style={{ color: ED.muted }}>
-                      Tu iPhone pide confirmación para cada tanda. Tocá
-                      “Continuar”, elegí <strong>Guardar imágenes</strong>, y
-                      seguí hasta llegar a {flow.total}.
+                      Tocá el botón y elegí{" "}
+                      <strong>Guardar {flow.nextCount === 1 ? "imagen" : "imágenes"}</strong>{" "}
+                      en el menú de tu iPhone. Entran todas de una vez.
                     </p>
                   </>
                 )}
