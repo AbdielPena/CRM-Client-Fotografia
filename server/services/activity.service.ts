@@ -116,12 +116,18 @@ export async function getRecentActivity(
   limit = 12,
 ): Promise<RecentActivityItem[]> {
   const supabase = createSupabaseServerClient()
+  // El dashboard NO muestra finanzas: se dejan fuera los movimientos de dinero
+  // (pagos y el espejo a FinanzApp). No es solo criterio: son la mayoría de las
+  // líneas del historial, así que dejarlos taparía todo lo demás. Eso se ve en
+  // /finance.
   const { data, error } = await supabase
     .from('activity_log')
     .select(
       'id, action, entity_type, entity_id, actor_type, actor_name, description, created_at',
     )
     .eq('studio_id', studioId)
+    .not('action', 'like', 'finanzapp.%')
+    .not('action', 'like', '%payment%')
     .order('created_at', { ascending: false })
     .limit(limit)
 
