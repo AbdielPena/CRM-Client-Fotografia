@@ -290,24 +290,6 @@ function zipDownloadUrl(token: string, exportId: string): string {
   return `/api/galleries/public/${token}/zip/${exportId}/stream`
 }
 
-/** Qué fotos entran en la tanda que toca ahora — para la etiqueta del botón. */
-function describirTanda(q: {
-  key: string
-  batches: File[][]
-  index: number
-  total: number
-}) {
-  const antes = q.batches
-    .slice(0, q.index)
-    .reduce((n, b) => n + b.length, 0)
-  return {
-    key: q.key,
-    from: antes + 1,
-    to: antes + (q.batches[q.index]?.length ?? 0),
-    total: q.total,
-    batches: q.batches.length,
-  }
-}
 
 export function PublicGalleryView({
   token,
@@ -910,22 +892,33 @@ export function PublicGalleryView({
   // muestra en navegadores que lo soportan (Safari móvil); en desktop no hay
   // app "Fotos".
   const [canSharePhotos, setCanSharePhotos] = useState(false)
-  const [saveBusy, setSaveBusy] = useState<string | null>(null)
-  // Fotos ya descargadas, partidas en tandas, esperando cada toque (ver saveToPhotos).
+  /**
+   * Cola de guardado. Se llena mientras se descarga (el productor) y se vacía
+   * a medida que iOS acepta cada tanda (el consumidor) — las dos cosas corren
+   * a la vez, así el cliente empieza a guardar sin esperar a que bajen todas.
+   */
   const saveQueueRef = useRef<{
-    key: string
     batches: File[][]
     index: number
-    total: number
+    downloading: boolean
   } | null>(null)
-  // Etiqueta del botón: qué tanda toca ahora.
-  const [saveNext, setSaveNext] = useState<{
-    key: string
-    from: number
-    to: number
+  /** true mientras hay un menú de compartir abierto (evita entrar dos veces). */
+  const sharingRef = useRef(false)
+  /** true cuando iOS pidió un toque nuevo y lo estamos esperando. */
+  const awaitingTapRef = useRef(false)
+
+  /** Pantalla de progreso que tapa todo mientras se guardan las fotos. */
+  type SaveFlow = {
+    phase: "download" | "share" | "tap" | "done" | "error"
     total: number
-    batches: number
-  } | null>(null)
+    downloaded: number
+    saved: number
+    /** Cuántas fotos van en la tanda que sigue. */
+    nextCount: number
+    message?: string
+  }
+  const [flow, setFlow] = useState<SaveFlow | null>(null)
+
   useEffect(() => {
     try {
       const probe = [new File([new Uint8Array(1)], "t.jpg", { type: "image/jpeg" })]
@@ -938,28 +931,85 @@ export function PublicGalleryView({
       setCanSharePhotos(false)
     }
   }, [])
+
   /**
-   * "Guardar en Fotos" — un toque por TANDA.
+   * Va vaciando la cola SOLA, mientras iOS lo permita.
    *
-   * Dos límites de iOS obligan este diseño:
+   * iOS exige un gesto del usuario para abrir cada menú de compartir, y el
+   * gesto se consume al abrirlo. Por eso el intento siguiente puede fallar con
+   * `NotAllowedError`: cuando pasa NO se pierde nada — se para, sale el botón
+   * grande del centro, y al tocarlo esta misma función sigue desde donde iba.
+   * Si el teléfono deja encadenar, corre entero sin tocar nada.
+   */
+  const runBatches = useCallback(async () => {
+    const q = saveQueueRef.current
+    if (!q || sharingRef.current) return
+    sharingRef.current = true
+    awaitingTapRef.current = false
+    try {
+      while (q.index < q.batches.length) {
+        // Cancelaron (o arrancó otro guardado) mientras el menú estaba abierto.
+        if (saveQueueRef.current !== q) return
+        const tanda = q.batches[q.index]
+        setFlow((f) => (f ? { ...f, phase: "share", message: undefined } : f))
+        try {
+          await navigator.share({ files: tanda, title: gallery.name })
+        } catch (e) {
+          const err = e as Error
+          awaitingTapRef.current = true
+          setFlow((f) =>
+            f
+              ? {
+                  ...f,
+                  phase: "tap",
+                  nextCount: tanda.length,
+                  message:
+                    err.name === "AbortError"
+                      ? "Cerraste el menú antes de guardar. Tocá para intentarlo de nuevo."
+                      : undefined,
+                }
+              : f,
+          )
+          return // el índice NO avanzó: la misma tanda se reintenta
+        }
+        q.index += 1
+        const guardadas = q.batches
+          .slice(0, q.index)
+          .reduce((n, b) => n + b.length, 0)
+        setFlow((f) =>
+          f
+            ? { ...f, saved: guardadas, nextCount: q.batches[q.index]?.length ?? 0 }
+            : f,
+        )
+      }
+      // Se acabaron las tandas listas.
+      if (q.downloading) {
+        setFlow((f) => (f ? { ...f, phase: "download" } : f))
+      } else {
+        saveQueueRef.current = null
+        setFlow((f) => (f ? { ...f, phase: "done" } : f))
+      }
+    } finally {
+      sharingRef.current = false
+    }
+  }, [gallery.name])
+
+  /**
+   * "Guardar en Fotos": descarga las fotos y las va mandando al carrete.
    *
-   *  1. `navigator.share` solo se puede abrir DENTRO del toque del usuario. Si
-   *     antes se descargan las fotos (varios segundos), Safari ya caducó el
-   *     permiso y siempre da error. Por eso el primer toque solo DESCARGA y los
-   *     siguientes comparten, cada uno dentro de su propio toque.
+   * Dos límites de iOS mandan sobre este diseño:
    *
-   *  2. El menú de compartir tiene un techo de memoria. Al mandarle demasiado
-   *     peso junto guarda las que alcanza y DESCARTA el resto sin avisar (pasó
-   *     de verdad: 18 fotos = 111 MB → solo se guardaron 9). Por eso las fotos
-   *     van en tandas chicas: como máximo MAX_POR_TANDA fotos y MAX_MB_POR_TANDA.
+   *  1. `navigator.share` solo abre DENTRO del gesto del usuario. Descargar
+   *     todo primero y compartir después siempre daba error.
+   *  2. El menú de compartir tiene techo de memoria: con demasiado peso junto
+   *     guarda las que alcanza y DESCARTA el resto sin avisar (pasó de verdad:
+   *     18 fotos / 111 MB → solo se guardaron 9). Por eso van en tandas de
+   *     MAX_POR_TANDA fotos / MAX_BYTES_POR_TANDA.
    *
    * No "simplificar" a un solo share con todas: vuelven los dos bugs.
    */
   const saveToPhotos = useCallback(
-    async (key: string, assetIds: string[], resolution: "web" | "original") => {
-      // El límite que de verdad importa es el PESO (la memoria del menú de iOS),
-      // no la cantidad: 8 fotos livianas pasan sin problema, 3 pesadas no. El
-      // tope de cantidad es solo una red de seguridad.
+    async (assetIds: string[], resolution: "web" | "original") => {
       const MAX_POR_TANDA = 8
       const MAX_BYTES_POR_TANDA = 30 * 1024 * 1024
 
@@ -972,38 +1022,15 @@ export function PublicGalleryView({
         return
       }
 
-      // ── Toques siguientes: compartir la tanda que toca, YA, sin nada
-      //    asíncrono antes (esa es la condición que exige iOS).
-      const q = saveQueueRef.current
-      if (q && q.key === key && q.index < q.batches.length) {
-        const tanda = q.batches[q.index]
-        try {
-          await navigator.share({ files: tanda, title: gallery.name })
-        } catch (e) {
-          const err = e as Error
-          if (err.name !== "AbortError") {
-            // No se avanza el índice: puede reintentar la misma tanda.
-            toast.error(
-              "Tu teléfono no pudo guardar esta tanda. Tocá otra vez, o usá el ZIP.",
-            )
-          }
-          return
-        }
-        q.index += 1
-        if (q.index >= q.batches.length) {
-          saveQueueRef.current = null
-          setSaveNext(null)
-          toast.success(
-            `Listo — ${q.total} foto${q.total === 1 ? "" : "s"} enviada${q.total === 1 ? "" : "s"} a Fotos`,
-          )
-        } else {
-          setSaveNext(describirTanda(q))
-        }
-        return
-      }
+      setFlow({
+        phase: "download",
+        total: assetIds.length,
+        downloaded: 0,
+        saved: 0,
+        nextCount: 0,
+      })
 
-      // ── Primer toque: descargar TODAS y partirlas en tandas.
-      setSaveBusy(key)
+      let photos: { id: string; url: string; filename: string }[] = []
       try {
         const res = await fetch(`/api/galleries/public/${token}/originals`, {
           method: "POST",
@@ -1011,71 +1038,98 @@ export function PublicGalleryView({
           body: JSON.stringify({ assetIds, resolution }),
         })
         if (!res.ok) throw new Error("No se pudieron preparar las fotos")
-        const { photos } = (await res.json()) as {
+        const data = (await res.json()) as {
           photos: { id: string; url: string; filename: string }[]
         }
-        if (photos.length > 1) toast.info(`Preparando ${photos.length} fotos…`)
-
-        const files: File[] = []
-        for (const p of photos) {
-          try {
-            const r = await fetch(p.url)
-            if (!r.ok) continue
-            const blob = await r.blob()
-            files.push(new File([blob], p.filename, { type: blob.type || "image/jpeg" }))
-          } catch {
-            // se cuenta abajo; una foto caída no debe tumbar las demás
-          }
-        }
-        if (!files.length) throw new Error("No se pudieron cargar las fotos")
-        if (!navigator.canShare?.({ files: files.slice(0, 1) })) {
+        photos = data.photos ?? []
+        if (!photos.length) throw new Error("No se pudieron preparar las fotos")
+        const probe = [new File([new Uint8Array(1)], "t.jpg", { type: "image/jpeg" })]
+        if (!navigator.canShare?.({ files: probe })) {
           throw new Error("Tu navegador no permite guardar directo en Fotos")
         }
-
-        // Nunca callar una pérdida: si faltó alguna, se dice cuántas.
-        const perdidas = photos.length - files.length
-        if (perdidas > 0) {
-          toast.error(
-            `${perdidas} foto${perdidas === 1 ? "" : "s"} no se pudo${perdidas === 1 ? "" : "n"} descargar. Bajá el ZIP para tenerlas todas.`,
-          )
-        }
-
-        const batches: File[][] = []
-        let actual: File[] = []
-        let bytes = 0
-        for (const f of files) {
-          if (
-            actual.length > 0 &&
-            (actual.length >= MAX_POR_TANDA || bytes + f.size > MAX_BYTES_POR_TANDA)
-          ) {
-            batches.push(actual)
-            actual = []
-            bytes = 0
-          }
-          actual.push(f)
-          bytes += f.size
-        }
-        if (actual.length) batches.push(actual)
-
-        const cola = { key, batches, index: 0, total: files.length }
-        saveQueueRef.current = cola
-        setSaveNext(describirTanda(cola))
-        toast.success(
-          batches.length === 1
-            ? `${files.length} foto${files.length === 1 ? "" : "s"} lista${files.length === 1 ? "" : "s"} — tocá otra vez para guardarlas`
-            : `${files.length} fotos listas — se guardan en ${batches.length} tandas para que iOS no pierda ninguna`,
-        )
       } catch (e) {
         const err = e as Error
-        toast.error(
-          err.message ||
-            "No se pudo preparar la descarga. Probá con el botón de ZIP.",
+        setFlow((f) =>
+          f
+            ? {
+                ...f,
+                phase: "error",
+                message: err.message || "No se pudo preparar la descarga.",
+              }
+            : f,
         )
-      } finally {
-        setSaveBusy(null)
+        return
       }
+
+      const q = { batches: [] as File[][], index: 0, downloading: true }
+      saveQueueRef.current = q
+
+      let actual: File[] = []
+      let bytes = 0
+      let descargadas = 0
+      let perdidas = 0
+
+      // Cierra la tanda en curso y, si nadie está compartiendo ni esperando un
+      // toque, arranca solo. Así el guardado empieza con las primeras fotos
+      // mientras el resto sigue bajando.
+      const cerrarTanda = () => {
+        if (!actual.length) return
+        q.batches.push(actual)
+        actual = []
+        bytes = 0
+        if (!sharingRef.current && !awaitingTapRef.current) void runBatches()
+      }
+
+      for (const p of photos) {
+        // Cancelaron: no seguir gastando datos del cliente.
+        if (saveQueueRef.current !== q) return
+        let file: File | null = null
+        try {
+          const r = await fetch(p.url)
+          if (r.ok) {
+            const blob = await r.blob()
+            file = new File([blob], p.filename, { type: blob.type || "image/jpeg" })
+          }
+        } catch {
+          // una foto caída no debe tumbar las demás
+        }
+        if (!file) {
+          perdidas += 1
+          continue
+        }
+        if (
+          actual.length > 0 &&
+          (actual.length >= MAX_POR_TANDA || bytes + file.size > MAX_BYTES_POR_TANDA)
+        ) {
+          cerrarTanda()
+        }
+        actual.push(file)
+        bytes += file.size
+        descargadas += 1
+        setFlow((f) => (f ? { ...f, downloaded: descargadas } : f))
+      }
+      cerrarTanda()
+      q.downloading = false
+      setFlow((f) => (f ? { ...f, total: descargadas } : f))
+
+      // Nunca callar una pérdida.
+      if (perdidas > 0) {
+        toast.error(
+          `${perdidas} foto${perdidas === 1 ? "" : "s"} no se pudo${perdidas === 1 ? "" : "n"} descargar. Bajá el ZIP para tenerlas todas.`,
+        )
+      }
+      if (!descargadas) {
+        saveQueueRef.current = null
+        setFlow((f) =>
+          f
+            ? { ...f, phase: "error", message: "No se pudieron cargar las fotos." }
+            : f,
+        )
+        return
+      }
+      if (!sharingRef.current && !awaitingTapRef.current) void runBatches()
     },
-    [token, gallery.name],
+    [token, runBatches],
   )
 
   // Keyboard navigation in lightbox
@@ -1332,10 +1386,9 @@ export function PublicGalleryView({
               {isShowingDelivery && gallery.allow_download && canSharePhotos && (
                 <button
                   type="button"
-                  disabled={saveBusy !== null}
+                  disabled={flow !== null}
                   onClick={() =>
                     saveToPhotos(
-                      "save",
                       (hasTracks && byTrack.high_quality.length > 0
                         ? byTrack.high_quality
                         : visibleAssets
@@ -1346,30 +1399,10 @@ export function PublicGalleryView({
                   className="inline-flex items-center gap-2 px-5 py-2.5 text-[0.8rem] font-semibold transition-opacity disabled:opacity-50"
                   style={{ background: ED.gold, color: "#1a1206", border: `1px solid ${ED.gold}` }}
                 >
-                  {saveBusy === "save" ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Download className="h-3.5 w-3.5" />
-                  )}
-                  {saveBusy === "save"
-                    ? "Preparando fotos…"
-                    : saveNext?.key === "save"
-                      ? saveNext.batches === 1
-                        ? "Tocá otra vez para guardar"
-                        : `Guardar ${saveNext.from}–${saveNext.to} de ${saveNext.total}`
-                      : "Guardar en Fotos"}
+                  <Download className="h-3.5 w-3.5" />
+                  Guardar en Fotos
                 </button>
               )}
-              {isShowingDelivery &&
-                gallery.allow_download &&
-                saveNext?.key === "save" &&
-                saveNext.batches > 1 && (
-                  <p className="w-full text-[12px]" style={{ color: ED.muted }}>
-                    Tus fotos son pesadas, así que van en tandas — iOS pierde
-                    fotos si se le mandan todas juntas. Tocá el botón, guardá, y
-                    volvé a tocarlo hasta llegar a {saveNext.total}.
-                  </p>
-                )}
               {isShowingDelivery && gallery.allow_download && (
                 hasTracks ? (
                   <>
@@ -1916,6 +1949,149 @@ export function PublicGalleryView({
           </p>
         )}
       </footer>
+
+      {/* ── Pantalla de guardado (tapa todo) ────────────────────────────────
+          El cliente no debe cerrar ni cambiar de app mientras corre: si sale,
+          se pierden las descargas que ya hizo el navegador. Por eso ocupa toda
+          la pantalla y lo dice en grande. */}
+      {flow && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center px-5"
+          style={{ background: "rgba(20,16,10,0.94)" }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-[420px] px-7 py-9 text-center"
+            style={{ background: ED.paper, border: `1px solid ${ED.line}` }}
+          >
+            {flow.phase === "done" ? (
+              <>
+                <Check className="mx-auto mb-4 h-9 w-9" style={{ color: ED.gold }} />
+                <p
+                  className="mb-2 uppercase"
+                  style={{ fontFamily: SERIF, letterSpacing: "0.22em", fontSize: "0.95rem", color: ED.ink }}
+                >
+                  Listo
+                </p>
+                <p className="mb-6 text-[13.5px]" style={{ color: ED.muted }}>
+                  Se guardaron <strong>{flow.saved}</strong> foto
+                  {flow.saved === 1 ? "" : "s"} en tu app Fotos.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFlow(null)}
+                  className="w-full px-5 py-3 text-[0.82rem] font-semibold"
+                  style={{ background: ED.ink, color: "#F7F3EC" }}
+                >
+                  Cerrar
+                </button>
+              </>
+            ) : flow.phase === "error" ? (
+              <>
+                <p
+                  className="mb-2 uppercase"
+                  style={{ fontFamily: SERIF, letterSpacing: "0.22em", fontSize: "0.95rem", color: ED.ink }}
+                >
+                  No se pudo
+                </p>
+                <p className="mb-6 text-[13.5px]" style={{ color: ED.muted }}>
+                  {flow.message}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFlow(null)}
+                  className="w-full px-5 py-3 text-[0.82rem] font-semibold"
+                  style={{ background: ED.ink, color: "#F7F3EC" }}
+                >
+                  Cerrar
+                </button>
+              </>
+            ) : (
+              <>
+                <Loader2
+                  className="mx-auto mb-5 h-8 w-8 animate-spin"
+                  style={{ color: ED.gold }}
+                />
+                <p
+                  className="mb-4 font-semibold uppercase"
+                  style={{ fontSize: "0.8rem", letterSpacing: "0.14em", lineHeight: 1.7, color: ED.ink }}
+                >
+                  No cierre esta pantalla
+                  <br />
+                  hasta que se descargue todo
+                </p>
+
+                {/* Barra de avance: el trazo claro es lo descargado, el sólido
+                    lo que ya entró a la app Fotos. Las dos cosas corren a la vez. */}
+                <div
+                  className="relative mb-2 h-1.5 w-full overflow-hidden"
+                  style={{ background: ED.line }}
+                >
+                  <div
+                    className="absolute inset-y-0 left-0 transition-all duration-300"
+                    style={{
+                      background: `${ED.gold}59`,
+                      width: `${Math.round((flow.downloaded / Math.max(1, flow.total)) * 100)}%`,
+                    }}
+                  />
+                  <div
+                    className="absolute inset-y-0 left-0 transition-all duration-300"
+                    style={{
+                      background: ED.gold,
+                      width: `${Math.round((flow.saved / Math.max(1, flow.total)) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <p className="mb-6 text-[13px]" style={{ color: ED.muted }}>
+                  {flow.saved === 0 && flow.phase === "download"
+                    ? `Descargando ${flow.downloaded} de ${flow.total}…`
+                    : `Guardadas ${flow.saved} de ${flow.total}`}
+                  {flow.saved > 0 && flow.downloaded < flow.total && (
+                    <> · bajando el resto ({flow.downloaded}/{flow.total})</>
+                  )}
+                </p>
+
+                {flow.phase === "tap" && (
+                  <>
+                    {flow.message && (
+                      <p className="mb-3 text-[12.5px]" style={{ color: "#8a6d2f" }}>
+                        {flow.message}
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void runBatches()}
+                      className="w-full px-5 py-4 text-[0.9rem] font-semibold"
+                      style={{ background: ED.gold, color: "#1a1206" }}
+                    >
+                      Continuar · guardar {flow.nextCount} foto
+                      {flow.nextCount === 1 ? "" : "s"}
+                    </button>
+                    <p className="mt-3 text-[12px]" style={{ color: ED.muted }}>
+                      Tu iPhone pide confirmación para cada tanda. Tocá
+                      “Continuar”, elegí <strong>Guardar imágenes</strong>, y
+                      seguí hasta llegar a {flow.total}.
+                    </p>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveQueueRef.current = null
+                    setFlow(null)
+                  }}
+                  className="mt-5 text-[12px] underline"
+                  style={{ color: ED.muted }}
+                >
+                  Cancelar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
