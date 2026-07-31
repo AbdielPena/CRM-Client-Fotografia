@@ -214,6 +214,130 @@ export async function finalizeProjectAction(
 }
 
 /**
+ * Cuánto dinero hay en juego antes de cancelar. Lo usa el diálogo para decidir
+ * si tiene que preguntar qué hacer con el abono (si no se cobró nada, no
+ * pregunta nada).
+ */
+export async function previewProjectCancellationAction(
+  projectId: string,
+): Promise<{ ok: boolean; paidAmount: number; currency: string; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const { untypedService } = await import("@/server/supabase/untyped")
+    const sb = untypedService()
+    const { data } = await sb
+      .from("invoices")
+      .select("amount_paid, currency")
+      .eq("studio_id", session.studioId)
+      .eq("project_id", projectId)
+      .is("deleted_at", null)
+    const rows = (data ?? []) as Array<{
+      amount_paid: number | string
+      currency: string | null
+    }>
+    const paidAmount = rows.reduce((n, r) => n + Number(r.amount_paid ?? 0), 0)
+    return {
+      ok: true,
+      paidAmount,
+      currency: rows[0]?.currency ?? "DOP",
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      paidAmount: 0,
+      currency: "DOP",
+      error: e instanceof Error ? e.message : "Error",
+    }
+  }
+}
+
+/**
+ * Cancela una sesión: anula lo que no se cobró, libera la fecha, apaga el
+ * reloj de entrega y la archiva de todas las vistas.
+ *
+ * NUNCA toca la ficha del cliente — sigue activo y recibiendo los correos de
+ * fidelidad. Para sacarlo de todo habría que mandarlo a la papelera, que es
+ * otra acción distinta.
+ */
+export async function cancelProjectAction(
+  projectId: string,
+  input: {
+    reason?: string | null
+    deposit: "kept" | "refunded" | "none"
+    notifyClient?: boolean
+  },
+): Promise<{
+  ok: boolean
+  error?: string
+  paidAmount?: number
+  cancelledInvoices?: number
+  refundRecorded?: boolean
+  clientNotified?: boolean
+}> {
+  const session = await requireStudioAuth()
+  try {
+    const { cancelProject } = await import(
+      "@/server/services/project-cancel.service"
+    )
+    const res = await cancelProject({
+      studioId: session.studioId,
+      projectId,
+      actorId: session.userId ?? null,
+      reason: input.reason ?? null,
+      deposit: input.deposit,
+      notifyClient: input.notifyClient !== false,
+    })
+    for (const p of [
+      "/projects",
+      `/projects/${projectId}`,
+      "/clients",
+      "/deliveries",
+      "/tasks",
+      "/galleries",
+      "/dashboard",
+      "/invoices",
+      "/calendar",
+    ]) {
+      revalidatePath(p)
+    }
+    return {
+      ok: true,
+      paidAmount: res.paidAmount,
+      cancelledInvoices: res.cancelledInvoices,
+      refundRecorded: res.refundRecorded,
+      clientNotified: res.clientNotified,
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
+/** Deshace la cancelación: la sesión vuelve al tablero. */
+export async function undoProjectCancellationAction(
+  projectId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireStudioAuth()
+  try {
+    const { reopenCancelledProject } = await import(
+      "@/server/services/project-cancel.service"
+    )
+    await reopenCancelledProject(session.studioId, projectId)
+    for (const p of [
+      "/projects",
+      `/projects/${projectId}`,
+      "/clients",
+      "/deliveries",
+      "/dashboard",
+    ]) {
+      revalidatePath(p)
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" }
+  }
+}
+
+/**
  * Resumen de lo que cambiaría al mover la sesión a otro plan (no aplica nada).
  * Se muestra al fotógrafo para que confirme antes de tocar dinero.
  */

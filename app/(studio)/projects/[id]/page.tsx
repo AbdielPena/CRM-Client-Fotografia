@@ -50,6 +50,7 @@ import {
   DollarSign,
   FileText,
   Receipt,
+  Ban,
   Clock,
   CreditCard,
   Truck,
@@ -153,6 +154,14 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   // habilita/oculta el botón en la interfaz.
   const finalizedAt = (project.finalized_at as string | null) ?? null
   const isFinalized = !!finalizedAt
+  // Cancelada: también usa `finalized_at` para archivarse, pero se muestra
+  // distinto (roja, con motivo) — no es un trabajo terminado.
+  const cancelledAt = (project.cancelled_at as string | null) ?? null
+  const isCancelled = !!cancelledAt
+  const cancellationReason =
+    (project.cancellation_reason as string | null) ?? null
+  const cancellationDeposit =
+    (project.cancellation_deposit as string | null) ?? null
   const filesPurgedAt = (project.files_purged_at as string | null) ?? null
   const hasDeliveryReady = galleries.some((g) => !!g.delivery_ready_at)
   const canFinalize =
@@ -424,14 +433,41 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               }}
               finalized={isFinalized}
               canFinalize={canFinalize}
+              cancelled={isCancelled}
+              clientName={(client?.name as string | undefined) ?? null}
             />
           </>
         }
       />
 
       <div className="space-y-5 px-6 py-6 lg:px-8 lg:py-8">
+      {/* Banner de sesión CANCELADA. Va antes que el de finalizada y la tapa:
+          una cancelación también archiva, pero no es un trabajo terminado. */}
+      {isCancelled && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm dark:border-red-500/30 dark:bg-red-500/10">
+          <Ban className="h-5 w-5 shrink-0 text-red-500" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-red-700 dark:text-red-300">
+              Sesión cancelada · {formatDate(cancelledAt)}
+            </p>
+            {cancellationReason && (
+              <p className="text-[12.5px] text-red-600/90 dark:text-red-300/80">
+                Motivo: {cancellationReason}
+              </p>
+            )}
+            <p className="text-[12.5px] text-red-600/80 dark:text-red-300/70">
+              {cancellationDeposit === "refunded"
+                ? "La devolución del abono quedó anotada en Finanzas como algo que le debes."
+                : cancellationDeposit === "kept"
+                  ? "El abono cobrado se quedó como ingreso (reserva no reembolsable)."
+                  : "No había pagos registrados."}
+              {" "}El cliente sigue activo y recibiendo tus correos de fidelidad.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Banner de sesión finalizada (archivada): fuera de todas las vistas activas */}
-      {isFinalized && (
+      {isFinalized && !isCancelled && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm dark:border-slate-600/40 dark:bg-slate-800/40">
           <Archive className="h-5 w-5 shrink-0 text-slate-500" />
           <div className="min-w-0 flex-1">

@@ -416,6 +416,45 @@ export async function cancelCollaboratorExtraPayable(
 }
 
 // ─── Vestido de la sesión (gasto en FinanzApp, como los colaboradores) ────────
+// ===========================================================================
+// DEVOLUCIÓN AL CLIENTE (cancelar una sesión con dinero ya cobrado)
+// ---------------------------------------------------------------------------
+// Cuando el dueño decide devolverle el abono, el dinero NO se borra del
+// historial: la sesión ya lo cobró. Se registra una cuenta POR PAGAR a nombre
+// del cliente — el estudio le debe ese dinero hasta que se lo entregue y salde
+// la cuenta en Finanzas. Idempotente por `crm-refund:<projectId>`.
+// ===========================================================================
+
+const refundRef = (projectId: string) => `crm-refund:${projectId}`
+
+/** Registra la devolución del abono como cuenta por pagar al cliente. */
+export async function recordClientRefundPayable(
+  studioId: string,
+  input: {
+    projectId: string
+    acreedor: string
+    monto: number
+    notas?: string | null
+  },
+): Promise<FinzResult> {
+  const workspaceId = await getFinanzAppWorkspaceId(studioId)
+  if (!workspaceId) return { ok: false, skipped: "no_workspace" }
+  const sb = untypedService()
+  const hoy = new Date().toISOString().slice(0, 10)
+  const { error } = await sb.rpc("finz_record_payable", {
+    p_workspace_id: workspaceId,
+    p_acreedor: input.acreedor || "Cliente",
+    p_monto: input.monto,
+    p_fecha_emision: hoy,
+    p_fecha_venc: hoy,
+    p_external_reference: refundRef(input.projectId),
+    p_notas: input.notas ?? "Devolución al cliente por cancelación (CRM)",
+  })
+  if (error)
+    throwServiceError("FINZ_RECORD_REFUND_FAILED", error, { studioId })
+  return { ok: true }
+}
+
 const dressRef = (projectId: string) => `crm-dress:${projectId}`
 
 /** Crea/actualiza el payable pendiente del costo del vestido de la sesión. */

@@ -43,6 +43,8 @@ export async function getProjects(
     orderBy?: "event_date_asc" | "event_date_desc"
     /** Filtro por finalización: 'exclude' = solo activas; 'only' = solo finalizadas. */
     finalized?: "exclude" | "only"
+  /** Canceladas: por defecto se EXCLUYEN de todo. */
+  cancelled?: "exclude" | "only"
   } = {},
 ) {
   const {
@@ -57,6 +59,7 @@ export async function getProjects(
     dateTo,
     orderBy,
     finalized,
+    cancelled = "exclude",
   } = opts
   const supabase = createSupabaseServerClient()
   const from = (page - 1) * pageSize
@@ -86,6 +89,12 @@ export async function getProjects(
   if (finalized === "exclude") query = query.is('finalized_at' as any, null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   else if (finalized === "only") query = query.not('finalized_at' as any, 'is', null)
+  // Una sesión CANCELADA no es una finalizada: por defecto no sale en ninguna
+  // lista, ni siquiera en "Finalizadas". Tiene su propio apartado.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (cancelled === "only") query = query.not('cancelled_at' as any, 'is', null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  else query = query.is('cancelled_at' as any, null)
   // service_category_id es columna nueva (no en tipos) → cast
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (serviceCategoryId) query = query.eq('service_category_id' as any, serviceCategoryId)
@@ -161,10 +170,20 @@ export async function countProjects(
     dateFrom?: string
     dateTo?: string
     finalized?: "exclude" | "only"
+  /** Canceladas: por defecto se EXCLUYEN de todo. */
+  cancelled?: "exclude" | "only"
   } = {},
 ): Promise<number> {
-  const { search, serviceCategoryId, onlyStatuses, excludeStatuses, dateFrom, dateTo, finalized } =
-    opts
+  const {
+    search,
+    serviceCategoryId,
+    onlyStatuses,
+    excludeStatuses,
+    dateFrom,
+    dateTo,
+    finalized,
+    cancelled = "exclude",
+  } = opts
   const supabase = createSupabaseServerClient()
 
   let query = supabase
@@ -177,6 +196,12 @@ export async function countProjects(
   if (finalized === "exclude") query = query.is('finalized_at' as any, null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   else if (finalized === "only") query = query.not('finalized_at' as any, 'is', null)
+  // Una sesión CANCELADA no es una finalizada: por defecto no sale en ninguna
+  // lista, ni siquiera en "Finalizadas". Tiene su propio apartado.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (cancelled === "only") query = query.not('cancelled_at' as any, 'is', null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  else query = query.is('cancelled_at' as any, null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (serviceCategoryId) query = query.eq('service_category_id' as any, serviceCategoryId)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

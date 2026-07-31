@@ -375,6 +375,53 @@ export function renderBookingRejectedForClient(params: {
   return { subject, html }
 }
 
+/**
+ * Aviso de cancelación de una sesión.
+ *
+ * Tono cuidado a propósito: la relación con el cliente sigue viva (de hecho
+ * sigue recibiendo los correos de fidelidad), así que el mensaje cierra
+ * dejando la puerta abierta, no como una despedida.
+ */
+export function renderSessionCancelledForClient(params: {
+  studioName: string
+  primaryColor?: string
+  branding?: EmailBranding | null
+  clientName: string
+  projectName: string
+  eventDate?: string | null
+  reason?: string | null
+  refunded?: boolean
+}) {
+  const {
+    studioName,
+    primaryColor = '#111827',
+    clientName,
+    projectName,
+    eventDate,
+    reason,
+    refunded,
+  } = params
+  const subject = `Cancelación de ${projectName} — ${studioName}`
+  const html = frame(`
+  <h1 style="margin: 0 0 8px; font-size: 22px;">Hola, ${escapeHtml(clientName)}</h1>
+  <p style="margin: 0 0 16px; color: #4b5563;">Te confirmamos que <strong>${escapeHtml(projectName)}</strong>${
+    eventDate ? `, pautada para el <strong>${escapeHtml(eventDate)}</strong>,` : ''
+  } quedó cancelada.</p>
+  ${
+    reason
+      ? `<div style="padding: 16px; background: #f9fafb; border-radius: 8px; border-left: 3px solid #d1d5db; margin-bottom: 16px;"><p style="margin: 0; color: #4b5563; font-size: 14px;">${escapeHtml(reason)}</p></div>`
+      : ''
+  }
+  ${
+    refunded
+      ? `<p style="margin: 0 0 16px; color: #4b5563;">Vamos a coordinar contigo la devolución de lo que habías abonado.</p>`
+      : ''
+  }
+  <p style="margin: 0 0 12px; color: #4b5563;">Si más adelante quieres retomarla o agendar otra fecha, escríbenos y con gusto lo vemos.</p>
+`, { studioName, accent: primaryColor, branding: params.branding })
+  return { subject, html }
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Renderers para el flujo Pixieset (cliente registrado con proyecto)
 // ──────────────────────────────────────────────────────────────────────

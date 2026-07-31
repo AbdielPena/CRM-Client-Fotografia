@@ -13,6 +13,7 @@ import {
   Clock,
   Shirt,
   Archive,
+  Ban,
 } from "lucide-react"
 import type { Metadata } from "next"
 
@@ -73,7 +74,7 @@ type ProjectRow = {
 }
 
 type ViewMode = "grid" | "kanban"
-type Scope = "active" | "completed" | "finalized" | "past"
+type Scope = "active" | "completed" | "finalized" | "past" | "cancelled"
 
 export default async function ProjectsPage({
   searchParams,
@@ -99,7 +100,9 @@ export default async function ProjectsPage({
         ? "finalized"
         : searchParams.scope === "past"
           ? "past"
-          : "active"
+          : searchParams.scope === "cancelled"
+            ? "cancelled"
+            : "active"
   const viewParam: ViewMode = searchParams.view === "kanban" ? "kanban" : "grid"
   // En "Completados"/"Finalizadas" siempre grid (no hay pipeline que arrastrar).
   const view: ViewMode = scope === "active" ? viewParam : "grid"
@@ -166,7 +169,9 @@ export default async function ProjectsPage({
   })()
 
   const scopeFilter =
-    scope === "finalized"
+    scope === "cancelled"
+      ? { cancelled: "only" as const }
+      : scope === "finalized"
       ? { finalized: "only" as const }
       : scope === "completed"
         ? { onlyStatuses: completedLabels, finalized: "exclude" as const }
@@ -203,8 +208,14 @@ export default async function ProjectsPage({
             }
           : { search, status, serviceCategoryId: category, page, ...scopeFilter }
 
-  const [data, activeCount, completedCount, finalizedCount, pastCount] =
-    await Promise.all([
+  const [
+    data,
+    activeCount,
+    completedCount,
+    finalizedCount,
+    cancelledCount,
+    pastCount,
+  ] = await Promise.all([
     getProjects(session.studioId, fetchOpts),
     countProjects(session.studioId, {
       search,
@@ -224,6 +235,11 @@ export default async function ProjectsPage({
       search,
       serviceCategoryId: category,
       finalized: "only",
+    }),
+    countProjects(session.studioId, {
+      search,
+      serviceCategoryId: category,
+      cancelled: "only",
     }),
     countProjects(session.studioId, {
       search,
@@ -339,6 +355,13 @@ export default async function ProjectsPage({
     if (search) params.set("q", search)
     if (category) params.set("category", category)
     params.set("scope", "past")
+    return `/projects?${params.toString()}`
+  })()
+  const cancelledScopeHref = (() => {
+    const params = new URLSearchParams()
+    if (search) params.set("q", search)
+    if (category) params.set("category", category)
+    params.set("scope", "cancelled")
     return `/projects?${params.toString()}`
   })()
   const finalizedScopeHref = (() => {
@@ -468,6 +491,30 @@ export default async function ProjectsPage({
               {finalizedCount}
             </span>
           </Link>
+          {/* Canceladas: solo aparece si hay alguna, para no ensuciar la barra. */}
+          {cancelledCount > 0 && (
+            <Link
+              href={cancelledScopeHref}
+              prefetch={false}
+              title="Sesiones canceladas — los clientes siguen activos"
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[13px] font-medium transition-colors",
+                scope === "cancelled"
+                  ? "bg-red-600 text-white"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Ban className="h-3.5 w-3.5" /> Canceladas
+              <span
+                className={cn(
+                  "ml-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
+                  scope === "cancelled" ? "bg-white/20" : "bg-muted text-muted-foreground",
+                )}
+              >
+                {cancelledCount}
+              </span>
+            </Link>
+          )}
         </div>
 
         {/* Cercanía de fecha: Hoy / Esta semana / Este mes (grilla de activos) */}

@@ -2,13 +2,15 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { MoreHorizontal, Pencil, Trash2, Plus, Archive, RotateCcw } from "lucide-react"
+import { MoreHorizontal, Pencil, Trash2, Plus, Archive, RotateCcw, Ban } from "lucide-react"
 import {
   deleteProjectAction,
   finalizeProjectAction,
   reopenProjectAction,
+  undoProjectCancellationAction,
 } from "@/server/actions/project.actions"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { CancelProjectDialog } from "@/components/projects/cancel-project-dialog"
 
 interface ProjectDetailActionsProps {
   project: { id: string; name: string; client_id?: string }
@@ -16,12 +18,18 @@ interface ProjectDetailActionsProps {
   finalized?: boolean
   /** Si la sesión está entregada (habilita el botón Finalizar). */
   canFinalize?: boolean
+  /** Si la sesión ya está cancelada. */
+  cancelled?: boolean
+  /** Nombre del cliente, para dejar claro en el diálogo que NO se borra. */
+  clientName?: string | null
 }
 
 export function ProjectDetailActions({
   project,
   finalized = false,
   canFinalize = false,
+  cancelled = false,
+  clientName = null,
 }: ProjectDetailActionsProps) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -32,6 +40,17 @@ export function ProjectDetailActions({
       const res = await finalizeProjectAction(project.id)
       if (!res.ok) {
         alert(res.error ?? "No se pudo finalizar la sesión.")
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  const handleUndoCancel = () => {
+    startTransition(async () => {
+      const res = await undoProjectCancellationAction(project.id)
+      if (!res.ok) {
+        alert(res.error ?? "No se pudo deshacer la cancelación.")
         return
       }
       router.refresh()
@@ -85,6 +104,37 @@ export function ProjectDetailActions({
               </button>
 
               <hr className="my-1 border-border" />
+
+              {/* Cancelar la sesión (o deshacerlo). Nunca borra al cliente. */}
+              {cancelled ? (
+                <button
+                  onClick={() => {
+                    setOpen(false)
+                    handleUndoCancel()
+                  }}
+                  disabled={pending}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Deshacer cancelación
+                </button>
+              ) : (
+                <CancelProjectDialog
+                  projectId={project.id}
+                  projectName={project.name}
+                  clientName={clientName}
+                  onDone={() => setOpen(false)}
+                >
+                  <button
+                    onClick={() => setOpen(false)}
+                    disabled={pending}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
+                  >
+                    <Ban className="h-4 w-4" />
+                    Cancelar sesión
+                  </button>
+                </CancelProjectDialog>
+              )}
 
               {/* Finalizar / Reabrir */}
               {finalized ? (
