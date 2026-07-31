@@ -290,6 +290,25 @@ function zipDownloadUrl(token: string, exportId: string): string {
   return `/api/galleries/public/${token}/zip/${exportId}/stream`
 }
 
+/** Qué fotos entran en la tanda que toca ahora — para la etiqueta del botón. */
+function describirTanda(q: {
+  key: string
+  batches: File[][]
+  index: number
+  total: number
+}) {
+  const antes = q.batches
+    .slice(0, q.index)
+    .reduce((n, b) => n + b.length, 0)
+  return {
+    key: q.key,
+    from: antes + 1,
+    to: antes + (q.batches[q.index]?.length ?? 0),
+    total: q.total,
+    batches: q.batches.length,
+  }
+}
+
 export function PublicGalleryView({
   token,
   gallery,
@@ -887,14 +906,26 @@ export function PublicGalleryView({
   )
 
   // "Guardar en Fotos" (iPhone): manda las fotos directo al carrete con el menú
-  // de compartir de iOS (navigator.share con archivos). Un solo share con TODAS
-  // (iOS exige el gesto del usuario; por lotes se perdería). Solo se muestra en
-  // navegadores que lo soportan (Safari móvil); en desktop no hay app "Fotos".
+  // de compartir de iOS (navigator.share con archivos), POR TANDAS. Solo se
+  // muestra en navegadores que lo soportan (Safari móvil); en desktop no hay
+  // app "Fotos".
   const [canSharePhotos, setCanSharePhotos] = useState(false)
   const [saveBusy, setSaveBusy] = useState<string | null>(null)
-  // Fotos ya descargadas esperando el segundo toque (ver saveToPhotos).
-  const readyFilesRef = useRef<{ key: string; files: File[] } | null>(null)
-  const [saveReadyKey, setSaveReadyKey] = useState<string | null>(null)
+  // Fotos ya descargadas, partidas en tandas, esperando cada toque (ver saveToPhotos).
+  const saveQueueRef = useRef<{
+    key: string
+    batches: File[][]
+    index: number
+    total: number
+  } | null>(null)
+  // Etiqueta del botón: qué tanda toca ahora.
+  const [saveNext, setSaveNext] = useState<{
+    key: string
+    from: number
+    to: number
+    total: number
+    batches: number
+  } | null>(null)
   useEffect(() => {
     try {
       const probe = [new File([new Uint8Array(1)], "t.jpg", { type: "image/jpeg" })]
@@ -908,18 +939,27 @@ export function PublicGalleryView({
     }
   }, [])
   /**
-   * "Guardar en Fotos" en DOS toques.
+   * "Guardar en Fotos" — un toque por TANDA.
    *
-   * iOS solo deja abrir el menú de compartir DENTRO del toque del usuario. Antes
-   * se descargaban las fotos primero y recién después se abría el menú: para
-   * cuando terminaba (varios segundos con fotos grandes) Safari ya había
-   * caducado el permiso del toque y siempre daba error.
+   * Dos límites de iOS obligan este diseño:
    *
-   * Ahora: el primer toque descarga y deja las fotos listas; el segundo toque
-   * abre el menú de golpe, dentro de su propio toque. Así sí funciona.
+   *  1. `navigator.share` solo se puede abrir DENTRO del toque del usuario. Si
+   *     antes se descargan las fotos (varios segundos), Safari ya caducó el
+   *     permiso y siempre da error. Por eso el primer toque solo DESCARGA y los
+   *     siguientes comparten, cada uno dentro de su propio toque.
+   *
+   *  2. El menú de compartir tiene un techo de memoria. Al mandarle demasiado
+   *     peso junto guarda las que alcanza y DESCARTA el resto sin avisar (pasó
+   *     de verdad: 18 fotos = 111 MB → solo se guardaron 9). Por eso las fotos
+   *     van en tandas chicas: como máximo MAX_POR_TANDA fotos y MAX_MB_POR_TANDA.
+   *
+   * No "simplificar" a un solo share con todas: vuelven los dos bugs.
    */
   const saveToPhotos = useCallback(
     async (key: string, assetIds: string[], resolution: "web" | "original") => {
+      const MAX_POR_TANDA = 5
+      const MAX_BYTES_POR_TANDA = 30 * 1024 * 1024
+
       if (assetIds.length === 0) {
         toast.error("No hay fotos para guardar")
         return
@@ -929,25 +969,37 @@ export function PublicGalleryView({
         return
       }
 
-      // Segundo toque: ya están en memoria → compartir YA, sin nada asíncrono
-      // antes (esa es la condición que exige iOS).
-      const ready = readyFilesRef.current
-      if (ready && ready.key === key && ready.files.length > 0) {
-        readyFilesRef.current = null
-        setSaveReadyKey(null)
+      // ── Toques siguientes: compartir la tanda que toca, YA, sin nada
+      //    asíncrono antes (esa es la condición que exige iOS).
+      const q = saveQueueRef.current
+      if (q && q.key === key && q.index < q.batches.length) {
+        const tanda = q.batches[q.index]
         try {
-          await navigator.share({ files: ready.files, title: gallery.name })
+          await navigator.share({ files: tanda, title: gallery.name })
         } catch (e) {
           const err = e as Error
-          if (err.name === "AbortError") return // cerró el menú, no es un fallo
-          toast.error(
-            "Tu teléfono no dejó guardar las fotos. Probá con el botón de ZIP.",
+          if (err.name !== "AbortError") {
+            // No se avanza el índice: puede reintentar la misma tanda.
+            toast.error(
+              "Tu teléfono no pudo guardar esta tanda. Tocá otra vez, o usá el ZIP.",
+            )
+          }
+          return
+        }
+        q.index += 1
+        if (q.index >= q.batches.length) {
+          saveQueueRef.current = null
+          setSaveNext(null)
+          toast.success(
+            `Listo — ${q.total} foto${q.total === 1 ? "" : "s"} enviada${q.total === 1 ? "" : "s"} a Fotos`,
           )
+        } else {
+          setSaveNext(describirTanda(q))
         }
         return
       }
 
-      // Primer toque: preparar.
+      // ── Primer toque: descargar TODAS y partirlas en tandas.
       setSaveBusy(key)
       try {
         const res = await fetch(`/api/galleries/public/${token}/originals`, {
@@ -960,21 +1012,55 @@ export function PublicGalleryView({
           photos: { id: string; url: string; filename: string }[]
         }
         if (photos.length > 1) toast.info(`Preparando ${photos.length} fotos…`)
+
         const files: File[] = []
         for (const p of photos) {
-          const r = await fetch(p.url)
-          if (!r.ok) continue
-          const blob = await r.blob()
-          files.push(new File([blob], p.filename, { type: blob.type || "image/jpeg" }))
+          try {
+            const r = await fetch(p.url)
+            if (!r.ok) continue
+            const blob = await r.blob()
+            files.push(new File([blob], p.filename, { type: blob.type || "image/jpeg" }))
+          } catch {
+            // se cuenta abajo; una foto caída no debe tumbar las demás
+          }
         }
         if (!files.length) throw new Error("No se pudieron cargar las fotos")
-        if (!navigator.canShare?.({ files })) {
+        if (!navigator.canShare?.({ files: files.slice(0, 1) })) {
           throw new Error("Tu navegador no permite guardar directo en Fotos")
         }
-        readyFilesRef.current = { key, files }
-        setSaveReadyKey(key)
+
+        // Nunca callar una pérdida: si faltó alguna, se dice cuántas.
+        const perdidas = photos.length - files.length
+        if (perdidas > 0) {
+          toast.error(
+            `${perdidas} foto${perdidas === 1 ? "" : "s"} no se pudo${perdidas === 1 ? "" : "n"} descargar. Bajá el ZIP para tenerlas todas.`,
+          )
+        }
+
+        const batches: File[][] = []
+        let actual: File[] = []
+        let bytes = 0
+        for (const f of files) {
+          if (
+            actual.length > 0 &&
+            (actual.length >= MAX_POR_TANDA || bytes + f.size > MAX_BYTES_POR_TANDA)
+          ) {
+            batches.push(actual)
+            actual = []
+            bytes = 0
+          }
+          actual.push(f)
+          bytes += f.size
+        }
+        if (actual.length) batches.push(actual)
+
+        const cola = { key, batches, index: 0, total: files.length }
+        saveQueueRef.current = cola
+        setSaveNext(describirTanda(cola))
         toast.success(
-          `${files.length} foto${files.length === 1 ? "" : "s"} lista${files.length === 1 ? "" : "s"} — tocá otra vez para guardarlas`,
+          batches.length === 1
+            ? `${files.length} foto${files.length === 1 ? "" : "s"} lista${files.length === 1 ? "" : "s"} — tocá otra vez para guardarlas`
+            : `${files.length} fotos listas — se guardan en ${batches.length} tandas para que iOS no pierda ninguna`,
         )
       } catch (e) {
         const err = e as Error
@@ -1264,11 +1350,23 @@ export function PublicGalleryView({
                   )}
                   {saveBusy === "save"
                     ? "Preparando fotos…"
-                    : saveReadyKey === "save"
-                      ? "Tocá otra vez para guardar"
+                    : saveNext?.key === "save"
+                      ? saveNext.batches === 1
+                        ? "Tocá otra vez para guardar"
+                        : `Guardar ${saveNext.from}–${saveNext.to} de ${saveNext.total}`
                       : "Guardar en Fotos"}
                 </button>
               )}
+              {isShowingDelivery &&
+                gallery.allow_download &&
+                saveNext?.key === "save" &&
+                saveNext.batches > 1 && (
+                  <p className="w-full text-[12px]" style={{ color: ED.muted }}>
+                    Tus fotos son pesadas, así que van en tandas — iOS pierde
+                    fotos si se le mandan todas juntas. Tocá el botón, guardá, y
+                    volvé a tocarlo hasta llegar a {saveNext.total}.
+                  </p>
+                )}
               {isShowingDelivery && gallery.allow_download && (
                 hasTracks ? (
                   <>
