@@ -92,6 +92,23 @@ export async function ensureBookingInvoice(
   try {
     const supabase = createSupabaseServiceClient()
 
+    // Una sesión CANCELADA (o archivada) NO vuelve a generar factura nunca.
+    // Sin esta puerta pasaba algo feo: cancelar anula la factura, esta red se
+    // ejecuta al recargar la pantalla de la sesión, veía "cero facturas
+    // activas" y creaba otra + le mandaba al cliente "tu factura está lista"
+    // menos de un segundo después del correo de cancelación.
+    const { data: proj } = await supabase
+      .from("projects")
+      .select("cancelled_at, finalized_at")
+      .eq("id", projectId)
+      .eq("studio_id", studioId)
+      .maybeSingle()
+    const estado = proj as {
+      cancelled_at: string | null
+      finalized_at: string | null
+    } | null
+    if (!estado || estado.cancelled_at || estado.finalized_at) return
+
     // ¿Ya tiene factura? Nada que hacer (idempotente).
     const { count } = await supabase
       .from("invoices")
