@@ -386,7 +386,7 @@ export async function acceptQuote(params: {
     .from("booking_requests")
     .select(
       "id, studio_id, status, quote_amount, quote_accepted_at, metadata, " +
-        "quote_created_by, quote_title, package_id, quote_deliverables",
+        "quote_created_by, quote_title, package_id, quote_deliverables, client_name",
     )
     .eq("quote_token", params.token)
     .maybeSingle()
@@ -403,6 +403,7 @@ export async function acceptQuote(params: {
     quote_title: string | null
     package_id: string | null
     quote_deliverables: string[] | null
+    client_name: string | null
   }
   if (q.quote_accepted_at || q.status !== "quoted") {
     return { status: "already_accepted", requestId: q.id }
@@ -493,8 +494,13 @@ export async function acceptQuote(params: {
           total_amount: acordado,
           updated_at: nowIso,
         }
-        // Sin plan, la sesión se llama como el trabajo cotizado.
-        if (!q.package_id && q.quote_title) patch.name = q.quote_title
+        // Sin plan, la sesión se llama "Cliente — trabajo cotizado". El
+        // nombre del cliente va SIEMPRE delante: sin él la sesión no aparecía
+        // al buscar por el cliente y parecía que nunca se había creado.
+        if (!q.package_id && q.quote_title) {
+          const cliente = (q.client_name ?? "").trim()
+          patch.name = cliente ? `${cliente} — ${q.quote_title}` : q.quote_title
+        }
         // Lo acordado queda escrito en la sesión (constancia de qué incluye).
         const ent = Array.isArray(q.quote_deliverables) ? q.quote_deliverables : []
         if (ent.length > 0) {

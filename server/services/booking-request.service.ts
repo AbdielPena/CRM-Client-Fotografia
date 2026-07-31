@@ -801,6 +801,17 @@ async function convertBookingToClientBundle(params: {
     console.error("[convertBookingToClientBundle] mover a pendiente_pago falló:", stErr)
   }
 
+  // Entrega: la sesión nace con su fila en client_deliveries para que aparezca
+  // desde el minuto uno en "Próximas entregas" con su fecha calculada. Antes
+  // solo se creaba al recalcular (galería, cambio de fecha…), así que una
+  // sesión recién aceptada no salía en ninguna lista de entregas.
+  try {
+    const { recomputeProjectDelivery } = await import("./delivery.service")
+    await recomputeProjectDelivery(params.studioId, result.project_id)
+  } catch (dErr) {
+    console.error("[convertBookingToClientBundle] crear entrega falló:", dErr)
+  }
+
   // Factura al ACEPTAR (no solo al firmar): TODOS los planes deben generar su
   // factura y enviársela al cliente en cuanto se acepta la reserva — muchas
   // sesiones (exterior, estudio…) no llevan firma de contrato, así que esperar

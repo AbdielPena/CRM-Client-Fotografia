@@ -155,14 +155,22 @@ export async function deleteProjectStatus(
  * si el status realmente cambió. `opts.dispatch:false` lo suprime — lo usa la
  * acción de automatización `update_project_status` para no auto-dispararse en
  * bucle (una regla con trigger status_changed + acción update_project_status).
+ *
+ * `opts.elevated` escribe con permisos de servicio. Hace falta en los cambios
+ * que dispara el CLIENTE sin sesión del CRM (aceptar una cotización desde su
+ * teléfono): con el cliente normal la RLS descarta el UPDATE y —lo peor— NO
+ * devuelve error, así que el flujo seguía como si hubiera funcionado y la
+ * sesión se quedaba en el estado crudo 'booked', fuera del tablero.
  */
 export async function setProjectStatus(
   studioId: string,
   projectId: string,
   newStatusLabel: string,
-  opts?: { dispatch?: boolean },
+  opts?: { dispatch?: boolean; elevated?: boolean },
 ): Promise<void> {
-  const supabase = createSupabaseServerClient()
+  const supabase = opts?.elevated
+    ? createSupabaseServiceClient()
+    : createSupabaseServerClient()
 
   // Status previo para el payload from→to del evento.
   const { data: prev } = await supabase
@@ -174,14 +182,26 @@ export async function setProjectStatus(
     .maybeSingle()
   const fromStatus = (prev as { status: string | null } | null)?.status ?? null
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('projects')
     .update({ status: newStatusLabel, updated_at: new Date().toISOString() })
     .eq('id', projectId)
     .eq('studio_id', studioId)
     .is('deleted_at', null)
+    .select('id')
 
   if (error) throwServiceError("PROJECT_STATUS_OP_FAILED", error)
+  // Un UPDATE que no toca ninguna fila NO devuelve error: así se perdió en
+  // silencio el cambio de estado de las cotizaciones aceptadas por el cliente.
+  // Que reviente aquí es lo correcto — quien llama ya lo registra.
+  if (!updated || updated.length === 0) {
+    throwServiceError(
+      "PROJECT_STATUS_OP_FAILED",
+      new Error(
+        `el cambio de estado no afectó ninguna fila (proyecto ${projectId})`,
+      ),
+    )
+  }
 
   const statusChanged = fromStatus !== newStatusLabel
 

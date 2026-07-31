@@ -99,7 +99,12 @@ export async function transitionProjectStatus(
       return { moved: false, toLabel: targetLabel }
     }
 
-    await setProjectStatus(studioId, projectId, targetLabel, opts)
+    // Elevado SIEMPRE: una transición automática no depende de que haya una
+    // sesión del CRM abierta (el cliente acepta su cotización desde el celular).
+    await setProjectStatus(studioId, projectId, targetLabel, {
+      ...opts,
+      elevated: true,
+    })
     return { moved: true, toLabel: targetLabel }
   } catch (err) {
     console.error("[automation] transitionProjectStatus failed", {
