@@ -294,12 +294,26 @@ export async function applyWatermark(
     const oh = om.height ?? 100
     const marginPx = Math.round((baseWidth * config.margin) / 100)
 
-    // Mosaico: se repite por toda la foto.
+    // Mosaico: se repite por toda la foto, pero DEJANDO LIBRE EL CENTRO.
+    //
+    // El centro de la foto es donde casi siempre está la cara, así que una
+    // marca justo ahí arruina la vista. En vez de borrar esa marca (dejaría un
+    // hueco raro), se corre toda la rejilla en vertical para que el centro
+    // exacto caiga en el ESPACIO entre dos filas: las marcas quedan un poco
+    // más arriba y un poco más abajo, y la cara respira.
     if (config.position === "tile") {
       const stepX = ow + Math.max(24, marginPx * 2)
       const stepY = oh + Math.max(24, marginPx * 2)
+
+      // Fase vertical: y0 tal que el centro quede a mitad de camino entre las
+      // filas de arriba y de abajo. Queda dentro de [0, stepY) para no perder
+      // cobertura por el borde superior.
+      const centroY = baseHeight / 2
+      const y0 =
+        (((centroY - oh / 2 - stepY / 2) % stepY) + stepY) % stepY
+
       const composites: OverlayOptions[] = []
-      for (let y = Math.round(marginPx / 2); y < baseHeight; y += stepY) {
+      for (let y = Math.round(y0); y < baseHeight; y += stepY) {
         for (let x = Math.round(marginPx / 2); x < baseWidth; x += stepX) {
           composites.push({ input: overlay, top: y, left: x })
         }
