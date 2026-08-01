@@ -7,7 +7,6 @@ import { createSupabaseServerClient } from "@/server/supabase/server"
 import { getTasksThisWeek } from "@/server/services/dashboard.service"
 import { getRecentActivity } from "@/server/services/activity.service"
 import { listStudioPrintOverview } from "@/server/services/print-selection.service"
-import { getModulesOverview } from "@/server/services/modules-overview.service"
 import {
   autoDetectCompletedSteps,
   calculateProgress,
@@ -25,10 +24,18 @@ import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import { UpcomingSessions } from "@/components/dashboard/upcoming-sessions"
 import { RecentActivityList } from "@/components/dashboard/recent-activity-list"
 import { PendingPrintsList } from "@/components/dashboard/pending-prints-list"
-import { ModulesOverview } from "@/components/dashboard/modules-overview"
 import { OnboardingBanner } from "@/components/dashboard/onboarding-banner"
 
 export const metadata: Metadata = { title: "Dashboard" }
+
+/**
+ * Etiquetas de estado que significan "ya terminó" y por eso NO cuentan como
+ * sesión activa ni salen en "Próximas sesiones". Va en el formato de lista que
+ * entiende PostgREST. Ojo: `projects.status` guarda ETIQUETAS del tablero, no
+ * el enum — filtrar por 'booked'/'in_progress' daba cero.
+ */
+const TERMINADAS_PG =
+  '("Entregado","Completado","Cancelado","Finalizado total","delivered","completed","cancelled","archived")'
 
 async function getDashboardData(studioId: string) {
   const supabase = createSupabaseServerClient()
@@ -53,7 +60,9 @@ async function getDashboardData(studioId: string) {
       .is("deleted_at", null)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .is("finalized_at" as any, null)
-      .in("status", ["booked", "in_progress", "editing"]),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .is("cancelled_at" as any, null)
+      .not("status", "in", TERMINADAS_PG),
     supabase
       .from("projects")
       .select(`id, name, event_date, event_time, status, client:clients(name)`)
@@ -61,16 +70,21 @@ async function getDashboardData(studioId: string) {
       .is("deleted_at", null)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .is("finalized_at" as any, null)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .is("cancelled_at" as any, null)
       .not("event_date", "is", null)
       .gte("event_date", now.toISOString().slice(0, 10))
-      .in("status", ["booked", "in_progress"])
+      .not("status", "in", TERMINADAS_PG)
       .order("event_date", { ascending: true })
-      .limit(5),
+      .limit(6),
     supabase
       .from("booking_requests")
       .select("id", { count: "exact", head: true })
       .eq("studio_id", studioId)
-      .eq("status", "pending_review"),
+      // Las que esperan algo tuyo: por revisar, aprobadas sin confirmar y
+      // esperando el pago del cliente. Contar solo `pending_review` daba 0
+      // casi siempre y la tarjeta no servía para nada.
+      .in("status", ["pending_review", "approved", "awaiting_payment"]),
     supabase
       .from("clients")
       .select("id, name, email, created_at")
@@ -100,7 +114,6 @@ export default async function DashboardPage() {
   const [
     data,
     unreadNotifications,
-    modulesOverview,
     onboardingSteps,
     upcomingEntries,
     weekTasks,
@@ -109,19 +122,12 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     getDashboardData(session.studioId),
     countUnreadNotifications(session.studioId),
-    getModulesOverview(session.studioId).catch(
-      () => ({}) as Awaited<ReturnType<typeof getModulesOverview>>,
-    ),
     getOnboardingSteps(session.studioId).catch(() => []),
     listUpcomingDeliveryEntries(session.studioId, { limit: 8 }).catch(() => []),
     getTasksThisWeek(session.studioId, 7).catch(() => []),
     getRecentActivity(session.studioId, 10).catch(() => []),
     listStudioPrintOverview(session.studioId).catch(() => []),
   ])
-
-  // El dashboard NO muestra finanzas: el resumen de módulos va sin la tarjeta
-  // de Finanzas (ingresos, gastos, balance). Eso vive solo en /finance.
-  const { finance: _finanzasFuera, ...modulesSinFinanzas } = modulesOverview
 
   // Impresiones que esperan algo del cliente (ni empezó, o empezó sin enviar).
   const pendingPrints = printItems.filter(
@@ -271,33 +277,18 @@ export default async function DashboardPage() {
             />
           )}
 
-          {/* ─── Modules overview (cross-módulo) ────────────────── */}
-          {(modulesSinFinanzas.inventory || modulesSinFinanzas.mail) && (
-            <section>
-              <div className="mb-3 flex items-baseline justify-between">
-                <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Tus módulos
-                </h2>
-                <p className="text-[11px] text-muted-foreground">
-                  Resumen de actividad por área
-                </p>
-              </div>
-              <ModulesOverview data={modulesSinFinanzas} />
-            </section>
-          )}
-
           {/* ─── KPIs (todos clickables) ──────────────────────────── */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StatCard
-              title="Solicitudes nuevas"
+              title="Solicitudes por atender"
               tone="amber"
               value={data.stats.pendingBookings}
               subtitle={
                 data.stats.pendingBookings > 0
-                  ? "Pendientes de revisar"
-                  : "Sin solicitudes nuevas"
+                  ? "Por revisar o esperando pago"
+                  : "Todo al día"
               }
-              href="/bookings?status=pending_review"
+              href="/bookings"
               tooltip="Ver solicitudes pendientes"
               delay={0.05}
             />
