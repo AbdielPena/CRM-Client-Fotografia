@@ -170,6 +170,48 @@ async function resolverNombresDeCliente(
   const idsCliente = porTipo("client")
   idsCliente.forEach((id) => clientIds.add(id))
 
+  // Las TAREAS no apuntan al cliente: apuntan a la sesión (o al cliente) por
+  // su propio entity_type/entity_id. Un salto más para saber de quién son.
+  const idsTarea = porTipo("task")
+  if (idsTarea.length) {
+    const { data } = await supabase
+      .from("tasks")
+      .select("id, entity_type, entity_id")
+      .eq("studio_id", studioId)
+      .in("id", idsTarea)
+    const tareas = (data ?? []) as Array<{
+      id: string
+      entity_type: string | null
+      entity_id: string | null
+    }>
+    const proyectosDeTareas = tareas
+      .filter((t) => t.entity_type === "project" && t.entity_id)
+      .map((t) => t.entity_id as string)
+    const clientePorProyecto = new Map<string, string>()
+    if (proyectosDeTareas.length) {
+      const { data: pr } = await supabase
+        .from("projects")
+        .select("id, client_id")
+        .eq("studio_id", studioId)
+        .in("id", proyectosDeTareas)
+      for (const r of (pr ?? []) as Array<{ id: string; client_id: string | null }>) {
+        if (r.client_id) clientePorProyecto.set(r.id, r.client_id)
+      }
+    }
+    for (const t of tareas) {
+      const cid =
+        t.entity_type === "client"
+          ? t.entity_id
+          : t.entity_type === "project" && t.entity_id
+            ? (clientePorProyecto.get(t.entity_id) ?? null)
+            : null
+      if (cid) {
+        clientIdPorClave.set(`task:${t.id}`, cid)
+        clientIds.add(cid)
+      }
+    }
+  }
+
   // Las solicitudes guardan el nombre escrito a mano (aún sin cliente creado).
   const idsSolicitud = porTipo("booking_request")
   if (idsSolicitud.length) {
