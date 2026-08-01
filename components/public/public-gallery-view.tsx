@@ -287,6 +287,28 @@ function EditorialCover({
  * la descarga directa ese estado nunca llega, se quedaba 3 minutos girando y
  * terminaba en "está tardando demasiado", aunque el archivo estaba disponible.
  */
+/**
+ * Protección de las fotos de SELECCIÓN.
+ *
+ * Se bloquea lo que un navegador SÍ deja bloquear: el clic derecho ("Guardar
+ * imagen como…"), arrastrar la foto fuera, y —lo que más importa en el
+ * teléfono— el menú de MANTENER PULSADO de iOS/Android, que es por donde de
+ * verdad se guardan las fotos.
+ *
+ * Lo que NO se puede bloquear desde una web es la captura de pantalla: es una
+ * función del sistema operativo y ninguna página tiene acceso a ella. Contra
+ * eso la defensa real es la marca de agua.
+ */
+const PROTEGER_FOTO = {
+  WebkitTouchCallout: "none",
+  WebkitUserSelect: "none",
+  userSelect: "none",
+} as const
+
+function bloquearMenu(e: React.MouseEvent) {
+  e.preventDefault()
+}
+
 function zipDownloadUrl(token: string, exportId: string): string {
   return `/api/galleries/public/${token}/zip/${exportId}/stream`
 }
@@ -1140,6 +1162,8 @@ export function PublicGalleryView({
   // baja resolución de las previews no se nota. La entrega final NO usa compact
   // (flujo editorial grande).
   const renderTile = (a: Asset, i: number, compact = false) => {
+    // Las fotos de SELECCIÓN se protegen; las de ENTREGA son del cliente.
+    const proteger = !isShowingDelivery && !deliveryOnly
     // En la ENTREGA, "elegir fotos" convierte el toque en marcar/desmarcar.
     const picking = isShowingDelivery && pickMode
     const isPicked = picked.has(a.id)
@@ -1184,6 +1208,8 @@ export function PublicGalleryView({
             alt=""
             loading="lazy"
             draggable={false}
+            onContextMenu={proteger ? bloquearMenu : undefined}
+            style={proteger ? PROTEGER_FOTO : undefined}
             className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
           />
         )}
@@ -2321,6 +2347,10 @@ function Lightbox({
             alt=""
             draggable={false}
             onClick={(e) => e.stopPropagation()}
+            // Si la galería no permite descargar (= es una SELECCIÓN), tampoco
+            // se deja el clic derecho ni el "mantener pulsado" del teléfono.
+            onContextMenu={allowDownload ? undefined : bloquearMenu}
+            style={allowDownload ? undefined : PROTEGER_FOTO}
             className="h-auto max-h-[84vh] w-auto max-w-[94vw] object-contain shadow-2xl sm:max-w-[80vw]"
           />
         )}

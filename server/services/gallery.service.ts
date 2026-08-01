@@ -2083,6 +2083,13 @@ export async function validateGalleryToken(
     .maybeSingle()
   if (!gallery || gallery.status !== "published") return null
 
+  // Una galería de SELECCIÓN nunca ofrece descarga, pase lo que diga la
+  // columna: son fotos sin editar y con marca de agua, que el cliente solo
+  // debe MIRAR para elegir. Descargar es exclusivo de la ENTREGA.
+  if ((gallery as { gallery_type?: string | null }).gallery_type !== "final_delivery") {
+    ;(gallery as { allow_download: boolean }).allow_download = false
+  }
+
   const assetsRaw = await fetchAllPaged((from, to) =>
     db
       .from("gallery_assets")
