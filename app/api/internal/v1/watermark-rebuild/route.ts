@@ -59,13 +59,18 @@ export async function POST(req: NextRequest) {
   )
 
   try {
+    // `galleryId` opcional: procesar UNA galería concreta. Sirve para dejar
+    // una de prueba lista y mirarla antes de soltar el catálogo entero.
+    const onlyGallery = url.searchParams.get("galleryId")
+
     const sb = untypedService()
-    const { data: galsRaw } = await sb
+    let q = sb
       .from("galleries")
       .select("id, studio_id, name, watermark_version")
       .eq("gallery_type", "selection")
       .is("deleted_at", null)
-      .order("created_at", { ascending: true })
+    if (onlyGallery) q = q.eq("id", onlyGallery)
+    const { data: galsRaw } = await q.order("created_at", { ascending: true })
     const galleries = (galsRaw ?? []) as GalleryRow[]
 
     let pendingTotal = 0
