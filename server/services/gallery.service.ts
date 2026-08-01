@@ -723,6 +723,20 @@ export async function updateGallery(
   return row as GalleryRow
 }
 
+/**
+ * Cuánto dura una galería de ENTREGA (la que es del cliente): 6 meses, que es
+ * lo que prometen los planes ("Galería privada · 6 meses").
+ */
+export const DELIVERY_GALLERY_AVAILABILITY_DAYS = 182
+
+/**
+ * La galería de SELECCIÓN **no vence por tiempo**. Se cierra sola cuando el
+ * trabajo del cliente termina: al marcar la sesión como "Impresión enviada"
+ * (la última etapa) o al darla por completada. Ver `closeSelectionGalleries`.
+ *
+ * Antes caducaba a los 30 días y dejaba al cliente sin enlace en plena
+ * selección, sin avisar a nadie.
+ */
 export const DEFAULT_GALLERY_AVAILABILITY_DAYS = 30
 
 export async function publishGallery(
@@ -733,8 +747,15 @@ export async function publishGallery(
   const current = await getGalleryById(studioId, galleryId)
   const patch: UpdateGalleryInput = { status: "published" }
 
-  // Calcular expiración al publicar si aún no tiene una fecha fija.
-  if (current && !current.expires_at) {
+  // Vencimiento al publicar. Dos reglas distintas a propósito:
+  //   · SELECCIÓN → nunca por tiempo. Se cierra cuando el proceso del cliente
+  //     termina (impresiones enviadas), no cuando se acaba un contador.
+  //   · ENTREGA   → 6 meses, que es lo que prometen los planes.
+  const esSeleccion =
+    (current as { gallery_type?: string | null } | null)?.gallery_type !== "final_delivery"
+  if (esSeleccion) {
+    patch.expiresAt = null
+  } else if (current && !current.expires_at) {
     let days = current.availability_days ?? null
     if (days == null && current.package_id) {
       const db = srvc() as unknown as SupabaseClient
@@ -746,7 +767,7 @@ export async function publishGallery(
         .maybeSingle()
       if (pkg?.gallery_availability_days != null) days = pkg.gallery_availability_days as number
     }
-    if (days == null) days = DEFAULT_GALLERY_AVAILABILITY_DAYS
+    if (days == null) days = DELIVERY_GALLERY_AVAILABILITY_DAYS
     if (days > 0) {
       const exp = new Date()
       exp.setDate(exp.getDate() + days)
@@ -2728,4 +2749,35 @@ export async function getOriginalDownloadUrl(
     .from(ORIGINALS_BUCKET)
     .createSignedUrl(key, SIGNED_UPLOAD_TTL)
   return signed?.signedUrl ?? null
+}
+
+
+/**
+ * Cierra las galerías de SELECCIÓN de una sesión.
+ *
+ * Es el único vencimiento que tiene la selección: no caduca por tiempo, se
+ * cierra cuando el trabajo del cliente terminó (impresiones enviadas). Se
+ * marcan `expired` y se les pone la fecha para dejar constancia de cuándo fue.
+ * La galería de ENTREGA no se toca: esa es del cliente y dura sus 6 meses.
+ */
+export async function closeSelectionGalleries(
+  studioId: string,
+  projectId: string,
+): Promise<number> {
+  const db = srvc() as unknown as SupabaseClient
+  const now = new Date().toISOString()
+  const { data, error } = await db
+    .from("galleries")
+    .update({ status: "expired", expires_at: now, updated_at: now })
+    .eq("studio_id", studioId)
+    .eq("project_id", projectId)
+    .eq("gallery_type", "selection")
+    .eq("status", "published")
+    .is("deleted_at", null)
+    .select("id")
+  if (error) {
+    console.error("[closeSelectionGalleries]", error.message)
+    return 0
+  }
+  return (data ?? []).length
 }

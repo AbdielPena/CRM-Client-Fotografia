@@ -162,6 +162,29 @@ export async function deleteProjectStatus(
  * devuelve error, así que el flujo seguía como si hubiera funcionado y la
  * sesión se quedaba en el estado crudo 'booked', fuera del tablero.
  */
+/**
+ * ¿Esta etiqueta significa que el trabajo con el cliente ya terminó?
+ *
+ * Para Abdiel la última etapa es "Impresión enviada" (después de la entrega
+ * digital vienen las impresiones). Se aceptan también los estados terminales
+ * por si cierra la sesión sin pasar por impresiones.
+ */
+function esFinDelProceso(label: string | null | undefined): boolean {
+  if (!label) return false
+  const n = label
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim()
+  return (
+    n.includes("impresion enviada") ||
+    n.includes("impresiones enviadas") ||
+    n === "completado" ||
+    n === "completada" ||
+    n === "finalizado total"
+  )
+}
+
 export async function setProjectStatus(
   studioId: string,
   projectId: string,
@@ -229,6 +252,25 @@ export async function setProjectStatus(
           .neq('status', 'entregada')
       } catch (err) {
         console.error('[project-status] marcar entrega realizada falló', err)
+      }
+    })()
+  }
+
+  // La galería de SELECCIÓN se cierra cuando el proceso del cliente terminó.
+  // Su última etapa es "Impresión enviada"; también cuenta darla por
+  // completada/finalizada. La de ENTREGA no se toca (dura sus 6 meses).
+  if (statusChanged && esFinDelProceso(newStatusLabel)) {
+    void (async () => {
+      try {
+        const { closeSelectionGalleries } = await import("./gallery.service")
+        const cerradas = await closeSelectionGalleries(studioId, projectId)
+        if (cerradas > 0) {
+          console.info(
+            `[project-status] ${cerradas} galería(s) de selección cerradas (${projectId})`,
+          )
+        }
+      } catch (err) {
+        console.error("[project-status] cerrar selección falló", err)
       }
     })()
   }
