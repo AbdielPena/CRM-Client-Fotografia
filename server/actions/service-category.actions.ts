@@ -31,6 +31,7 @@ export async function createServiceCategoryAction(formData: FormData) {
     dressIncludedAmount: formData.get("dressIncludedAmount"),
     deliveryDays: formData.get("deliveryDays"),
     printDeliveryDays: formData.get("printDeliveryDays"),
+    selectionSendHours: formData.get("selectionSendHours"),
     retentionMonths: formData.get("retentionMonths"),
   }
   const parsed = createServiceCategorySchema.safeParse(raw)
@@ -56,6 +57,7 @@ export async function updateServiceCategoryAction(id: string, formData: FormData
     dressIncludedAmount: formData.get("dressIncludedAmount"),
     deliveryDays: formData.get("deliveryDays"),
     printDeliveryDays: formData.get("printDeliveryDays"),
+    selectionSendHours: formData.get("selectionSendHours"),
     retentionMonths: formData.get("retentionMonths"),
   }
   const parsed = updateServiceCategorySchema.safeParse(raw)

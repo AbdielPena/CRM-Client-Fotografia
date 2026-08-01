@@ -28,6 +28,13 @@ export const createServiceCategorySchema = z.object({
     (v) => (v === "" || v === null || v === undefined ? undefined : v),
     z.coerce.number().int().min(1).max(120).optional(),
   ),
+  // Horas que tiene el estudio para MANDARLE la selección al cliente después
+  // de la sesión. Es la ventana real de trabajo (24 a 72 h), y fija cuándo
+  // vence la tarea "Enviar selección de fotos al cliente". Vacío = 72.
+  selectionSendHours: z.preprocess(
+    (v) => (v === "" || v === null || v === undefined ? undefined : v),
+    z.coerce.number().int().min(1).max(720).optional(),
+  ),
   // Meses de conservación de los archivos locales tras la entrega. Al vencer,
   // el sistema borra las fotos del servidor (Drive queda como respaldo).
   retentionMonths: z.preprocess(

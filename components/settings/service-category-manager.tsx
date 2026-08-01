@@ -27,6 +27,7 @@ export interface ServiceCategoryView {
   dressIncludedAmount: number | null
   deliveryDays: number | null
   printDeliveryDays: number | null
+  selectionSendHours: number | null
   retentionMonths: number | null
 }
 
@@ -337,6 +338,29 @@ function CategoryForm({
             La entrega se cuenta desde que el cliente hace su selección. Vacío = 21
             días (3 semanas). En quinceañeras, si el cumpleaños cae antes, se
             entrega 2 días antes del cumpleaños.
+          </p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Horas para enviar la selección{" "}
+            <span className="font-normal text-muted-foreground">
+              (desde la sesión)
+            </span>
+          </label>
+          <input
+            name="selectionSendHours"
+            type="number"
+            min="1"
+            max="720"
+            step="1"
+            defaultValue={defaults?.selectionSendHours ?? ""}
+            className={inputCls}
+            placeholder="72"
+          />
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            El tiempo que te das para mandarle la galería de selección al
+            cliente después de la sesión. Fija cuándo vence tu tarea «Enviar
+            selección». Vacío = 72 horas (3 días).
           </p>
         </div>
         <div>

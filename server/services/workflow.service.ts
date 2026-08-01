@@ -434,7 +434,13 @@ export async function processWorkflowStages(): Promise<{
     // Sin pago ni fotos, la sesión no se hizo: no hay nada que seleccionar.
     if (!sessionHappened({ hasPayment: withPayment.has(p.id), hasGallery: withGallery.has(p.id) }))
       continue
-    const due = new Date(new Date(p.event_date).getTime() + 86400000)
+    // Vence según las HORAS que se dé el estudio para mandar la selección
+    // (configurable por categoría; 72 h por defecto). Antes era fijo +1 día,
+    // así que la tarea salía "vencida" al día siguiente de la sesión aunque
+    // todavía estuvieras dentro del plazo.
+    const horas = await horasParaEnviarSeleccion(p.studio_id, p.id)
+    const dias = Math.max(1, Math.ceil(horas / 24))
+    const due = new Date(new Date(p.event_date).getTime() + dias * 86400000)
       .toISOString()
       .slice(0, 10)
     const ok = await createWorkflowTask(p.studio_id, p.id, "send_selection", {
@@ -452,4 +458,40 @@ export async function processWorkflowStages(): Promise<{
   }
 
   return { sessionTasksCreated: created, scanned: cands.length }
+}
+
+
+/** Horas por defecto para mandarle la selección al cliente tras la sesión. */
+export const DEFAULT_SELECTION_SEND_HOURS = 72
+
+/**
+ * Cuántas horas tiene el estudio para enviarle la selección al cliente.
+ * Se configura por CATEGORÍA de servicio; si no está definida, 72 h.
+ */
+export async function horasParaEnviarSeleccion(
+  studioId: string,
+  projectId: string,
+): Promise<number> {
+  try {
+    const sb = untypedService()
+    const { data: proj } = await sb
+      .from("projects")
+      .select("service_category_id")
+      .eq("id", projectId)
+      .eq("studio_id", studioId)
+      .maybeSingle()
+    const catId = (proj as { service_category_id?: string | null } | null)
+      ?.service_category_id
+    if (!catId) return DEFAULT_SELECTION_SEND_HOURS
+    const { data: cat } = await sb
+      .from("service_categories")
+      .select("selection_send_hours")
+      .eq("id", catId)
+      .maybeSingle()
+    const h = (cat as { selection_send_hours?: number | null } | null)
+      ?.selection_send_hours
+    return h && h > 0 ? h : DEFAULT_SELECTION_SEND_HOURS
+  } catch {
+    return DEFAULT_SELECTION_SEND_HOURS
+  }
 }

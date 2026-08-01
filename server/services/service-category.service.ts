@@ -27,6 +27,7 @@ export interface ServiceCategory {
   deliveryDays: number | null
   /** Días para entregar las IMPRESIONES desde que se publica la galería final. */
   printDeliveryDays: number | null
+  selectionSendHours: number | null
   /** Meses de conservación de archivos locales tras la entrega. null = default. */
   retentionMonths: number | null
 }
@@ -97,6 +98,8 @@ export async function getServiceCategories(studioId: string): Promise<ServiceCat
     dressIncludedAmount: r.dress_included_amount ?? null,
     deliveryDays: r.delivery_days ?? null,
     printDeliveryDays: r.print_delivery_days ?? null,
+    selectionSendHours:
+      (r as { selection_send_hours?: number | null }).selection_send_hours ?? null,
     retentionMonths: r.retention_months ?? null,
   }))
 }
@@ -153,6 +156,7 @@ export async function createServiceCategory(
       dress_included_amount: input.dressIncludedAmount ?? null,
       delivery_days: input.deliveryDays ?? null,
       print_delivery_days: input.printDeliveryDays ?? null,
+      selection_send_hours: input.selectionSendHours ?? null,
       retention_months: input.retentionMonths ?? null,
     })
     .select("id")
@@ -189,6 +193,8 @@ export async function updateServiceCategory(
   if (input.deliveryDays !== undefined) patch.delivery_days = input.deliveryDays ?? null
   if (input.printDeliveryDays !== undefined)
     patch.print_delivery_days = input.printDeliveryDays ?? null
+  if (input.selectionSendHours !== undefined)
+    patch.selection_send_hours = input.selectionSendHours ?? null
   if (input.retentionMonths !== undefined) patch.retention_months = input.retentionMonths ?? null
   const { error } = await sb
     .from("service_categories")
