@@ -100,6 +100,9 @@ export async function POST(req: NextRequest) {
       studioId: target.studio_id,
       galleryId: target.id,
       limit,
+      // `fromOriginal=1`: rehace las versiones desde el ORIGINAL. Hace falta
+      // cuando la copia "limpia" se guardó con una marca vieja ya encima.
+      fromOriginal: url.searchParams.get("fromOriginal") === "1",
     })
 
     return NextResponse.json({

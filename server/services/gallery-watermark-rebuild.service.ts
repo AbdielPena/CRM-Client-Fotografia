@@ -2,6 +2,8 @@ import "server-only"
 
 import { createSupabaseServiceClient } from "@/server/supabase/service"
 import { untypedService } from "@/server/supabase/untyped"
+import sharp from "sharp"
+
 import { isLocalStorage, localRead, localWrite } from "@/lib/storage/local-driver"
 import {
   applyWatermark,
@@ -22,9 +24,11 @@ import {
  */
 
 const RENDITIONS_BUCKET = "gallery-renditions"
+const ORIGINALS_BUCKET = "gallery-originals"
 
 type AssetRow = {
   id: string
+  original_key: string | null
   thumb_key: string | null
   web_key: string | null
   metadata: Record<string, unknown> | null
@@ -47,6 +51,43 @@ async function readObject(key: string): Promise<Buffer | null> {
   const { data, error } = await svc.storage.from(RENDITIONS_BUCKET).download(key)
   if (error || !data) return null
   return Buffer.from(await data.arrayBuffer())
+}
+
+async function readOriginal(key: string): Promise<Buffer | null> {
+  if (isLocalStorage()) {
+    try {
+      return await localRead(ORIGINALS_BUCKET, key)
+    } catch {
+      return null
+    }
+  }
+  const svc = createSupabaseServiceClient()
+  const { data, error } = await svc.storage.from(ORIGINALS_BUCKET).download(key)
+  if (error || !data) return null
+  return Buffer.from(await data.arrayBuffer())
+}
+
+/**
+ * Rehace una versión (miniatura o foto grande) DESDE EL ORIGINAL, con los
+ * mismos tamaños que usa la subida normal. Se usa para limpiar fotos cuya
+ * "copia limpia" se capturó cuando ya tenían una marca vieja encima.
+ */
+async function derivarDelOriginal(
+  originalKey: string,
+  kind: "thumb" | "web",
+): Promise<Buffer | null> {
+  const src = await readOriginal(originalKey)
+  if (!src) return null
+  const img = sharp(src).rotate()
+  return kind === "thumb"
+    ? await img
+        .resize({ width: 400, height: 400, fit: "cover", withoutEnlargement: true })
+        .webp({ quality: 75 })
+        .toBuffer()
+    : await img
+        .resize({ width: 1600, withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toBuffer()
 }
 
 async function writeObject(key: string, buf: Buffer): Promise<void> {
@@ -83,15 +124,26 @@ async function rebuildOne(
   asset: AssetRow,
   config: WatermarkConfig | null,
   version: number,
+  fromOriginal = false,
 ): Promise<void> {
   const svc = untypedService()
 
-  for (const [key, quality] of [
-    [asset.thumb_key, 75],
-    [asset.web_key, 82],
-  ] as Array<[string | null, number]>) {
+  for (const [key, quality, kind] of [
+    [asset.thumb_key, 75, "thumb"],
+    [asset.web_key, 82, "web"],
+  ] as Array<[string | null, number, "thumb" | "web"]>) {
     if (!key) continue
-    const clean = await ensureClean(key)
+
+    // `fromOriginal`: la copia "limpia" guardada NO estaba limpia — se capturó
+    // cuando la foto ya llevaba una marca vieja encima, así que cada pasada
+    // apilaba la nueva sobre la vieja. Se rehace desde el ORIGINAL, que sí
+    // está intacto, y esa pasa a ser la copia limpia de verdad.
+    let clean: Buffer | null = null
+    if (fromOriginal && asset.original_key) {
+      clean = await derivarDelOriginal(asset.original_key, kind)
+      if (clean) await writeObject(cleanKeyFor(key), clean)
+    }
+    if (!clean) clean = await ensureClean(key)
     if (!clean) continue
     // Sin config = la galería no lleva marca (entrega final o apagada):
     // se restaura la versión limpia.
@@ -113,6 +165,8 @@ export async function rebuildGalleryWatermarks(params: {
   /** Fotos por tanda. La UI llama en bucle hasta remaining=0. */
   limit?: number
   concurrency?: number
+  /** Rehacer las copias limpias desde el ORIGINAL (borra marcas viejas). */
+  fromOriginal?: boolean
 }): Promise<{ processed: number; remaining: number; total: number }> {
   const { studioId, galleryId } = params
   const limit = Math.min(Math.max(params.limit ?? 25, 1), 100)
@@ -142,7 +196,7 @@ export async function rebuildGalleryWatermarks(params: {
   // Pendientes = las que no llevan sello de esta versión de la marca.
   const { data: rows } = await svc
     .from("gallery_assets")
-    .select("id, thumb_key, web_key, metadata")
+    .select("id, original_key, thumb_key, web_key, metadata")
     .eq("studio_id", studioId)
     .eq("gallery_id", galleryId)
     .is("deleted_at", null)
@@ -159,7 +213,7 @@ export async function rebuildGalleryWatermarks(params: {
     const slice = batch.slice(i, i + concurrency)
     await Promise.all(
       slice.map((a) =>
-        rebuildOne(a, config, version).catch((err) => {
+        rebuildOne(a, config, version, params.fromOriginal === true).catch((err) => {
           console.error("[watermark-rebuild] falló", a.id, err)
         }),
       ),
