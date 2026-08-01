@@ -119,6 +119,11 @@ export async function createPackage(
   ;(insert as Record<string, unknown>).dress_included_amount = data.dressIncludedAmount ?? null
   // profit_amount: ganancia limpia declarada para el plan.
   ;(insert as Record<string, unknown>).profit_amount = data.profitAmount ?? null
+  // Vencimiento de galerías, por plan (ver gallery.service).
+  ;(insert as Record<string, unknown>).gallery_availability_days =
+    data.galleryAvailabilityDays ?? null
+  ;(insert as Record<string, unknown>).selection_close_trigger =
+    data.selectionCloseTrigger ?? null
   if (printEntitlements !== undefined) {
     ;(insert as Record<string, unknown>).print_entitlements = printEntitlements
   }
@@ -170,6 +175,10 @@ export async function updatePackage(
     patch.dress_included_amount = data.dressIncludedAmount ?? null
   if (data.profitAmount !== undefined)
     patch.profit_amount = data.profitAmount ?? null
+  if (data.galleryAvailabilityDays !== undefined)
+    patch.gallery_availability_days = data.galleryAvailabilityDays ?? null
+  if (data.selectionCloseTrigger !== undefined)
+    patch.selection_close_trigger = data.selectionCloseTrigger ?? null
 
   // Slug: si el user lo escribe explícito → usamos su valor (sanitizado).
   // Si cambia el nombre sin slug explícito → regeneramos para mantener SEO-friendly.

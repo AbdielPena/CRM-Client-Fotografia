@@ -33,6 +33,17 @@ export const createPackageSchema = z.object({
   // Monto de vestido incluido en el plan (ej. 17000). Si el vestido de la sesión
   // cuesta más, el excedente se factura como costo extra.
   dressIncludedAmount: z.coerce.number().min(0).optional(),
+  // Cuánto dura la galería de ENTREGA de este plan, en días. Vacío = 182
+  // (6 meses), que es lo que prometen los planes.
+  galleryAvailabilityDays: z.coerce.number().int().min(0).max(3650).optional(),
+  // Cuándo se cierra la galería de SELECCIÓN de este plan. NUNCA por tiempo:
+  //   prints_sent — al marcar "Impresión enviada" (por defecto, es la última
+  //                 etapa del proceso)
+  //   delivered   — al marcar "Entregado" (planes sin impresiones)
+  //   never       — no se cierra sola; la cierras tú a mano
+  selectionCloseTrigger: z
+    .enum(["prints_sent", "delivered", "never"])
+    .optional(),
   // Ganancia limpia por sesión de este plan (ya descontado todo). Al saldarse
   // la sesión suma a la ganancia del mes en Finanzas. Vacío o 0 = no reporta.
   profitAmount: z.coerce.number().min(0).optional(),

@@ -169,20 +169,29 @@ export async function deleteProjectStatus(
  * digital vienen las impresiones). Se aceptan también los estados terminales
  * por si cierra la sesión sin pasar por impresiones.
  */
-function esFinDelProceso(label: string | null | undefined): boolean {
-  if (!label) return false
-  const n = label
+function normalizar(label: string | null | undefined): string {
+  if (!label) return ""
+  return label
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim()
-  return (
-    n.includes("impresion enviada") ||
-    n.includes("impresiones enviadas") ||
-    n === "completado" ||
-    n === "completada" ||
-    n === "finalizado total"
-  )
+}
+
+/** Estados terminales: cierran la selección pase lo que pase. */
+function esCierreTotal(label: string | null | undefined): boolean {
+  const n = normalizar(label)
+  return n === "completado" || n === "completada" || n === "finalizado total"
+}
+
+function esImpresionEnviada(label: string | null | undefined): boolean {
+  const n = normalizar(label)
+  return n.includes("impresion enviada") || n.includes("impresiones enviadas")
+}
+
+function esEntregado(label: string | null | undefined): boolean {
+  const n = normalizar(label)
+  return n === "entregado" || n === "entregada"
 }
 
 export async function setProjectStatus(
@@ -259,10 +268,29 @@ export async function setProjectStatus(
   // La galería de SELECCIÓN se cierra cuando el proceso del cliente terminó.
   // Su última etapa es "Impresión enviada"; también cuenta darla por
   // completada/finalizada. La de ENTREGA no se toca (dura sus 6 meses).
-  if (statusChanged && esFinDelProceso(newStatusLabel)) {
+  if (
+    statusChanged &&
+    (esCierreTotal(newStatusLabel) ||
+      esImpresionEnviada(newStatusLabel) ||
+      esEntregado(newStatusLabel))
+  ) {
     void (async () => {
       try {
-        const { closeSelectionGalleries } = await import("./gallery.service")
+        const { closeSelectionGalleries, getSelectionCloseTrigger } =
+          await import("./gallery.service")
+        // Lo decide el PLAN de la sesión; los estados terminales cierran igual.
+        if (!esCierreTotal(newStatusLabel)) {
+          const trigger = await getSelectionCloseTrigger(studioId, projectId)
+          if (trigger === "never") return
+          if (trigger === "prints_sent" && !esImpresionEnviada(newStatusLabel))
+            return
+          if (
+            trigger === "delivered" &&
+            !esEntregado(newStatusLabel) &&
+            !esImpresionEnviada(newStatusLabel)
+          )
+            return
+        }
         const cerradas = await closeSelectionGalleries(studioId, projectId)
         if (cerradas > 0) {
           console.info(

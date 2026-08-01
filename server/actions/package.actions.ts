@@ -54,6 +54,10 @@ export async function createPackageAction(formData: FormData) {
     dressIncludedAmount: formData.get("dressIncludedAmount"),
     // Vacío = sin ganancia definida (null), no 0.
     profitAmount: formData.get("profitAmount") || undefined,
+    // Vacío = usar el valor por defecto del sistema, no 0.
+    galleryAvailabilityDays:
+      formData.get("galleryAvailabilityDays") || undefined,
+    selectionCloseTrigger: formData.get("selectionCloseTrigger") || undefined,
     isActive: formData.get("isActive") !== "false",
     contractTemplateId: formData.get("contractTemplateId"),
     formTemplateId: formData.get("formTemplateId"),
@@ -92,6 +96,10 @@ export async function updatePackageAction(packageId: string, formData: FormData)
     dressIncludedAmount: formData.get("dressIncludedAmount"),
     // Vacío = sin ganancia definida (null), no 0.
     profitAmount: formData.get("profitAmount") || undefined,
+    // Vacío = usar el valor por defecto del sistema, no 0.
+    galleryAvailabilityDays:
+      formData.get("galleryAvailabilityDays") || undefined,
+    selectionCloseTrigger: formData.get("selectionCloseTrigger") || undefined,
     isActive: formData.get("isActive") !== "false",
     contractTemplateId: formData.get("contractTemplateId"),
     formTemplateId: formData.get("formTemplateId"),

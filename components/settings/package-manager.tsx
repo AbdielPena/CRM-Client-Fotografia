@@ -44,6 +44,8 @@ interface Package {
   durationHours?: number
   editedPhotos?: number
   deliveryDays?: number
+  galleryAvailabilityDays?: number
+  selectionCloseTrigger?: "prints_sent" | "delivered" | "never"
   balanceDueOffsetDays?: number
   includesDress?: boolean
   dressIncludedAmount?: number
@@ -761,6 +763,49 @@ function PackageForm({
           <p className="mt-1 text-xs text-muted-foreground">
             Días para entregar tras la sesión. El sistema calcula la fecha de
             entrega y prioriza según el cumpleaños. Déjalo vacío si no aplica.
+          </p>
+        </div>
+
+        {/* ── Cuánto duran las galerías de este plan ───────────────────── */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Duración de la galería de entrega (días)
+          </label>
+          <input
+            name="galleryAvailabilityDays"
+            type="number"
+            min="0"
+            max="3650"
+            defaultValue={defaultValues?.galleryAvailabilityDays}
+            className={inputCls}
+            placeholder="182"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Cuánto tiempo puede el cliente entrar a sus fotos finales. Vacío =
+            182 días (6 meses), que es lo que prometen los planes.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-foreground">
+            Cerrar la galería de selección
+          </label>
+          <select
+            name="selectionCloseTrigger"
+            defaultValue={defaultValues?.selectionCloseTrigger ?? "prints_sent"}
+            className={inputCls}
+          >
+            <option value="prints_sent">
+              Al marcar &quot;Impresión enviada&quot; (recomendado)
+            </option>
+            <option value="delivered">
+              Al marcar &quot;Entregado&quot; (planes sin impresiones)
+            </option>
+            <option value="never">Nunca — la cierro yo a mano</option>
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            La selección NUNCA vence por tiempo: se cierra cuando el trabajo con
+            el cliente termina.
           </p>
         </div>
 

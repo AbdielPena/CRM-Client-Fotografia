@@ -2760,6 +2760,37 @@ export async function getOriginalDownloadUrl(
  * marcan `expired` y se les pone la fecha para dejar constancia de cuándo fue.
  * La galería de ENTREGA no se toca: esa es del cliente y dura sus 6 meses.
  */
+/** Cuándo cierra la selección, según el plan de la sesión. */
+export type SelectionCloseTrigger = "prints_sent" | "delivered" | "never"
+
+/**
+ * Lee del PLAN de la sesión cuándo debe cerrarse su galería de selección.
+ * Por defecto "prints_sent": las impresiones son la última etapa.
+ */
+export async function getSelectionCloseTrigger(
+  studioId: string,
+  projectId: string,
+): Promise<SelectionCloseTrigger> {
+  const db = srvc() as unknown as SupabaseClient
+  const { data } = await db
+    .from("projects")
+    .select("package_id")
+    .eq("id", projectId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const packageId = (data as { package_id?: string | null } | null)?.package_id
+  if (!packageId) return "prints_sent"
+  const { data: pkg } = await db
+    .from("packages")
+    .select("selection_close_trigger")
+    .eq("id", packageId)
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const t = (pkg as { selection_close_trigger?: string | null } | null)
+    ?.selection_close_trigger
+  return t === "delivered" || t === "never" ? t : "prints_sent"
+}
+
 export async function closeSelectionGalleries(
   studioId: string,
   projectId: string,

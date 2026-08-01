@@ -88,6 +88,17 @@ export default async function PackagesSettingsPage() {
             profitAmount:
               (p as unknown as { profit_amount?: number | null })
                 .profit_amount ?? undefined,
+            // Vencimiento de galerías, por plan.
+            galleryAvailabilityDays:
+              (p as unknown as { gallery_availability_days?: number | null })
+                .gallery_availability_days ?? undefined,
+            selectionCloseTrigger:
+              ((p as unknown as { selection_close_trigger?: string | null })
+                .selection_close_trigger as
+                | "prints_sent"
+                | "delivered"
+                | "never"
+                | null) ?? undefined,
             includes: p.includes ? p.includes.join("\n") : undefined,
             isActive: p.is_active,
             contractTemplateId: p.default_contract_template_id ?? undefined,
