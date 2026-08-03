@@ -28,11 +28,23 @@ interface ContractSigningViewProps {
      *  degradado de marca con el logo. */
     studioBannerUrl?: string
   }
+  /**
+   * Si el estudio modificó el contrato después de que el cliente lo firmara,
+   * aquí viene el detalle. Se muestra ANTES del documento: nadie debe volver a
+   * firmar sin saber qué le cambiaron.
+   */
+  amendment?: {
+    version: number
+    summary: string
+    changes: Array<{ campo: string; antes: string; despues: string }>
+    created_at: string
+  } | null
 }
 
 export function ContractSigningView({
   token,
   contract,
+  amendment,
   returnTo,
 }: ContractSigningViewProps & { returnTo?: string }) {
   const [agreed, setAgreed] = useState(false)
@@ -191,6 +203,40 @@ export function ContractSigningView({
             acuerdo.
           </p>
         </div>
+
+        {/* Contrato modificado: qué cambió, antes que el documento. */}
+        {amendment && (
+          <div className="lx-card border-gold-300/70 bg-gold-50/60 p-6 dark:bg-gold-900/10">
+            <p className="lx-overline mb-1 text-gold-700 dark:text-gold-300">
+              Contrato actualizado
+            </p>
+            <p className="text-sm text-foreground">{amendment.summary}</p>
+            {amendment.changes.length > 0 && (
+              <ul className="mt-4 space-y-3">
+                {amendment.changes.map((ch, i) => (
+                  <li key={i}>
+                    <p className="lx-overline text-muted-foreground">
+                      {ch.campo}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap items-baseline gap-2">
+                      <span className="text-muted-foreground line-through">
+                        {ch.antes}
+                      </span>
+                      <span className="text-muted-foreground">→</span>
+                      <span className="font-serif text-xl font-semibold text-foreground">
+                        {ch.despues}
+                      </span>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-4 text-[13px] text-muted-foreground">
+              Como el documento cambió, necesitamos tu firma otra vez. Si algo no
+              te cuadra, escríbenos antes de firmar.
+            </p>
+          </div>
+        )}
 
         {/* Body — HTML ya tiene placeholders y firma del studio renderizados */}
         <div className="lx-card p-8">

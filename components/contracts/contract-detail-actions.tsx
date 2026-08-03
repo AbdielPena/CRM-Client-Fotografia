@@ -1,23 +1,37 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { MoreHorizontal, Send, XCircle, Trash2 } from "lucide-react"
+import { MoreHorizontal, Send, XCircle, Trash2, FileSignature } from "lucide-react"
 import { sendContractAction, voidContractAction, deleteContractAction } from "@/server/actions/contract.actions"
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
+import { AmendContractDialog } from "@/components/contracts/amend-contract-dialog"
 import { toast } from "sonner"
 
 interface ContractDetailActionsProps {
-  contract: { id: string; title: string; status: string }
+  contract: {
+    id: string
+    title: string
+    status: string
+    clientName?: string | null
+    totalAmount?: number | null
+    currency?: string | null
+  }
 }
 
 export function ContractDetailActions({ contract }: ContractDetailActionsProps) {
   const [open, setOpen] = useState(false)
   const [voidOpen, setVoidOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [amendOpen, setAmendOpen] = useState(false)
   const [isSending, startSend] = useTransition()
 
   const canSend = contract.status === "draft"
   const canVoid = ["draft", "sent"].includes(contract.status)
+  // Modificar tiene sentido en cuanto el contrato salió del borrador: si sigue
+  // en borrador se edita directo, no hace falta avisar ni volver a firmar.
+  const canAmend = ["sent", "signed", "viewed", "expired"].includes(
+    contract.status,
+  )
 
   const handleSend = () => {
     startSend(async () => {
@@ -52,7 +66,19 @@ export function ContractDetailActions({ contract }: ContractDetailActionsProps) 
         {open && (
           <>
             <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-            <div className="absolute right-0 top-full mt-1 w-48 bg-card rounded-lg border border-border shadow-lg z-20 py-1">
+            <div className="absolute right-0 top-full mt-1 w-56 bg-card rounded-lg border border-border shadow-lg z-20 py-1">
+              {canAmend && (
+                <button
+                  onClick={() => {
+                    setOpen(false)
+                    setAmendOpen(true)
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <FileSignature className="h-4 w-4" />
+                  Modificar contrato
+                </button>
+              )}
               {canVoid && (
                 <button
                   onClick={() => {
@@ -101,6 +127,16 @@ export function ContractDetailActions({ contract }: ContractDetailActionsProps) 
         confirmLabel="Eliminar"
         danger
         onConfirm={() => deleteContractAction(contract.id)}
+      />
+      <AmendContractDialog
+        contractId={contract.id}
+        contractTitle={contract.title}
+        clientName={contract.clientName}
+        currentTotal={contract.totalAmount}
+        currency={contract.currency ?? "DOP"}
+        wasSigned={contract.status === "signed"}
+        open={amendOpen}
+        onClose={() => setAmendOpen(false)}
       />
     </div>
   )

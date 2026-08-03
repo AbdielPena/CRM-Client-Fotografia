@@ -115,6 +115,13 @@ export default async function ContractSigningPage({
     return <InvalidLink />
   }
 
+  // Si el estudio modificó el contrato, el cliente tiene que ver QUÉ cambió
+  // antes de volver a firmar. Solo la última modificación: es la que aplica.
+  const { getPublicAmendmentNotice } = await import(
+    "@/server/services/contract-amend.service"
+  )
+  const amendment = await getPublicAmendmentNotice(params.token)
+
   // Renderizar body con placeholders + firma del studio (si ya firmó)
   const { vars } = await buildContractPlaceholders(contract.id as string)
   const rendered = renderPlaceholders((contract.body_html as string) ?? "", vars)
@@ -135,6 +142,7 @@ export default async function ContractSigningPage({
   return (
     <ContractSigningView
       token={params.token}
+      amendment={amendment}
       returnTo={
         searchParams?.return?.startsWith("/b/") ? searchParams.return : undefined
       }

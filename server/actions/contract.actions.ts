@@ -78,6 +78,55 @@ export async function deleteContractAction(contractId: string) {
   redirect("/contracts")
 }
 
+/**
+ * Modificar un contrato ya enviado o firmado: ajusta el monto si hace falta,
+ * archiva la firma anterior, deja el contrato pendiente otra vez y le explica
+ * al cliente qué cambió.
+ */
+const amendSchema = z.object({
+  summary: z
+    .string()
+    .trim()
+    .min(5, "Explica en una frase qué cambió — lo va a leer el cliente")
+    .max(500, "Máximo 500 caracteres"),
+  newTotal: z.number().min(0).max(100_000_000).nullable(),
+  notifyClient: z.boolean(),
+})
+
+export async function amendContractAction(
+  contractId: string,
+  input: { summary: string; newTotal: number | null; notifyClient: boolean },
+) {
+  const session = await requireStudioAuth()
+
+  const parsed = amendSchema.safeParse(input)
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      error:
+        parsed.error.issues[0]?.message ?? "Revisa los datos del formulario.",
+    }
+  }
+
+  const { amendContract } = await import(
+    "@/server/services/contract-amend.service"
+  )
+  const res = await amendContract({
+    studioId: session.studioId,
+    contractId,
+    actorId: session.userId,
+    summary: parsed.data.summary,
+    newTotal: parsed.data.newTotal,
+    notifyClient: parsed.data.notifyClient,
+  })
+
+  revalidatePath(`/contracts/${contractId}`)
+  revalidatePath("/contracts")
+  revalidatePath("/projects")
+  revalidatePath("/invoices")
+  return res
+}
+
 // ----------------------------------------------------------------------------
 // Plantillas de contrato — acciones admin
 // ----------------------------------------------------------------------------

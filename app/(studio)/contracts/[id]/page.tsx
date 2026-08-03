@@ -63,6 +63,30 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
   const signingUrl = signingToken ? `${appUrl}/sign/${signingToken}` : null
 
+  // Monto vigente de la sesión + historial de modificaciones. El monto sale de
+  // las facturas, que es de donde lo lee el propio contrato: así el diálogo de
+  // "Modificar" muestra exactamente el número que el cliente está viendo.
+  const projectId = (project?.id as string | undefined) ?? null
+  let montoActual: number | null = null
+  let monedaActual = "DOP"
+  if (projectId) {
+    const { data: invs } = await supabase
+      .from("invoices")
+      .select("total, currency")
+      .eq("studio_id", session.studioId)
+      .eq("project_id", projectId)
+      .is("deleted_at", null)
+    const filas = (invs ?? []) as Array<{ total: number | string; currency: string | null }>
+    if (filas.length > 0) {
+      montoActual = filas.reduce((s, i) => s + Number(i.total ?? 0), 0)
+      monedaActual = filas[0].currency ?? "DOP"
+    }
+  }
+  const { getContractAmendments } = await import(
+    "@/server/services/contract-amend.service"
+  )
+  const amendments = await getContractAmendments(session.studioId, params.id)
+
   return (
     <>
       <AppTopbar
@@ -78,6 +102,9 @@ export default async function ContractDetailPage({ params }: { params: { id: str
                 id: contract.id as string,
                 title: contract.title as string,
                 status,
+                clientName: (client?.name as string | undefined) ?? null,
+                totalAmount: montoActual,
+                currency: monedaActual,
               }}
             />
           </>
@@ -247,6 +274,64 @@ export default async function ContractDetailPage({ params }: { params: { id: str
               )}
             </div>
           </div>
+
+          {/* Modificaciones: cada vez que el contrato cambió después de salir
+              del borrador, con la firma que quedó anulada. Es la prueba de qué
+              aceptó el cliente y cuándo. */}
+          {amendments.length > 0 && (
+            <div className="sf-card p-5">
+              <h2 className="mb-1 text-sm font-semibold text-foreground">
+                Modificaciones
+              </h2>
+              <p className="mb-3 text-[11.5px] text-muted-foreground">
+                El cliente recibió el detalle de cada una y volvió a firmar.
+              </p>
+              <ol className="space-y-3">
+                {amendments.map((a) => (
+                  <li
+                    key={a.id}
+                    className="rounded-lg border border-border bg-muted/30 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                        Versión {a.version}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {formatDateShort(new Date(a.created_at))}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[12.5px] text-foreground">
+                      {a.summary}
+                    </p>
+                    {a.changes?.length > 0 && (
+                      <ul className="mt-2 space-y-1">
+                        {a.changes.map((ch, i) => (
+                          <li key={i} className="text-[11.5px]">
+                            <span className="text-muted-foreground">
+                              {ch.campo}:{" "}
+                            </span>
+                            <span className="text-muted-foreground line-through">
+                              {ch.antes}
+                            </span>
+                            <span className="text-muted-foreground"> → </span>
+                            <span className="font-medium text-foreground">
+                              {ch.despues}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {a.previous_signed_at && (
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        Anuló la firma de {a.previous_signed_name ?? "el cliente"} del{" "}
+                        {formatDateShort(new Date(a.previous_signed_at))}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
         </div>
       </div>
       </div>
