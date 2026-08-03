@@ -10,12 +10,14 @@ import type { Metadata } from "next"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { getFinTitheRecords } from "@/server/services/fin-tithe.service"
+import { getPlanProfitTithe } from "@/server/services/plan-profit-tithe.service"
 import { formatCurrency, formatDate } from "@/lib/utils/currency"
 import { d } from "@/lib/decimal"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/shared/empty-state"
+import { PlanProfitTithePanel } from "@/components/finance/plan-profit-tithe-panel"
 import {
   DataTable,
   DataTableBody,
@@ -32,9 +34,10 @@ export const metadata: Metadata = { title: "Finanzas · Diezmo" }
 export default async function FinanceTithePage() {
   const session = await requireStudioAuth()
 
-  const [records, unread] = await Promise.all([
+  const [records, unread, planTithe] = await Promise.all([
     getFinTitheRecords(session.studioId, { pageSize: 100 }),
     countUnreadNotifications(session.studioId),
+    getPlanProfitTithe(session.studioId),
   ])
 
   // KPIs
@@ -58,7 +61,20 @@ export default async function FinanceTithePage() {
         actions={<ComputeTitheButton />}
       />
 
-      <main className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-5xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+        <PlanProfitTithePanel data={planTithe} />
+
+        <div className="space-y-4 border-t border-border pt-8">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">
+              Diezmo calculado sobre ingresos
+            </h2>
+            <p className="mt-0.5 text-[13px] text-muted-foreground">
+              El otro cálculo: el 10% de las transacciones marcadas con
+              «aplica diezmo». Corre solo el día 28 de cada mes.
+            </p>
+          </div>
+
         {records.items.length > 0 && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <KpiCard
@@ -175,6 +191,7 @@ export default async function FinanceTithePage() {
               con tag de no-business para no afectar utilidad operacional.
             </li>
           </ul>
+          </div>
         </div>
       </main>
     </>
