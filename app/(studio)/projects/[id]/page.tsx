@@ -936,19 +936,41 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </span>
                 </div>
               )}
-              {pkg && (
-                <div className="flex items-start gap-3">
-                  <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <span className="block text-foreground">{String(pkg.name)}</span>
-                    {pkg.price != null && (
-                      <span className="text-xs text-muted-foreground">
-                        Paquete · {formatCurrency(Number(pkg.price), (pkg.currency as string) ?? currency)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
+              {pkg &&
+                (() => {
+                  // El precio del PLAN sube con el tiempo; esta sesión se cobra
+                  // al que se pactó con la clienta. Antes se mostraba el de
+                  // lista de hoy y parecía que a ella también le había subido.
+                  const pactado = totalAmount != null ? Number(totalAmount) : null
+                  const lista = pkg.price != null ? Number(pkg.price) : null
+                  const moneda = (pkg.currency as string) ?? currency
+                  const subio = pactado != null && lista != null && lista !== pactado
+                  return (
+                    <div className="flex items-start gap-3">
+                      <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <span className="block text-foreground">{String(pkg.name)}</span>
+                        {pactado != null ? (
+                          <span className="text-xs text-muted-foreground">
+                            Precio pactado · {formatCurrency(pactado, moneda)}
+                            {subio && (
+                              <span className="text-muted-foreground/70">
+                                {" "}
+                                · hoy el plan cuesta {formatCurrency(lista, moneda)}
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          lista != null && (
+                            <span className="text-xs text-muted-foreground">
+                              Paquete · {formatCurrency(lista, moneda)}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
             </dl>
             {/* Cambiar de plan: reajusta monto, factura, entrega, categoría y nombre */}
             {planOptions.length > 0 && (
