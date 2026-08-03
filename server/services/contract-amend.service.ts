@@ -63,6 +63,12 @@ async function ajustarMontos(
   studioId: string,
   projectId: string,
   nuevoTotal: number,
+  /**
+   * `false` = solo comprobar que se puede y decir cuánto dice hoy. Se llama así
+   * ANTES de tocar el contrato: si el contrato luego no se puede reabrir, el
+   * dinero no se movió y no queda nada a medias.
+   */
+  aplicar: boolean,
 ): Promise<{ ok: boolean; error?: string; antes: number; currency: string }> {
   const sb = untypedService()
   const { data: invRaw } = await sb
@@ -118,6 +124,8 @@ async function ajustarMontos(
     }
   }
 
+  if (!aplicar) return { ok: true, antes, currency }
+
   // Se reparte proporcional a lo que cada factura pendiente pesaba antes; si
   // todas estaban en cero (raro), se divide en partes iguales.
   const pesoTotal = tocables.reduce((s, i) => s + Number(i.total ?? 0), 0)
@@ -137,28 +145,41 @@ async function ajustarMontos(
         )
     asignado += parte
 
-    await sb
+    // OJO: `balance_due` es una columna CALCULADA (total − amount_paid). Si se
+    // intenta escribir, Postgres rechaza el UPDATE entero.
+    const { error: invErr } = await sb
       .from("invoices")
-      .update({
-        subtotal: parte,
-        total: parte,
-        balance_due: parte,
-        updated_at: now,
-      })
+      .update({ subtotal: parte, total: parte, updated_at: now })
       .eq("id", inv.id)
       .eq("studio_id", studioId)
+    if (invErr) {
+      return {
+        ok: false,
+        antes,
+        currency,
+        error: `No se pudo actualizar la factura: ${invErr.message}`,
+      }
+    }
 
-    // Las líneas del documento tienen que decir lo mismo que el total.
+    // Las líneas del documento tienen que decir lo mismo que el total. Aquí el
+    // que se escribe es `unit_price`: `amount` también es calculado.
     const { data: itemsRaw } = await sb
       .from("invoice_items")
-      .select("id")
+      .select("id, quantity")
       .eq("invoice_id", inv.id)
-    const items = (itemsRaw ?? []) as Array<{ id: string }>
+    const items = (itemsRaw ?? []) as Array<{
+      id: string
+      quantity: number | string | null
+    }>
     if (items.length === 1) {
-      await sb
+      const cant = Number(items[0].quantity ?? 1) || 1
+      const { error: itemErr } = await sb
         .from("invoice_items")
-        .update({ unit_price: parte, total: parte })
+        .update({ unit_price: Number((parte / cant).toFixed(2)) })
         .eq("id", items[0].id)
+      if (itemErr) {
+        console.error("[amendContract] línea de factura no se actualizó", itemErr)
+      }
     }
 
     // Espejo a la app de Facturación (best-effort: nunca bloquea).
@@ -232,10 +253,16 @@ export async function amendContract(
   }
 
   const changes: AmendChange[] = []
+  const cambiaMonto = input.newTotal != null && contrato.project_id != null
 
-  // ── 1. El dinero, si toca ────────────────────────────────────────────────
-  if (input.newTotal != null && contrato.project_id) {
-    const r = await ajustarMontos(studioId, contrato.project_id, input.newTotal)
+  // ── 1. Comprobar el dinero SIN tocarlo todavía ───────────────────────────
+  if (cambiaMonto) {
+    const r = await ajustarMontos(
+      studioId,
+      contrato.project_id as string,
+      input.newTotal as number,
+      false,
+    )
     if (!r.ok) {
       return {
         ok: false,
@@ -250,34 +277,8 @@ export async function amendContract(
       changes.push({
         campo: "Monto total de los servicios",
         antes: money(r.antes, r.currency),
-        despues: money(input.newTotal, r.currency),
+        despues: money(input.newTotal as number, r.currency),
       })
-    }
-    // La sesión y la reserva tienen que contar lo mismo que la factura.
-    await sb
-      .from("projects")
-      .update({ total_amount: input.newTotal, updated_at: new Date().toISOString() })
-      .eq("id", contrato.project_id)
-      .eq("studio_id", studioId)
-
-    const { data: brRaw } = await sb
-      .from("booking_requests")
-      .select("id, pricing_snapshot")
-      .eq("project_id", contrato.project_id)
-      .maybeSingle()
-    const br = brRaw as {
-      id: string
-      pricing_snapshot: Record<string, unknown> | null
-    } | null
-    if (br) {
-      const snap = { ...(br.pricing_snapshot ?? {}) }
-      const pct = Number(snap.deposit_percent ?? 50)
-      snap.price = input.newTotal
-      snap.deposit_amount = Number(((input.newTotal * pct) / 100).toFixed(2))
-      await sb
-        .from("booking_requests")
-        .update({ pricing_snapshot: snap })
-        .eq("id", br.id)
     }
   }
 
@@ -311,7 +312,7 @@ export async function amendContract(
 
   // ── 3. El contrato vuelve a estar pendiente (mismo enlace) ───────────────
   const now = new Date().toISOString()
-  const { data: upd } = await svc
+  const { data: upd, error: updErr } = await svc
     .from("contracts")
     .update({
       status: "sent",
@@ -323,7 +324,9 @@ export async function amendContract(
       signed_user_agent: null,
       signature_image_url: null,
       evidence_hash: null,
-      body_snapshot: null,
+      // `body_snapshot` NO se limpia: la columna no admite nulo, y de todos
+      // modos la copia de lo firmado ya quedó archivada en la modificación.
+      // Al volver a firmar, signContract la sobreescribe con el texto vigente.
       // La firma del estudio también cae: el documento es otro.
       studio_signed_at: null,
       studio_signed_by_user_id: null,
@@ -335,16 +338,81 @@ export async function amendContract(
     .eq("id", contractId)
     .eq("studio_id", studioId)
     .select("id")
-  // RLS bloqueada devuelve 0 filas SIN error: por eso se comprueba el conteo.
-  if (!upd || upd.length === 0) {
-    throwServiceError(
-      "CONTRACT_AMEND_FAILED",
-      new Error("no se pudo reabrir el contrato para firma"),
-      { contractId },
-    )
+
+  // Si no se pudo reabrir, la modificación NO ocurrió: se borra la constancia
+  // que se acababa de insertar para no dejar un historial que miente. Y se
+  // devuelve el motivo REAL de la base — tragarse ese mensaje fue lo que hizo
+  // que este error apareciera como "algo salió mal" sin explicación.
+  if (updErr || !upd || upd.length === 0) {
+    await sb.from("contract_amendments").delete().eq("contract_id", contractId).eq("version", version)
+    const motivo =
+      updErr?.message ?? "el contrato no admitió volver a pendiente de firma"
+    console.error("[amendContract] no se pudo reabrir", { contractId, motivo })
+    return {
+      ok: false,
+      version: 0,
+      changes: [],
+      clientNotified: false,
+      signUrl: null,
+      error: `No se pudo reabrir el contrato para firma: ${motivo}`,
+    }
   }
 
-  // ── 4. Avisarle al cliente qué cambió ────────────────────────────────────
+  // ── 4. Ahora sí, mover el dinero ─────────────────────────────────────────
+  // Va después del contrato a propósito: si reabrirlo hubiera fallado, la
+  // factura del cliente seguiría intacta.
+  if (cambiaMonto) {
+    const r = await ajustarMontos(
+      studioId,
+      contrato.project_id as string,
+      input.newTotal as number,
+      true,
+    )
+    if (!r.ok) {
+      console.error("[amendContract] el monto no se pudo aplicar", r.error)
+      return {
+        ok: false,
+        version,
+        changes,
+        clientNotified: false,
+        signUrl: null,
+        error: `El contrato quedó pendiente de firma, pero el monto no se pudo cambiar: ${r.error}`,
+      }
+    }
+    // La sesión y la reserva tienen que contar lo mismo que la factura.
+    await sb
+      .from("projects")
+      .update({
+        total_amount: input.newTotal,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", contrato.project_id as string)
+      .eq("studio_id", studioId)
+
+    const { data: brRaw } = await sb
+      .from("booking_requests")
+      .select("id, pricing_snapshot")
+      .eq("project_id", contrato.project_id as string)
+      .maybeSingle()
+    const br = brRaw as {
+      id: string
+      pricing_snapshot: Record<string, unknown> | null
+    } | null
+    if (br) {
+      const snap = { ...(br.pricing_snapshot ?? {}) }
+      const pct = Number(snap.deposit_percent ?? 50)
+      snap.price = input.newTotal
+      snap.deposit_amount = Number(
+        (((input.newTotal as number) * pct) / 100).toFixed(2),
+      )
+      await sb
+        .from("booking_requests")
+        .update({ pricing_snapshot: snap })
+        .eq("id", br.id)
+    }
+  }
+
+  // ── 5. Avisarle al cliente qué cambió ────────────────────────────────────
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://my.abbypixel.com"
   const signUrl = contrato.signing_token
     ? `${base}/sign/${contrato.signing_token}`
