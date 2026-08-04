@@ -151,6 +151,12 @@ export async function getTasks(
     priority?: TaskPriority
     /** true = solo tareas sin entidad vinculada (personales). */
     noEntity?: boolean
+    /**
+     * Etapa del flujo (`tasks.workflow_stage`). Sirve para separar las dos
+     * entregas: `send_prints` son las IMPRESIONES, `deliver_photos` /
+     * `send_selection` la parte digital. Acepta varias.
+     */
+    workflowStage?: string | string[]
     overdue?: boolean
     search?: string
     page?: number
@@ -180,6 +186,11 @@ export async function getTasks(
   if (opts.entityId) query = query.eq("entity_id", opts.entityId)
   if (opts.priority) query = query.eq("priority", opts.priority)
   if (opts.noEntity) query = query.is("entity_id", null)
+  if (opts.workflowStage) {
+    query = Array.isArray(opts.workflowStage)
+      ? query.in("workflow_stage", opts.workflowStage)
+      : query.eq("workflow_stage", opts.workflowStage)
+  }
   if (opts.overdue) {
     const today = new Date().toISOString().slice(0, 10)
     query = query

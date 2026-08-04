@@ -13,7 +13,7 @@ import {
   getOnboardingSteps,
 } from "@/server/services/onboarding.service"
 import { countUnreadNotifications } from "@/server/services/notification.service"
-import { listUpcomingDeliveryEntries } from "@/server/services/delivery.service"
+import { listUpcomingDeliveriesByTrack } from "@/server/services/delivery.service"
 import { UpcomingDeliveriesAside } from "@/components/deliveries/upcoming-deliveries-aside"
 import { formatDateShort } from "@/lib/utils/currency"
 
@@ -123,7 +123,10 @@ export default async function DashboardPage() {
     getDashboardData(session.studioId),
     countUnreadNotifications(session.studioId),
     getOnboardingSteps(session.studioId).catch(() => []),
-    listUpcomingDeliveryEntries(session.studioId, { limit: 8 }).catch(() => []),
+    listUpcomingDeliveriesByTrack(session.studioId, { limit: 5 }).catch(() => ({
+      digital: [],
+      prints: [],
+    })),
     getTasksThisWeek(session.studioId, 7).catch(() => []),
     getRecentActivity(session.studioId, 10).catch(() => []),
     listStudioPrintOverview(session.studioId).catch(() => []),
@@ -313,14 +316,18 @@ export default async function DashboardPage() {
           </div>
 
           {/* ─── Próximas entregas (ordenadas por fecha, incl. galerías) ── */}
-          {upcomingEntries.length > 0 && (
+          {upcomingEntries.digital.length + upcomingEntries.prints.length > 0 && (
             <DashboardCard
               title="Próximas entregas"
               href="/deliveries"
               hrefLabel="Ver todas"
               delay={0.38}
             >
-              <UpcomingDeliveriesAside entries={upcomingEntries} showHeader={false} />
+              <UpcomingDeliveriesAside
+                digital={upcomingEntries.digital}
+                prints={upcomingEntries.prints}
+                showHeader={false}
+              />
             </DashboardCard>
           )}
 

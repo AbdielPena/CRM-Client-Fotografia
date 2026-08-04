@@ -40,7 +40,7 @@ import {
   ProjectKanbanView,
   type ProjectCard,
 } from "@/components/projects/project-kanban-view"
-import { listUpcomingDeliveryEntries } from "@/server/services/delivery.service"
+import { listUpcomingDeliveriesByTrack } from "@/server/services/delivery.service"
 import { UpcomingDeliveriesAside } from "@/components/deliveries/upcoming-deliveries-aside"
 
 export const metadata: Metadata = { title: "Sesiones" }
@@ -378,10 +378,12 @@ export default async function ProjectsPage({
     () => [],
   )
 
-  // Próximas entregas (proyectos + galerías con fecha) para la lista lateral.
-  const upcomingEntries = await listUpcomingDeliveryEntries(session.studioId, {
-    limit: 12,
-  }).catch(() => [] as Awaited<ReturnType<typeof listUpcomingDeliveryEntries>>)
+  // Próximas entregas para la lista lateral, separadas en DIGITALES (fotos por
+  // la galería) e IMPRESIONES (lo físico): son dos plazos distintos y se
+  // trabajan aparte. El límite es por lista, no del total.
+  const upcomingEntries = await listUpcomingDeliveriesByTrack(session.studioId, {
+    limit: 8,
+  }).catch(() => ({ digital: [], prints: [] }))
 
   return (
     <>
@@ -769,7 +771,10 @@ export default async function ProjectsPage({
 
         <aside className="hidden w-80 shrink-0 xl:block">
           <div className="sticky top-6 rounded-xl border border-border bg-card p-5">
-            <UpcomingDeliveriesAside entries={upcomingEntries} />
+            <UpcomingDeliveriesAside
+              digital={upcomingEntries.digital}
+              prints={upcomingEntries.prints}
+            />
           </div>
         </aside>
       </div>

@@ -46,6 +46,7 @@ export default async function TasksPage({
     priority?: string
     type?: string
     personal?: string
+    stage?: string
     q?: string
   }
 }) {
@@ -224,6 +225,7 @@ async function AllView({
     priority?: string
     type?: string
     personal?: string
+    stage?: string
     q?: string
   }
 }) {
@@ -239,6 +241,14 @@ async function AllView({
   const assignedToMe = searchParams?.assignee === "me"
   const type = searchParams?.type // client | project | ...
   const personal = searchParams?.personal === "1"
+  // Etapa del flujo: separa la parte DIGITAL (enviar la seleccion) de las
+  // IMPRESIONES, que tienen su propio plazo y se trabajan semanas despues.
+  const validStage = ["send_selection", "send_prints"] as const
+  const stage = validStage.includes(
+    searchParams?.stage as (typeof validStage)[number],
+  )
+    ? (searchParams!.stage as (typeof validStage)[number])
+    : undefined
 
   const [tasks, allTasksRes, pendingRes, overdueRes, myTasksRes] = await Promise.all([
     getTasks(studioId, {
@@ -247,6 +257,7 @@ async function AllView({
       priority,
       entityType: type || undefined,
       noEntity: personal || undefined,
+      workflowStage: stage,
       overdue,
       search: searchParams?.q,
       pageSize: 100,
@@ -255,6 +266,19 @@ async function AllView({
     getTasks(studioId, { status: "pendiente", pageSize: 1 }),
     getTasks(studioId, { overdue: true, pageSize: 1 }),
     getTasks(studioId, { assignedToUserId: userId, pageSize: 1 }),
+  ])
+  // Cuantas quedan abiertas de cada entrega, para ponerlo en el chip.
+  const [selPend, printPend] = await Promise.all([
+    getTasks(studioId, {
+      workflowStage: "send_selection",
+      status: "pendiente",
+      pageSize: 1,
+    }),
+    getTasks(studioId, {
+      workflowStage: "send_prints",
+      status: "pendiente",
+      pageSize: 1,
+    }),
   ])
 
   const DONE = new Set(["completada", "cancelada"])
@@ -268,7 +292,7 @@ async function AllView({
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Kpi label="Total" value={allTasksRes.total} icon={<CheckSquare className="size-4" />} tone="neutral" href="/tasks?view=all" active={!status && !overdue && !assignedToMe && !priority && !type && !personal} />
+        <Kpi label="Total" value={allTasksRes.total} icon={<CheckSquare className="size-4" />} tone="neutral" href="/tasks?view=all" active={!status && !overdue && !assignedToMe && !priority && !type && !personal && !stage} />
         <Kpi label="Pendientes" value={pendingRes.total} icon={<Clock className="size-4" />} tone="warning" href={base({ status: "pendiente" })} active={status === "pendiente"} />
         <Kpi label="Atrasadas" value={overdueRes.total} icon={<AlertCircle className="size-4" />} tone="danger" href={base({ overdue: "1" })} active={overdue} />
         <Kpi label="Asignadas a mí" value={myTasksRes.total} icon={<CheckSquare className="size-4" />} tone="neutral" href={base({ assignee: "me" })} active={assignedToMe} />
@@ -282,6 +306,17 @@ async function AllView({
         <span className="mx-1 self-center text-muted-foreground/40">|</span>
         <Chip label="🔴 Urgente" href={base({ priority: "urgent" })} active={priority === "urgent"} />
         <Chip label="🟠 Alta" href={base({ priority: "high" })} active={priority === "high"} />
+        <span className="mx-1 self-center text-muted-foreground/40">|</span>
+        <Chip
+          label={`📸 Selección${selPend.total ? ` (${selPend.total})` : ""}`}
+          href={base({ stage: "send_selection" })}
+          active={stage === "send_selection"}
+        />
+        <Chip
+          label={`🖨️ Impresiones${printPend.total ? ` (${printPend.total})` : ""}`}
+          href={base({ stage: "send_prints" })}
+          active={stage === "send_prints"}
+        />
         <span className="mx-1 self-center text-muted-foreground/40">|</span>
         <Chip label="Cliente" href={base({ type: "client" })} active={type === "client"} />
         <Chip label="Proyecto" href={base({ type: "project" })} active={type === "project"} />

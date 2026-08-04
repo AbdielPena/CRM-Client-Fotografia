@@ -2,6 +2,7 @@ import "server-only"
 
 import { createSupabaseServerClient } from "@/server/supabase/server"
 import { createSupabaseServiceClient } from "@/server/supabase/service"
+import { untypedServer } from "@/server/supabase/untyped"
 import { throwServiceError } from "@/lib/utils/api-error"
 import type { CalendarEventRow } from "./google-calendar.service"
 
@@ -248,9 +249,19 @@ export async function getDeliveryStats(studioId: string): Promise<{
 
 export type UpcomingEntryKind = "project" | "gallery"
 
+/**
+ * Qué se entrega. Son DOS momentos distintos con plazos y anclas distintas, y
+ * el dueño los trabaja por separado: primero manda las fotos digitales, y
+ * semanas después las impresiones. Mezclarlos en una sola lista escondía las
+ * impresiones atrasadas entre entregas digitales que aún no tocaban.
+ */
+export type DeliveryTrack = "digital" | "prints"
+
 export interface UpcomingDeliveryEntry {
   id: string
   kind: UpcomingEntryKind
+  /** "digital" = fotos por la galería · "prints" = impresiones físicas. */
+  track: DeliveryTrack
   title: string // nombre del cliente (proyecto) o nombre de la galería
   subtitle: string | null // nombre de la sesión / "Galería"
   date: string | null // fecha de entrega (YYYY-MM-DD)
@@ -277,6 +288,7 @@ export async function listUpcomingDeliveryEntries(
   const projectEntries: UpcomingDeliveryEntry[] = projectDeliveries.map((d) => ({
     id: `delivery-${d.id}`,
     kind: "project",
+    track: "digital",
     title: d.clientName,
     subtitle: d.projectName,
     date: d.estimatedDeliveryDate,
@@ -309,6 +321,7 @@ export async function listUpcomingDeliveryEntries(
     return {
       id: `gallery-${g.id}`,
       kind: "gallery",
+      track: "digital",
       title: g.name,
       subtitle: "Galería",
       date: g.delivery_date,
@@ -318,7 +331,56 @@ export async function listUpcomingDeliveryEntries(
     }
   })
 
-  const all = [...projectEntries, ...galleryEntries]
+  // (c) IMPRESIONES pendientes. No viven en `client_deliveries`: son la tarea
+  //     "Enviar impresiones", que nace al publicar la galería final con su
+  //     propio plazo (`service_categories.print_delivery_days`). Por eso se leen
+  //     de `tasks` y no del mismo sitio que las digitales.
+  const { data: printRows } = await untypedServer()
+    .from("tasks")
+    .select(
+      "id, due_date, entity_id, project:projects(id, name, client:clients(name))",
+    )
+    .eq("studio_id", studioId)
+    .eq("workflow_stage", "send_prints")
+    .eq("entity_type", "project")
+    .is("deleted_at", null)
+    .not("status", "in", '("completada","cancelada")')
+
+  const printEntries: UpcomingDeliveryEntry[] = (
+    (printRows as Array<{
+      id: string
+      due_date: string | null
+      entity_id: string | null
+      project: unknown
+    }> | null) ?? []
+  ).map((t) => {
+    const proj = (Array.isArray(t.project) ? t.project[0] : t.project) as
+      | { id?: string; name?: string; client?: unknown }
+      | null
+    const cli = (Array.isArray(proj?.client) ? proj?.client[0] : proj?.client) as
+      | { name?: string }
+      | null
+    const fecha = t.due_date ? t.due_date.slice(0, 10) : null
+    const computed = deriveDeliveryComputed({
+      status: "pendiente",
+      birthday: null,
+      estimatedDeliveryDate: fecha,
+      today,
+    })
+    return {
+      id: `prints-${t.id}`,
+      kind: "project",
+      track: "prints",
+      title: cli?.name ?? proj?.name ?? "Impresiones",
+      subtitle: proj?.name ?? "Impresiones",
+      date: fecha,
+      priority: computed.priority,
+      overdue: computed.overdue,
+      href: t.entity_id ? `/projects/${t.entity_id}` : "/tasks",
+    }
+  })
+
+  const all = [...projectEntries, ...galleryEntries, ...printEntries]
   // Orden por fecha ascendente (más cercana / vencida primero); sin fecha al final.
   all.sort((a, b) => {
     if (a.date && b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0
@@ -328,6 +390,28 @@ export async function listUpcomingDeliveryEntries(
   })
 
   return opts.limit ? all.slice(0, opts.limit) : all
+}
+
+/**
+ * Lo mismo, pero separado en las dos entregas que el dueño trabaja aparte:
+ * **digitales** (las fotos por la galería) e **impresiones** (lo físico). Cada
+ * lista va ordenada por su propia fecha, y el `limit` se aplica a cada una —
+ * si no, un montón de digitales lejanas taparían las impresiones de esta semana.
+ */
+export async function listUpcomingDeliveriesByTrack(
+  studioId: string,
+  opts: { limit?: number } = {},
+): Promise<{
+  digital: UpcomingDeliveryEntry[]
+  prints: UpcomingDeliveryEntry[]
+}> {
+  const all = await listUpcomingDeliveryEntries(studioId)
+  const corta = (xs: UpcomingDeliveryEntry[]) =>
+    opts.limit ? xs.slice(0, opts.limit) : xs
+  return {
+    digital: corta(all.filter((e) => e.track === "digital")),
+    prints: corta(all.filter((e) => e.track === "prints")),
+  }
 }
 
 /**
