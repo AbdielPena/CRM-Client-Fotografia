@@ -54,32 +54,51 @@ export async function runPrintSelectionReminders(): Promise<PrintReminderResult>
     errores: 0,
   }
 
-  // Galerías con impresiones habilitadas, ya entregadas y SIN selección enviada.
+  // Galerías ENTREGADAS sin selección enviada.
+  //
+  // OJO: NO se filtra por `print_selection_enabled`. Esa columna es solo una
+  // marca interna ("ya mandamos la invitación una vez") y está en falso en casi
+  // todas, incluso donde el cliente sí llegó a seleccionar. La regla de verdad
+  // —la misma que ve el cliente en su galería— es: el plan incluye impresiones
+  // Y ya hay fotos entregadas. Vive en `getGalleryPrintState`.
   const { data: galRaw } = await sb
     .from("galleries")
     .select(
-      "id, studio_id, name, client_id, delivery_ready_at, print_selection_enabled, print_submitted_at",
+      "id, studio_id, name, client_id, delivery_ready_at, gallery_type, print_submitted_at",
     )
-    .eq("print_selection_enabled", true)
     .is("print_submitted_at", null)
-    .not("delivery_ready_at", "is", null)
     .is("deleted_at", null)
+    .not("client_id", "is", null)
+    .or("delivery_ready_at.not.is.null,gallery_type.eq.final_delivery")
 
   const galerias = (galRaw ?? []) as Array<{
     id: string
     studio_id: string
     name: string | null
     client_id: string | null
-    delivery_ready_at: string
+    delivery_ready_at: string | null
   }>
-  res.candidatas = galerias.length
   if (galerias.length === 0) return res
 
   const hoy = hoyRD()
+  const { getGalleryPrintState } = await import("./print-selection.service")
 
   for (const g of galerias) {
     try {
-      if (diasDesde(g.delivery_ready_at) > MAX_DIAS) {
+      // ¿De verdad tiene algo que elegir? Si el plan no incluye impresiones, o
+      // todas son automáticas (se imprimen todas sin que él escoja), no hay
+      // nada que recordarle.
+      const estado = await getGalleryPrintState(g.id)
+      const tieneQueElegir =
+        !!estado &&
+        estado.enabled &&
+        !estado.submitted &&
+        estado.categories.some((c) => c.mode === "manual" && c.allowed > 0)
+      if (!tieneQueElegir) continue
+
+      res.candidatas += 1
+
+      if (g.delivery_ready_at && diasDesde(g.delivery_ready_at) > MAX_DIAS) {
         res.vencidas += 1
         continue
       }
