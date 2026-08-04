@@ -44,7 +44,14 @@ function diasDesde(iso: string): number {
   return Math.floor(ms / 86_400_000)
 }
 
-export async function runPrintSelectionReminders(): Promise<PrintReminderResult> {
+export async function runPrintSelectionReminders(
+  /**
+   * `dryRun` = calcular a quién le tocaría el recordatorio SIN mandar nada.
+   * Existe para poder verificar el barrido contra los datos reales sin
+   * escribirle a las clientas — probar esto en vivo cuesta correos de verdad.
+   */
+  opts: { dryRun?: boolean } = {},
+): Promise<PrintReminderResult> {
   const sb = untypedService()
   const res: PrintReminderResult = {
     candidatas: 0,
@@ -104,18 +111,33 @@ export async function runPrintSelectionReminders(): Promise<PrintReminderResult>
       }
 
       // ¿Ya salió el recordatorio hoy para esta galería?
-      const { count } = await sb
-        .from("emails")
+      //
+      // La tabla es `email_queue`, NO `emails`. Con el nombre equivocado la
+      // consulta fallaba en silencio (count=null → 0) y este freno no existía:
+      // cada corrida mandaba otro correo al mismo cliente.
+      const { count, error: errCola } = await sb
+        .from("email_queue")
         .select("id", { count: "exact", head: true })
         .eq("studio_id", g.studio_id)
         .eq("template_slug", "print_selection_reminder")
         .eq("related_entity_id", g.id)
         .gte("created_at", `${hoy}T00:00:00`)
+      if (errCola) {
+        // Ante la duda, NO se manda: mejor saltarse un recordatorio que
+        // duplicarle el correo a una clienta.
+        console.error("[print-reminder] no se pudo comprobar la cola", errCola)
+        res.errores += 1
+        continue
+      }
       if ((count ?? 0) > 0) {
         res.yaEnviadoHoy += 1
         continue
       }
 
+      if (opts.dryRun) {
+        res.enviados += 1 // "se le mandaría"
+        continue
+      }
       const { sendPrintSelectionReminder } = await import("./print-email.service")
       const ok = await sendPrintSelectionReminder(g.id)
       if (ok) res.enviados += 1

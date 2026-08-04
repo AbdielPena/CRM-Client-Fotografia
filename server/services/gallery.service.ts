@@ -2515,6 +2515,18 @@ export async function submitClientSelection(
     } catch (err) {
       console.error("[submitClientSelection] recomputeProjectDelivery falló:", err)
     }
+
+    // El cliente ya eligió → la sesión pasa a "En edición". Sin esto se quedaba
+    // en "Esperando selección" para siempre aunque la clienta hubiera enviado
+    // su selección hace días.
+    try {
+      const { advanceProjectStatus } = await import(
+        "./project-automation.service"
+      )
+      await advanceProjectStatus(gallery.studio_id, gallery.project_id, "edicion")
+    } catch (err) {
+      console.error("[submitClientSelection] mover a En edición falló:", err)
+    }
   }
 
   // Notificar al studio (best-effort)

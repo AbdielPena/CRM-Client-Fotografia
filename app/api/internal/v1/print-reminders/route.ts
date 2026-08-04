@@ -35,8 +35,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await runPrintSelectionReminders()
-    return NextResponse.json({ ok: true, ...result })
+    // `?dryRun=1` calcula a quién le tocaría SIN mandar nada. Sirve para
+    // verificar el barrido contra los datos reales sin escribirle a nadie.
+    const dryRun = new URL(req.url).searchParams.get("dryRun") === "1"
+    const result = await runPrintSelectionReminders({ dryRun })
+    return NextResponse.json({ ok: true, dryRun, ...result })
   } catch (e) {
     console.error("[print-reminders]", e)
     return NextResponse.json(
