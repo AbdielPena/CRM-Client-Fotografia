@@ -31,15 +31,36 @@ function escapeHtml(s: string): string {
 }
 
 export async function onPrintSelectionEnabled(galleryId: string): Promise<void> {
+  await enviarInvitacionImpresiones(galleryId, "print_selection_ready")
+}
+
+/**
+ * Recordatorio diario: el cliente ya tiene su galería final y sigue sin elegir
+ * sus impresiones. Mismo contenido y mismas variables que la invitación, pero
+ * con su propia plantilla editable — así el estudio puede insistir con otro
+ * tono sin tocar el correo original.
+ */
+export async function sendPrintSelectionReminder(
+  galleryId: string,
+): Promise<boolean> {
+  return await enviarInvitacionImpresiones(galleryId, "print_selection_reminder")
+}
+
+async function enviarInvitacionImpresiones(
+  galleryId: string,
+  slug: "print_selection_ready" | "print_selection_reminder",
+): Promise<boolean> {
   const sb = createSupabaseServiceClient()
   const { data: gRow } = await sb
     .from("galleries")
-    .select("id, studio_id, client_id, name, package_id, project_id")
+    .select(
+      "id, studio_id, client_id, name, package_id, project_id, delivery_ready_at",
+    )
     .eq("id", galleryId)
     .maybeSingle()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const g = gRow as any
-  if (!g?.client_id) return
+  if (!g?.client_id) return false
 
   const { data: clientRow } = await sb
     .from("clients")
@@ -48,7 +69,7 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
     .maybeSingle()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = clientRow as any
-  if (!client?.email) return
+  if (!client?.email) return false
 
   const { data: studioRow } = await sb
     .from("studios")
@@ -110,16 +131,28 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
   const token = (tokRow as { token?: string } | null)?.token
   if (token) galleryUrl = `${appUrl()}/g/${token}`
 
-  const catalog = TEMPLATE_CATALOG.print_selection_ready
+  const dias = g.delivery_ready_at
+    ? String(
+        Math.max(
+          0,
+          Math.floor(
+            (Date.now() - new Date(g.delivery_ready_at).getTime()) / 86400000,
+          ),
+        ),
+      )
+    : ""
+
+  const catalog = TEMPLATE_CATALOG[slug]
   const { subject, bodyHtml, fromName, replyTo } = await resolveTemplate(
     g.studio_id,
-    "print_selection_ready",
+    slug,
     {
       client_name: client.name ?? "",
       gallery_name: g.name ?? "",
       studio_name: studioName,
       plan_summary: planSummary,
       gallery_link: galleryUrl,
+      dias_desde_entrega: dias,
     },
     { subject: catalog.defaultSubject, bodyHtml: catalog.defaultBodyHtml },
   )
@@ -133,9 +166,11 @@ export async function onPrintSelectionEnabled(galleryId: string): Promise<void> 
     replyTo: replyTo ?? studio?.email ?? null,
     subject,
     bodyHtml,
+    templateSlug: slug,
     relatedEntityType: "gallery",
     relatedEntityId: galleryId,
   })
+  return true
 }
 
 // ---------------------------------------------------------------------------
