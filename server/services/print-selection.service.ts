@@ -386,7 +386,7 @@ export async function submitGalleryPrintSelection(input: {
   lock?: boolean
 }): Promise<{ ok: true }> {
   const sb = untypedService()
-  const { error } = await sb
+  const { data: upd, error } = await sb
     .from("galleries")
     .update({
       print_submitted_at: new Date().toISOString(),
@@ -394,7 +394,31 @@ export async function submitGalleryPrintSelection(input: {
       updated_at: new Date().toISOString(),
     })
     .eq("id", input.galleryId)
+    .select("studio_id, project_id")
   if (error) throw new PrintSelectionError("SUBMIT_FAILED", error.message)
+
+  // El cliente ya eligió qué quiere impreso → la sesión pasa a "Impresión /
+  // Producción". Sin esto la sesión se quedaba en "Entregado" y el estudio no
+  // veía en el tablero que ya tocaba mandar a imprimir.
+  const fila = (upd ?? [])[0] as
+    | { studio_id?: string; project_id?: string | null }
+    | undefined
+  if (fila?.studio_id && fila.project_id) {
+    try {
+      const { advanceProjectStatus } = await import(
+        "./project-automation.service"
+      )
+      await advanceProjectStatus(
+        fila.studio_id,
+        fila.project_id,
+        "impresion_produccion",
+      )
+    } catch (err) {
+      // Best-effort: que el cliente pueda confirmar aunque el tablero falle.
+      console.error("[print] mover a Impresión / Producción falló", err)
+    }
+  }
+
   return { ok: true }
 }
 

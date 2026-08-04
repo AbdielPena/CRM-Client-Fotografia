@@ -601,6 +601,21 @@ export async function changeTaskStatus(
   ) {
     void (async () => {
       try {
+        // Las impresiones ya salieron → la sesión pasa a "Impresión enviada".
+        // Es el paso 9 del flujo: antes se quedaba en "Impresión / Producción"
+        // aunque el estudio ya las hubiera entregado.
+        const { advanceProjectStatus } = await import(
+          "./project-automation.service"
+        )
+        await advanceProjectStatus(
+          studioId,
+          task.entity_id as string,
+          "impresion_enviada",
+        )
+      } catch (err) {
+        console.error("[task] mover a Impresión enviada falló", err)
+      }
+      try {
         const { maybeFinalizeClient } = await import("./project-automation.service")
         await maybeFinalizeClient(studioId, task.entity_id as string)
       } catch (err) {

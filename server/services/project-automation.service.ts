@@ -18,6 +18,12 @@ export type ProjectIntent =
   | "esperando_seleccion"
   | "edicion"
   | "entregado"
+  // Las dos etapas de IMPRESIÓN. Existían como columnas del tablero pero sin
+  // intención, así que nada podía mover una sesión ahí: el cliente elegía sus
+  // impresiones y la sesión se quedaba en "Entregado" para siempre.
+  | "impresion_produccion"
+  | "impresion_enviada"
+  | "completado"
 
 const INTENT_KEYWORDS: Record<ProjectIntent, string[]> = {
   consulta: ["consulta", "inquiry", "lead", "inicial"],
@@ -29,8 +35,14 @@ const INTENT_KEYWORDS: Record<ProjectIntent, string[]> = {
   reservado: ["reserv", "booked", "agendad", "confirm", "abonad"],
   sesion_realizada: ["sesion", "shoot", "captur", "realiz"],
   esperando_seleccion: ["esperand", "selecc", "waiting"],
+  // OJO: "produc" aquí es por "postproducción". Choca con "Impresión /
+  // Producción", así que las de impresión SIEMPRE deben resolverse por
+  // auto_intent explícito (que tiene prioridad), no por estas palabras.
   edicion: ["edici", "edit", "post", "produc"],
-  entregado: ["entreg", "delivered", "final", "complet"],
+  entregado: ["entreg", "delivered", "final"],
+  impresion_produccion: ["impresionproduccion", "impresionenproduccion"],
+  impresion_enviada: ["impresionenviada", "impresionesenviadas", "impresionentregada"],
+  completado: ["completad", "completed"],
 }
 
 function normalize(s: string): string {
@@ -71,6 +83,46 @@ async function findStatusLabelByIntent(
  * - Si el studio no tiene un label que matchee, no hace nada.
  * - Loggea pero nunca lanza al caller (best-effort).
  */
+/**
+ * Como `transitionProjectStatus`, pero SOLO hacia adelante en el tablero.
+ *
+ * Las etapas de impresión se disparan desde acciones del cliente (confirmar su
+ * selección) que se pueden repetir. Sin este freno, una sesión que ya estaba en
+ * "Impresión enviada" o "Completado" volvería atrás sola.
+ */
+export async function advanceProjectStatus(
+  studioId: string,
+  projectId: string,
+  intent: ProjectIntent,
+): Promise<{ moved: boolean; toLabel: string | null }> {
+  try {
+    const targetLabel = await findStatusLabelByIntent(studioId, intent)
+    if (!targetLabel) return { moved: false, toLabel: null }
+
+    const statuses = await getProjectStatuses(studioId)
+    const posDe = (label: string | null | undefined) =>
+      label ? (statuses.find((s) => s.label === label)?.position ?? -1) : -1
+
+    const supabase = createSupabaseServiceClient()
+    const { data: project } = await supabase
+      .from("projects")
+      .select("status")
+      .eq("id", projectId)
+      .eq("studio_id", studioId)
+      .maybeSingle()
+    const current = (project as { status: string | null } | null)?.status ?? null
+
+    // Si el estado actual no está en el tablero (o va más adelante), no se toca.
+    if (posDe(current) >= posDe(targetLabel)) {
+      return { moved: false, toLabel: current }
+    }
+    return await transitionProjectStatus(studioId, projectId, intent)
+  } catch (err) {
+    console.error("[automation] advanceProjectStatus falló", intent, err)
+    return { moved: false, toLabel: null }
+  }
+}
+
 export async function transitionProjectStatus(
   studioId: string,
   projectId: string,
