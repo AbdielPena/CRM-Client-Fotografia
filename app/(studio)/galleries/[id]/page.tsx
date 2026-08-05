@@ -286,11 +286,22 @@ export default async function GalleryDetailPage({
   )
   // Comentarios del cliente por foto (galería de selección) + miniatura de cada foto.
   const galleryComments = await getGalleryComments(galleryId).catch(() => [])
-  const thumbByAssetId = new Map(assetsWithUrls.map((a) => [a.id, a.thumbUrl]))
-  const assetComments = galleryComments.map((c) => ({
-    ...c,
-    thumbUrl: thumbByAssetId.get(c.assetId) ?? null,
-  }))
+  // Miniatura + NOMBRE DE ARCHIVO de cada foto comentada: con la miniatura sola
+  // no se sabe cuál de las 300 fotos es al abrirla en Lightroom.
+  const fotoPorId = new Map(
+    assetsWithUrls.map((a) => [
+      a.id,
+      { thumbUrl: a.thumbUrl, originalName: a.original_name ?? a.filename ?? null },
+    ]),
+  )
+  const assetComments = galleryComments.map((c) => {
+    const foto = fotoPorId.get(c.assetId)
+    return {
+      ...c,
+      thumbUrl: foto?.thumbUrl ?? null,
+      originalName: foto?.originalName ?? null,
+    }
+  })
 
   // Estado de selección de impresión + miniaturas (para el panel de producción).
   const printView = await getGalleryPrintAdminView(galleryId)
