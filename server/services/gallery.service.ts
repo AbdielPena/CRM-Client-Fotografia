@@ -795,6 +795,22 @@ export async function publishGallery(
     })()
   }
 
+  // Publicar la galería de SELECCIÓN = ya se la mandaste al cliente → la sesión
+  // pasa a "Esperando selección". Sin esto había que arrastrar la tarjeta a
+  // mano y el tablero se quedaba en "Reservado" con la galería ya enviada.
+  if (gType !== "final_delivery" && gProjectId) {
+    void (async () => {
+      try {
+        const { advanceProjectStatus } = await import(
+          "./project-automation.service"
+        )
+        await advanceProjectStatus(studioId, gProjectId, "esperando_seleccion")
+      } catch (err) {
+        console.error("[gallery] mover a Esperando selección falló", err)
+      }
+    })()
+  }
+
   // Si el plan incluye entregables impresos: habilita la selección de impresión
   // y avisa al cliente por email. Best-effort.
   if (gType === "final_delivery") {

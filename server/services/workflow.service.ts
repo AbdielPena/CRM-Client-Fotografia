@@ -450,6 +450,19 @@ export async function processWorkflowStages(): Promise<{
       dueDate: due,
     })
     if (ok) created++
+
+    // La sesión ya ocurrió de verdad (fecha pasada + pago o galería) → la
+    // tarjeta pasa a "Sesión realizada". Antes se quedaba en "Reservado"
+    // aunque el shoot fuera de hace semanas.
+    try {
+      const { advanceProjectStatus } = await import(
+        "./project-automation.service"
+      )
+      await advanceProjectStatus(p.studio_id, p.id, "sesion_realizada")
+    } catch (err) {
+      console.error("[workflow] mover a Sesión realizada falló", err)
+    }
+
     try {
       await recomputeProjectDelivery(p.studio_id, p.id)
     } catch {
