@@ -4,7 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   Users,
-  Plus,
+  UserPlus,
   Pencil,
   Trash2,
   X,
@@ -149,11 +149,15 @@ export function ProjectCollaboratorsCard({
             Colaboradores ({assignments.length})
           </h2>
         </div>
+        {/* Con borde e icono A PROPÓSITO: como texto suelto de 11px no se leía
+            como botón —sobre todo en el teléfono— y parecía que ciertos planes
+            no admitían colaboradores. Se puede en TODOS. */}
         <button
           onClick={() => setModal({ mode: "create" })}
-          className="text-xs font-medium text-primary hover:text-primary/80"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
         >
-          + Asignar
+          <UserPlus className="h-3.5 w-3.5" />
+          Asignar
         </button>
       </div>
 
@@ -198,11 +202,23 @@ export function ProjectCollaboratorsCard({
       )}
 
       {assignments.length === 0 ? (
-        <div className="py-8 text-center">
+        /* El vacío llevaba a un callejón sin salida: decía que no había nadie
+           pero no ofrecía asignar. Aquí va el botón grande. */
+        <div className="px-5 py-8 text-center">
           <Users className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             Sin colaboradores asignados todavía
           </p>
+          <p className="mx-auto mt-1 max-w-xs text-[12px] text-muted-foreground/80">
+            Maquillista, asistente, videógrafo… cualquier sesión puede llevarlos.
+          </p>
+          <button
+            onClick={() => setModal({ mode: "create" })}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand/90"
+          >
+            <UserPlus className="h-4 w-4" />
+            Asignar colaborador
+          </button>
         </div>
       ) : (
         <div className="divide-y divide-border/60">
