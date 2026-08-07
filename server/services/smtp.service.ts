@@ -120,7 +120,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   //    baja. Si el caller ya mandó la suya, se respeta y no se pisa.
   const bajaA = safeReplyTo ?? safeFromEmail
   const headers: Record<string, string> = {
-    'X-Mailer': 'StudioFlow (AbbyPixel)',
+    // Con versión: sin ella rspamd cambia MISSING_XM_UA por XM_UA_NO_VERSION.
+    'X-Mailer': 'StudioFlow/1.0 (AbbyPixel)',
     ...(bajaA ? { 'List-Unsubscribe': `<mailto:${bajaA}?subject=Baja>` } : {}),
     ...input.headers,
   }
