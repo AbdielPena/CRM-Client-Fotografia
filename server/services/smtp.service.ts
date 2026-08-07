@@ -109,6 +109,22 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     ? sanitizeEmailHeader(input.replyTo)
     : undefined
 
+  // Cabeceras de reputación. Van en TODOS los correos porque no todos pasan por
+  // el drenador de la cola (muchos servicios llaman a sendEmail directo).
+  //
+  //  - X-Mailer: sin él rspamd marca MISSING_XM_UA y los filtros lo leen como
+  //    "script suelto" en vez de una aplicación identificada.
+  //  - List-Unsubscribe: Gmail lo premia. Los transaccionales llevan solo la
+  //    forma `mailto:` (sin One-Click) — el One-Click con URL lo pone el
+  //    drenador SOLO en marketing, que es lo único de lo que uno puede darse de
+  //    baja. Si el caller ya mandó la suya, se respeta y no se pisa.
+  const bajaA = safeReplyTo ?? safeFromEmail
+  const headers: Record<string, string> = {
+    'X-Mailer': 'StudioFlow (AbbyPixel)',
+    ...(bajaA ? { 'List-Unsubscribe': `<mailto:${bajaA}?subject=Baja>` } : {}),
+    ...input.headers,
+  }
+
   try {
     const info = await transporter.sendMail({
       from: `"${safeFromName}" <${safeFromEmail}>`,
@@ -117,7 +133,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       html: input.html,
       text: input.text ?? stripHtml(input.html),
       replyTo: safeReplyTo,
-      ...(input.headers ? { headers: input.headers } : {}),
+      headers,
     })
     console.log(`[smtp.sendEmail] ✉️  enviado a ${input.to} — id=${info.messageId}`)
     return { ok: true, messageId: info.messageId }
