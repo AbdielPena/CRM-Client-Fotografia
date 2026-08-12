@@ -1,47 +1,47 @@
 import "server-only"
 
 import { untypedService } from "@/server/supabase/untyped"
+import { getAutomation, getPausedClientIds } from "./email-automation.service"
 
 /**
- * Recordatorio DIARIO al cliente que ya recibió su galería final y todavía no
- * ha elegido sus impresiones.
+ * Recordatorio al cliente que ya recibió su galería final y todavía no ha
+ * elegido sus impresiones.
  *
  * Sin esa selección el estudio no puede mandar nada a imprimir: la sesión se
- * queda parada esperando algo que el cliente ni recuerda que le toca. Por eso
- * el aviso es diario y no semanal — y se apaga solo en cuanto envía.
+ * queda parada esperando algo que el cliente ni recuerda que le toca.
+ *
+ * El ritmo y el tope los pone el estudio en Ajustes → Automatizaciones
+ * (`email_automations`, clave `print_selection_reminder`). Antes eran
+ * constantes aquí y cambiarlos exigía un deploy.
  *
  * Corre una vez al día desde el cron. Idempotente: si ya salió un recordatorio
- * hoy para esa galería, no manda otro (así un reintento del cron no duplica).
+ * dentro de la ventana configurada, no manda otro — así ni un reintento del
+ * cron ni un cambio de ritmo duplican correos.
  */
-
-/**
- * Tope de seguridad. Un correo diario para siempre a una dirección muerta
- * termina quemando la reputación del servidor de correo. A los 30 días se deja
- * de insistir por correo — la tarea del estudio sigue viva en el CRM.
- */
-const MAX_DIAS = 30
 
 export interface PrintReminderResult {
   candidatas: number
   enviados: number
-  yaEnviadoHoy: number
+  yaAvisado: number
   vencidas: number
+  pausadas: number
   errores: number
 }
 
-/** Fecha de hoy en RD, 'YYYY-MM-DD'. */
-function hoyRD(): string {
+const RD_TZ = "America/Santo_Domingo"
+
+/** Fecha en RD, 'YYYY-MM-DD', desplazada `offsetDias` respecto a hoy. */
+function fechaRD(offsetDias = 0): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Santo_Domingo",
+    timeZone: RD_TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date())
+  }).format(new Date(Date.now() + offsetDias * 86_400_000))
 }
 
 function diasDesde(iso: string): number {
-  const ms = Date.now() - new Date(iso).getTime()
-  return Math.floor(ms / 86_400_000)
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
 }
 
 export async function runPrintSelectionReminders(
@@ -56,8 +56,9 @@ export async function runPrintSelectionReminders(
   const res: PrintReminderResult = {
     candidatas: 0,
     enviados: 0,
-    yaEnviadoHoy: 0,
+    yaAvisado: 0,
     vencidas: 0,
+    pausadas: 0,
     errores: 0,
   }
 
@@ -87,11 +88,39 @@ export async function runPrintSelectionReminders(
   }>
   if (galerias.length === 0) return res
 
-  const hoy = hoyRD()
   const { getGalleryPrintState } = await import("./print-selection.service")
+
+  // Config y lista de pausados: una sola lectura por estudio, no por galería.
+  const configs = new Map<string, Awaited<ReturnType<typeof getAutomation>>>()
+  const pausados = new Map<string, Set<string>>()
+  for (const studioId of new Set(galerias.map((g) => g.studio_id))) {
+    configs.set(
+      studioId,
+      await getAutomation(studioId, "print_selection_reminder"),
+    )
+    try {
+      pausados.set(studioId, await getPausedClientIds(studioId))
+    } catch (err) {
+      // Sin la lista de pausados no se puede garantizar el freno. Se salta el
+      // estudio entero: mejor perder una ronda de recordatorios que escribirle
+      // a quien el estudio pidió no molestar.
+      console.error("[print-reminder] estudio saltado", studioId, err)
+      res.errores += 1
+    }
+  }
 
   for (const g of galerias) {
     try {
+      const cfg = configs.get(g.studio_id)
+      if (!cfg || !cfg.enabled) continue
+
+      const listaPausados = pausados.get(g.studio_id)
+      if (!listaPausados) continue // estudio saltado arriba
+      if (g.client_id && listaPausados.has(g.client_id)) {
+        res.pausadas += 1
+        continue
+      }
+
       // ¿De verdad tiene algo que elegir? Si el plan no incluye impresiones, o
       // todas son automáticas (se imprimen todas sin que él escoja), no hay
       // nada que recordarle.
@@ -105,23 +134,31 @@ export async function runPrintSelectionReminders(
 
       res.candidatas += 1
 
-      if (g.delivery_ready_at && diasDesde(g.delivery_ready_at) > MAX_DIAS) {
+      const tope = cfg.max_days
+      if (tope && g.delivery_ready_at && diasDesde(g.delivery_ready_at) > tope) {
         res.vencidas += 1
         continue
       }
 
-      // ¿Ya salió el recordatorio hoy para esta galería?
+      // ¿Ya salió un recordatorio dentro de la ventana?
+      //
+      // Ventana por CALENDARIO en RD, no por horas: con "cada 3 días" y el cron
+      // a la misma hora, restar 72h exactas haría que el envío anterior cayera
+      // dentro de la ventana por segundos y el aviso se fuera corriendo un día
+      // en cada vuelta.
       //
       // La tabla es `email_queue`, NO `emails`. Con el nombre equivocado la
       // consulta fallaba en silencio (count=null → 0) y este freno no existía:
       // cada corrida mandaba otro correo al mismo cliente.
+      const cada = Math.max(1, cfg.every_days ?? 3)
+      const desde = `${fechaRD(-(cada - 1))}T00:00:00-04:00`
       const { count, error: errCola } = await sb
         .from("email_queue")
         .select("id", { count: "exact", head: true })
         .eq("studio_id", g.studio_id)
         .eq("template_slug", "print_selection_reminder")
         .eq("related_entity_id", g.id)
-        .gte("created_at", `${hoy}T00:00:00`)
+        .gte("created_at", desde)
       if (errCola) {
         // Ante la duda, NO se manda: mejor saltarse un recordatorio que
         // duplicarle el correo a una clienta.
@@ -130,7 +167,7 @@ export async function runPrintSelectionReminders(
         continue
       }
       if ((count ?? 0) > 0) {
-        res.yaEnviadoHoy += 1
+        res.yaAvisado += 1
         continue
       }
 

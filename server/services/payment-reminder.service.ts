@@ -2,10 +2,12 @@ import "server-only"
 
 import { untypedService } from "@/server/supabase/untyped"
 import { formatCurrency } from "@/lib/utils/currency"
+import { getPausedClientIds } from "./email-automation.service"
 
 /**
  * Recordatorio del saldo (50% restante) atado a la fecha de la SESIÓN:
- *  - "day_before": un día antes de la sesión.
+ *  - "day_before": con la antelación que fije el estudio en Ajustes →
+ *    Automatizaciones (`offset_days`, por defecto 1 = el día antes).
  *  - "day_of": el día de la sesión (lo dispara el cron en la mañana, 8 AM RD).
  *
  * Por cada sesión con saldo pendiente: correo (marco luxury, plantilla
@@ -17,6 +19,8 @@ import { formatCurrency } from "@/lib/utils/currency"
 const RD_TZ = "America/Santo_Domingo"
 // Facturas que cuentan como "saldo pendiente".
 const UNPAID_STATUSES = ["sent", "partially_paid", "overdue", "pending"]
+/** Antelación por defecto si el estudio no la ha tocado (el "día antes"). */
+const DEFAULT_OFFSET_DAYS = 1
 
 function rdDate(offsetDays = 0): string {
   const d = new Date(Date.now() + offsetDays * 86_400_000)
@@ -52,7 +56,6 @@ export type ReminderRunResult = {
 export async function runSessionPaymentReminders(): Promise<ReminderRunResult> {
   const sb = untypedService()
   const today = rdDate(0)
-  const tomorrow = rdDate(1)
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
@@ -66,17 +69,55 @@ export async function runSessionPaymentReminders(): Promise<ReminderRunResult> {
     skipped: 0,
   }
 
-  // 1) Sesiones de hoy / mañana
+  // 0) Con cuánta antelación avisa cada estudio (Ajustes → Automatizaciones).
+  //    Se lee ANTES de buscar sesiones porque define qué fechas hay que mirar.
+  const { data: cfgRows } = await sb
+    .from("email_automations")
+    .select("studio_id, enabled, offset_days")
+    .eq("key", "session_balance_reminder")
+  const cfgPorEstudio = new Map<string, { enabled: boolean; offset: number }>()
+  for (const c of (cfgRows ?? []) as Array<{
+    studio_id: string
+    enabled: boolean
+    offset_days: number | null
+  }>) {
+    cfgPorEstudio.set(c.studio_id, {
+      enabled: c.enabled,
+      offset: c.offset_days ?? DEFAULT_OFFSET_DAYS,
+    })
+  }
+  const cfgDe = (studioId: string) =>
+    cfgPorEstudio.get(studioId) ?? { enabled: true, offset: DEFAULT_OFFSET_DAYS }
+
+  // 1) Sesiones de hoy + las que caen en la antelación de algún estudio.
+  //    Cada estudio puede tener la suya, así que se consultan todas las fechas
+  //    candidatas y después se descarta lo que no le toca a ese estudio.
+  const antelaciones = new Set<number>([DEFAULT_OFFSET_DAYS])
+  for (const c of cfgPorEstudio.values()) if (c.enabled) antelaciones.add(c.offset)
+  const fechas = [today, ...[...antelaciones].map((d) => rdDate(d))]
+
   const { data: projRows } = await sb
     .from("projects")
     .select(
       "id, studio_id, name, event_date, client_id, currency, client:clients(name,email,phone)",
     )
-    .in("event_date", [today, tomorrow])
+    .in("event_date", [...new Set(fechas)])
     .is("deleted_at", null)
   const projects = (projRows ?? []) as ProjRow[]
   if (projects.length === 0) return result
   const ids = projects.map((p) => p.id)
+
+  // Clientes con los correos automáticos pausados por el estudio.
+  const pausados = new Map<string, Set<string>>()
+  for (const studioId of new Set(projects.map((p) => p.studio_id))) {
+    try {
+      pausados.set(studioId, await getPausedClientIds(studioId))
+    } catch (err) {
+      // Sin la lista no se puede garantizar el freno → se salta el estudio
+      // entero antes que escribirle a quien pidió que no le llegara nada.
+      console.error("[payment-reminder] estudio saltado", studioId, err)
+    }
+  }
 
   // 2) Saldo pendiente por proyecto (suma de facturas no pagadas/canceladas)
   const { data: invRows } = await sb
@@ -109,18 +150,39 @@ export async function runSessionPaymentReminders(): Promise<ReminderRunResult> {
   )
 
   for (const p of projects) {
+    const cfg = cfgDe(p.studio_id)
+    if (!cfg.enabled) continue
+
+    const listaPausados = pausados.get(p.studio_id)
+    if (!listaPausados) continue // estudio saltado arriba
+    if (p.client_id && listaPausados.has(p.client_id)) {
+      result.skipped++
+      continue
+    }
+
+    // La fecha pudo entrar en la consulta por la antelación de OTRO estudio.
+    const esHoy = p.event_date === today
+    const esAviso = p.event_date === rdDate(cfg.offset)
+    if (!esHoy && !esAviso) continue
+
     const balance = balanceByProject.get(p.id) ?? 0
     if (balance <= 0) continue // sin saldo → no recordar
     result.eligible++
 
-    const kind = p.event_date === today ? "day_of" : "day_before"
+    const kind = esHoy ? "day_of" : "day_before"
     if (sentSet.has(`${p.id}|${kind}|${p.event_date}`)) {
       result.skipped++
       continue
     }
 
     const client = Array.isArray(p.client) ? p.client[0] : p.client
-    const whenLabel = kind === "day_of" ? "hoy" : "mañana"
+    // El texto sigue a la antelación configurada: con 3 días, decirle "mañana"
+    // al cliente sería mentirle.
+    const whenLabel = esHoy
+      ? "hoy"
+      : cfg.offset === 1
+        ? "mañana"
+        : `en ${cfg.offset} días`
     const amount = formatCurrency(balance, p.currency || "DOP")
     const dateLabel = new Intl.DateTimeFormat("es-DO", {
       timeZone: "UTC",

@@ -64,6 +64,8 @@ export type DrainResult = {
   retrying: number
   failed: number
   reaped: number
+  /** Frenados porque el cliente tiene los correos pausados. */
+  cancelledPaused: number
 }
 
 export async function drainEmailQueue(limit = BATCH_SIZE): Promise<DrainResult> {
@@ -94,8 +96,53 @@ export async function drainEmailQueue(limit = BATCH_SIZE): Promise<DrainResult> 
   let sent = 0
   let retrying = 0
   let failed = 0
+  let cancelledPaused = 0
+
+  // 1.b) Clientes con los correos pausados por el estudio.
+  //
+  // Este es el freno de verdad: los servicios de recordatorio ya lo comprueban
+  // por su cuenta, pero aquí pasa TODO —facturas, galerías, contratos— así que
+  // es el único punto donde "no le mandes nada más a esta persona" se cumple
+  // pase lo que pase. Se cruza por correo porque la fila de la cola no guarda
+  // el id del cliente.
+  const pausados = new Set<string>()
+  const studioIds = [...new Set(rows.map((r) => r.studio_id))]
+  if (studioIds.length > 0) {
+    const { data: pausRows, error: errPaus } = await sb
+      .from("clients")
+      .select("studio_id, email")
+      .in("studio_id", studioIds)
+      .not("automations_paused_at", "is", null)
+      .not("email", "is", null)
+    if (errPaus) {
+      // Sin esta lista no se puede respetar la pausa. Se corta la tanda: el
+      // drenador corre cada minuto, así que perder una vuelta no cuesta nada
+      // comparado con escribirle a quien pidió que no le llegara nada.
+      console.error("[email-drain] no se pudo leer la pausa por cliente", errPaus)
+      return { processed: 0, sent: 0, retrying: 0, failed: 0, reaped, cancelledPaused: 0 }
+    }
+    for (const c of (pausRows ?? []) as Array<{ studio_id: string; email: string }>) {
+      pausados.add(`${c.studio_id}|${c.email.trim().toLowerCase()}`)
+    }
+  }
 
   for (const row of rows) {
+    if (pausados.has(`${row.studio_id}|${row.to_email.trim().toLowerCase()}`)) {
+      // Se marca con motivo legible: en Ajustes → Cola de emails el estudio ve
+      // exactamente qué se frenó y por qué, en vez de un correo desaparecido.
+      await sb
+        .from("email_queue")
+        .update({
+          status: "cancelled",
+          last_error: "cliente con correos pausados",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+        .in("status", ["pending", "retrying"])
+      cancelledPaused += 1
+      continue
+    }
+
     // Lock atómico: solo procede si SIGUE pending/retrying.
     const { data: locked } = await sb
       .from("email_queue")
@@ -230,5 +277,5 @@ export async function drainEmailQueue(limit = BATCH_SIZE): Promise<DrainResult> 
     }
   }
 
-  return { processed: rows.length, sent, retrying, failed, reaped }
+  return { processed: rows.length, sent, retrying, failed, reaped, cancelledPaused }
 }

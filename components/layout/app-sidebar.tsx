@@ -179,6 +179,7 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/settings/contracts", label: "Plantillas de contrato", icon: FileStack },
       { type: "link", href: "/settings/project-templates", label: "Plantillas de proyecto", icon: Layers },
       { type: "link", href: "/settings/emails/templates", label: "Plantillas de email", icon: Mail },
+      { type: "link", href: "/settings/emails/automations", label: "Automatizaciones de correo", icon: MailCheck },
       { type: "link", href: "/settings/branding", label: "Marca y personalización", icon: Layers },
       { type: "link", href: "/settings/watermark", label: "Marca de agua", icon: Droplets },
       { type: "link", href: "/settings/availability", label: "Disponibilidad", icon: Clock },

@@ -6,11 +6,12 @@ import { safeEqual } from "@/lib/utils/timing-safe"
 /**
  * POST /api/internal/v1/print-reminders
  *
- * Recordatorio DIARIO a quien ya recibió su galería final y todavía no ha
- * elegido sus impresiones. Sin esa selección el estudio no puede imprimir nada.
+ * Recordatorio a quien ya recibió su galería final y todavía no ha elegido sus
+ * impresiones. Sin esa selección el estudio no puede imprimir nada.
  *
- * Lo llama el cron del VPS una vez al día. Idempotente: si ya salió el
- * recordatorio hoy para esa galería, no manda otro.
+ * Lo llama el cron del VPS una vez al día, pero el ritmo real lo pone el
+ * estudio en Ajustes → Automatizaciones (por defecto cada 3 días). Idempotente:
+ * si ya salió el recordatorio dentro de la ventana, no manda otro.
  *
  * Auth: header `x-internal-key` == INTERNAL_API_KEY.
  */

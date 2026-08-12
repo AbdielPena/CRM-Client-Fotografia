@@ -40,6 +40,8 @@ import { ClientDetailActions } from "@/components/clients/client-detail-actions"
 import { ClientCreatedToast } from "@/components/clients/client-created-toast"
 import { DeleteClientButton } from "@/components/clients/delete-client-button"
 import { PortalAccessCard } from "@/components/clients/portal-access-card"
+import { ClientEmailsCard } from "@/components/clients/client-emails-card"
+import { getClientEmailControl } from "@/server/services/email-automation.service"
 import { DeliveriesPanel } from "@/components/clients/deliveries-panel"
 import { EntityTasks } from "@/components/tasks/entity-tasks"
 import {
@@ -68,9 +70,10 @@ export default async function ClientDetailPage({
   params: { id: string }
 }) {
   const session = await requireStudioAuth()
-  const [client, unread] = await Promise.all([
+  const [client, unread, emailControl] = await Promise.all([
     getClientById(session.studioId, params.id),
     countUnreadNotifications(session.studioId),
+    getClientEmailControl(session.studioId, params.id),
   ])
 
   if (!client) notFound()
@@ -770,6 +773,15 @@ export default async function ClientDetailPage({
               initialLastLogin={
                 (client as { last_portal_login_at?: string | null }).last_portal_login_at ?? null
               }
+            />
+
+            {/* Interruptor general de sus correos */}
+            <ClientEmailsCard
+              clientId={client.id as string}
+              paused={emailControl.paused}
+              pausedAt={emailControl.pausedAt}
+              reason={emailControl.reason}
+              pendientes={emailControl.pendientes}
             />
 
             {/* Notas del perfil */}
