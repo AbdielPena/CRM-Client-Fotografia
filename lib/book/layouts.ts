@@ -61,6 +61,31 @@ export function layoutItemStyle(layout: BookPageLayout, index: number): CSSPrope
   return {}
 }
 
+/**
+ * Cómo encaja una foto en su celda.
+ *
+ * Una foto HORIZONTAL que va sola en la página se muestra ENTERA y a todo el
+ * ancho (`contain`): la hoja es vertical, así que recortarla para llenarla se
+ * come justo la composición por la que se tomó la panorámica. Queda el papel
+ * arriba y abajo, como en un álbum impreso.
+ *
+ * En las páginas de varias fotos se mantiene `cover`: ahí el mosaico depende de
+ * que las celdas queden llenas, y dejar huecos rompe el diseño.
+ *
+ * Sin medidas de la foto se conserva el comportamiento de siempre.
+ */
+export function photoFit(
+  layout: BookPageLayout,
+  size: { width?: number | null; height?: number | null } | null | undefined,
+): "cover" | "contain" {
+  const solaEnLaPagina = layout === "full" || layout === "single"
+  if (!solaEnLaPagina) return "cover"
+  const w = size?.width
+  const h = size?.height
+  if (!w || !h) return "cover"
+  return w > h ? "contain" : "cover"
+}
+
 /** Genera un id de página estable-ish sin depender de Date.now/random en el server. */
 export function newPageId(seed: string | number): string {
   return `pg_${seed}_${String(seed).length}${String(seed).slice(-4)}`

@@ -41,6 +41,7 @@ import {
   layoutCapacity,
   layoutGridStyle,
   layoutItemStyle,
+  photoFit,
   type BookPage,
   type BookPageLayout,
 } from "@/lib/book/layouts"
@@ -59,7 +60,7 @@ import {
   type TextPosition,
 } from "@/lib/book/cover"
 
-type DAsset = { id: string; thumbUrl: string | null }
+type DAsset = { id: string; thumbUrl: string | null; width?: number | null; height?: number | null }
 
 const uid = () => `pg_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36).slice(-3)}`
 const str = (v: unknown) => (typeof v === "string" ? v : "")
@@ -793,7 +794,11 @@ function PageCard({
               {a?.thumbUrl ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={a.thumbUrl} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={a.thumbUrl}
+                    alt=""
+                    className={`h-full w-full ${photoFit(page.layout, a) === "contain" ? "object-contain" : "object-cover"}`}
+                  />
                   <div className="absolute inset-0 hidden items-start justify-between p-0.5 group-hover:flex">
                     <div className="flex flex-col gap-0.5">
                       {idx > 0 && <button onClick={(e) => { e.stopPropagation(); onMovePhoto(idx, -1) }} className="rounded bg-black/60 p-0.5 text-white" title="Mover antes"><ChevronLeft className="h-3 w-3" /></button>}

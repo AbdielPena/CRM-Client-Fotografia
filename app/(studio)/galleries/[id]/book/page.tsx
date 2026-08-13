@@ -31,6 +31,10 @@ export default async function BookDesignerPage({ params }: { params: { id: strin
   const hydrated = assets.map((a) => ({
     id: a.id,
     thumbUrl: getAssetThumbUrl(a.thumb_key),
+    // Medidas: el editor las necesita para previsualizar una foto horizontal
+    // igual que la verá la clienta (entera y a todo el ancho, sin recortar).
+    width: (a as unknown as { width?: number | null }).width ?? null,
+    height: (a as unknown as { height?: number | null }).height ?? null,
     status: a.status,
     deliveryTrack: (a as unknown as { delivery_track: string | null }).delivery_track ?? null,
     originalName: (a as unknown as { original_name?: string | null }).original_name ?? "",
@@ -50,7 +54,7 @@ export default async function BookDesignerPage({ params }: { params: { id: strin
     deliveryPhotos.length
       ? deliveryPhotos
       : hydrated.filter((a) => a.status === "completed").sort(byCreation)
-  ).map((a) => ({ id: a.id, thumbUrl: a.thumbUrl }))
+  ).map((a) => ({ id: a.id, thumbUrl: a.thumbUrl, width: a.width, height: a.height }))
 
   const bookSettings =
     ((gallery as unknown as { book_settings?: Record<string, unknown> }).book_settings ?? {}) as Record<

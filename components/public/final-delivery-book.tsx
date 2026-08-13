@@ -7,6 +7,7 @@ import {
   parseBookPages,
   layoutGridStyle,
   layoutItemStyle,
+  photoFit,
   type BookPageLayout,
 } from "@/lib/book/layouts"
 import { COVER_FONTS_HREF } from "@/lib/book/cover"
@@ -960,22 +961,42 @@ export function FinalDeliveryBook({
                       ...layoutGridStyle(pg.layout),
                     }}
                   >
-                    {pg.items.map((a, idx) => (
-                      <div
-                        key={`${a.id}-${idx}`}
-                        style={{ position: "relative", overflow: "hidden", ...layoutItemStyle(pg.layout, idx) }}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={a.webUrl ?? a.thumbUrl ?? ""}
-                          alt={`${gallery.name} — ${i + 1}`}
-                          loading="eager"
-                          fetchPriority={i < 3 ? "high" : "low"}
-                          decoding="async"
-                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", boxShadow: "0 8px 30px -12px rgba(0,0,0,.45)" }}
-                        />
-                      </div>
-                    ))}
+                    {pg.items.map((a, idx) => {
+                      // Una foto horizontal sola en la página se ve ENTERA y a
+                      // todo el ancho, no recortada para llenar la hoja vertical.
+                      const fit = photoFit(pg.layout, a)
+                      return (
+                        <div
+                          key={`${a.id}-${idx}`}
+                          style={{
+                            position: "relative",
+                            overflow: "hidden",
+                            // Con `contain` la foto no llena la celda: se centra
+                            // para que el papel quede parejo arriba y abajo.
+                            ...(fit === "contain"
+                              ? { display: "flex", alignItems: "center", justifyContent: "center" }
+                              : null),
+                            ...layoutItemStyle(pg.layout, idx),
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={a.webUrl ?? a.thumbUrl ?? ""}
+                            alt={`${gallery.name} — ${i + 1}`}
+                            loading="eager"
+                            fetchPriority={i < 3 ? "high" : "low"}
+                            decoding="async"
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: fit,
+                              display: "block",
+                              boxShadow: "0 8px 30px -12px rgba(0,0,0,.45)",
+                            }}
+                          />
+                        </div>
+                      )
+                    })}
                     <span className="pxbook-pagenum">— {i + 1}</span>
                   </div>
                 </div>
