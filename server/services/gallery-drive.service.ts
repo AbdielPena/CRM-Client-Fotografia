@@ -219,6 +219,27 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       })
       .eq("id", backupId)
 
+    // Qué hay YA en cada carpeta de Drive.
+    //
+    // Sin esto el respaldo no se puede reanudar: una galería grande no cabe en
+    // una sola corrida del cron, y al reintentarla volvería a subir todo,
+    // duplicando cada foto en Drive. Con la lista previa, el reintento continúa
+    // donde se quedó.
+    const yaEnDrive = new Map<string, Set<string>>()
+    for (const tr of tracks) {
+      const fid = folderIds[tr]
+      if (!fid) continue
+      try {
+        const existentes = await drive.listFilesInFolder(studioId, fid, 1000)
+        yaEnDrive.set(tr, new Set(existentes.map((f) => f.name)))
+      } catch (e) {
+        // Si no se puede listar, se sigue: subir de más es recuperable,
+        // no subir no lo es.
+        console.error("[gallery-drive] no se pudo listar la carpeta", fid, e)
+        yaEnDrive.set(tr, new Set())
+      }
+    }
+
     let uploaded = 0
     let bytes = 0
     for (const a of assets) {
@@ -228,6 +249,15 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       const key = tr === "high_quality" ? a.original_key : a.web_key
       const bucket = tr === "high_quality" ? ORIGINALS_BUCKET : RENDITIONS_BUCKET
       if (!key) continue
+
+      // Nombre destino, calculado ANTES de descargar: si ya está en Drive nos
+      // ahorramos bajar la foto entera del storage para nada.
+      const extPrev = tr === "high_quality" ? (a.original_name?.split(".").pop() ?? "jpg") : "webp"
+      const nombrePrev = `${baseName(a.original_name, a.id)}${tr === "social" ? "_web" : ""}.${extPrev}`
+      if (yaEnDrive.get(tr)?.has(nombrePrev)) {
+        uploaded += 1 // ya estaba respaldada
+        continue
+      }
       const { data: blob, error } = await storage.storage.from(bucket).download(key)
       if (error || !blob) {
         console.error("[gallery-drive] download fail", a.id, tr, error)
@@ -363,9 +393,30 @@ export async function getGoogleDriveStatus(
   return { connected: s.connected, email: s.email, needsReconnect: false }
 }
 
+/**
+ * Minutos sin avanzar tras los cuales un respaldo se da por colgado. El bucle
+ * de subida escribe `updated_at` después de CADA foto, así que uno vivo nunca
+ * se queda quieto tanto tiempo.
+ */
+const COLGADO_MIN = 20
+
 /** Worker: drena backups pendientes (llamado por el cron endpoint). */
-export async function drainPendingDriveBackups(limit = 3): Promise<{ processed: number }> {
+export async function drainPendingDriveBackups(limit = 3): Promise<{ processed: number; rescatados: number }> {
   const sb = untypedService()
+
+  // Rescate: una corrida del cron se corta a los 5 minutos, así que una galería
+  // grande deja la fila en 'uploading' a medias. Como abajo solo se recogen las
+  // 'pending', sin este rescate esa galería no se respaldaría nunca más.
+  // Ahora es seguro reintentarla: la subida salta lo que ya está en Drive.
+  const corte = new Date(Date.now() - COLGADO_MIN * 60_000).toISOString()
+  const { data: rescatadas } = await sb
+    .from("gallery_drive_backups")
+    .update({ status: "pending", updated_at: new Date().toISOString() })
+    .in("status", ["running", "uploading"])
+    .lt("updated_at", corte)
+    .select("id")
+  const rescatados = (rescatadas ?? []).length
+
   const { data } = await sb
     .from("gallery_drive_backups")
     .select("id")
@@ -382,5 +433,5 @@ export async function drainPendingDriveBackups(limit = 3): Promise<{ processed: 
       console.error("[gallery-drive] backup failed", id, e)
     }
   }
-  return { processed }
+  return { processed, rescatados }
 }
