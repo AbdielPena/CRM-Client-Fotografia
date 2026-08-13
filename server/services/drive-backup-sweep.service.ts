@@ -33,6 +33,12 @@ import {
 /** Margen que NUNCA se toca, para que la cuenta de Google siga usable. */
 const RESERVA_BYTES = 2 * 1024 * 1024 * 1024 // 2 GB
 
+/**
+ * Veces que se reintenta una galería que nunca llega a completar. Sin tope, una
+ * galería con un problema permanente se reencola en cada barrido eternamente.
+ */
+const MAX_INTENTOS = 4
+
 export interface SweepResult {
   /** Galerías con fotos que deberían tener respaldo. */
   revisadas: number
@@ -74,23 +80,25 @@ async function candidatas(): Promise<Candidata[]> {
   }>
   if (galerias.length === 0) return []
 
-  // Último respaldo COMPLETO por galería (para saber cuántas fotos cubría).
+  // TODOS los respaldos por galería: hace falta saber no solo cuál completó,
+  // sino cuántas veces se ha intentado.
   const { data: bkRaw } = await sb
     .from("gallery_drive_backups")
-    .select("gallery_id, status, total_assets, completed_at")
-    .in("status", ["completed", "pending", "running", "uploading"])
+    .select("gallery_id, status, total_assets")
   const completos = new Map<string, number>()
   const enCurso = new Set<string>()
+  const intentos = new Map<string, number>()
   for (const b of (bkRaw ?? []) as Array<{
     gallery_id: string
     status: string
     total_assets: number | null
   }>) {
+    intentos.set(b.gallery_id, (intentos.get(b.gallery_id) ?? 0) + 1)
     if (b.status === "completed") {
       // Si hubo varios, vale el que más fotos cubrió.
       const prev = completos.get(b.gallery_id) ?? 0
       completos.set(b.gallery_id, Math.max(prev, b.total_assets ?? 0))
-    } else {
+    } else if (["pending", "running", "uploading"].includes(b.status)) {
       enCurso.add(b.gallery_id)
     }
   }
@@ -98,6 +106,12 @@ async function candidatas(): Promise<Candidata[]> {
   const out: Candidata[] = []
   for (const g of galerias) {
     if (enCurso.has(g.id)) continue // ya hay uno encolado o corriendo
+
+    // Tope de reintentos. Una galería que falla o queda a medias una y otra vez
+    // (fotos rotas, permisos, lo que sea) se reencolaba en CADA barrido, para
+    // siempre. Tras varios intentos se deja quieta: que se vea como un problema
+    // a resolver, no como un bucle silencioso.
+    if ((intentos.get(g.id) ?? 0) >= MAX_INTENTOS && !completos.has(g.id)) continue
 
     // Solo fotos listas: las que siguen procesándose no tienen original estable.
     const { data: assets } = await sb
@@ -186,7 +200,15 @@ export async function runDriveBackupSweep(
       }
 
       // `track: high_quality` = solo originales. Ver la nota de arriba.
-      await enqueueGalleryDriveBackup(g.studioId, g.id, { track: "high_quality" })
+      //
+      // `notifyClient: false` es lo importante aquí: esto es una COPIA DE
+      // SEGURIDAD, no una entrega. La primera versión de este barrido usaba el
+      // valor por defecto (avisar) y le mandó 95 correos en un día a una
+      // clienta cuyo respaldo se reintentaba.
+      await enqueueGalleryDriveBackup(g.studioId, g.id, {
+        track: "high_quality",
+        notifyClient: false,
+      })
       res.encoladas += 1
       res.bytesPorSubir += g.bytes
       if (libre != null) libreRestante.set(g.studioId, libre - g.bytes)

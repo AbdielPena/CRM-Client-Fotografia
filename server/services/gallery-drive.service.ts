@@ -48,6 +48,8 @@ interface BackupRow {
   status: string
   uploaded_assets: number | null
   bytes_uploaded: number | null
+  /** false = respaldo interno; no se le escribe al cliente. */
+  notify_client: boolean | null
 }
 
 /**
@@ -57,7 +59,16 @@ interface BackupRow {
 export async function enqueueGalleryDriveBackup(
   studioId: string,
   galleryId: string,
-  opts: { track?: DriveTrack; createdBy?: string | null } = {},
+  opts: {
+    track?: DriveTrack
+    createdBy?: string | null
+    /**
+     * ¿Se le avisa al cliente cuando termine? `true` (defecto) para la ENTREGA
+     * — es el correo con el link. `false` para el respaldo automático: ahí es
+     * una copia interna y el cliente no tiene por qué enterarse.
+     */
+    notifyClient?: boolean
+  } = {},
 ): Promise<string> {
   const sb = untypedService()
   const { data: g } = await sb
@@ -87,6 +98,7 @@ export async function enqueueGalleryDriveBackup(
       client_id: row.client_id,
       track: opts.track ?? "both",
       status: "pending",
+      notify_client: opts.notifyClient ?? true,
       created_by: opts.createdBy ?? null,
     })
     .select("id")
@@ -303,7 +315,10 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       .eq("id", backupId)
 
     // Email al cliente con el link (best-effort).
-    if (finalStatus !== "failed" && link && clientEmail) {
+    //
+    // `notify_client === false` = respaldo automático: se sube a Drive y ya.
+    // Avisar aquí fue lo que le mando 95 correos a una clienta en un día.
+    if (b.notify_client !== false && finalStatus !== "failed" && link && clientEmail) {
       try {
         await sendDriveLinkEmail({
           studioId,
@@ -339,6 +354,24 @@ async function sendDriveLinkEmail(input: {
   backupId: string
 }): Promise<void> {
   const sb = untypedService()
+
+  // UN aviso por respaldo, y solo uno.
+  //
+  // `email_sent_at` existía pero solo se ESCRIBÍA: nadie lo leía antes de
+  // enviar. Mientras el respaldo corría una sola vez no se notaba; en cuanto
+  // algo lo reintentó (un rescate, un reintento del cron) cada vuelta le
+  // mandaba el mismo correo al cliente otra vez.
+  //
+  // La marca se pone de forma condicional (`is null`) y solo se envía si esta
+  // corrida fue la que ganó: dos procesos a la vez no pueden mandar dos.
+  const { data: marcado } = await sb
+    .from("gallery_drive_backups")
+    .update({ email_sent_at: new Date().toISOString() })
+    .eq("id", input.backupId)
+    .is("email_sent_at", null)
+    .select("id")
+  if (!marcado || marcado.length === 0) return // ya se avisó antes
+
   const { data: studioRow } = await sb
     .from("studios")
     .select("name, email")
