@@ -34,6 +34,42 @@ function escapeQuery(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'")
 }
 
+export interface DriveQuota {
+  /** Bytes totales del plan. `null` = cuenta sin límite (Workspace ilimitado). */
+  limit: number | null
+  usage: number
+  /** Bytes libres. `null` cuando no hay límite. */
+  free: number | null
+}
+
+/**
+ * Espacio del Drive de la cuenta conectada.
+ *
+ * Es el freno del respaldo automático: llenar el Drive no solo detiene los
+ * respaldos, también deja al dueño sin poder recibir correo en esa cuenta de
+ * Google. Antes de subir una galería se comprueba que quepa.
+ */
+export async function getStorageQuota(studioId: string): Promise<DriveQuota> {
+  const auth = await authHeader(studioId)
+  const res = await fetch(`${DRIVE_API}/about?fields=storageQuota`, {
+    headers: { Authorization: auth },
+  })
+  if (!res.ok) throw new Error(`Drive quota ${res.status}: ${await res.text()}`)
+  const data = (await res.json()) as {
+    storageQuota?: { limit?: string; usage?: string }
+  }
+  // `limit` viene ausente en cuentas sin tope. Los valores son strings porque
+  // superan el entero seguro de JavaScript.
+  const limitRaw = data.storageQuota?.limit
+  const limit = limitRaw == null ? null : Number(limitRaw)
+  const usage = Number(data.storageQuota?.usage ?? 0)
+  return {
+    limit,
+    usage,
+    free: limit == null ? null : Math.max(0, limit - usage),
+  }
+}
+
 /** Busca una carpeta por nombre dentro de `parentId` (o en la raíz). */
 export async function findFolder(
   studioId: string,
@@ -134,6 +170,46 @@ export async function uploadFile(
   if (!putRes.ok) throw new Error(`Drive upload PUT ${putRes.status}: ${await putRes.text()}`)
   const data = (await putRes.json()) as { id: string }
   return data.id
+}
+
+/**
+ * Archivos (no carpetas) dentro de una carpeta, del más nuevo al más viejo.
+ * Con scope `drive.file` solo se ven los que creó la propia app — justo lo que
+ * hace falta para rotar sus respaldos sin tocar nada más del Drive.
+ */
+export async function listFilesInFolder(
+  studioId: string,
+  folderId: string,
+  pageSize = 100,
+): Promise<Array<{ id: string; name: string; createdTime: string }>> {
+  const auth = await authHeader(studioId)
+  const q = [
+    `'${folderId}' in parents`,
+    "trashed=false",
+    `mimeType!='${FOLDER_MIME}'`,
+  ].join(" and ")
+  const url =
+    `${DRIVE_API}/files?q=${encodeURIComponent(q)}` +
+    `&fields=files(id,name,createdTime)&orderBy=createdTime desc&pageSize=${pageSize}&spaces=drive`
+  const res = await fetch(url, { headers: { Authorization: auth } })
+  if (!res.ok) throw new Error(`Drive listFiles ${res.status}: ${await res.text()}`)
+  const data = (await res.json()) as {
+    files?: Array<{ id: string; name: string; createdTime: string }>
+  }
+  return data.files ?? []
+}
+
+/** Borra un archivo (se usa para rotar respaldos viejos). */
+export async function deleteFile(studioId: string, fileId: string): Promise<void> {
+  const auth = await authHeader(studioId)
+  const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
+    method: "DELETE",
+    headers: { Authorization: auth },
+  })
+  // 404 = ya no está. Es el resultado buscado, no un fallo.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(`Drive delete ${res.status}: ${await res.text()}`)
+  }
 }
 
 /**
