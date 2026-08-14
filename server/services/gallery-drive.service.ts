@@ -25,7 +25,18 @@ import { fetchAllPaged } from "@/server/services/gallery.service"
 
 const ORIGINALS_BUCKET = "gallery-originals"
 const RENDITIONS_BUCKET = "gallery-renditions"
+/** Carpeta de ENTREGAS: se comparte por enlace con el cliente. */
 const ROOT_FOLDER = "PixelOS Entregas"
+/**
+ * Carpeta de RESPALDO INTERNO: nunca se comparte, nunca se enlaza.
+ *
+ * Existe porque la ruta de Drive se arma por PROYECTO, no por galería: la
+ * selección y la entrega del mismo proyecto caían en la MISMA carpeta. Como esa
+ * carpeta se comparte para la entrega, respaldar la selección ahí le daba al
+ * cliente acceso a descargar TODAS las fotos de la sesión — incluidas las que
+ * no eligió ni pagó.
+ */
+const ROOT_INTERNO = "PixelOS Respaldo interno"
 
 export type DriveTrack = "social" | "high_quality" | "both"
 
@@ -131,10 +142,15 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     // Nombres de cliente / proyecto / galería.
     const { data: g } = await sb
       .from("galleries")
-      .select("id, name, client_id, project_id")
+      .select("id, name, client_id, project_id, gallery_type")
       .eq("id", b.gallery_id)
       .maybeSingle()
-    const gallery = g as { name: string; client_id: string | null; project_id: string | null } | null
+    const gallery = g as {
+      name: string
+      client_id: string | null
+      project_id: string | null
+      gallery_type: string | null
+    } | null
     let clientName = "Cliente"
     let clientEmail: string | null = null
     let projectName = gallery?.name ?? "Galería"
@@ -206,9 +222,19 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       }))
       .filter((a) => a.track !== null && tracks.includes(a.track))
 
-    // Carpetas: /PixelOS Entregas/{categoría}/{cliente}/{proyecto}/
+    // ¿Esto lo puede ver el cliente?
+    //
+    // SOLO la entrega final. Una galería de selección son las pruebas: el
+    // cliente elige de ahí, pero no tiene derecho a descargarlas. Y un respaldo
+    // interno (notify_client=false) no se comparte nunca, sea del tipo que sea.
+    const esEntrega = gallery?.gallery_type === "final_delivery"
+    const paraElCliente = esEntrega && b.notify_client !== false
+
+    // Cada destino tiene su RAÍZ. Separarlas es lo que impide que un fallo al
+    // compartir vuelva a filtrar la selección: en la carpeta interna no hay
+    // nada compartido con nadie.
     const projectFolderId = await drive.ensureFolderPath(studioId, [
-      ROOT_FOLDER,
+      paraElCliente ? ROOT_FOLDER : ROOT_INTERNO,
       sanitize(categoryFolder),
       sanitize(clientName),
       sanitize(projectName),
@@ -294,9 +320,14 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
         .eq("id", backupId)
     }
 
-    // Compartir como "cualquiera con el enlace" (lector, sin descubrimiento/indexado).
-    await drive.shareFolder(studioId, projectFolderId, {})
-    const link = await drive.getFileLink(studioId, projectFolderId)
+    // Compartir SOLO la entrega final. Antes esto corría siempre, así que un
+    // respaldo de la selección dejaba su carpeta con enlace público.
+    let link: string | null = null
+    if (paraElCliente) {
+      // "Cualquiera con el enlace" (lector, sin descubrimiento/indexado).
+      await drive.shareFolder(studioId, projectFolderId, {})
+      link = await drive.getFileLink(studioId, projectFolderId)
+    }
 
     const total = assets.length
     const finalStatus = uploaded === 0 && total > 0 ? "failed" : uploaded < total ? "partial" : "completed"
