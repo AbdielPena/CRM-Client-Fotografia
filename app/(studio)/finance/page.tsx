@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ExternalLink, AlertTriangle, Wallet, TrendingUp, Users, Shirt } from "lucide-react"
+import { ExternalLink, AlertTriangle, Wallet, TrendingUp, Users, Shirt, PiggyBank } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
@@ -77,15 +77,24 @@ export default async function FinancePage() {
         description="Pagos del CRM y a qué cuenta de tu app de Finanzas entraron."
         unreadNotifications={unread}
         actions={
-          <a
-            href="https://fi.abbypixel.com"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Abrir FinanzApp
-          </a>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/finance/tithe"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              <PiggyBank className="h-3.5 w-3.5" />
+              10% de ganancia
+            </Link>
+            <a
+              href="https://fi.abbypixel.com"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Abrir FinanzApp
+            </a>
+          </div>
         }
       />
 

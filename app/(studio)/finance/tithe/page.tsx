@@ -55,8 +55,8 @@ export default async function FinanceTithePage() {
     <>
       <AppTopbar
         eyebrow="Finanzas"
-        title="Diezmo (10%)"
-        description="Cálculo automático del 10% sobre ingresos marcados con 'aplica_diezmo'. Cron mensual día 28."
+        title="10% de ganancia"
+        description="Arriba: el 10% de la ganancia de cada plan y cuánto suma este mes con las sesiones ya cobradas. Abajo: el diezmo calculado sobre los ingresos marcados en FinanzApp."
         unreadNotifications={unread}
         actions={<ComputeTitheButton />}
       />
