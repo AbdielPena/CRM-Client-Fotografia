@@ -1,4 +1,4 @@
-import { CalendarCheck, Clock3, PiggyBank } from "lucide-react"
+import { CalendarCheck, Clock3, PiggyBank, Wallet } from "lucide-react"
 
 import type { PlanTitheSummary } from "@/server/services/plan-profit-tithe.service"
 import { formatCurrency } from "@/lib/utils/currency"
@@ -57,25 +57,35 @@ export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {/* El orden importa: primero la ganancia TOTAL, y de ahí sale el 10%.
+          Antes solo se veía el 10% y el total no aparecía en ningún sitio. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Tarjeta
-          label={`10% de ${nombreMes(thisMonth.period)}`}
-          value={formatCurrency(thisMonth.tithe)}
-          hint={`${thisMonth.sessions} ${thisMonth.sessions === 1 ? "sesión saldada" : "sesiones saldadas"} · ${formatCurrency(thisMonth.profit)} de ganancia`}
-          icon={<PiggyBank className="size-4" />}
-          tone="positive"
+          label={`Ganancia de ${nombreMes(thisMonth.period)}`}
+          value={formatCurrency(thisMonth.profit)}
+          hint={`${thisMonth.sessions} ${thisMonth.sessions === 1 ? "sesión cobrada completa" : "sesiones cobradas completas"}`}
+          icon={<Wallet className="size-4" />}
+          tone="neutral"
         />
         <Tarjeta
-          label={`10% de ${nombreMes(lastMonth.period)}`}
-          value={formatCurrency(lastMonth.tithe)}
-          hint={`${lastMonth.sessions} ${lastMonth.sessions === 1 ? "sesión saldada" : "sesiones saldadas"} · ${formatCurrency(lastMonth.profit)} de ganancia`}
+          label="10% de esa ganancia"
+          value={formatCurrency(thisMonth.tithe)}
+          hint={`El 10% del total de ${formatCurrency(thisMonth.profit)}`}
+          icon={<PiggyBank className="size-4" />}
+          tone="positive"
+          destacada
+        />
+        <Tarjeta
+          label={`Ganancia de ${nombreMes(lastMonth.period)}`}
+          value={formatCurrency(lastMonth.profit)}
+          hint={`Su 10% fue ${formatCurrency(lastMonth.tithe)} · ${lastMonth.sessions} ${lastMonth.sessions === 1 ? "sesión" : "sesiones"}`}
           icon={<CalendarCheck className="size-4" />}
           tone="neutral"
         />
         <Tarjeta
-          label="10% en camino"
-          value={formatCurrency(pending.tithe)}
-          hint={`${pending.sessions} ${pending.sessions === 1 ? "sesión" : "sesiones"} con saldo pendiente`}
+          label="Ganancia en camino"
+          value={formatCurrency(pending.profit)}
+          hint={`Su 10% será ${formatCurrency(pending.tithe)} · ${pending.sessions} ${pending.sessions === 1 ? "sesión" : "sesiones"} sin terminar de pagar`}
           icon={<Clock3 className="size-4" />}
           tone="warning"
         />
@@ -97,10 +107,10 @@ export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
                 <tr className="border-b border-border">
                   <Th className="text-left">Plan</Th>
                   <Th>Precio</Th>
-                  <Th>Ganancia</Th>
+                  <Th>Ganancia por sesión</Th>
                   <Th>10% por sesión</Th>
-                  <Th>{nombreMes(lastMonth.period)}</Th>
-                  <Th>{nombreMes(thisMonth.period)}</Th>
+                  <Th>{`Ganancia ${nombreMes(lastMonth.period)}`}</Th>
+                  <Th>{`Ganancia ${nombreMes(thisMonth.period)}`}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -125,18 +135,32 @@ export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
                       <Td>{formatCurrency(r.profit)}</Td>
                       <Td strong>{formatCurrency(r.tithe)}</Td>
                       <Td muted={r.sessionsLastMonth === 0}>
-                        {r.sessionsLastMonth > 0
-                          ? `${formatCurrency(r.titheLastMonth)} · ${r.sessionsLastMonth}`
-                          : "—"}
+                        {r.sessionsLastMonth > 0 ? (
+                          <>
+                            {formatCurrency(r.profitLastMonth)}
+                            <span className="ml-1 text-[11px] text-muted-foreground">
+                              ({r.sessionsLastMonth})
+                            </span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </Td>
                       <Td
                         strong={activo}
                         muted={!activo}
                         className={activo ? "text-emerald-600 dark:text-emerald-400" : undefined}
                       >
-                        {activo
-                          ? `${formatCurrency(r.titheThisMonth)} · ${r.sessionsThisMonth}`
-                          : "—"}
+                        {activo ? (
+                          <>
+                            {formatCurrency(r.profitThisMonth)}
+                            <span className="ml-1 text-[11px] font-normal opacity-70">
+                              ({r.sessionsThisMonth})
+                            </span>
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </Td>
                     </tr>
                   )
@@ -145,14 +169,30 @@ export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
               <tfoot>
                 <tr className="border-t border-border bg-muted/40">
                   <td className="px-4 py-2.5 text-[12px] font-medium text-muted-foreground">
-                    {conMovimiento.length} de {rows.length} planes con sesiones
-                    saldadas
+                    TOTAL de ganancia · {conMovimiento.length} de {rows.length}{" "}
+                    planes con sesiones cobradas
                   </td>
                   <td />
                   <td />
                   <td />
-                  <Td strong>{formatCurrency(lastMonth.tithe)}</Td>
-                  <Td strong>{formatCurrency(thisMonth.tithe)}</Td>
+                  <Td strong>{formatCurrency(lastMonth.profit)}</Td>
+                  <Td strong>{formatCurrency(thisMonth.profit)}</Td>
+                </tr>
+                {/* La fila que el estudio venía a buscar: el 10% calculado
+                    sobre el TOTAL de arriba, no plan por plan. */}
+                <tr className="border-t-2 border-emerald-500/40 bg-emerald-500/10">
+                  <td className="px-4 py-3 text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    10% DEL TOTAL DE GANANCIA
+                  </td>
+                  <td />
+                  <td />
+                  <td />
+                  <Td strong className="text-emerald-700 dark:text-emerald-300">
+                    {formatCurrency(lastMonth.tithe)}
+                  </Td>
+                  <Td strong className="text-emerald-700 dark:text-emerald-300">
+                    {formatCurrency(thisMonth.tithe)}
+                  </Td>
                 </tr>
               </tfoot>
             </table>
@@ -207,12 +247,14 @@ function Tarjeta({
   hint,
   icon,
   tone,
+  destacada,
 }: {
   label: string
   value: string
   hint: string
   icon: React.ReactNode
   tone: "positive" | "warning" | "neutral"
+  destacada?: boolean
 }) {
   const iconClass =
     tone === "positive"
@@ -221,7 +263,13 @@ function Tarjeta({
         ? "text-amber-500"
         : "text-muted-foreground"
   return (
-    <div className="sf-card p-4">
+    <div
+      className={`sf-card p-4 ${
+        destacada
+          ? "border-emerald-500/50 bg-emerald-500/5 ring-1 ring-emerald-500/20"
+          : ""
+      }`}
+    >
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           {label}
