@@ -40,6 +40,20 @@ const ROOT_INTERNO = "PixelOS Respaldo interno"
 
 export type DriveTrack = "social" | "high_quality" | "both"
 
+/**
+ * Nombre con el que una foto queda guardada en Drive. Lo necesita también la
+ * limpieza de la fuga, que tiene que reconocer en una carpeta qué archivo vino
+ * de qué galería. Si esta regla y la de la subida se separan, la limpieza
+ * movería archivos equivocados — por eso vive aquí y se exporta.
+ */
+export function driveFileNameFor(
+  a: { id: string; original_name: string | null },
+  track: "high_quality" | "social",
+): string {
+  const ext = track === "high_quality" ? (a.original_name?.split(".").pop() ?? "jpg") : "webp"
+  return `${baseName(a.original_name, a.id)}${track === "social" ? "_web" : ""}.${ext}`
+}
+
 function sanitize(s: string): string {
   return (s || "").replace(/[/\\:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 120) || "_"
 }

@@ -199,6 +199,60 @@ export async function listFilesInFolder(
   return data.files ?? []
 }
 
+/**
+ * Quita el acceso "cualquiera con el enlace" de una carpeta. Devuelve cuántos
+ * permisos públicos retiró (0 = ya era privada).
+ *
+ * NO borra archivos ni toca los permisos de personas concretas: solo cierra el
+ * enlace público.
+ */
+export async function revokePublicAccess(
+  studioId: string,
+  fileId: string,
+): Promise<number> {
+  const auth = await authHeader(studioId)
+  const res = await fetch(
+    `${DRIVE_API}/files/${fileId}/permissions?fields=permissions(id,type)`,
+    { headers: { Authorization: auth } },
+  )
+  if (!res.ok) throw new Error(`Drive permissions ${res.status}: ${await res.text()}`)
+  const data = (await res.json()) as {
+    permissions?: Array<{ id: string; type: string }>
+  }
+  const publicos = (data.permissions ?? []).filter((p) => p.type === "anyone")
+
+  let quitados = 0
+  for (const p of publicos) {
+    const del = await fetch(`${DRIVE_API}/files/${fileId}/permissions/${p.id}`, {
+      method: "DELETE",
+      headers: { Authorization: auth },
+    })
+    // 404 = ya no estaba; es el resultado buscado.
+    if (del.ok || del.status === 404) quitados += 1
+    else throw new Error(`Drive revoke ${del.status}: ${await del.text()}`)
+  }
+  return quitados
+}
+
+/**
+ * Mueve un archivo de una carpeta a otra. En Drive "mover" es cambiar de padre:
+ * el archivo NO se copia ni se borra, así que es reversible.
+ */
+export async function moveFile(
+  studioId: string,
+  fileId: string,
+  fromFolderId: string,
+  toFolderId: string,
+): Promise<void> {
+  const auth = await authHeader(studioId)
+  const url =
+    `${DRIVE_API}/files/${fileId}` +
+    `?addParents=${encodeURIComponent(toFolderId)}` +
+    `&removeParents=${encodeURIComponent(fromFolderId)}&fields=id`
+  const res = await fetch(url, { method: "PATCH", headers: { Authorization: auth } })
+  if (!res.ok) throw new Error(`Drive move ${res.status}: ${await res.text()}`)
+}
+
 /** Borra un archivo (se usa para rotar respaldos viejos). */
 export async function deleteFile(studioId: string, fileId: string): Promise<void> {
   const auth = await authHeader(studioId)
