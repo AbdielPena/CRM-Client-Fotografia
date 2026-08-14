@@ -91,7 +91,16 @@ async function nombresDe(galleryId: string): Promise<Set<string>> {
 }
 
 export async function runDriveLeakCleanup(
-  opts: { dryRun?: boolean } = {},
+  opts: {
+    dryRun?: boolean
+    /**
+     * Solo cerrar enlaces de las carpetas de SOLO selección, sin mover nada.
+     * Es la parte urgente y de riesgo cero: ahí no hay ninguna entrega que
+     * romper. Mover las mezcladas son decenas de miles de archivos y se hace
+     * aparte, por tandas.
+     */
+    soloRevocar?: boolean
+  } = {},
 ): Promise<LeakCleanupResult> {
   const sb = untypedService()
   const res: LeakCleanupResult = {
@@ -162,6 +171,8 @@ export async function runDriveLeakCleanup(
       }
 
       // ── Caso B: mezclada → mover solo lo que es exclusivo de la selección ─
+      if (opts.soloRevocar) continue
+
       const deEntrega = new Set<string>()
       for (const e of entregas) {
         for (const n of await nombresDe(e.gallery_id)) deEntrega.add(n)

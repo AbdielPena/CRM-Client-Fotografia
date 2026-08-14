@@ -40,7 +40,10 @@ export async function POST(req: NextRequest) {
   const aplicar = url.searchParams.get("apply") === "1"
 
   try {
-    const res = await runDriveLeakCleanup({ dryRun: !aplicar })
+    const res = await runDriveLeakCleanup({
+      dryRun: !aplicar,
+      soloRevocar: url.searchParams.get("soloRevocar") === "1",
+    })
     return NextResponse.json({ ok: true, aplicado: aplicar, ...res })
   } catch (e) {
     console.error("[drive-leak-cleanup]", e)
