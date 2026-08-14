@@ -188,15 +188,31 @@ export async function listFilesInFolder(
     "trashed=false",
     `mimeType!='${FOLDER_MIME}'`,
   ].join(" and ")
-  const url =
-    `${DRIVE_API}/files?q=${encodeURIComponent(q)}` +
-    `&fields=files(id,name,createdTime)&orderBy=createdTime desc&pageSize=${pageSize}&spaces=drive`
-  const res = await fetch(url, { headers: { Authorization: auth } })
-  if (!res.ok) throw new Error(`Drive listFiles ${res.status}: ${await res.text()}`)
-  const data = (await res.json()) as {
-    files?: Array<{ id: string; name: string; createdTime: string }>
-  }
-  return data.files ?? []
+
+  // Drive devuelve como MÁXIMO 1000 por página. Sin recorrer las páginas, una
+  // carpeta de 1500 fotos se veía como de 1000 — y quien use esta lista para
+  // decidir qué mover o qué ya está subido, decidiría con datos incompletos.
+  const porPagina = Math.min(Math.max(1, pageSize), 1000)
+  const out: Array<{ id: string; name: string; createdTime: string }> = []
+  let pageToken: string | null = null
+
+  do {
+    const url =
+      `${DRIVE_API}/files?q=${encodeURIComponent(q)}` +
+      `&fields=nextPageToken,files(id,name,createdTime)` +
+      `&orderBy=createdTime desc&pageSize=${porPagina}&spaces=drive` +
+      (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "")
+    const res = await fetch(url, { headers: { Authorization: auth } })
+    if (!res.ok) throw new Error(`Drive listFiles ${res.status}: ${await res.text()}`)
+    const data = (await res.json()) as {
+      nextPageToken?: string
+      files?: Array<{ id: string; name: string; createdTime: string }>
+    }
+    out.push(...(data.files ?? []))
+    pageToken = data.nextPageToken ?? null
+  } while (pageToken)
+
+  return out
 }
 
 /**
