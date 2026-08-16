@@ -68,9 +68,15 @@ interface Candidata {
 async function candidatas(): Promise<Candidata[]> {
   const sb = untypedService()
 
+  // A Drive SOLO sube la ENTREGA FINAL. Nunca la selección.
+  //
+  // Las fotos de selección son las pruebas de la sesión: viven en el servidor y
+  // ahí se quedan. Subirlas a Drive fue el error que llenó las carpetas de las
+  // clientas con la sesión completa.
   const { data: galRaw, error } = await sb
     .from("galleries")
     .select("id, studio_id, name")
+    .eq("gallery_type", "final_delivery")
     .is("deleted_at", null)
   if (error) throw error
   const galerias = (galRaw ?? []) as Array<{
