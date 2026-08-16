@@ -236,26 +236,18 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       }))
       .filter((a) => a.track !== null && tracks.includes(a.track))
 
-    // A Drive SOLO sube la ENTREGA FINAL.
+    // DOS destinos distintos, y esta es la única línea que decide cuál:
     //
-    // Regla del estudio, sin excepciones: las fotos de selección son las
-    // pruebas de la sesión y viven en el servidor. No se respaldan a Drive ni
-    // en una carpeta interna. Este freno está aquí —en el motor, no en quien
-    // llama— para que ningún botón ni barrido pueda saltárselo.
+    //   · RESPALDO INTERNO  → todo el sistema, selección incluida. Nunca se
+    //     comparte, nunca se enlaza. Es la copia de seguridad del estudio.
+    //   · ENTREGA DEL CLIENTE → solo la entrega final, compartida por enlace.
+    //     Ese enlace es el que recibe la clienta.
+    //
+    // Que una galería de selección acabe en la carpeta del cliente es el fallo
+    // que le dio acceso a la sesión completa. Por eso el tipo de galería manda
+    // aquí, en el motor, y no en quien llama.
     const esEntrega = gallery?.gallery_type === "final_delivery"
-    if (!esEntrega) {
-      await sb
-        .from("gallery_drive_backups")
-        .update({
-          status: "cancelled",
-          last_error: "solo se respalda la entrega final",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", backupId)
-      return
-    }
-
-    const paraElCliente = b.notify_client !== false
+    const paraElCliente = esEntrega && b.notify_client !== false
 
     // Cada destino tiene su RAÍZ. Separarlas es lo que impide que un fallo al
     // compartir vuelva a filtrar la selección: en la carpeta interna no hay

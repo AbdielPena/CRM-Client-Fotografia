@@ -22,23 +22,24 @@ import { driveFileNameFor } from "./gallery-drive.service"
  *     archivos no se tocan: pasan a ser respaldo interno, que es justo lo que
  *     el estudio quiere tener.
  *
- *  B) Carpeta MEZCLADA (selección + entrega) → se mueven a la carpeta interna
- *     solo los archivos que pertenecen ÚNICAMENTE a la selección. El enlace
- *     sigue vivo y la clienta no nota nada: sigue viendo su entrega.
+ *  B) Carpeta MEZCLADA (selección + entrega) → se BORRAN de la carpeta del
+ *     cliente los archivos que pertenecen ÚNICAMENTE a la selección. El
+ *     enlace sigue vivo y la clienta no nota nada: sigue viendo su entrega.
  *
  * Una foto que está en las dos galerías (lo normal: la entrega es un subconjunto
- * de la selección) SE QUEDA en la carpeta compartida. Moverla le quitaría a la
- * clienta una foto que sí compró.
+ * de la selección) SE QUEDA. Borrarla le quitaría a la clienta una foto que sí
+ * compró — es la regla que más importa de todo este archivo.
  *
- * En Drive "mover" es cambiar de carpeta padre: no copia ni borra nada.
+ * Borrar aquí no pierde nada: las fotos siguen en el servidor, y el respaldo
+ * interno las tiene en su propia carpeta, que no se comparte con nadie.
  */
-
-const ROOT_INTERNO = "PixelOS Respaldo interno"
 
 export interface LeakCleanupResult {
   carpetasRevisadas: number
   enlacesQuitados: number
-  archivosMovidos: number
+  archivosBorrados: number
+  /** true = quedaron carpetas sin terminar; hay que volver a llamar. */
+  quedaPendiente: boolean
   /** Fotos que están en selección Y entrega: se quedan con la clienta. */
   compartidasSeQuedan: number
   errores: number
@@ -100,13 +101,20 @@ export async function runDriveLeakCleanup(
      * aparte, por tandas.
      */
     soloRevocar?: boolean
+    /**
+     * Tope de archivos a borrar en esta llamada. El proceso se corta a los 5
+     * minutos, así que se avanza por tandas y se vuelve a llamar.
+     */
+    maxBorrar?: number
   } = {},
 ): Promise<LeakCleanupResult> {
   const sb = untypedService()
+  const tope = opts.maxBorrar ?? 2000
   const res: LeakCleanupResult = {
     carpetasRevisadas: 0,
     enlacesQuitados: 0,
-    archivosMovidos: 0,
+    archivosBorrados: 0,
+    quedaPendiente: false,
     compartidasSeQuedan: 0,
     errores: 0,
     detalle: [],
@@ -146,6 +154,10 @@ export async function runDriveLeakCleanup(
   }
 
   for (const [carpetaId, filas] of porCarpeta) {
+    if (res.archivosBorrados >= tope) {
+      res.quedaPendiente = true
+      break
+    }
     const seleccion = filas.filter((f) => f.gallery_type === "selection")
     if (seleccion.length === 0) continue // sin selección, nada que limpiar
 
@@ -182,44 +194,42 @@ export async function runDriveLeakCleanup(
         for (const n of await nombresDe(s.gallery_id)) deSeleccion.add(n)
       }
 
-      // Carpeta interna destino, misma estructura.
-      const destinoProyecto = opts.dryRun
-        ? "(en seco)"
-        : await drive.ensureFolderPath(studioId, [ROOT_INTERNO, "Selección", nombre])
-
-      let movidos = 0
+      let borrados = 0
       let quedan = 0
+      let cortado = false
       for (const sub of [
-        { id: filas[0].high_quality_folder_id, etiqueta: "Máxima calidad (originales)" },
-        { id: filas[0].social_folder_id, etiqueta: "Redes (optimizada)" },
+        filas[0].high_quality_folder_id,
+        filas[0].social_folder_id,
       ]) {
-        if (!sub.id) continue
-        const archivos = await drive.listFilesInFolder(studioId, sub.id, 1000)
+        if (!sub) continue
+        const archivos = await drive.listFilesInFolder(studioId, sub, 1000)
         for (const f of archivos) {
-          // La regla de oro: si la foto también es de la entrega, NO se mueve.
+          // LA REGLA DE ORO: si la foto también es de la entrega, NO se toca.
           if (deEntrega.has(f.name)) {
             if (deSeleccion.has(f.name)) quedan += 1
             continue
           }
           if (!deSeleccion.has(f.name)) continue // ni de una ni de otra: no tocar
-          if (!opts.dryRun) {
-            const destinoSub = await drive.ensureFolder(
-              studioId,
-              sub.etiqueta,
-              destinoProyecto,
-            )
-            await drive.moveFile(studioId, f.id, sub.id, destinoSub)
+          if (res.archivosBorrados + borrados >= tope) {
+            cortado = true
+            break
           }
-          movidos += 1
+          if (!opts.dryRun) await drive.deleteFile(studioId, f.id)
+          borrados += 1
         }
+        if (cortado) break
       }
 
-      res.archivosMovidos += movidos
+      res.archivosBorrados += borrados
       res.compartidasSeQuedan += quedan
+      if (cortado) res.quedaPendiente = true
       res.detalle.push({
         proyecto: nombre,
         caso: "mezclada",
-        accion: `mover ${movidos} fotos de selección a interno · ${quedan} se quedan (también son de la entrega) · el enlace de la clienta sigue vivo`,
+        accion:
+          `borrar ${borrados} fotos de selección del enlace del cliente · ` +
+          `${quedan} se quedan (también son de la entrega)` +
+          (cortado ? " · TANDA CORTADA, quedan más" : ""),
       })
     } catch (err) {
       res.errores += 1

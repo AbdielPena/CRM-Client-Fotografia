@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
     const res = await runDriveLeakCleanup({
       dryRun: !aplicar,
       soloRevocar: url.searchParams.get("soloRevocar") === "1",
+      maxBorrar: Number(url.searchParams.get("max") ?? 2000) || 2000,
     })
     return NextResponse.json({ ok: true, aplicado: aplicar, ...res })
   } catch (e) {
