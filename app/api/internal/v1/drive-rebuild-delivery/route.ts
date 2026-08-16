@@ -94,14 +94,17 @@ export async function POST(req: NextRequest) {
       .filter((r) => tipoDe(r) !== "final_delivery")
       .map((r) => String(r.id))
     if (aplicar && idsSeleccion.length > 0) {
-      await sb
+      // 'failed', no 'cancelled': ese valor no pasa el CHECK de la tabla y la
+      // escritura se perdia sin avisar.
+      const { error: errSel } = await sb
         .from("gallery_drive_backups")
         .update({
-          status: "cancelled",
+          status: "failed",
           last_error: "a Drive solo sube la entrega final",
           updated_at: new Date().toISOString(),
         })
         .in("id", idsSeleccion)
+      if (errSel) throw errSel
     }
 
     // 3) Reconstruir la entrega desde cero, con la carpeta ya vacía.

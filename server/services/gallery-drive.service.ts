@@ -244,14 +244,19 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     // saltárselo.
     const esEntrega = gallery?.gallery_type === "final_delivery"
     if (!esEntrega) {
-      await sb
+      // 'failed' y no 'cancelled': el CHECK de la tabla solo admite
+      // pending/running/uploading/completed/failed/partial. Escribir un valor
+      // invalido dejaba la fila en 'running' para siempre, el rescate la volvia
+      // a 'pending' y el drenador la recogia otra vez, en bucle.
+      const { error: errCancel } = await sb
         .from("gallery_drive_backups")
         .update({
-          status: "cancelled",
+          status: "failed",
           last_error: "a Drive solo sube la entrega final",
           updated_at: new Date().toISOString(),
         })
         .eq("id", backupId)
+      if (errCancel) console.error("[gallery-drive] no se pudo frenar", backupId, errCancel)
       return
     }
 
