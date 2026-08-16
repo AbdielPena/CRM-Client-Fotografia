@@ -106,6 +106,12 @@ export async function runDriveLeakCleanup(
      * minutos, así que se avanza por tandas y se vuelve a llamar.
      */
     maxBorrar?: number
+    /**
+     * Limitar la limpieza a UNA carpeta de Drive (su `root_folder_id`). Sirve
+     * para hacer la primera de verdad y que el estudio la revise con sus ojos
+     * antes de soltar el resto.
+     */
+    soloCarpeta?: string
   } = {},
 ): Promise<LeakCleanupResult> {
   const sb = untypedService()
@@ -154,6 +160,7 @@ export async function runDriveLeakCleanup(
   }
 
   for (const [carpetaId, filas] of porCarpeta) {
+    if (opts.soloCarpeta && carpetaId !== opts.soloCarpeta) continue
     if (res.archivosBorrados >= tope) {
       res.quedaPendiente = true
       break

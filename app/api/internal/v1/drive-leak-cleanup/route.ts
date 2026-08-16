@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       dryRun: !aplicar,
       soloRevocar: url.searchParams.get("soloRevocar") === "1",
       maxBorrar: Number(url.searchParams.get("max") ?? 2000) || 2000,
+      soloCarpeta: url.searchParams.get("carpeta") ?? undefined,
     })
     return NextResponse.json({ ok: true, aplicado: aplicar, ...res })
   } catch (e) {
