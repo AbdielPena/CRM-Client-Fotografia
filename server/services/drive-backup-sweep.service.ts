@@ -68,13 +68,15 @@ interface Candidata {
 async function candidatas(): Promise<Candidata[]> {
   const sb = untypedService()
 
-  // Este barrido es el RESPALDO INTERNO: entra TODO, selección incluida.
+  // A Drive sube SOLO lo que el estudio pone en la galería de ENTREGA FINAL.
   //
-  // Va siempre a `PixelOS Respaldo interno`, que no se comparte con nadie. La
-  // carpeta que ve la clienta es otra y la llena el botón de publicar entrega.
+  // La selección del cliente NO se sube: son las pruebas de la sesión, viven en
+  // el servidor y ahí se quedan. Subirlas fue lo que llenó las carpetas de las
+  // clientas con la sesión completa.
   const { data: galRaw, error } = await sb
     .from("galleries")
     .select("id, studio_id, name")
+    .eq("gallery_type", "final_delivery")
     .is("deleted_at", null)
   if (error) throw error
   const galerias = (galRaw ?? []) as Array<{
