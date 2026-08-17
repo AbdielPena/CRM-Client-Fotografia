@@ -572,20 +572,57 @@ export async function onFinalDeliveryPublished(
   projectId: string,
 ): Promise<void> {
   await advanceProjectStatus(studioId, projectId, "entregado")
-  const days = await getPrintDeliveryDays(studioId, projectId)
+  // SIN fecha límite todavía: el plazo de las impresiones NO arranca al
+  // publicar la entrega, sino cuando el cliente termina de elegir qué quiere
+  // impreso. Si se pone aquí, una clienta que tarda dos semanas en elegir deja
+  // la tarea vencida sin que el estudio haya podido hacer nada.
+  // La fija startPrintDeliveryClock.
   await createWorkflowTask(studioId, projectId, "send_prints", {
     title: "Enviar impresiones al cliente",
     description:
-      "La galería de fotos finales está publicada. Coordina y envía las impresiones; al marcar esta tarea como completada, el cliente queda finalizado (si no le quedan otros proyectos pendientes).",
-    dueDate: new Date(Date.now() + days * 86400000).toISOString().slice(0, 10),
+      "La galería de fotos finales está publicada. El plazo empieza a contar cuando el cliente confirme qué fotos quiere impresas; al marcar esta tarea como completada, el cliente queda finalizado (si no le quedan otros proyectos pendientes).",
+    dueDate: null,
   })
 }
 
 /**
- * Plazo para entregar las impresiones, en días desde que se publica la galería
- * final. Lo fija la categoría de la sesión (Configuración → Categorías); 21 si
- * no está configurada. Antes era un 3 fijo, que dejaba las quinceañeras y bodas
- * (2 a 4 semanas de plazo real) marcadas como atrasadas desde el primer día.
+ * Arranca el plazo de las IMPRESIONES: le pone fecha límite a la tarea
+ * "Enviar impresiones".
+ *
+ * Se llama cuando el cliente confirma su selección de impresiones — ese es el
+ * momento en que el estudio puede empezar a trabajar. Si el plan no lleva
+ * selección (no hay nada que elegir), arranca al publicar la entrega.
+ *
+ * Solo pone la fecha si no la tiene: nunca corre un plazo ya fijado.
+ */
+export async function startPrintDeliveryClock(
+  studioId: string,
+  projectId: string,
+): Promise<void> {
+  try {
+    const dias = await getPrintDeliveryDays(studioId, projectId)
+    const limite = new Date(Date.now() + dias * 86400000).toISOString().slice(0, 10)
+    const sb = untypedService()
+    const { error } = await sb
+      .from("tasks")
+      .update({ due_date: limite, updated_at: new Date().toISOString() })
+      .eq("studio_id", studioId)
+      .eq("entity_type", "project")
+      .eq("entity_id", projectId)
+      .eq("workflow_stage", "send_prints")
+      .is("deleted_at", null)
+      .is("due_date", null)
+      .neq("status", "completada")
+    if (error) console.error("[pipeline] arrancar plazo de impresiones", error)
+  } catch (err) {
+    console.error("[pipeline] startPrintDeliveryClock falló", err)
+  }
+}
+
+/**
+ * Plazo para entregar las impresiones, en días desde que el CLIENTE confirma
+ * qué quiere impreso (no desde que se publica la entrega). Lo fija la categoría
+ * de la sesión (Configuración → Categorías); 21 si no está configurada.
  */
 async function getPrintDeliveryDays(studioId: string, projectId: string): Promise<number> {
   const DEFAULT_DAYS = 21

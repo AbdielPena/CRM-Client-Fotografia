@@ -405,7 +405,7 @@ export async function submitGalleryPrintSelection(input: {
     | undefined
   if (fila?.studio_id && fila.project_id) {
     try {
-      const { advanceProjectStatus } = await import(
+      const { advanceProjectStatus, startPrintDeliveryClock } = await import(
         "./project-automation.service"
       )
       await advanceProjectStatus(
@@ -413,6 +413,10 @@ export async function submitGalleryPrintSelection(input: {
         fila.project_id,
         "impresion_produccion",
       )
+      // AQUÍ arranca el plazo de las impresiones, no al publicar la entrega:
+      // hasta que el cliente no dice qué quiere impreso, el estudio no puede
+      // empezar y no tiene sentido contarle el tiempo en contra.
+      await startPrintDeliveryClock(fila.studio_id, fila.project_id)
     } catch (err) {
       // Best-effort: que el cliente pueda confirmar aunque el tablero falle.
       console.error("[print] mover a Impresión / Producción falló", err)

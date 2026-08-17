@@ -1,12 +1,11 @@
 import type { Metadata } from "next"
-import { Workflow, CheckCircle2, AlertTriangle, CalendarClock, ListChecks } from "lucide-react"
+import { Workflow, AlertTriangle, CalendarClock, ListChecks, CheckCircle2 } from "lucide-react"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { getClientPipelines } from "@/server/services/workflow.service"
 import { getProjectStatuses } from "@/server/services/project-status.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
-import { WorkflowClientCard } from "@/components/workflow/workflow-client-card"
 import { PipelineBoard } from "@/components/workflow/pipeline-board"
 
 export const metadata: Metadata = { title: "Pipeline de trabajo" }
@@ -95,33 +94,24 @@ export default async function DeliveriesPage() {
             {/* Activos — tablero por etapas: cada sesión aparece UNA vez, en
                 la columna donde está. La posición ya dice en qué va, así que la
                 tarjeta se queda con lo mínimo. */}
-            <PipelineBoard cards={active} statuses={statusOptions} />
-
-            {/* Finalizados */}
-            {finalized.length > 0 && (
-              <section className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  <h2 className="text-sm font-semibold text-foreground">
-                    Finalizados ({finalized.length})
-                  </h2>
-                </div>
-                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                  {finalized.map((card, i) => (
-                    <WorkflowClientCard key={card.clientId} card={card} index={i} />
-                  ))}
-                </div>
-              </section>
-            )}
+            {/* Los finalizados van DENTRO del tablero: el desplegable "Estado"
+                vive ahí y tiene que filtrarlos también. Cuando estaban fuera se
+                quedaban en pantalla al filtrar y parecía que el filtro fallaba. */}
+            <PipelineBoard
+              cards={active}
+              finalized={finalized}
+              statuses={statusOptions}
+            />
           </>
         )}
 
         <p className="text-[11px] text-muted-foreground">
-          Cada sesión está en la <strong>columna de la etapa donde va</strong>.
-          Dentro de cada columna, lo <strong>atrasado</strong> sube primero y
-          después manda la entrega más próxima. Una etapa se marca atrasada
-          cuando su fecha límite vence. El cliente se marca finalizado al
-          confirmar el envío de impresiones de todos sus proyectos.
+          Cada sesión está en la <strong>columna de la etapa donde va</strong> y
+          dentro de cada columna manda la <strong>fecha de entrega</strong>: la
+          más próxima arriba. El plazo de las <strong>impresiones</strong> no
+          empieza a correr hasta que el cliente confirma cuáles quiere impresas.
+          El cliente se marca finalizado al confirmar el envío de impresiones de
+          todos sus proyectos.
         </p>
       </div>
     </>

@@ -819,7 +819,16 @@ export async function publishGallery(
         const { maybeEnablePrintSelection } = await import(
           "./print-selection.service"
         )
-        await maybeEnablePrintSelection(galleryId)
+        const pideSeleccion = await maybeEnablePrintSelection(galleryId)
+        // Si el plan no lleva selección de impresiones no hay nada que esperar:
+        // el plazo arranca ya. Si SÍ la lleva, arranca cuando el cliente
+        // confirme (startPrintDeliveryClock desde submitGalleryPrintSelection).
+        if (!pideSeleccion && gProjectId) {
+          const { startPrintDeliveryClock } = await import(
+            "./project-automation.service"
+          )
+          await startPrintDeliveryClock(studioId, gProjectId)
+        }
       } catch (err) {
         console.error("[gallery] maybeEnablePrintSelection failed", err)
       }

@@ -4,10 +4,11 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { AlertTriangle, CalendarDays, Check, Loader2 } from "lucide-react"
+import { AlertTriangle, CalendarDays, Check, CheckCircle2, Loader2 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
 import { formatDateShort } from "@/lib/utils/currency"
+import { WorkflowClientCard } from "@/components/workflow/workflow-client-card"
 import { changeTaskStatusAction } from "@/server/actions/task.actions"
 import {
   STAGE_LABELS,
@@ -100,14 +101,27 @@ function etapaDe(stages: ClientCard["projects"][number]["stages"]): {
 
 export function PipelineBoard({
   cards,
+  finalized,
   statuses,
 }: {
   cards: ClientCard[]
+  /** Clientes ya finalizados. Van aquí dentro para que el filtro los alcance. */
+  finalized: ClientCard[]
   statuses: StatusOption[]
 }) {
   const router = useRouter()
   const [status, setStatus] = React.useState("")
   const [marcando, setMarcando] = React.useState<string | null>(null)
+
+  // Los finalizados obedecen el MISMO filtro. Antes vivían fuera del tablero y
+  // se quedaban en pantalla al filtrar: parecía que el filtro no funcionaba.
+  const finalizados = React.useMemo(
+    () =>
+      status
+        ? finalized.filter((c) => c.projects.some((p) => p.status === status))
+        : finalized,
+    [finalized, status],
+  )
 
   const tarjetas = React.useMemo<Tarjeta[]>(() => {
     const out: Tarjeta[] = []
@@ -238,6 +252,22 @@ export function PipelineBoard({
           )
         })}
       </div>
+
+      {finalizados.length > 0 ? (
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <h2 className="text-sm font-semibold text-foreground">
+              Finalizados ({finalizados.length})
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {finalizados.map((card, i) => (
+              <WorkflowClientCard key={card.clientId} card={card} index={i} />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
