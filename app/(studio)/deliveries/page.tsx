@@ -7,7 +7,7 @@ import { getClientPipelines } from "@/server/services/workflow.service"
 import { getProjectStatuses } from "@/server/services/project-status.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { WorkflowClientCard } from "@/components/workflow/workflow-client-card"
-import { PipelineList } from "@/components/workflow/pipeline-list"
+import { PipelineBoard } from "@/components/workflow/pipeline-board"
 
 export const metadata: Metadata = { title: "Pipeline de trabajo" }
 export const dynamic = "force-dynamic"
@@ -92,9 +92,10 @@ export default async function DeliveriesPage() {
           </div>
         ) : (
           <>
-            {/* Activos — lista plana ordenada por avance; el estudio elige qué
-                ver con el desplegable de estado. */}
-            <PipelineList cards={active} statuses={statusOptions} />
+            {/* Activos — tablero por etapas: cada sesión aparece UNA vez, en
+                la columna donde está. La posición ya dice en qué va, así que la
+                tarjeta se queda con lo mínimo. */}
+            <PipelineBoard cards={active} statuses={statusOptions} />
 
             {/* Finalizados */}
             {finalized.length > 0 && (
@@ -116,11 +117,11 @@ export default async function DeliveriesPage() {
         )}
 
         <p className="text-[11px] text-muted-foreground">
-          El pipeline se ordena por <strong>avance</strong>: lo más cerca de terminar
-          va primero y, a igual avance, la entrega más próxima; los clientes
-          finalizados van al final. Una etapa se marca <strong>atrasada</strong>{" "}
-          cuando su fecha límite vence. El cliente se marca finalizado al confirmar
-          el envío de impresiones de todos sus proyectos.
+          Cada sesión está en la <strong>columna de la etapa donde va</strong>.
+          Dentro de cada columna, lo <strong>atrasado</strong> sube primero y
+          después manda la entrega más próxima. Una etapa se marca atrasada
+          cuando su fecha límite vence. El cliente se marca finalizado al
+          confirmar el envío de impresiones de todos sus proyectos.
         </p>
       </div>
     </>
