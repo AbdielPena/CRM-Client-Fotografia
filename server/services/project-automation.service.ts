@@ -59,7 +59,11 @@ async function findStatusLabelByIntent(
   studioId: string,
   intent: ProjectIntent,
 ): Promise<string | null> {
-  const statuses = await getProjectStatuses(studioId)
+  // elevated: media vuelta del flujo la dispara EL CLIENTE desde la galería
+  // pública, donde no hay sesión del estudio. Con el cliente normal RLS
+  // devolvía la lista vacía —sin error— y ninguna transición encontraba a qué
+  // estado mover la sesión.
+  const statuses = await getProjectStatuses(studioId, { elevated: true })
 
   const explicit = statuses.find(
     (s) => (s as { auto_intent?: string | null }).auto_intent === intent,
@@ -99,7 +103,7 @@ export async function advanceProjectStatus(
     const targetLabel = await findStatusLabelByIntent(studioId, intent)
     if (!targetLabel) return { moved: false, toLabel: null }
 
-    const statuses = await getProjectStatuses(studioId)
+    const statuses = await getProjectStatuses(studioId, { elevated: true })
     const posDe = (label: string | null | undefined) =>
       label ? (statuses.find((s) => s.label === label)?.position ?? -1) : -1
 
@@ -214,11 +218,13 @@ export async function onPaymentRecorded(
 
   const paymentsCount = count ?? 0
   // Cualquier pago confirmado (reserva o balance) deja el proyecto en "Reservado".
-  // transitionProjectStatus es idempotente: si ya está en "Reservado" no hace nada.
+  // SOLO HACIA ADELANTE: el saldo se cobra el día de la sesión o después, así que
+  // con una transición normal cobrar el balance devolvía a "Reservado" una sesión
+  // que ya estaba en edición o entregada.
   // "Sesión realizada" NO se infiere por conteo de pagos (bug viejo): solo se setea
   // por automatización explícita / cambio manual / trigger por fecha de sesión.
   if (paymentsCount >= 1) {
-    await transitionProjectStatus(studioId, projectId, "reservado")
+    await advanceProjectStatus(studioId, projectId, "reservado")
   }
 
   // Flujo de booking: el PRIMER pago (depósito) confirma la sesión.
@@ -380,7 +386,9 @@ export async function onGalleryLinkedToClient(
   }
 
   if (!projectId) return
-  await transitionProjectStatus(studioId, projectId, "esperando_seleccion")
+  // Solo hacia adelante: vincular una galería nueva (la de entrega, una segunda
+  // selección) no puede devolver la sesión a "Esperando selección".
+  await advanceProjectStatus(studioId, projectId, "esperando_seleccion")
 }
 
 /**
@@ -439,7 +447,7 @@ export async function onSelectionSubmitted(
 ): Promise<void> {
   const projectId = await resolveProjectIdFromGallery(studioId, galleryId)
   if (!projectId) return
-  await transitionProjectStatus(studioId, projectId, "edicion")
+  await advanceProjectStatus(studioId, projectId, "edicion")
 }
 
 // ---------------------------------------------------------------------------
@@ -563,7 +571,7 @@ export async function onFinalDeliveryPublished(
   studioId: string,
   projectId: string,
 ): Promise<void> {
-  await transitionProjectStatus(studioId, projectId, "entregado")
+  await advanceProjectStatus(studioId, projectId, "entregado")
   const days = await getPrintDeliveryDays(studioId, projectId)
   await createWorkflowTask(studioId, projectId, "send_prints", {
     title: "Enviar impresiones al cliente",

@@ -910,8 +910,8 @@ async function markProjectDeliveredFromGallery(
     ) {
       return
     }
-    const { transitionProjectStatus } = await import("./project-automation.service")
-    await transitionProjectStatus(studioId, projectId, "entregado")
+    const { advanceProjectStatus } = await import("./project-automation.service")
+    await advanceProjectStatus(studioId, projectId, "entregado")
   } catch (err) {
     console.error("[gallery] markProjectDeliveredFromGallery failed", err)
   }

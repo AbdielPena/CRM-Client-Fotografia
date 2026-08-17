@@ -16,9 +16,21 @@ export type ProjectStatus = {
   auto_intent: string | null
 }
 
-/** Lista todos los estados del studio ordenados por posición. */
-export async function getProjectStatuses(studioId: string): Promise<ProjectStatus[]> {
-  const supabase = createSupabaseServerClient()
+/**
+ * Lista todos los estados del studio ordenados por posición.
+ *
+ * `elevated` lee con service-role. Hace falta para los automatismos que
+ * dispara EL CLIENTE (enviar su selección desde la galería pública): ahí no hay
+ * sesión del estudio, RLS devolvía la lista VACÍA sin dar error, y la sesión
+ * nunca pasaba a "En edición".
+ */
+export async function getProjectStatuses(
+  studioId: string,
+  opts?: { elevated?: boolean },
+): Promise<ProjectStatus[]> {
+  const supabase = opts?.elevated
+    ? createSupabaseServiceClient()
+    : createSupabaseServerClient()
   const { data, error } = await supabase
     .from('project_statuses')
     .select('*')

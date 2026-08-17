@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { AlertTriangle, Check, Loader2 } from "lucide-react"
+import { AlertTriangle, CalendarDays, Check, Loader2 } from "lucide-react"
 
 import { cn } from "@/lib/utils/cn"
 import { formatDateShort } from "@/lib/utils/currency"
@@ -53,6 +53,28 @@ interface Tarjeta {
   /** Tarea de la etapa actual, si la hay: permite marcarla hecha desde aquí. */
   taskId: string | null
   stage: StageKey
+}
+
+/**
+ * Cuánto falta para la entrega, en texto corto.
+ *
+ * La fecha sola no dice nada de un vistazo: "5 sep" hay que restarlo mentalmente
+ * en cada tarjeta. El "en 3 d" es lo que de verdad se lee.
+ *
+ * Mediodía a propósito: con `new Date("2026-09-05")` la fecha se interpreta en
+ * UTC y en RD retrocede un día.
+ */
+function plazoDe(fecha: string | null): { texto: string; urgente: boolean } {
+  if (!fecha) return { texto: "", urgente: false }
+  const hoy = new Date()
+  hoy.setHours(12, 0, 0, 0)
+  const dias = Math.round(
+    (new Date(`${fecha}T12:00:00`).getTime() - hoy.getTime()) / 86400000,
+  )
+  if (dias < 0) return { texto: `hace ${-dias} d`, urgente: true }
+  if (dias === 0) return { texto: "hoy", urgente: true }
+  if (dias === 1) return { texto: "mañana", urgente: true }
+  return { texto: `en ${dias} d`, urgente: dias <= 3 }
 }
 
 /** La etapa donde está la sesión: la actual o atrasada; si no, la última hecha. */
@@ -112,12 +134,12 @@ export function PipelineBoard({
     const m = new Map<StageKey, Tarjeta[]>()
     for (const k of STAGE_ORDER) m.set(k, [])
     for (const t of tarjetas) m.get(t.stage)?.push(t)
-    // Dentro de cada columna: lo atrasado primero, luego por fecha de entrega.
+    // Orden dentro de la columna: por FECHA DE ENTREGA, la más próxima arriba.
+    // Lo atrasado sube solo, porque su fecha ya pasó. Las sin fecha, al final.
     for (const lista of m.values()) {
-      lista.sort((a, b) => {
-        if (a.overdue !== b.overdue) return a.overdue ? -1 : 1
-        return (a.deliveryDate ?? "9999").localeCompare(b.deliveryDate ?? "9999")
-      })
+      lista.sort((a, b) =>
+        (a.deliveryDate ?? "9999-12-31").localeCompare(b.deliveryDate ?? "9999-12-31"),
+      )
     }
     return m
   }, [tarjetas])
@@ -229,6 +251,7 @@ function TarjetaSesion({
   ocupado: boolean
   onHecho: (taskId: string) => void
 }) {
+  const plazo = plazoDe(t.deliveryDate)
   return (
     <div
       className={cn(
@@ -248,21 +271,32 @@ function TarjetaSesion({
         </p>
       </Link>
 
-      {(t.deliveryDate || t.overdue) && (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          {t.overdue ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400">
-              <AlertTriangle className="h-3 w-3" />
-              Atrasada
-            </span>
-          ) : null}
-          {t.deliveryDate ? (
-            <span className="text-[11px] tabular-nums text-muted-foreground">
-              {formatDateShort(new Date(`${t.deliveryDate}T12:00:00`))}
-            </span>
-          ) : null}
-        </div>
-      )}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        {t.deliveryDate ? (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums",
+              plazo.urgente
+                ? "bg-red-500/12 text-red-600 dark:text-red-400"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            <CalendarDays className="h-3 w-3 shrink-0" />
+            Entrega {formatDateShort(new Date(`${t.deliveryDate}T12:00:00`))}
+            <span className="opacity-70">· {plazo.texto}</span>
+          </span>
+        ) : (
+          <span className="text-[11px] text-muted-foreground/70">
+            Sin fecha de entrega
+          </span>
+        )}
+        {t.overdue ? (
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400">
+            <AlertTriangle className="h-3 w-3" />
+            Atrasada
+          </span>
+        ) : null}
+      </div>
 
       {t.taskId ? (
         <button
