@@ -20,12 +20,16 @@ import { toast } from "sonner"
 import { setProjectStatusAction } from "@/server/actions/project-status.actions"
 import { cn } from "@/lib/utils/cn"
 import { formatDate } from "@/lib/utils/currency"
+import { groupIntoPhases } from "@/lib/projects/pipeline-phases"
 
 type Status = {
   id: string
   label: string
   color: string
   position: number
+  /** Identificador estable de la etapa: decide en que bloque cae la
+   *  columna. El nombre no sirve, el estudio puede cambiarlo. */
+  auto_intent?: string | null
 }
 
 export type ProjectCard = {
@@ -169,6 +173,10 @@ export function ProjectKanbanView({
     ? projects.find((p) => p.id === activeId) ?? null
     : null
 
+  // Las columnas se reparten en bloques por proceso, conservando el orden
+  // que ya traen (la posicion que fijo el estudio).
+  const bloques = React.useMemo(() => groupIntoPhases(statuses), [statuses])
+
   const handleDragStart = (e: DragStartEvent) => {
     setActiveId(String(e.active.id))
   }
@@ -216,31 +224,56 @@ export function ProjectKanbanView({
       onDragEnd={handleDragEnd}
     >
       <div
-        className="flex gap-4 overflow-x-auto pb-4"
-        style={{ minHeight: 540 }}
+        className="flex gap-6 overflow-x-auto pb-4"
+        style={{ minHeight: 580 }}
       >
-        {statuses.map((stage, i) => (
-          <KanbanColumn
-            key={stage.id}
-            stage={stage}
-            projects={grouped[stage.label] ?? []}
-            index={i}
-          />
+        {bloques.map(({ phase, columns }, bi) => (
+          <React.Fragment key={phase.id}>
+            {bi > 0 ? <Divisor /> : null}
+            <BloqueFase
+              phase={phase}
+              total={columns.reduce(
+                (n, c) => n + (grouped[c.label]?.length ?? 0),
+                0,
+              )}
+            >
+              {columns.map((stage, i) => (
+                <KanbanColumn
+                  key={stage.id}
+                  stage={stage}
+                  projects={grouped[stage.label] ?? []}
+                  index={indiceGlobal(bloques, bi, i)}
+                />
+              ))}
+            </BloqueFase>
+          </React.Fragment>
         ))}
 
         {completedStatusLabel ? (
-          <KanbanColumn
-            key="__terminal__"
-            stage={{
-              id: "__terminal__",
-              label: completedStatusLabel,
-              color: TERMINAL_COLOR,
-              position: 9999,
-            }}
-            projects={[]}
-            index={statuses.length}
-            terminal
-          />
+          <>
+            <Divisor />
+            <BloqueFase
+              phase={{
+                id: "cierre",
+                label: "Cierre",
+                hint: "Sale del tablero activo",
+                color: TERMINAL_COLOR,
+              }}
+              total={0}
+            >
+              <KanbanColumn
+                stage={{
+                  id: "__terminal__",
+                  label: completedStatusLabel,
+                  color: TERMINAL_COLOR,
+                  position: 9999,
+                }}
+                projects={[]}
+                index={statuses.length}
+                terminal
+              />
+            </BloqueFase>
+          </>
         ) : null}
       </div>
 
@@ -435,5 +468,79 @@ function ProjectCardView({
         aria-label={`Abrir ${project.name}`}
       />
     </div>
+  )
+}
+
+/**
+ * Linea vertical entre bloques. Es lo que hace ver DONDE termina un proceso y
+ * empieza el siguiente; solo con el hueco no se distinguia.
+ */
+function Divisor() {
+  return (
+    <div aria-hidden className="flex flex-shrink-0 items-stretch pt-11">
+      <span className="w-px bg-gradient-to-b from-transparent via-border to-transparent" />
+    </div>
+  )
+}
+
+/** Indice global de una columna, para que la animacion siga en cascada. */
+function indiceGlobal(
+  bloques: Array<{ columns: unknown[] }>,
+  bloque: number,
+  col: number,
+): number {
+  let n = 0
+  for (let i = 0; i < bloque; i++) n += bloques[i].columns.length
+  return n + col
+}
+
+/**
+ * Un proceso del pipeline: cinta con su nombre arriba y sus columnas debajo.
+ *
+ * La cinta de color mas el divisor son lo que separa un proceso de otro. Antes
+ * las 10 columnas iban seguidas y todas pesaban igual, asi que no se veia donde
+ * acababa una etapa del trabajo y empezaba la siguiente.
+ */
+function BloqueFase({
+  phase,
+  total,
+  children,
+}: {
+  phase: { id: string; label: string; hint: string; color: string }
+  total: number
+  children: React.ReactNode
+}) {
+  return (
+    <section className="flex flex-shrink-0 flex-col">
+      <header
+        className="mb-2.5 flex items-baseline justify-between gap-3 rounded-lg px-3 py-2"
+        style={{
+          background: `${phase.color}14`,
+          borderLeft: `3px solid ${phase.color}`,
+        }}
+      >
+        <div className="min-w-0">
+          <h3
+            className="text-[12px] font-semibold uppercase tracking-wider"
+            style={{ color: phase.color }}
+          >
+            {phase.label}
+          </h3>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {phase.hint}
+          </p>
+        </div>
+        {total > 0 ? (
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums"
+            style={{ background: `${phase.color}22`, color: phase.color }}
+          >
+            {total}
+          </span>
+        ) : null}
+      </header>
+
+      <div className="flex gap-3">{children}</div>
+    </section>
   )
 }

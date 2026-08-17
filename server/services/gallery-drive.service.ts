@@ -364,6 +364,36 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     const total = assets.length
     const finalStatus = uploaded === 0 && total > 0 ? "failed" : uploaded < total ? "partial" : "completed"
 
+    // ESPEJO: la carpeta del cliente contiene EXACTAMENTE la entrega y nada mas.
+    //
+    // Es el candado que faltaba. Sin el, cualquier archivo que se colara en la
+    // carpeta —una seleccion subida por error, una version vieja, un duplicado—
+    // se quedaba ahi meses sin que nadie lo notara. Ahora, al terminar cada
+    // respaldo, lo que sobra se borra.
+    //
+    // Solo se limpia si la subida quedo COMPLETA: si fallo a medias, vaciar la
+    // carpeta le quitaria al cliente fotos que si le tocan.
+    if (paraElCliente && finalStatus === "completed") {
+      for (const tr of tracks) {
+        const fid = folderIds[tr]
+        if (!fid) continue
+        const debenEstar = new Set(
+          assets.filter((a) => a.track === tr).map((a) => driveFileNameFor(a, tr)),
+        )
+        try {
+          const enDrive = await drive.listFilesInFolder(studioId, fid, 1000)
+          for (const f of enDrive) {
+            if (debenEstar.has(f.name)) continue
+            await drive.deleteFile(studioId, f.id)
+            console.warn("[gallery-drive] sobraba en la carpeta del cliente:", f.name)
+          }
+        } catch (e) {
+          // No es fatal: la entrega ya esta subida. Se reintenta a la proxima.
+          console.error("[gallery-drive] no se pudo dejar la carpeta en espejo", fid, e)
+        }
+      }
+    }
+
     await sb
       .from("gallery_drive_backups")
       .update({
