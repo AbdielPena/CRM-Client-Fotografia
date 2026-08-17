@@ -129,4 +129,12 @@ export async function onSelectionGalleryPublished(galleryId: string): Promise<vo
     relatedEntityType: "gallery",
     relatedEntityId: galleryId,
   })
+
+  // El aviso ya salió → cerrar la etapa "Enviar selección" del pipeline.
+  try {
+    const { onSelectionSentToClient } = await import("./project-automation.service")
+    await onSelectionSentToClient(g.studio_id, galleryId)
+  } catch (err) {
+    console.error("[selection-email] cerrar etapa send_selection", err)
+  }
 }

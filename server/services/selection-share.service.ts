@@ -208,6 +208,17 @@ export async function shareSelectionGallery(
     }
   }
 
+  // 6) Aviso enviado → cerrar la etapa "Enviar selección" del pipeline. Solo si
+  //    de verdad salió algo: un enlace copiado a mano no cuenta.
+  if (sentEmail || sentWhatsapp) {
+    try {
+      const { onSelectionSentToClient } = await import("./project-automation.service")
+      await onSelectionSentToClient(studioId, galleryId)
+    } catch (e) {
+      console.error("[selection-share] cerrar etapa send_selection", e)
+    }
+  }
+
   return {
     url,
     clientName,

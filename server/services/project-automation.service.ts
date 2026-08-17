@@ -482,6 +482,80 @@ export async function createWorkflowTask(
 }
 
 /**
+ * La SELECCIÓN ya salió hacia la clienta (correo o WhatsApp) → cerrar la etapa
+ * "Enviar selección" del pipeline.
+ *
+ * Hasta ahora esa etapa solo se cerraba de dos maneras: marcándola a mano, o
+ * cuando la clienta terminaba de elegir sus fotos. Compartir la galería no
+ * dejaba ningún rastro, así que la etapa se quedaba abierta —y se pintaba
+ * vencida— aunque el estudio ya hubiera hecho su parte. Si la clienta elegía
+ * rápido parecía funcionar; si tardaba, no.
+ *
+ * Si la tarea todavía no existe se inserta YA COMPLETADA, no se omite: el cron
+ * de las 6:15 la crearía a la mañana siguiente y la etapa reaparecería abierta.
+ *
+ * Best-effort: nada de esto puede tumbar un envío al cliente.
+ */
+export async function onSelectionSentToClient(
+  studioId: string,
+  galleryId: string,
+): Promise<void> {
+  const projectId = await resolveProjectIdFromGallery(studioId, galleryId)
+  if (!projectId) return
+
+  const sb = untypedService()
+  const ahora = new Date().toISOString()
+
+  const { data: existentes, error: errBuscar } = await sb
+    .from("tasks")
+    .select("id, status")
+    .eq("studio_id", studioId)
+    .eq("entity_type", "project")
+    .eq("entity_id", projectId)
+    .eq("workflow_stage", "send_selection")
+    .is("deleted_at", null)
+  if (errBuscar) {
+    console.error("[pipeline] buscar send_selection", errBuscar)
+    return
+  }
+
+  const abiertas = ((existentes ?? []) as Array<{ id: string; status: string }>).filter(
+    (t) => t.status !== "completada",
+  )
+
+  if ((existentes ?? []).length > 0) {
+    if (abiertas.length === 0) return // ya estaba cerrada
+    const { error } = await sb
+      .from("tasks")
+      .update({ status: "completada", completed_at: ahora, updated_at: ahora })
+      .in(
+        "id",
+        abiertas.map((t) => t.id),
+      )
+    if (error) console.error("[pipeline] cerrar send_selection", error)
+    return
+  }
+
+  const { error } = await sb.from("tasks").insert({
+    studio_id: studioId,
+    title: "Enviar selección de fotos al cliente",
+    description: "La galería de selección se le compartió al cliente.",
+    priority: "high",
+    status: "completada",
+    completed_at: ahora,
+    entity_type: "project",
+    entity_id: projectId,
+    workflow_stage: "send_selection",
+    notify_assignee: false,
+    created_by: null,
+  })
+  // 23505 = el cron la creó entre medio; la siguiente pasada la cerrará.
+  if (error && (error as { code?: string }).code !== "23505") {
+    console.error("[pipeline] crear send_selection cerrada", error)
+  }
+}
+
+/**
  * Galería de ENTREGA FINAL publicada → proyecto a "Entregado" + tarea
  * "Enviar impresiones". Best-effort, idempotente.
  */
