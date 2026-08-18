@@ -1,24 +1,21 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDown, Clock3, PiggyBank } from "lucide-react"
+import { ChevronDown, Clock3 } from "lucide-react"
 
-import type { PlanTitheSummary } from "@/server/services/plan-profit-tithe.service"
+import type { PlanProfitSummary } from "@/server/services/plan-profit.service"
 import { formatCurrency } from "@/lib/utils/currency"
 import { cn } from "@/lib/utils/cn"
 
 /**
- * Ganancia por mes y su 10%.
+ * Ganancia por mes y por plan.
  *
- * La versión anterior enseñaba cuatro tarjetas anchas y una tabla de seis
- * columnas, y solo sabía de dos meses: el actual y el pasado. Mucha superficie
- * para responder una pregunta simple —*en tal mes, ¿cuánto gané?*— y sin manera
- * de mirar atrás.
+ * Manda el MES: a la izquierda están todos, uno por línea con su monto; a la
+ * derecha el detalle del que elijas. La referencia fija por plan (precio y
+ * ganancia) es otra pregunta —sirve para poner precios, no para saber cómo te
+ * fue— así que vive plegada abajo y no compite por la atención.
  *
- * Ahora manda el MES. A la izquierda están todos, uno por línea con su monto;
- * a la derecha el detalle del que elijas. La referencia fija por plan (precio,
- * ganancia, 10%) es otra pregunta —sirve para poner precios, no para saber cómo
- * te fue— así que vive plegada abajo y no compite por la atención.
+ * Sin porcentajes: el estudio pidió ver la ganancia y nada más.
  */
 
 const MESES = [
@@ -42,7 +39,7 @@ function nombreMes(periodo: string): string {
   return `${MESES[m - 1]} ${y}`
 }
 
-export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
+export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
   const { plans, months, byMonth, pending } = data
   const [periodo, setPeriodo] = React.useState(months[0]?.period ?? "")
   const [verPlanes, setVerPlanes] = React.useState(false)
@@ -140,16 +137,6 @@ export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
                 : "sesiones cobradas completas"}
             </p>
 
-            <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
-              <PiggyBank className="size-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
-              <span className="text-[12.5px] text-emerald-800 dark:text-emerald-300">
-                El 10% de ese total es{" "}
-                <strong className="tabular-nums">
-                  {formatCurrency(mes.tithe)}
-                </strong>
-              </span>
-            </div>
-
             {detalle.length > 0 ? (
               <div className="mt-4">
                 <p className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -195,8 +182,7 @@ export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
             <strong className="text-foreground">
               {formatCurrency(pending.profit)}
             </strong>{" "}
-            en camino — su 10% será {formatCurrency(pending.tithe)}. Son{" "}
-            {pending.sessions}{" "}
+            en camino. Son {pending.sessions}{" "}
             {pending.sessions === 1 ? "sesión" : "sesiones"} sin terminar de
             pagar; todavía no cuentan en ningún mes.
           </span>
@@ -247,8 +233,7 @@ export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
                       {formatCurrency(p.profit)}
                     </span>
                     <span className="block text-[11px] text-muted-foreground">
-                      10%: {formatCurrency(p.tithe)} · precio{" "}
-                      {formatCurrency(p.price)}
+                      precio {formatCurrency(p.price)}
                     </span>
                   </span>
                 </li>

@@ -3,12 +3,11 @@ import "server-only"
 import { untypedService } from "@/server/supabase/untyped"
 
 /**
- * El 10% de la ganancia declarada en cada plan.
+ * Ganancia por mes y por plan.
  *
- * Es distinto del diezmo de `fin_tithe_records`, que se calcula sobre los
- * ingresos marcados con `aplica_diezmo`. Aquí se mira otra cosa: la **ganancia
- * limpia** que el dueño declaró en cada plan (`packages.profit_amount`) y su
- * 10%, tanto como referencia fija por plan como acumulado del mes.
+ * Sale de la **ganancia limpia** que el dueño declaró en cada plan
+ * (`packages.profit_amount`). Nada de porcentajes: el estudio pidió ver la
+ * ganancia y punto.
  *
  * Regla de "ya cuenta": la misma que usa `session-profit.service.ts` — la
  * sesión suma cuando queda TOTALMENTE pagada, y suma en el mes del último pago.
@@ -23,9 +22,7 @@ import { untypedService } from "@/server/supabase/untyped"
  *     ganancia real   = lo cobrado en esa sesión − gastos del plan
  *
  * Con eso una sesión vendida al precio viejo sigue reportando la ganancia
- * vieja, y una con descuento reporta menos. El número fijo por plan (columna
- * "10% por sesión") sí usa la ganancia declarada tal cual: es la referencia
- * para poner precios, no un dato del pasado.
+ * vieja, y una con descuento reporta menos.
  */
 
 /** Mes 'YYYY-MM' en hora de República Dominicana. */
@@ -66,8 +63,6 @@ export interface PlanRef {
   price: number
   /** Ganancia limpia declarada en el plan. */
   profit: number
-  /** El 10% de esa ganancia — el numero fijo por sesion de este plan. */
-  tithe: number
 }
 
 export interface MonthTotals {
@@ -75,7 +70,6 @@ export interface MonthTotals {
   period: string
   sessions: number
   profit: number
-  tithe: number
 }
 
 /** Lo que aporto un plan en UN mes. */
@@ -85,14 +79,14 @@ export interface MonthPlanRow {
   profit: number
 }
 
-export interface PlanTitheSummary {
+export interface PlanProfitSummary {
   plans: PlanRef[]
   /** Serie mensual completa, del mes mas reciente al mas viejo. */
   months: MonthTotals[]
   /** Desglose por plan de cada mes, indexado por periodo. */
   byMonth: Record<string, MonthPlanRow[]>
   /** Sesiones vivas con saldo: su ganancia todavia no cuenta. */
-  pending: { sessions: number; profit: number; tithe: number }
+  pending: { sessions: number; profit: number }
 }
 
 interface PkgRow {
@@ -104,9 +98,9 @@ interface PkgRow {
   service_category_id: string | null
 }
 
-export async function getPlanProfitTithe(
+export async function getPlanProfit(
   studioId: string,
-): Promise<PlanTitheSummary> {
+): Promise<PlanProfitSummary> {
   const sb = untypedService()
   const actual = periodoRD(new Date())
 
@@ -146,7 +140,6 @@ export async function getPlanProfitTithe(
         : null,
       price: Number(p.price ?? 0),
       profit,
-      tithe: profit / 10,
     })
   }
 
@@ -167,9 +160,9 @@ export async function getPlanProfitTithe(
   if (proyectos.length === 0) {
     return {
       plans: [...filas.values()],
-      months: [{ period: actual, sessions: 0, profit: 0, tithe: 0 }],
+      months: [{ period: actual, sessions: 0, profit: 0 }],
       byMonth: { [actual]: [] },
-      pending: { sessions: 0, profit: 0, tithe: 0 },
+      pending: { sessions: 0, profit: 0 },
     }
   }
 
@@ -220,7 +213,7 @@ export async function getPlanProfitTithe(
   // ── Repartir cada sesión en su mes (o en "pendiente") ────────────────────
   const totales = new Map<string, { sessions: number; profit: number }>()
   const porMes = new Map<string, Map<string, MonthPlanRow>>()
-  const pending = { sessions: 0, profit: 0, tithe: 0 }
+  const pending = { sessions: 0, profit: 0 }
 
   for (const proy of proyectos) {
     const fila = filas.get(proy.package_id)
@@ -261,7 +254,6 @@ export async function getPlanProfitTithe(
     delMes.set(proy.package_id, fp)
     porMes.set(periodo, delMes)
   }
-  pending.tithe = pending.profit / 10
 
   const conDatos = [...totales.keys()].sort()
   const primero = conDatos[0] ?? actual
@@ -272,7 +264,7 @@ export async function getPlanProfitTithe(
   const months: MonthTotals[] = periodos
     .map((period) => {
       const t = totales.get(period) ?? { sessions: 0, profit: 0 }
-      return { period, sessions: t.sessions, profit: t.profit, tithe: t.profit / 10 }
+      return { period, sessions: t.sessions, profit: t.profit }
     })
     .reverse() // el mes mas reciente primero
 

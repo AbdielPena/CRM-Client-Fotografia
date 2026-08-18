@@ -28,7 +28,7 @@ import {
   Layers,
   Mail,
   Wallet,
-  PiggyBank,
+  TrendingUp,
   Boxes,
   Landmark,
   PanelLeftClose,
@@ -142,7 +142,7 @@ const NAV_GROUPS: NavGroup[] = [
       { type: "link", href: "/finance", label: "Finanzas", icon: Wallet },
       // La pantalla existía pero no estaba enlazada desde ningún sitio: solo se
       // llegaba escribiendo la dirección a mano.
-      { type: "link", href: "/finance/tithe", label: "10% de ganancia", icon: PiggyBank },
+      { type: "link", href: "/finance/tithe", label: "Ganancia por mes", icon: TrendingUp },
       { type: "link", href: "/invoices", label: "Facturas", icon: Receipt },
       { type: "link", href: "/contracts", label: "Contratos", icon: FileText },
       { type: "link", href: "/inventory/items", label: "Inventario", icon: Boxes },

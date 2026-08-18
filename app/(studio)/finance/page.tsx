@@ -82,8 +82,8 @@ export default async function FinancePage() {
               href="/finance/tithe"
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
             >
-              <PiggyBank className="h-3.5 w-3.5" />
-              10% de ganancia
+              <TrendingUp className="h-3.5 w-3.5" />
+              Ganancia por mes
             </Link>
             <a
               href="https://fi.abbypixel.com"

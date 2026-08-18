@@ -10,14 +10,14 @@ import type { Metadata } from "next"
 import { requireStudioAuth } from "@/server/middleware/auth"
 import { countUnreadNotifications } from "@/server/services/notification.service"
 import { getFinTitheRecords } from "@/server/services/fin-tithe.service"
-import { getPlanProfitTithe } from "@/server/services/plan-profit-tithe.service"
+import { getPlanProfit } from "@/server/services/plan-profit.service"
 import { formatCurrency, formatDate } from "@/lib/utils/currency"
 import { d } from "@/lib/decimal"
 
 import { AppTopbar } from "@/components/layout/app-topbar"
 import { Button } from "@/components/ui/button"
 import { EmptyState } from "@/components/shared/empty-state"
-import { PlanProfitTithePanel } from "@/components/finance/plan-profit-tithe-panel"
+import { PlanProfitPanel } from "@/components/finance/plan-profit-panel"
 import {
   DataTable,
   DataTableBody,
@@ -29,15 +29,15 @@ import {
 
 import { ComputeTitheButton } from "./compute-tithe-button"
 
-export const metadata: Metadata = { title: "Finanzas · Diezmo" }
+export const metadata: Metadata = { title: "Finanzas · Ganancia" }
 
 export default async function FinanceTithePage() {
   const session = await requireStudioAuth()
 
-  const [records, unread, planTithe] = await Promise.all([
+  const [records, unread, planProfit] = await Promise.all([
     getFinTitheRecords(session.studioId, { pageSize: 100 }),
     countUnreadNotifications(session.studioId),
-    getPlanProfitTithe(session.studioId),
+    getPlanProfit(session.studioId),
   ])
 
   // KPIs
@@ -55,14 +55,14 @@ export default async function FinanceTithePage() {
     <>
       <AppTopbar
         eyebrow="Finanzas"
-        title="10% de ganancia"
-        description="Arriba: cuánto ganaste cada mes y su 10%. Abajo: el diezmo calculado sobre los ingresos marcados en FinanzApp."
+        title="Ganancia"
+        description="Cuánto ganaste cada mes y de qué planes salió."
         unreadNotifications={unread}
         actions={<ComputeTitheButton />}
       />
 
       <main className="mx-auto w-full max-w-5xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
-        <PlanProfitTithePanel data={planTithe} />
+        <PlanProfitPanel data={planProfit} />
 
         <div className="space-y-4 border-t border-border pt-8">
           <div>
