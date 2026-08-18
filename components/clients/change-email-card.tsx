@@ -29,6 +29,7 @@ interface Preview {
   enviados: number
   muestra: Array<{ id: string; asunto: string; fecha: string | null }>
   copias: number
+  otrasDirecciones: string[]
   duplicadoCon: string | null
 }
 
@@ -118,7 +119,7 @@ export function ChangeEmailCard({
         <button
           type="button"
           onClick={revisar}
-          disabled={!nuevoLimpio || igual || cargando !== null}
+          disabled={!nuevoLimpio || cargando !== null}
           className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-[12.5px] font-medium text-foreground hover:bg-muted disabled:opacity-50"
         >
           {cargando === "revisar" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
@@ -128,7 +129,8 @@ export function ChangeEmailCard({
 
       {igual ? (
         <p className="mt-2 text-[11.5px] text-muted-foreground">
-          Ese es el correo que ya tiene.
+          Es el correo que ya tiene. Aun asi puedes revisarlo: si le salieron
+          correos a una direccion anterior, desde aqui se los reenvias.
         </p>
       ) : null}
 
@@ -151,17 +153,26 @@ export function ChangeEmailCard({
           ) : null}
 
           <ul className="space-y-1 text-[12px] text-muted-foreground">
-            <li>
-              <strong className="text-foreground">{preview.enCola}</strong> correos en
-              cola sin enviar: salen al correo nuevo.
-            </li>
-            <li>
-              <strong className="text-foreground">{preview.copias}</strong> copias del
-              correo (reserva, formularios, galerías): se actualizan.
-            </li>
+            {!igual ? (
+              <>
+                <li>
+                  <strong className="text-foreground">{preview.enCola}</strong> correos
+                  en cola sin enviar: salen al correo nuevo.
+                </li>
+                <li>
+                  <strong className="text-foreground">{preview.copias}</strong> copias
+                  del correo (reserva, formularios, galerías): se actualizan.
+                </li>
+              </>
+            ) : null}
             <li>
               <strong className="text-foreground">{preview.enviados}</strong> correos ya
-              enviados al correo viejo.
+              enviados a otra direccion.
+              {preview.otrasDirecciones.length > 0 ? (
+                <span className="block text-[11.5px]">
+                  Fueron a: {preview.otrasDirecciones.join(", ")}
+                </span>
+              ) : null}
             </li>
           </ul>
 
@@ -175,7 +186,7 @@ export function ChangeEmailCard({
                   className="mt-0.5"
                 />
                 <span>
-                  Reenviar al correo nuevo los {preview.enviados} correos que ya se
+                  Reenviar a {preview.nuevo} los {preview.enviados} correos que ya se
                   enviaron
                   <span className="block text-[11.5px] text-muted-foreground">
                     Le llegarán de nuevo tal como salieron, con los mismos enlaces. No
@@ -212,7 +223,7 @@ export function ChangeEmailCard({
           <button
             type="button"
             onClick={aplicar}
-            disabled={cargando !== null}
+            disabled={cargando !== null || (igual && !reenviar)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[12.5px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
           >
             {cargando === "aplicar" ? (
@@ -220,7 +231,11 @@ export function ChangeEmailCard({
             ) : (
               <Send className="h-3.5 w-3.5" />
             )}
-            {reenviar ? `Cambiar y reenviar ${preview.enviados}` : "Cambiar correo"}
+            {igual
+              ? `Reenviar ${preview.enviados}`
+              : reenviar
+                ? `Cambiar y reenviar ${preview.enviados}`
+                : "Cambiar correo"}
           </button>
         </div>
       ) : null}

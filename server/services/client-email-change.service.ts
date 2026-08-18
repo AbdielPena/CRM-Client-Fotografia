@@ -51,12 +51,47 @@ export interface EmailChangePreview {
   muestra: Array<{ id: string; asunto: string; fecha: string | null }>
   /** Copias del correo en reservas, formularios y galerías. */
   copias: number
+  /** Direcciones distintas a las que ya se le escribió (correos anteriores). */
+  otrasDirecciones: string[]
   /** Otro cliente del estudio ya usa ese correo. */
   duplicadoCon: string | null
 }
 
 function normaliza(email: string): string {
   return email.trim().toLowerCase()
+}
+
+/**
+ * IDs de todo lo que le pertenece al cliente: su factura, su reserva, su
+ * sesión, su galería, su contrato.
+ *
+ * Es lo que permite encontrar SU historial de correos aunque la dirección haya
+ * cambiado. Buscar solo por dirección falla justo cuando más falta hace: una vez
+ * corregido el correo, lo ya enviado sigue apuntando al viejo y quedaría
+ * invisible para siempre.
+ */
+async function idsRelacionados(studioId: string, clientId: string): Promise<string[]> {
+  const sb = untypedService()
+  const ids = new Set<string>([clientId])
+  const tablas = ["invoices", "projects", "booking_requests", "galleries", "contracts", "quotes"]
+  for (const t of tablas) {
+    const { data, error } = await sb
+      .from(t)
+      .select("id")
+      .eq("studio_id", studioId)
+      .eq("client_id", clientId)
+    if (error) continue // la tabla puede no tener client_id; no es un fallo
+    for (const r of (data ?? []) as Array<{ id: string }>) ids.add(r.id)
+  }
+  return [...ids]
+}
+
+/** Filtro PostgREST: correos de ESTE cliente, por dirección o por entidad. */
+function filtroDelCliente(direccion: string | null, ids: string[]): string {
+  const partes: string[] = []
+  if (direccion) partes.push(`to_email.eq."${direccion}"`)
+  if (ids.length > 0) partes.push(`related_entity_id.in.(${ids.join(",")})`)
+  return partes.join(",")
 }
 
 /** Qué pasaría si se aplica el cambio. NO escribe nada. */
@@ -88,8 +123,39 @@ export async function previewClientEmailChange(
     enviados: 0,
     muestra: [],
     copias: 0,
+    otrasDirecciones: [],
     duplicadoCon: null,
   }
+
+  // Lo YA enviado que no fue al correo nuevo: candidatos a reenvio. Se busca
+  // por sus entidades ademas de por la direccion, para que siga apareciendo
+  // aunque el correo ya se haya corregido.
+  const ids = await idsRelacionados(studioId, clientId)
+  const filtro = filtroDelCliente(actual, ids)
+  if (filtro) {
+    const { data: enviados } = await sb
+      .from("email_queue")
+      .select("id, subject, sent_at, to_email")
+      .eq("studio_id", studioId)
+      .eq("status", "sent")
+      .or(filtro)
+      .neq("to_email", nuevo)
+      .order("sent_at", { ascending: false })
+    const previos = (enviados ?? []) as Array<{
+      id: string
+      subject: string
+      sent_at: string | null
+      to_email: string
+    }>
+    res.enviados = previos.length
+    res.muestra = previos
+      .slice(0, 10)
+      .map((e) => ({ id: e.id, asunto: e.subject, fecha: e.sent_at }))
+    res.otrasDirecciones = [...new Set(previos.map((e) => normaliza(e.to_email)))]
+  }
+
+  // El resto solo aplica si la direccion CAMBIA. Lo de arriba no: sirve para
+  // reenviar a la direccion actual lo que se envio a una anterior.
   if (!actual || actual === nuevo) return res
 
   // ¿Ese correo ya es de otro cliente? No se bloquea —una madre y su hija
@@ -112,19 +178,6 @@ export async function previewClientEmailChange(
     .eq("to_email", actual)
     .eq("status", "pending")
   res.enCola = cola ?? 0
-
-  const { data: enviados, count: total } = await sb
-    .from("email_queue")
-    .select("id, subject, sent_at", { count: "exact" })
-    .eq("studio_id", studioId)
-    .eq("to_email", actual)
-    .eq("status", "sent")
-    .order("sent_at", { ascending: false })
-    .limit(10)
-  res.enviados = total ?? 0
-  res.muestra = (
-    (enviados ?? []) as Array<{ id: string; subject: string; sent_at: string | null }>
-  ).map((e) => ({ id: e.id, asunto: e.subject, fecha: e.sent_at }))
 
   for (const { tabla, columna } of COPIAS) {
     const { count } = await sb
@@ -209,8 +262,14 @@ export async function changeClientEmail(
   if (!cliente) throw new Error("CLIENT_NOT_FOUND")
 
   const viejo = cliente.email ? normaliza(cliente.email) : null
+
+  // Misma direccion: no hay nada que mover, pero SI puede haber correos que
+  // salieron a una direccion anterior y el estudio quiere reenviar ahora.
   if (viejo === nuevo) {
-    return { ok: true, anterior: viejo, nuevo, redirigidos: 0, reenviados: 0, copias: 0 }
+    const reenviados = opts.reenviar
+      ? await reenviarHistorial(studioId, clientId, nuevo, cliente.name)
+      : 0
+    return { ok: true, anterior: viejo, nuevo, redirigidos: 0, reenviados, copias: 0 }
   }
 
   // 1) La ficha. Con `select` porque un UPDATE que no toca filas NO da error.
@@ -249,7 +308,7 @@ export async function changeClientEmail(
 
     // 4) Reenvío de lo ya enviado, solo si lo piden.
     if (opts.reenviar) {
-      reenviados = await reenviarHistorial(studioId, viejo, nuevo, cliente.name)
+      reenviados = await reenviarHistorial(studioId, clientId, nuevo, cliente.name)
     }
   }
 
@@ -277,20 +336,31 @@ export async function changeClientEmail(
  */
 async function reenviarHistorial(
   studioId: string,
-  viejo: string,
+  clientId: string,
   nuevo: string,
   nombre: string,
 ): Promise<number> {
   const sb = untypedService()
 
+  const { data: cli } = await sb
+    .from("clients")
+    .select("email")
+    .eq("id", clientId)
+    .maybeSingle()
+  const actual = (cli as { email: string | null } | null)?.email
+  const ids = await idsRelacionados(studioId, clientId)
+  const filtro = filtroDelCliente(actual ? normaliza(actual) : null, ids)
+  if (!filtro) return 0
+
   const { data: previos } = await sb
     .from("email_queue")
     .select(
-      "id, subject, body_html, body_text, from_name, reply_to, template_slug, related_entity_type, related_entity_id, sent_at",
+      "id, subject, body_html, body_text, from_name, reply_to, template_slug, related_entity_type, related_entity_id, sent_at, to_email",
     )
     .eq("studio_id", studioId)
-    .eq("to_email", viejo)
     .eq("status", "sent")
+    .or(filtro)
+    .neq("to_email", nuevo)
     .order("sent_at", { ascending: true })
     .limit(MAX_REENVIOS)
 
@@ -327,7 +397,7 @@ async function reenviarHistorial(
       related_entity_id: e.related_entity_id,
       scheduled_for: new Date().toISOString(),
       status: "pending",
-      metadata: { reenvio_de: String(e.id), reenvio_desde: viejo },
+      metadata: { reenvio_de: String(e.id), reenvio_desde: String(e.to_email) },
     }))
   if (filas.length === 0) return 0
 
