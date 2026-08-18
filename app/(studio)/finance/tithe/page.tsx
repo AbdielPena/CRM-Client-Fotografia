@@ -79,14 +79,14 @@ export default async function FinanceTithePage() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <KpiCard
               label="Pendiente de pago"
-              value={formatCurrency(totalPendiente.toNumber())}
+              value={formatCurrency(totalPendiente.toNumber(), "DOP")}
               icon={<Clock className="size-4" />}
               tone={totalPendiente.gt(0) ? "warning" : "neutral"}
               count={pendientes.length}
             />
             <KpiCard
               label={`Pagado en ${new Date().getFullYear()}`}
-              value={formatCurrency(totalPagadoYTD.toNumber())}
+              value={formatCurrency(totalPagadoYTD.toNumber(), "DOP")}
               icon={<CheckCircle2 className="size-4" />}
               tone="positive"
               count={pagados.length}
@@ -136,10 +136,10 @@ export default async function FinanceTithePage() {
                       </p>
                     </DataTableCell>
                     <DataTableCell className="text-right tabular-nums text-muted-foreground">
-                      {formatCurrency(Number(r.base_calculo))}
+                      {formatCurrency(Number(r.base_calculo), "DOP")}
                     </DataTableCell>
                     <DataTableCell className="text-right tabular-nums font-semibold">
-                      {formatCurrency(Number(r.monto_diezmo))}
+                      {formatCurrency(Number(r.monto_diezmo), "DOP")}
                     </DataTableCell>
                     <DataTableCell className="text-xs text-muted-foreground">
                       {r.fecha_pago

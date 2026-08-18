@@ -139,7 +139,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                             : "text-muted-foreground",
                         )}
                       >
-                        {m.profit > 0 ? formatCurrency(m.profit) : "—"}
+                        {m.profit > 0 ? formatCurrency(m.profit, "DOP") : "—"}
                       </span>
                     </div>
 
@@ -157,7 +157,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
 
                     {m.projectedProfit > 0 ? (
                       <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
-                        + {formatCurrency(m.projectedProfit)} previsto
+                        + {formatCurrency(m.projectedProfit, "DOP")} previsto
                       </p>
                     ) : null}
                   </button>
@@ -181,7 +181,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                   Cobrado
                 </p>
                 <p className="text-lg font-bold tabular-nums text-foreground">
-                  {formatCurrency(mes.collected)}
+                  {formatCurrency(mes.collected, "DOP")}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   {mes.payments} {mes.payments === 1 ? "pago" : "pagos"} recibidos
@@ -192,7 +192,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                   Ganancia confirmada
                 </p>
                 <p className="text-lg font-bold tabular-nums text-foreground">
-                  {formatCurrency(mes.profit)}
+                  {formatCurrency(mes.profit, "DOP")}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   {mes.sessions}{" "}
@@ -208,7 +208,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                 </p>
                 <p className="text-lg font-bold tabular-nums text-foreground">
                   {mes.projectedProfit > 0
-                    ? `+ ${formatCurrency(mes.projectedProfit)}`
+                    ? `+ ${formatCurrency(mes.projectedProfit, "DOP")}`
                     : "\u2014"}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
@@ -224,7 +224,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
               <p className="mt-1.5 text-[12px] text-muted-foreground">
                 Si todas pagan, el mes cierra en{" "}
                 <strong className="tabular-nums text-foreground">
-                  {formatCurrency(mes.profit + mes.projectedProfit)}
+                  {formatCurrency(mes.profit + mes.projectedProfit, "DOP")}
                 </strong>{" "}
                 de ganancia.
               </p>
@@ -239,7 +239,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                   >
                     {planPorId.get(d.packageId)?.packageName ?? "(plan eliminado)"}{" "}
                     <strong className="tabular-nums text-foreground">
-                      {formatCurrency(d.profit + d.projectedProfit)}
+                      {formatCurrency(d.profit + d.projectedProfit, "DOP")}
                     </strong>
                   </span>
                 ))}
@@ -279,11 +279,11 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                           </td>
                           <td className="px-3 py-1.5 text-right tabular-nums">
                             <span className="text-foreground">
-                              {formatCurrency(r.paid)}
+                              {formatCurrency(r.paid, "DOP")}
                             </span>
                             {previsto ? (
                               <span className="block text-[11px] text-muted-foreground">
-                                de {formatCurrency(r.total)}
+                                de {formatCurrency(r.total, "DOP")}
                               </span>
                             ) : null}
                           </td>
@@ -294,7 +294,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                             )}
                           >
                             {previsto ? "+ " : ""}
-                            {formatCurrency(r.profit)}
+                            {formatCurrency(r.profit, "DOP")}
                           </td>
                         </tr>
                       )
@@ -319,7 +319,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
           <span>
             {unscheduled.sessions}{" "}
             {unscheduled.sessions === 1 ? "sesión" : "sesiones"} sin fecha y sin
-            terminar de pagar ({formatCurrency(unscheduled.profit)}). Sin fecha
+            terminar de pagar ({formatCurrency(unscheduled.profit, "DOP")}). Sin fecha
             no se pueden proyectar a ningún mes — ponles fecha y aparecerán.
           </span>
         </p>
@@ -366,10 +366,10 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                   </span>
                   <span className="shrink-0 text-right text-[12px] tabular-nums">
                     <span className="block text-foreground">
-                      {formatCurrency(p.profit)}
+                      {formatCurrency(p.profit, "DOP")}
                     </span>
                     <span className="block text-[11px] text-muted-foreground">
-                      precio {formatCurrency(p.price)}
+                      precio {formatCurrency(p.price, "DOP")}
                     </span>
                   </span>
                 </li>
