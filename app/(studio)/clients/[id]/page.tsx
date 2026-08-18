@@ -41,6 +41,7 @@ import { ClientCreatedToast } from "@/components/clients/client-created-toast"
 import { DeleteClientButton } from "@/components/clients/delete-client-button"
 import { PortalAccessCard } from "@/components/clients/portal-access-card"
 import { ClientEmailsCard } from "@/components/clients/client-emails-card"
+import { ChangeEmailCard } from "@/components/clients/change-email-card"
 import { getClientEmailControl } from "@/server/services/email-automation.service"
 import { DeliveriesPanel } from "@/components/clients/deliveries-panel"
 import { EntityTasks } from "@/components/tasks/entity-tasks"
@@ -773,6 +774,12 @@ export default async function ClientDetailPage({
               initialLastLogin={
                 (client as { last_portal_login_at?: string | null }).last_portal_login_at ?? null
               }
+            />
+
+            {/* Cambiar su correo: arrastra la cola y las copias */}
+            <ChangeEmailCard
+              clientId={client.id as string}
+              currentEmail={(client.email as string | null) ?? null}
             />
 
             {/* Interruptor general de sus correos */}
