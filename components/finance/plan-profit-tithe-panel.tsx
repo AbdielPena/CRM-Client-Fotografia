@@ -1,18 +1,24 @@
-import { CalendarCheck, Clock3, PiggyBank, Wallet } from "lucide-react"
+"use client"
+
+import * as React from "react"
+import { ChevronDown, Clock3, PiggyBank } from "lucide-react"
 
 import type { PlanTitheSummary } from "@/server/services/plan-profit-tithe.service"
 import { formatCurrency } from "@/lib/utils/currency"
+import { cn } from "@/lib/utils/cn"
 
 /**
- * Apartado "10% de la ganancia por plan".
+ * Ganancia por mes y su 10%.
  *
- * Responde dos preguntas distintas y las mantiene separadas a propósito:
- *   · Cuánto es el 10% de CADA plan (número fijo, sirve para decidir precios).
- *   · Cuánto suma ese 10% en el mes, contando solo las sesiones ya saldadas.
+ * La versión anterior enseñaba cuatro tarjetas anchas y una tabla de seis
+ * columnas, y solo sabía de dos meses: el actual y el pasado. Mucha superficie
+ * para responder una pregunta simple —*en tal mes, ¿cuánto gané?*— y sin manera
+ * de mirar atrás.
  *
- * Lo tercero — "en camino" — evita el malentendido de siempre: el dinero de las
- * reservas todavía no es ganancia, porque la sesión no se ha hecho ni cobrado
- * completa.
+ * Ahora manda el MES. A la izquierda están todos, uno por línea con su monto;
+ * a la derecha el detalle del que elijas. La referencia fija por plan (precio,
+ * ganancia, 10%) es otra pregunta —sirve para poner precios, no para saber cómo
+ * te fue— así que vive plegada abajo y no compite por la atención.
  */
 
 const MESES = [
@@ -37,247 +43,226 @@ function nombreMes(periodo: string): string {
 }
 
 export function PlanProfitTithePanel({ data }: { data: PlanTitheSummary }) {
-  const { rows, thisMonth, lastMonth, pending } = data
-  const conMovimiento = rows.filter(
-    (r) => r.sessionsThisMonth > 0 || r.sessionsLastMonth > 0,
+  const { plans, months, byMonth, pending } = data
+  const [periodo, setPeriodo] = React.useState(months[0]?.period ?? "")
+  const [verPlanes, setVerPlanes] = React.useState(false)
+
+  const mes = months.find((m) => m.period === periodo) ?? months[0]
+  const planPorId = React.useMemo(
+    () => new Map(plans.map((p) => [p.packageId, p])),
+    [plans],
   )
+  const detalle = byMonth[periodo] ?? []
+  // La barra compara meses entre sí: sin referencia, un monto suelto no dice
+  // si fue un buen mes o no.
+  const tope = Math.max(...months.map((m) => m.profit), 1)
+
+  if (!mes) return null
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div>
         <h2 className="text-base font-semibold text-foreground">
-          10% de la ganancia por plan
+          Ganancia por mes
         </h2>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Sobre la ganancia limpia que declaraste en cada plan. Una sesión suma
-          el mes en que el cliente <strong>termina</strong> de pagar — un abono
-          todavía no cuenta. Los totales del mes se calculan sobre lo que
-          cobraste de verdad en cada sesión, así que subir un precio hoy no
-          cambia lo que ganaste antes.
+          Una sesión suma el mes en que la clienta <strong>termina</strong> de
+          pagar. Se calcula sobre lo que cobraste de verdad, así que subir un
+          precio hoy no cambia lo que ganaste antes.
         </p>
       </div>
 
-      {/* El orden importa: primero la ganancia TOTAL, y de ahí sale el 10%.
-          Antes solo se veía el 10% y el total no aparecía en ningún sitio. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Tarjeta
-          label={`Ganancia de ${nombreMes(thisMonth.period)}`}
-          value={formatCurrency(thisMonth.profit)}
-          hint={`${thisMonth.sessions} ${thisMonth.sessions === 1 ? "sesión cobrada completa" : "sesiones cobradas completas"}`}
-          icon={<Wallet className="size-4" />}
-          tone="neutral"
-        />
-        <Tarjeta
-          label="10% de esa ganancia"
-          value={formatCurrency(thisMonth.tithe)}
-          hint={`El 10% del total de ${formatCurrency(thisMonth.profit)}`}
-          icon={<PiggyBank className="size-4" />}
-          tone="positive"
-          destacada
-        />
-        <Tarjeta
-          label={`Ganancia de ${nombreMes(lastMonth.period)}`}
-          value={formatCurrency(lastMonth.profit)}
-          hint={`Su 10% fue ${formatCurrency(lastMonth.tithe)} · ${lastMonth.sessions} ${lastMonth.sessions === 1 ? "sesión" : "sesiones"}`}
-          icon={<CalendarCheck className="size-4" />}
-          tone="neutral"
-        />
-        <Tarjeta
-          label="Ganancia en camino"
-          value={formatCurrency(pending.profit)}
-          hint={`Su 10% será ${formatCurrency(pending.tithe)} · ${pending.sessions} ${pending.sessions === 1 ? "sesión" : "sesiones"} sin terminar de pagar`}
-          icon={<Clock3 className="size-4" />}
-          tone="warning"
-        />
+      <div className="sf-card overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,220px)_1fr]">
+          {/* ── Los meses ─────────────────────────────────────────────── */}
+          <ul className="border-b border-border/70 md:border-b-0 md:border-r">
+            {months.map((m) => {
+              const activo = m.period === periodo
+              return (
+                <li key={m.period}>
+                  <button
+                    type="button"
+                    onClick={() => setPeriodo(m.period)}
+                    className={cn(
+                      "w-full px-4 py-2.5 text-left transition-colors",
+                      activo ? "bg-accent/50" : "hover:bg-accent/25",
+                    )}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span
+                        className={cn(
+                          "text-[12.5px] capitalize",
+                          activo
+                            ? "font-semibold text-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {nombreMes(m.period)}
+                      </span>
+                      <span
+                        className={cn(
+                          "shrink-0 text-[12.5px] tabular-nums",
+                          activo
+                            ? "font-semibold text-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {m.profit > 0 ? formatCurrency(m.profit) : "—"}
+                      </span>
+                    </div>
+                    <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-border/60">
+                      <div
+                        className={cn(
+                          "h-full rounded-full",
+                          activo ? "bg-emerald-500" : "bg-emerald-500/40",
+                        )}
+                        style={{ width: `${Math.round((m.profit / tope) * 100)}%` }}
+                      />
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+
+          {/* ── El mes elegido ────────────────────────────────────────── */}
+          <div className="p-4">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              En <span className="capitalize">{nombreMes(mes.period)}</span> ganaste
+            </p>
+            <p className="mt-0.5 text-3xl font-bold tabular-nums text-foreground">
+              {formatCurrency(mes.profit)}
+            </p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              {mes.sessions}{" "}
+              {mes.sessions === 1
+                ? "sesión cobrada completa"
+                : "sesiones cobradas completas"}
+            </p>
+
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2">
+              <PiggyBank className="size-4 shrink-0 text-emerald-700 dark:text-emerald-400" />
+              <span className="text-[12.5px] text-emerald-800 dark:text-emerald-300">
+                El 10% de ese total es{" "}
+                <strong className="tabular-nums">
+                  {formatCurrency(mes.tithe)}
+                </strong>
+              </span>
+            </div>
+
+            {detalle.length > 0 ? (
+              <div className="mt-4">
+                <p className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  De qué planes salió
+                </p>
+                <ul className="divide-y divide-border/60">
+                  {detalle.map((d) => {
+                    const plan = planPorId.get(d.packageId)
+                    return (
+                      <li
+                        key={d.packageId}
+                        className="flex items-baseline justify-between gap-3 py-1.5"
+                      >
+                        <span className="min-w-0 truncate text-[12.5px] text-foreground">
+                          {plan?.packageName ?? "(plan eliminado)"}
+                          <span className="ml-1.5 text-[11px] text-muted-foreground">
+                            ×{d.sessions}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[12.5px] tabular-nums text-foreground">
+                          {formatCurrency(d.profit)}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            ) : (
+              <p className="mt-4 text-[12.5px] text-muted-foreground">
+                Ninguna sesión terminó de pagarse en este mes.
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
-      {rows.length === 0 ? (
-        <div className="sf-card p-5 text-[13px] text-muted-foreground">
-          Ningún plan tiene ganancia declarada todavía. Ponla en{" "}
-          <strong className="text-foreground">
-            Configuración → Paquetes
-          </strong>
-          , campo «Ganancia de este plan», y este apartado se llena solo.
+      {/* Lo que todavía no cuenta. Va aparte y en una línea: es la confusión
+          de siempre —el dinero de las reservas aún no es ganancia. */}
+      {pending.sessions > 0 ? (
+        <p className="flex items-start gap-1.5 text-[12px] text-muted-foreground">
+          <Clock3 className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            <strong className="text-foreground">
+              {formatCurrency(pending.profit)}
+            </strong>{" "}
+            en camino — su 10% será {formatCurrency(pending.tithe)}. Son{" "}
+            {pending.sessions}{" "}
+            {pending.sessions === 1 ? "sesión" : "sesiones"} sin terminar de
+            pagar; todavía no cuentan en ningún mes.
+          </span>
+        </p>
+      ) : null}
+
+      {/* Referencia por plan: plegada, porque responde otra pregunta. */}
+      {plans.length > 0 ? (
+        <div className="sf-card overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setVerPlanes((v) => !v)}
+            className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-accent/25"
+          >
+            <ChevronDown
+              className={cn(
+                "size-4 shrink-0 text-muted-foreground transition-transform",
+                verPlanes && "rotate-180",
+              )}
+            />
+            <span className="text-[13px] font-medium text-foreground">
+              Cuánto deja cada plan
+            </span>
+            <span className="ml-auto text-[11.5px] text-muted-foreground">
+              {plans.length} planes
+            </span>
+          </button>
+
+          {verPlanes ? (
+            <ul className="divide-y divide-border/60 border-t border-border/70">
+              {plans.map((p) => (
+                <li
+                  key={p.packageId}
+                  className="flex items-baseline justify-between gap-3 px-4 py-2"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12.5px] text-foreground">
+                      {p.packageName}
+                    </span>
+                    {p.categoryName ? (
+                      <span className="block text-[11px] text-muted-foreground">
+                        {p.categoryName}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-right text-[12px] tabular-nums">
+                    <span className="block text-foreground">
+                      {formatCurrency(p.profit)}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground">
+                      10%: {formatCurrency(p.tithe)} · precio{" "}
+                      {formatCurrency(p.price)}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : (
-        <div className="sf-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <Th className="text-left">Plan</Th>
-                  <Th>Precio</Th>
-                  <Th>Ganancia por sesión</Th>
-                  <Th>10% por sesión</Th>
-                  <Th>{`Ganancia ${nombreMes(lastMonth.period)}`}</Th>
-                  <Th>{`Ganancia ${nombreMes(thisMonth.period)}`}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const activo = r.sessionsThisMonth > 0
-                  return (
-                    <tr
-                      key={r.packageId}
-                      className="border-b border-border/60 last:border-0 hover:bg-accent/30"
-                    >
-                      <td className="px-4 py-2.5">
-                        <p className="font-medium text-foreground">
-                          {r.packageName}
-                        </p>
-                        {r.categoryName && (
-                          <p className="text-[11px] text-muted-foreground">
-                            {r.categoryName}
-                          </p>
-                        )}
-                      </td>
-                      <Td muted>{formatCurrency(r.price)}</Td>
-                      <Td>{formatCurrency(r.profit)}</Td>
-                      <Td strong>{formatCurrency(r.tithe)}</Td>
-                      <Td muted={r.sessionsLastMonth === 0}>
-                        {r.sessionsLastMonth > 0 ? (
-                          <>
-                            {formatCurrency(r.profitLastMonth)}
-                            <span className="ml-1 text-[11px] text-muted-foreground">
-                              ({r.sessionsLastMonth})
-                            </span>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </Td>
-                      <Td
-                        strong={activo}
-                        muted={!activo}
-                        className={activo ? "text-emerald-600 dark:text-emerald-400" : undefined}
-                      >
-                        {activo ? (
-                          <>
-                            {formatCurrency(r.profitThisMonth)}
-                            <span className="ml-1 text-[11px] font-normal opacity-70">
-                              ({r.sessionsThisMonth})
-                            </span>
-                          </>
-                        ) : (
-                          "—"
-                        )}
-                      </Td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t border-border bg-muted/40">
-                  <td className="px-4 py-2.5 text-[12px] font-medium text-muted-foreground">
-                    TOTAL de ganancia · {conMovimiento.length} de {rows.length}{" "}
-                    planes con sesiones cobradas
-                  </td>
-                  <td />
-                  <td />
-                  <td />
-                  <Td strong>{formatCurrency(lastMonth.profit)}</Td>
-                  <Td strong>{formatCurrency(thisMonth.profit)}</Td>
-                </tr>
-                {/* La fila que el estudio venía a buscar: el 10% calculado
-                    sobre el TOTAL de arriba, no plan por plan. */}
-                <tr className="border-t-2 border-emerald-500/40 bg-emerald-500/10">
-                  <td className="px-4 py-3 text-[12px] font-semibold text-emerald-700 dark:text-emerald-300">
-                    10% DEL TOTAL DE GANANCIA
-                  </td>
-                  <td />
-                  <td />
-                  <td />
-                  <Td strong className="text-emerald-700 dark:text-emerald-300">
-                    {formatCurrency(lastMonth.tithe)}
-                  </Td>
-                  <Td strong className="text-emerald-700 dark:text-emerald-300">
-                    {formatCurrency(thisMonth.tithe)}
-                  </Td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+        <div className="sf-card p-4 text-[13px] text-muted-foreground">
+          Ningún plan tiene ganancia declarada todavía. Ponla en{" "}
+          <strong className="text-foreground">Configuración → Paquetes</strong>,
+          campo «Ganancia de este plan», y este apartado se llena solo.
         </div>
       )}
     </section>
-  )
-}
-
-function Th({
-  children,
-  className = "text-right",
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <th
-      className={`px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground ${className}`}
-    >
-      {children}
-    </th>
-  )
-}
-
-function Td({
-  children,
-  muted,
-  strong,
-  className = "",
-}: {
-  children: React.ReactNode
-  muted?: boolean
-  strong?: boolean
-  className?: string
-}) {
-  return (
-    <td
-      className={`px-4 py-2.5 text-right tabular-nums ${
-        strong ? "font-semibold" : ""
-      } ${muted ? "text-muted-foreground" : ""} ${className}`}
-    >
-      {children}
-    </td>
-  )
-}
-
-function Tarjeta({
-  label,
-  value,
-  hint,
-  icon,
-  tone,
-  destacada,
-}: {
-  label: string
-  value: string
-  hint: string
-  icon: React.ReactNode
-  tone: "positive" | "warning" | "neutral"
-  destacada?: boolean
-}) {
-  const iconClass =
-    tone === "positive"
-      ? "text-emerald-500"
-      : tone === "warning"
-        ? "text-amber-500"
-        : "text-muted-foreground"
-  return (
-    <div
-      className={`sf-card p-4 ${
-        destacada
-          ? "border-emerald-500/50 bg-emerald-500/5 ring-1 ring-emerald-500/20"
-          : ""
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          {label}
-        </span>
-        <span className={iconClass}>{icon}</span>
-      </div>
-      <p className="mt-2 text-xl font-bold tabular-nums">{value}</p>
-      <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>
-    </div>
   )
 }

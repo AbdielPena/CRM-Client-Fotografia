@@ -56,7 +56,7 @@ export default async function FinanceTithePage() {
       <AppTopbar
         eyebrow="Finanzas"
         title="10% de ganancia"
-        description="Arriba: el 10% de la ganancia de cada plan y cuánto suma este mes con las sesiones ya cobradas. Abajo: el diezmo calculado sobre los ingresos marcados en FinanzApp."
+        description="Arriba: cuánto ganaste cada mes y su 10%. Abajo: el diezmo calculado sobre los ingresos marcados en FinanzApp."
         unreadNotifications={unread}
         actions={<ComputeTitheButton />}
       />
@@ -169,9 +169,11 @@ export default async function FinanceTithePage() {
           </DataTable>
         )}
 
-        <div className="rounded-xl border border-input bg-card p-4 text-xs text-muted-foreground">
-          <p className="mb-1 font-medium text-foreground">¿Cómo funciona?</p>
-          <ul className="ml-4 list-disc space-y-1">
+        <details className="rounded-xl border border-input bg-card text-xs text-muted-foreground">
+          <summary className="cursor-pointer px-4 py-3 font-medium text-foreground">
+            ¿Cómo funciona?
+          </summary>
+          <ul className="ml-4 list-disc space-y-1 px-4 pb-4">
             <li>
               Cada transacción tipo='ingreso' tiene un checkbox{" "}
               <code className="rounded bg-muted px-1">aplica_diezmo</code>.
@@ -191,7 +193,7 @@ export default async function FinanceTithePage() {
               con tag de no-business para no afectar utilidad operacional.
             </li>
           </ul>
-          </div>
+        </details>
         </div>
       </main>
     </>

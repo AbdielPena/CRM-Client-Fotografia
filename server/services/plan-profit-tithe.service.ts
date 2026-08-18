@@ -39,44 +39,59 @@ function periodoRD(fecha: Date): string {
     .slice(0, 7)
 }
 
-/** Mes actual y el anterior, en hora RD. */
-function mesesRD(): { actual: string; anterior: string } {
-  const hoy = new Date()
-  const actual = periodoRD(hoy)
-  const [y, m] = actual.split("-").map(Number)
-  const anteriorFecha = new Date(Date.UTC(y, m - 2, 15, 12))
-  return { actual, anterior: periodoRD(anteriorFecha) }
+/**
+ * Todos los meses entre el primero con movimiento y el mes en curso, sin
+ * huecos. Un mes en cero es informacion: dice que ese mes no cerro nada.
+ */
+function serieDeMeses(primero: string, ultimo: string): string[] {
+  const [ya, ma] = primero.split("-").map(Number)
+  const [yb, mb] = ultimo.split("-").map(Number)
+  const out: string[] = []
+  for (let y = ya, m = ma; y < yb || (y === yb && m <= mb); ) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`)
+    m += 1
+    if (m > 12) {
+      m = 1
+      y += 1
+    }
+  }
+  return out
 }
 
-export interface PlanTitheRow {
+/** La referencia fija de un plan: no depende del mes. */
+export interface PlanRef {
   packageId: string
   packageName: string
   categoryName: string | null
   price: number
   /** Ganancia limpia declarada en el plan. */
   profit: number
-  /** El 10% de esa ganancia — el número fijo por sesión de este plan. */
+  /** El 10% de esa ganancia — el numero fijo por sesion de este plan. */
   tithe: number
-  sessionsThisMonth: number
-  sessionsLastMonth: number
-  profitThisMonth: number
-  titheThisMonth: number
-  profitLastMonth: number
-  titheLastMonth: number
 }
 
-export interface PlanTitheTotals {
+export interface MonthTotals {
+  /** 'YYYY-MM' en hora RD. */
   period: string
   sessions: number
   profit: number
   tithe: number
 }
 
+/** Lo que aporto un plan en UN mes. */
+export interface MonthPlanRow {
+  packageId: string
+  sessions: number
+  profit: number
+}
+
 export interface PlanTitheSummary {
-  rows: PlanTitheRow[]
-  thisMonth: PlanTitheTotals
-  lastMonth: PlanTitheTotals
-  /** Sesiones vivas con saldo: su ganancia todavía no cuenta. */
+  plans: PlanRef[]
+  /** Serie mensual completa, del mes mas reciente al mas viejo. */
+  months: MonthTotals[]
+  /** Desglose por plan de cada mes, indexado por periodo. */
+  byMonth: Record<string, MonthPlanRow[]>
+  /** Sesiones vivas con saldo: su ganancia todavia no cuenta. */
   pending: { sessions: number; profit: number; tithe: number }
 }
 
@@ -93,7 +108,7 @@ export async function getPlanProfitTithe(
   studioId: string,
 ): Promise<PlanTitheSummary> {
   const sb = untypedService()
-  const { actual, anterior } = mesesRD()
+  const actual = periodoRD(new Date())
 
   // ── Planes con ganancia declarada ────────────────────────────────────────
   const [{ data: pkgsRaw }, { data: catsRaw }] = await Promise.all([
@@ -116,7 +131,7 @@ export async function getPlanProfitTithe(
   // precio, y con eso se reconstruye la ganancia real de cada sesión vendida.
   const gastosDelPlan = new Map<string, number>()
 
-  const filas = new Map<string, PlanTitheRow>()
+  const filas = new Map<string, PlanRef>()
   for (const p of packages) {
     const profit = Number(p.profit_amount ?? 0)
     gastosDelPlan.set(p.id, Math.max(0, Number(p.price ?? 0) - profit))
@@ -132,12 +147,6 @@ export async function getPlanProfitTithe(
       price: Number(p.price ?? 0),
       profit,
       tithe: profit / 10,
-      sessionsThisMonth: 0,
-      sessionsLastMonth: 0,
-      profitThisMonth: 0,
-      titheThisMonth: 0,
-      profitLastMonth: 0,
-      titheLastMonth: 0,
     })
   }
 
@@ -156,16 +165,10 @@ export async function getPlanProfitTithe(
     total_amount: number | string
   }>
   if (proyectos.length === 0) {
-    const vacio = (period: string): PlanTitheTotals => ({
-      period,
-      sessions: 0,
-      profit: 0,
-      tithe: 0,
-    })
     return {
-      rows: [...filas.values()],
-      thisMonth: vacio(actual),
-      lastMonth: vacio(anterior),
+      plans: [...filas.values()],
+      months: [{ period: actual, sessions: 0, profit: 0, tithe: 0 }],
+      byMonth: { [actual]: [] },
       pending: { sessions: 0, profit: 0, tithe: 0 },
     }
   }
@@ -215,10 +218,8 @@ export async function getPlanProfitTithe(
   }
 
   // ── Repartir cada sesión en su mes (o en "pendiente") ────────────────────
-  const totales = {
-    [actual]: { sessions: 0, profit: 0 },
-    [anterior]: { sessions: 0, profit: 0 },
-  } as Record<string, { sessions: number; profit: number }>
+  const totales = new Map<string, { sessions: number; profit: number }>()
+  const porMes = new Map<string, Map<string, MonthPlanRow>>()
   const pending = { sessions: 0, profit: 0, tithe: 0 }
 
   for (const proy of proyectos) {
@@ -243,44 +244,49 @@ export async function getPlanProfitTithe(
     }
     if (!acc?.ultimo) continue
     const periodo = periodoRD(new Date(acc.ultimo))
-    if (periodo === actual) {
-      fila.sessionsThisMonth += 1
-      fila.profitThisMonth += ganancia
-      fila.titheThisMonth += ganancia / 10
-      totales[actual].sessions += 1
-      totales[actual].profit += ganancia
-    } else if (periodo === anterior) {
-      fila.sessionsLastMonth += 1
-      fila.profitLastMonth += ganancia
-      fila.titheLastMonth += ganancia / 10
-      totales[anterior].sessions += 1
-      totales[anterior].profit += ganancia
+
+    const t = totales.get(periodo) ?? { sessions: 0, profit: 0 }
+    t.sessions += 1
+    t.profit += ganancia
+    totales.set(periodo, t)
+
+    const delMes = porMes.get(periodo) ?? new Map<string, MonthPlanRow>()
+    const fp = delMes.get(proy.package_id) ?? {
+      packageId: proy.package_id,
+      sessions: 0,
+      profit: 0,
     }
+    fp.sessions += 1
+    fp.profit += ganancia
+    delMes.set(proy.package_id, fp)
+    porMes.set(periodo, delMes)
   }
   pending.tithe = pending.profit / 10
 
-  // Los planes que movieron dinero primero; el resto por ganancia.
-  const rows = [...filas.values()].sort(
-    (a, b) =>
-      b.profitThisMonth - a.profitThisMonth ||
-      b.profitLastMonth - a.profitLastMonth ||
-      b.profit - a.profit,
-  )
+  const conDatos = [...totales.keys()].sort()
+  const primero = conDatos[0] ?? actual
+  // Si hubo cobros de un mes futuro (fecha mal puesta), la serie llega hasta ahi.
+  const ultimo = conDatos[conDatos.length - 1] ?? actual
+  const periodos = serieDeMeses(primero, ultimo > actual ? ultimo : actual)
+
+  const months: MonthTotals[] = periodos
+    .map((period) => {
+      const t = totales.get(period) ?? { sessions: 0, profit: 0 }
+      return { period, sessions: t.sessions, profit: t.profit, tithe: t.profit / 10 }
+    })
+    .reverse() // el mes mas reciente primero
+
+  const byMonth: Record<string, MonthPlanRow[]> = {}
+  for (const period of periodos) {
+    byMonth[period] = [...(porMes.get(period)?.values() ?? [])].sort(
+      (a, b) => b.profit - a.profit,
+    )
+  }
 
   return {
-    rows,
-    thisMonth: {
-      period: actual,
-      sessions: totales[actual].sessions,
-      profit: totales[actual].profit,
-      tithe: totales[actual].profit / 10,
-    },
-    lastMonth: {
-      period: anterior,
-      sessions: totales[anterior].sessions,
-      profit: totales[anterior].profit,
-      tithe: totales[anterior].profit / 10,
-    },
+    plans: [...filas.values()].sort((a, b) => b.profit - a.profit),
+    months,
+    byMonth,
     pending,
   }
 }
