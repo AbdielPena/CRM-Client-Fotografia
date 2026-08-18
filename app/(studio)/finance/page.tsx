@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ExternalLink, AlertTriangle, Wallet, TrendingUp, Users, Shirt, PiggyBank } from "lucide-react"
+import { ExternalLink, Wallet, TrendingUp, Users, Shirt } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
@@ -11,7 +11,6 @@ import {
   getSessionFinanceStats,
 } from "@/server/services/dashboard.service"
 import { AppTopbar } from "@/components/layout/app-topbar"
-import { StatCard } from "@/components/shared/stat-card"
 import { DashboardCard } from "@/components/dashboard/dashboard-card"
 import { RevenueLineChart } from "@/components/dashboard/revenue-line-chart"
 import { TopPackagesList } from "@/components/dashboard/top-packages-list"
@@ -60,6 +59,9 @@ export default async function FinancePage() {
     banco: a.banco ?? null,
   }))
 
+  const hayDeudas =
+    sessionFinance.collaboratorDebt > 0 || sessionFinance.dressDebt > 0
+
   const trendPct =
     data.totalsByMonth.lastMonth > 0
       ? Math.round(
@@ -99,41 +101,58 @@ export default async function FinancePage() {
       />
 
       <div className="space-y-6 px-6 py-6 lg:px-8 lg:py-8">
-        {/* KPIs */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard
-            title="Cobrado este mes"
-            value={formatCurrency(data.totalsByMonth.thisMonth, "DOP")}
-            trend={
-              trendPct !== null
-                ? { value: trendPct, label: "vs. mes anterior" }
-                : undefined
-            }
-            subtitle={
-              trendPct === null
-                ? `Mes anterior: ${formatCurrency(data.totalsByMonth.lastMonth, "DOP")}`
-                : undefined
-            }
-          />
-          <StatCard
-            title="Mes anterior"
-            value={formatCurrency(data.totalsByMonth.lastMonth, "DOP")}
-            subtitle="Total cobrado"
-          />
-          <StatCard
-            title="Año en curso"
-            value={formatCurrency(data.totalsByMonth.ytd, "DOP")}
-            subtitle="YTD acumulado"
-          />
-        </div>
+        {/* Las cifras y la tendencia son la MISMA pregunta —como voy de
+            dinero— asi que van juntas en una caja, no en cuatro bloques. */}
+        <DashboardCard title="Cobros">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,260px)_1fr]">
+            <dl className="space-y-3">
+              <div>
+                <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Este mes
+                </dt>
+                <dd className="text-2xl font-bold tabular-nums text-foreground">
+                  {formatCurrency(data.totalsByMonth.thisMonth, "DOP")}
+                </dd>
+                {trendPct !== null && (
+                  <dd
+                    className={
+                      trendPct >= 0
+                        ? "text-[12px] font-medium text-emerald-600 dark:text-emerald-400"
+                        : "text-[12px] font-medium text-red-600 dark:text-red-400"
+                    }
+                  >
+                    {trendPct >= 0 ? "▲" : "▼"} {Math.abs(trendPct)}% vs. mes anterior
+                  </dd>
+                )}
+              </div>
+              <div className="flex items-baseline justify-between gap-3 border-t border-border/60 pt-3">
+                <dt className="text-[12.5px] text-muted-foreground">Mes anterior</dt>
+                <dd className="text-[13px] font-semibold tabular-nums text-foreground">
+                  {formatCurrency(data.totalsByMonth.lastMonth, "DOP")}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-[12.5px] text-muted-foreground">Año en curso</dt>
+                <dd className="text-[13px] font-semibold tabular-nums text-foreground">
+                  {formatCurrency(data.totalsByMonth.ytd, "DOP")}
+                </dd>
+              </div>
+            </dl>
 
-        {/* Tendencia de ingresos (venía del dashboard) */}
-        <DashboardCard title="Tendencia de ingresos">
-          <RevenueLineChart buckets={monthlyRevenue} currency="DOP" />
+            <RevenueLineChart buckets={monthlyRevenue} currency="DOP" />
+          </div>
         </DashboardCard>
 
-        {/* Por pagar: deudas con colaboradores y vestidos */}
-        {(sessionFinance.collaboratorDebt > 0 || sessionFinance.dressDebt > 0) && (
+        {/* Lo que debes y lo que mas vendes: dos listas cortas, una al lado
+            de la otra. Apiladas a todo lo ancho eran dos pantallazos. */}
+        <div
+          className={
+            hayDeudas
+              ? "grid grid-cols-1 gap-4 lg:grid-cols-2"
+              : "grid grid-cols-1 gap-4"
+          }
+        >
+        {hayDeudas && (
           <DashboardCard title="Por pagar">
             <div className="space-y-3">
               {sessionFinance.collaboratorDebt > 0 && (
@@ -185,7 +204,6 @@ export default async function FinancePage() {
           </DashboardCard>
         )}
 
-        {/* Planes más vendidos (venía del dashboard) */}
         <DashboardCard
           title="Planes más vendidos"
           href="/settings/packages"
@@ -193,27 +211,10 @@ export default async function FinancePage() {
         >
           <TopPackagesList items={topPackages} currency="DOP" />
         </DashboardCard>
+        </div>
 
-        {/* Pendientes */}
-        {data.pendingCount > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600 mt-0.5" />
-                <div>
-                  <p className="text-sm font-semibold text-amber-900">
-                    {data.pendingCount}{" "}
-                    {data.pendingCount === 1 ? "pago" : "pagos"} sin cuenta asignada
-                  </p>
-                  <p className="text-xs text-amber-800 mt-0.5">
-                    Total pendiente: {formatCurrency(data.pendingTotal, "DOP")}.
-                    Asígnales una cuenta para que se reflejen en tu app de Finanzas.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* La alerta de "pagos sin cuenta" se fue: repetia, en un bloque
+            propio, la fila "Sin asignar" que ya sale en el desglose. */}
 
         {/* Por cuenta + cuenta default */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -303,9 +304,7 @@ export default async function FinancePage() {
                 <thead className="bg-muted/40 text-[11px] uppercase text-muted-foreground">
                   <tr>
                     <th className="px-5 py-2.5 text-left font-medium">Fecha</th>
-                    <th className="px-5 py-2.5 text-left font-medium">Factura</th>
                     <th className="px-5 py-2.5 text-left font-medium">Cliente</th>
-                    <th className="px-5 py-2.5 text-left font-medium">Método</th>
                     <th className="px-5 py-2.5 text-right font-medium">Monto</th>
                     <th className="px-5 py-2.5 text-left font-medium">Cuenta destino</th>
                   </tr>
@@ -319,22 +318,22 @@ export default async function FinancePage() {
                       <td className="px-5 py-3 text-foreground/80 whitespace-nowrap">
                         {formatDateShort(new Date(p.receivedAt))}
                       </td>
-                      <td className="px-5 py-3 whitespace-nowrap">
+                      <td className="px-5 py-3">
+                        <p className="text-foreground/80">{p.clientName ?? "—"}</p>
                         <Link
                           href={`/invoices/${p.invoiceId}`}
-                          className="font-mono text-xs text-primary hover:underline"
+                          className="font-mono text-[11px] text-primary hover:underline"
                         >
                           {p.invoiceNumber ?? p.invoiceId.slice(0, 8)}
                         </Link>
                       </td>
-                      <td className="px-5 py-3 text-foreground/80">
-                        {p.clientName ?? "—"}
-                      </td>
-                      <td className="px-5 py-3 text-[12.5px] text-muted-foreground">
-                        {METHOD_LABELS[p.method] ?? p.method}
-                      </td>
-                      <td className="px-5 py-3 text-right font-medium text-foreground tabular-nums whitespace-nowrap">
-                        {formatCurrency(p.amount, p.currency)}
+                      <td className="px-5 py-3 text-right whitespace-nowrap">
+                        <p className="font-medium tabular-nums text-foreground">
+                          {formatCurrency(p.amount, p.currency)}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {METHOD_LABELS[p.method] ?? p.method}
+                        </p>
                       </td>
                       <td className="px-5 py-3">
                         <AssignAccountCell
