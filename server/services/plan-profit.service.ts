@@ -22,16 +22,10 @@ import { untypedService } from "@/server/supabase/untyped"
  * Sumarlos en una cifra sola haría creer que ya se ganó algo que no ha
  * entrado, así que el servicio los devuelve separados y la pantalla también.
  *
- * OJO con los meses pasados. La ganancia del plan es un número de HOY; si se
- * sube el precio, aplicarlo hacia atrás inflaría lo que de verdad se ganó. Por
- * eso cada sesión se calcula sobre lo que se le COBRÓ a esa clienta:
- *
- *     gastos del plan = precio de hoy − ganancia de hoy   (lo que no cambia
- *                                                          al subir el precio)
- *     ganancia real   = lo cobrado en esa sesión − gastos del plan
- *
- * Con eso una sesión vendida al precio viejo sigue reportando la ganancia
- * vieja, y una con descuento reporta menos.
+ * La ganancia de cada sesion es la DECLARADA en su plan, tal cual. No se
+ * recalcula sobre lo cobrado: sin historial de precios no se puede distinguir
+ * una sesion vendida al precio viejo de una con descuento, y adivinar hacia
+ * abajo hacia que un plan de 30,900 reportara 24,600.
  */
 
 /** Mes 'YYYY-MM' en hora de República Dominicana. */
@@ -161,14 +155,9 @@ export async function getPlanProfit(
     ]),
   )
 
-  // Gastos del plan = precio − ganancia. Es lo que NO cambia cuando se sube el
-  // precio, y con eso se reconstruye la ganancia real de cada sesión vendida.
-  const gastosDelPlan = new Map<string, number>()
-
   const filas = new Map<string, PlanRef>()
   for (const p of packages) {
     const profit = Number(p.profit_amount ?? 0)
-    gastosDelPlan.set(p.id, Math.max(0, Number(p.price ?? 0) - profit))
     // Sin ganancia declarada no hay 10% que mostrar; los inactivos tampoco
     // aportan (no se pueden vender), salvo que aún tengan sesiones del mes.
     if (!(profit > 0)) continue
@@ -342,11 +331,8 @@ export async function getPlanProfit(
     const acc = cobrado.get(proy.id)
     const pagado = acc?.pagado ?? 0
 
-    // Ganancia REAL de esta sesión, sobre lo que se le cobró a esta clienta.
-    // Si la sesión se vendió antes de un aumento, reporta la ganancia de
-    // entonces; si llevó descuento, reporta menos. Nunca menos de cero.
-    const gastos = gastosDelPlan.get(proy.package_id) ?? 0
-    const ganancia = total > 0 ? Math.max(0, total - gastos) : fila.profit
+    // La ganancia declarada en el plan, sin recalcular.
+    const ganancia = fila.profit
 
     // Margen de un peso: un redondeo no debe impedir que cuente.
     const saldada = total > 0 && pagado + 1 >= total
