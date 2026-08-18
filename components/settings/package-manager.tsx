@@ -845,8 +845,8 @@ function PackageForm({
           </label>
           <p className="mt-1 text-xs text-muted-foreground">
             En los planes que incluyen el vestido (Luxury), el costo del vestido
-            de la sesión se resta de la ganancia neta y se registra como gasto en
-            Finanzas.
+            de la sesión se registra como gasto en Finanzas. No se le resta a la
+            ganancia del plan: esa ya viene con todo descontado.
           </p>
         </div>
 

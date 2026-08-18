@@ -380,10 +380,21 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     includesDress && dressIncludedAmount > 0 ? Math.max(0, dressCost - dressIncludedAmount) : 0
   const dressExtraInvoiced = !!(project.dress_extra_invoiced as boolean | null)
   const dressPayStatus = (project.dress_pay_status as string | null) ?? "pending"
-  // Ganancia neta = ingreso − colaboradores − vestido absorbido por el plan.
-  // (El excedente lo paga el cliente vía factura, así que no afecta la ganancia.)
   const projectIncome = totalAmount != null ? Number(totalAmount) : totalPaid
-  const netProfit = projectIncome - collaboratorCost - dressAbsorbed
+  // La ganancia sale del campo "Ganancia de este plan", que es la UNICA fuente
+  // de ganancia del sistema. Su propia ayuda dice "lo que te queda limpio por
+  // una sesion de este plan, ya descontado todo": volver a restar colaboradores
+  // y vestido los descontaria dos veces.
+  //
+  // Solo cuando el plan no declara ganancia se cae al calculo viejo, para no
+  // dejar la tarjeta en cero.
+  const planProfit = Number(
+    (pkg as { profit_amount?: number | string | null } | null)?.profit_amount ?? 0,
+  )
+  const usaGananciaDelPlan = Number.isFinite(planProfit) && planProfit > 0
+  const netProfit = usaGananciaDelPlan
+    ? planProfit
+    : projectIncome - collaboratorCost - dressAbsorbed
 
   // Badges de "pendiente": la HORA en toda sesión (parte importante); los
   // COLABORADORES y el VESTIDO solo en sesiones de quinceañera.
@@ -986,14 +997,22 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             )}
           </div>
 
-          {/* Ganancia neta (ingreso − vestido − colaboradores) */}
+          {/* Ganancia: la declarada en el plan. Los costos de abajo se
+              muestran porque hay que pagarlos, no porque la modifiquen. */}
           {(projectCollaborators.length > 0 || (includesDress && dressCost > 0)) && (
             <CollapsibleCard
-              title="Ganancia neta"
+              title="Ganancia"
               icon={<DollarSign className="h-4 w-4" />}
               summary={formatCurrency(netProfit, currency)}
             >
               <dl className="space-y-2 text-xs">
+                {usaGananciaDelPlan && (
+                  <p className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
+                    Sale del campo <strong>Ganancia de este plan</strong>, que ya
+                    viene descontado todo. Los costos de abajo son lo que tienes
+                    que pagar por esta sesion, no se le restan otra vez.
+                  </p>
+                )}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Ingreso del proyecto</dt>
                   <dd className="font-medium tabular-nums text-foreground">
@@ -1073,7 +1092,9 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </>
                 )}
                 <div className="flex justify-between border-t border-border/60 pt-2">
-                  <dt className="font-semibold text-foreground">Ganancia neta</dt>
+                  <dt className="font-semibold text-foreground">
+                    {usaGananciaDelPlan ? "Ganancia del plan" : "Ganancia neta"}
+                  </dt>
                   <dd
                     className={
                       netProfit >= 0

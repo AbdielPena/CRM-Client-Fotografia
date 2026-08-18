@@ -297,7 +297,7 @@ export async function getProjectById(studioId: string, projectId: string) {
       `
         *,
         client:clients(*),
-        package:packages(id, name, price, currency, includes_dress, dress_included_amount),
+        package:packages(id, name, price, currency, includes_dress, dress_included_amount, profit_amount),
         service_category:service_categories(id, dress_included_amount, retention_months),
         invoices(*),
         contracts(*),
