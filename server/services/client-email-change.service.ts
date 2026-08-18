@@ -86,6 +86,36 @@ async function idsRelacionados(studioId: string, clientId: string): Promise<stri
   return [...ids]
 }
 
+/**
+ * Direcciones del propio estudio. Lo que salio hacia ellas es un aviso INTERNO
+ * ("Nueva solicitud de booking"), no correspondencia del cliente: va enlazado a
+ * su reserva, asi que la busqueda por entidad lo encuentra, pero reenviarselo
+ * seria mandarle una nota de la casa.
+ */
+async function direccionesDelEstudio(studioId: string): Promise<Set<string>> {
+  const sb = untypedService()
+  const out = new Set<string>()
+  const { data: st } = await sb
+    .from("studios")
+    .select("email")
+    .eq("id", studioId)
+    .maybeSingle()
+  const e = (st as { email: string | null } | null)?.email
+  if (e) out.add(normaliza(e))
+
+  const { data: br } = await sb
+    .from("studio_branding")
+    .select("contact_email, from_email, reply_to_email")
+    .eq("studio_id", studioId)
+    .maybeSingle()
+  const b = br as Record<string, string | null> | null
+  for (const k of ["contact_email", "from_email", "reply_to_email"]) {
+    const v = b?.[k]
+    if (v) out.add(normaliza(v))
+  }
+  return out
+}
+
 /** Filtro PostgREST: correos de ESTE cliente, por dirección o por entidad. */
 function filtroDelCliente(direccion: string | null, ids: string[]): string {
   const partes: string[] = []
@@ -141,12 +171,13 @@ export async function previewClientEmailChange(
       .or(filtro)
       .neq("to_email", nuevo)
       .order("sent_at", { ascending: false })
-    const previos = (enviados ?? []) as Array<{
+    const internas = await direccionesDelEstudio(studioId)
+    const previos = ((enviados ?? []) as Array<{
       id: string
       subject: string
       sent_at: string | null
       to_email: string
-    }>
+    }>).filter((e) => !internas.has(normaliza(e.to_email)))
     res.enviados = previos.length
     res.muestra = previos
       .slice(0, 10)
@@ -364,7 +395,10 @@ async function reenviarHistorial(
     .order("sent_at", { ascending: true })
     .limit(MAX_REENVIOS)
 
-  const lista = (previos ?? []) as Array<Record<string, unknown>>
+  const internas = await direccionesDelEstudio(studioId)
+  const lista = ((previos ?? []) as Array<Record<string, unknown>>).filter(
+    (e) => !internas.has(normaliza(String(e.to_email))),
+  )
   if (lista.length === 0) return 0
 
   // Lo ya reenviado antes no se repite.
