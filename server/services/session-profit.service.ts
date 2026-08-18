@@ -37,6 +37,7 @@ type ProjectFinance = {
   profitAmount: number
   totalAmount: number
   paidAmount: number
+  settled: boolean
 }
 
 /** Lee lo que hace falta para decidir: monto del plan, total y cobrado. */
@@ -72,34 +73,26 @@ async function loadProjectFinance(
   const profitAmount = Number(pkg?.profit_amount ?? 0)
   if (!Number.isFinite(profitAmount) || profitAmount <= 0) return null
 
-  // Cobrado real = pagos confirmados de las facturas de la sesión.
-  const { data: invoices } = await sb
-    .from("invoices")
-    .select("id")
-    .eq("studio_id", studioId)
-    .eq("project_id", projectId)
-    .is("deleted_at", null)
-  const invoiceIds = ((invoices ?? []) as Array<{ id: string }>).map((i) => i.id)
-  if (invoiceIds.length === 0) return null
-
-  const { data: pays } = await sb
-    .from("payments")
-    .select("amount")
-    .eq("studio_id", studioId)
-    .in("invoice_id", invoiceIds)
-    .eq("status", "completed")
-  const paidAmount = ((pays ?? []) as Array<{ amount: number | string }>).reduce(
-    (s, r) => s + Number(r.amount ?? 0),
-    0,
+  // Saldada o no: la definición compartida del sistema. Compara contra lo
+  // FACTURADO —lo que de verdad se le pidió— y no contra el precio de lista,
+  // que se mueve al cambiarle el plan a una clienta y dejaba sesiones ya
+  // pagadas sin registrar su ganancia.
+  const { getSessionSettlement } = await import("./session-settlement.service")
+  const saldo = await getSessionSettlement(
+    studioId,
+    projectId,
+    Number(p.total_amount ?? 0),
   )
+  if (saldo.invoiced <= 0) return null
 
   return {
     projectName: p.name,
     clientName: cli?.name ?? null,
     packageName: pkg?.name ?? null,
     profitAmount,
-    totalAmount: Number(p.total_amount ?? 0),
-    paidAmount,
+    totalAmount: saldo.owed,
+    paidAmount: saldo.paid,
+    settled: saldo.settled,
   }
 }
 
@@ -114,8 +107,7 @@ export async function recordSessionProfitIfFullyPaid(
   const fin = await loadProjectFinance(studioId, projectId)
   if (!fin) return { recorded: false, reason: "el plan no define ganancia" }
 
-  // "Saldada" con un margen de un peso, para que un redondeo no lo impida.
-  if (fin.totalAmount <= 0 || fin.paidAmount + 1 < fin.totalAmount) {
+  if (!fin.settled) {
     return { recorded: false, reason: "la sesión todavía tiene saldo" }
   }
 

@@ -1,6 +1,7 @@
 import "server-only"
 
 import { untypedService } from "@/server/supabase/untyped"
+import { getSessionSettlements } from "./session-settlement.service"
 
 /**
  * Ganancia por mes y por plan, confirmada y prevista.
@@ -209,49 +210,12 @@ export async function getPlanProfit(
     }
   }
 
-  // ── Cobrado real por sesión: pagos confirmados de sus facturas ───────────
-  const idsProyecto = proyectos.map((p) => p.id)
-  const { data: invRaw } = await sb
-    .from("invoices")
-    .select("id, project_id")
-    .eq("studio_id", studioId)
-    .in("project_id", idsProyecto)
-    .is("deleted_at", null)
-  const facturas = (invRaw ?? []) as Array<{
-    id: string
-    project_id: string | null
-  }>
-  const facturaDeProyecto = new Map(
-    facturas.map((f) => [f.id, f.project_id ?? ""]),
+  // Saldado o no: lo decide session-settlement, que es la unica definicion del
+  // sistema. Compara contra lo FACTURADO, no contra el precio de la sesion.
+  const saldos = await getSessionSettlements(
+    studioId,
+    proyectos.map((p) => ({ id: p.id, total: Number(p.total_amount ?? 0) })),
   )
-
-  const cobrado = new Map<string, { pagado: number; ultimo: string | null }>()
-  if (facturas.length > 0) {
-    const { data: payRaw } = await sb
-      .from("payments")
-      .select("invoice_id, amount, received_at")
-      .eq("studio_id", studioId)
-      .eq("status", "completed")
-      .is("deleted_at", null)
-      .in(
-        "invoice_id",
-        facturas.map((f) => f.id),
-      )
-    for (const p of (payRaw ?? []) as Array<{
-      invoice_id: string
-      amount: number | string
-      received_at: string | null
-    }>) {
-      const projectId = facturaDeProyecto.get(p.invoice_id)
-      if (!projectId) continue
-      const acc = cobrado.get(projectId) ?? { pagado: 0, ultimo: null }
-      acc.pagado += Number(p.amount ?? 0)
-      if (p.received_at && (!acc.ultimo || p.received_at > acc.ultimo)) {
-        acc.ultimo = p.received_at
-      }
-      cobrado.set(projectId, acc)
-    }
-  }
 
   // Nombres de cliente para el detalle: sin ellos la lista no sirve de nada.
   const nombreCliente = new Map<string, string>()
@@ -327,16 +291,16 @@ export async function getPlanProfit(
   for (const proy of proyectos) {
     const fila = filas.get(proy.package_id)
     if (!fila) continue
-    const total = Number(proy.total_amount ?? 0)
-    const acc = cobrado.get(proy.id)
-    const pagado = acc?.pagado ?? 0
+    const saldo = saldos.get(proy.id)
+    // `owed` es lo que se le pidio de verdad: lo facturado. El precio de lista
+    // solo entra cuando todavia no se le ha facturado nada.
+    const total = saldo?.owed ?? Number(proy.total_amount ?? 0)
+    const pagado = saldo?.paid ?? 0
 
     // La ganancia declarada en el plan, sin recalcular.
     const ganancia = fila.profit
 
-    // Margen de un peso: un redondeo no debe impedir que cuente.
-    const saldada = total > 0 && pagado + 1 >= total
-    if (!saldada) {
+    if (!saldo?.settled) {
       // Todavia debe: se PROYECTA al mes en que se espera cobrarla. El ancla
       // es la fecha de la sesion, porque el saldo se paga ese dia. Si esa
       // fecha ya paso y sigue sin saldar, se espera cobrarla ahora.
@@ -370,8 +334,8 @@ export async function getPlanProfit(
       })
       continue
     }
-    if (!acc?.ultimo) continue
-    const periodo = periodoRD(new Date(acc.ultimo))
+    if (!saldo.lastPaymentAt) continue
+    const periodo = periodoRD(new Date(saldo.lastPaymentAt))
 
     const t = totales.get(periodo) ?? { sessions: 0, profit: 0 }
     t.sessions += 1
@@ -392,7 +356,7 @@ export async function getPlanProfit(
       paid: pagado,
       profit: ganancia,
       status: "confirmado",
-      date: acc.ultimo,
+      date: saldo.lastPaymentAt,
     })
   }
 
