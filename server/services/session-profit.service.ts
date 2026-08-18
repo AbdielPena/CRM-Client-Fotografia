@@ -50,7 +50,7 @@ async function loadProjectFinance(
   const { data: proj } = await sb
     .from("projects")
     .select(
-      "id, name, total_amount, package_id, client:clients(name), package:packages(name, profit_amount)",
+      "id, name, total_amount, package_id, profit_amount, client:clients(name), package:packages(name, profit_amount)",
     )
     .eq("id", projectId)
     .eq("studio_id", studioId)
@@ -61,6 +61,7 @@ async function loadProjectFinance(
   const p = proj as {
     name: string
     total_amount: number | string | null
+    profit_amount: number | string | null
     client: { name?: string } | Array<{ name?: string }> | null
     package:
       | { name?: string; profit_amount?: number | string | null }
@@ -70,7 +71,12 @@ async function loadProjectFinance(
   const pkg = Array.isArray(p.package) ? p.package[0] : p.package
   const cli = Array.isArray(p.client) ? p.client[0] : p.client
 
-  const profitAmount = Number(pkg?.profit_amount ?? 0)
+  // La ganancia de ESTA sesion manda sobre la del plan: si hubo descuento, el
+  // estudio la ajusto ahi y es la que tiene que llegar a Finanzas.
+  const propia = Number(p.profit_amount ?? NaN)
+  const profitAmount = Number.isFinite(propia) && propia > 0
+    ? propia
+    : Number(pkg?.profit_amount ?? 0)
   if (!Number.isFinite(profitAmount) || profitAmount <= 0) return null
 
   // Saldada o no: la definición compartida del sistema. Compara contra lo

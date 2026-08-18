@@ -16,6 +16,7 @@ import { StatusBadge } from "@/components/shared/status-badge"
 import { NoteForm } from "@/components/shared/note-form"
 import { ProjectDetailActions } from "@/components/projects/project-detail-actions"
 import { ChangePackageCard } from "@/components/projects/change-package-card"
+import { SessionProfitEditor } from "@/components/projects/session-profit-editor"
 import { getPackages } from "@/server/services/package.service"
 import { ClientPortalAccessCard } from "@/components/projects/client-portal-access-card"
 import { ensureClientAccessCode } from "@/server/services/client-portal.service"
@@ -388,9 +389,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   //
   // Solo cuando el plan no declara ganancia se cae al calculo viejo, para no
   // dejar la tarjeta en cero.
-  const planProfit = Number(
-    (pkg as { profit_amount?: number | string | null } | null)?.profit_amount ?? 0,
+  // La ganancia de la sesion; el plan solo es el respaldo.
+  const sessionProfit = Number(
+    (project as { profit_amount?: number | string | null }).profit_amount ?? NaN,
   )
+  const planProfit =
+    Number.isFinite(sessionProfit) && sessionProfit >= 0
+      ? sessionProfit
+      : Number(
+          (pkg as { profit_amount?: number | string | null } | null)?.profit_amount ?? 0,
+        )
   const usaGananciaDelPlan = Number.isFinite(planProfit) && planProfit > 0
   const netProfit = usaGananciaDelPlan
     ? planProfit
@@ -997,9 +1005,12 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             )}
           </div>
 
-          {/* Ganancia: la declarada en el plan. Los costos de abajo se
+          {/* Ganancia. Sale SIEMPRE: es el numero que el estudio mira, y es
+              donde se ajusta cuando hubo descuento. Los costos de abajo se
               muestran porque hay que pagarlos, no porque la modifiquen. */}
-          {(projectCollaborators.length > 0 || (includesDress && dressCost > 0)) && (
+          {usaGananciaDelPlan ||
+          projectCollaborators.length > 0 ||
+          (includesDress && dressCost > 0) ? (
             <CollapsibleCard
               title="Ganancia"
               icon={<DollarSign className="h-4 w-4" />}
@@ -1007,11 +1018,30 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             >
               <dl className="space-y-2 text-xs">
                 {usaGananciaDelPlan && (
-                  <p className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
-                    Sale del campo <strong>Ganancia de este plan</strong>, que ya
-                    viene descontado todo. Los costos de abajo son lo que tienes
-                    que pagar por esta sesion, no se le restan otra vez.
-                  </p>
+                  <>
+                    <p className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
+                      Lo que te queda limpio por esta sesion, ya descontado todo.
+                      Los costos de abajo son lo que tienes que pagar por ella;
+                      no se le restan otra vez.
+                    </p>
+                    <SessionProfitEditor
+                      projectId={project.id as string}
+                      amount={netProfit}
+                      planAmount={Number(
+                        (pkg as { profit_amount?: number | string | null } | null)
+                          ?.profit_amount ?? 0,
+                      )}
+                      currency={currency}
+                      isOverride={
+                        Number.isFinite(sessionProfit) &&
+                        sessionProfit !==
+                          Number(
+                            (pkg as { profit_amount?: number | string | null } | null)
+                              ?.profit_amount ?? 0,
+                          )
+                      }
+                    />
+                  </>
                 )}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Ingreso del proyecto</dt>
@@ -1093,7 +1123,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 )}
                 <div className="flex justify-between border-t border-border/60 pt-2">
                   <dt className="font-semibold text-foreground">
-                    {usaGananciaDelPlan ? "Ganancia del plan" : "Ganancia neta"}
+                    {usaGananciaDelPlan ? "Ganancia de la sesion" : "Ganancia neta"}
                   </dt>
                   <dd
                     className={
@@ -1107,7 +1137,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 </div>
               </dl>
             </CollapsibleCard>
-          )}
+          ) : null}
 
           {/* Finance summary */}
           {invoices.length > 0 && (

@@ -534,3 +534,42 @@ export async function deleteProjectAction(projectId: string) {
   revalidatePath("/projects")
   redirect("/projects")
 }
+
+/**
+ * Ajusta la ganancia de UNA sesión. Vacío = volver a la del plan.
+ *
+ * Hace falta por los descuentos: la ganancia se copia del plan al asignarlo,
+ * pero si a la clienta se le cobra menos, la real baja y el plan no tiene cómo
+ * saberlo.
+ */
+export async function updateSessionProfitAction(formData: FormData) {
+  const session = await requireStudioAuth()
+  const projectId = String(formData.get("projectId") ?? "").trim()
+  if (!projectId) return { error: "Falta la sesión" }
+
+  const raw = String(formData.get("amount") ?? "").trim()
+  let amount: number | null = null
+  if (raw !== "") {
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n < 0) return { error: "Ese monto no es válido" }
+    amount = n
+  }
+
+  const { untypedService } = await import("@/server/supabase/untyped")
+  const sb = untypedService()
+  // `select` porque un UPDATE que no toca filas NO da error: sin esto, un id
+  // de otro estudio se guardaría "bien" sin cambiar nada.
+  const { data, error } = await sb
+    .from("projects")
+    .update({ profit_amount: amount, updated_at: new Date().toISOString() })
+    .eq("studio_id", session.studioId)
+    .eq("id", projectId)
+    .is("deleted_at", null)
+    .select("id")
+  if (error) return { error: error.message }
+  if ((data ?? []).length === 0) return { error: "No se encontró la sesión" }
+
+  revalidatePath(`/projects/${projectId}`)
+  revalidatePath("/finance/tithe")
+  return { success: true as const }
+}

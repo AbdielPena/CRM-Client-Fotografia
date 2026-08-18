@@ -176,7 +176,9 @@ export async function getPlanProfit(
   // ── Sesiones vivas con plan y monto ──────────────────────────────────────
   const { data: projRaw } = await sb
     .from("projects")
-    .select("id, package_id, total_amount, event_date, name, client_id")
+    .select(
+      "id, package_id, total_amount, event_date, name, client_id, profit_amount",
+    )
     .eq("studio_id", studioId)
     .is("deleted_at", null)
     .is("cancelled_at", null)
@@ -189,6 +191,7 @@ export async function getPlanProfit(
     event_date: string | null
     name: string | null
     client_id: string | null
+    profit_amount: number | string | null
   }>
   if (proyectos.length === 0) {
     return {
@@ -297,8 +300,11 @@ export async function getPlanProfit(
     const total = saldo?.owed ?? Number(proy.total_amount ?? 0)
     const pagado = saldo?.paid ?? 0
 
-    // La ganancia declarada en el plan, sin recalcular.
-    const ganancia = fila.profit
+    // La ganancia de ESTA sesion. Se copio del plan al asignarlo y el estudio
+    // pudo bajarla si hizo un descuento; si por lo que sea esta vacia, se cae a
+    // la del plan.
+    const propia = Number(proy.profit_amount ?? NaN)
+    const ganancia = Number.isFinite(propia) && propia >= 0 ? propia : fila.profit
 
     if (!saldo?.settled) {
       // Todavia debe: se PROYECTA al mes en que se espera cobrarla. El ancla
