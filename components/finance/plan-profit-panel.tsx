@@ -44,8 +44,18 @@ function nombreMes(periodo: string): string {
   return `${MESES[m - 1]} ${y}`
 }
 
+/** '2026-08-17' -> '17 ago'. Mediodia: en UTC la fecha retrocede un dia en RD. */
+function fechaCorta(iso: string): string {
+  const d = new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso)
+  return new Intl.DateTimeFormat("es-DO", {
+    day: "numeric",
+    month: "short",
+    timeZone: "America/Santo_Domingo",
+  }).format(d)
+}
+
 export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
-  const { plans, months, byMonth, unscheduled } = data
+  const { plans, months, byMonth, byMonthClients, unscheduled } = data
   // Arranca en el mes en curso: es el que se mira todos los días.
   const actual = React.useMemo(
     () => new Intl.DateTimeFormat("en-CA", {
@@ -68,6 +78,7 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
     [plans],
   )
   const detalle = byMonth[periodo] ?? []
+  const sesiones = byMonthClients[periodo] ?? []
   // La barra compara meses entre sí: un monto suelto no dice si fue buen mes.
   const tope = Math.max(...months.map((m) => m.profit + m.projectedProfit), 1)
 
@@ -155,87 +166,141 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
             })}
           </ul>
 
-          {/* ── El mes elegido ────────────────────────────────────────── */}
+          {/* -- El mes elegido -------------------------------------- */}
           <div className="p-4">
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
               <span className="capitalize">{nombreMes(mes.period)}</span>
             </p>
 
-            <div className="mt-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
-                Confirmado · ya cobrado completo
-              </p>
-              <p className="text-3xl font-bold tabular-nums text-foreground">
-                {formatCurrency(mes.profit)}
-              </p>
-              <p className="text-[12px] text-muted-foreground">
-                {mes.sessions}{" "}
-                {mes.sessions === 1
-                  ? "sesión cobrada completa"
-                  : "sesiones cobradas completas"}
-              </p>
+            {/* Tres preguntas distintas, tres cifras. Cuanto ENTRO no es lo
+                mismo que cuanto GANASTE, y ninguna de las dos es lo que falta
+                por cobrar. */}
+            <div className="mt-2 grid grid-cols-1 divide-y divide-border/60 rounded-lg border border-border/70 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              <div className="px-3 py-2.5">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Cobrado
+                </p>
+                <p className="text-lg font-bold tabular-nums text-foreground">
+                  {formatCurrency(mes.collected)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {mes.payments} {mes.payments === 1 ? "pago" : "pagos"} recibidos
+                </p>
+              </div>
+              <div className="px-3 py-2.5">
+                <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                  Ganancia confirmada
+                </p>
+                <p className="text-lg font-bold tabular-nums text-foreground">
+                  {formatCurrency(mes.profit)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {mes.sessions}{" "}
+                  {mes.sessions === 1
+                    ? "sesion cobrada completa"
+                    : "sesiones cobradas completas"}
+                </p>
+              </div>
+              <div className="px-3 py-2.5">
+                <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <CalendarClock className="size-3" />
+                  Previsto
+                </p>
+                <p className="text-lg font-bold tabular-nums text-foreground">
+                  {mes.projectedProfit > 0
+                    ? `+ ${formatCurrency(mes.projectedProfit)}`
+                    : "\u2014"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {mes.projectedSessions}{" "}
+                  {mes.projectedSessions === 1
+                    ? "sesion sin terminar de pagar"
+                    : "sesiones sin terminar de pagar"}
+                </p>
+              </div>
             </div>
 
             {mes.projectedProfit > 0 ? (
-              <div className="mt-3 rounded-lg border border-border/70 bg-muted/25 p-3">
-                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  <CalendarClock className="size-3.5" />
-                  Previsto · falta que paguen
-                </p>
-                <p className="text-xl font-semibold tabular-nums text-foreground">
-                  + {formatCurrency(mes.projectedProfit)}
-                </p>
-                <p className="text-[12px] text-muted-foreground">
-                  {mes.projectedSessions}{" "}
-                  {mes.projectedSessions === 1
-                    ? "sesión registrada sin terminar de pagar"
-                    : "sesiones registradas sin terminar de pagar"}
-                </p>
-                <p className="mt-1.5 border-t border-border/60 pt-1.5 text-[12px] text-muted-foreground">
-                  Si todas pagan, el mes cierra en{" "}
-                  <strong className="tabular-nums text-foreground">
-                    {formatCurrency(mes.profit + mes.projectedProfit)}
-                  </strong>
-                </p>
-              </div>
+              <p className="mt-1.5 text-[12px] text-muted-foreground">
+                Si todas pagan, el mes cierra en{" "}
+                <strong className="tabular-nums text-foreground">
+                  {formatCurrency(mes.profit + mes.projectedProfit)}
+                </strong>{" "}
+                de ganancia.
+              </p>
             ) : null}
 
             {detalle.length > 0 ? (
-              <div className="mt-4">
-                <p className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-                  De qué planes sale
-                </p>
-                <ul className="divide-y divide-border/60">
-                  {detalle.map((d) => {
-                    const plan = planPorId.get(d.packageId)
-                    return (
-                      <li
-                        key={d.packageId}
-                        className="flex items-baseline justify-between gap-3 py-1.5"
-                      >
-                        <span className="min-w-0 truncate text-[12.5px] text-foreground">
-                          {plan?.packageName ?? "(plan eliminado)"}
-                        </span>
-                        <span className="shrink-0 text-right text-[12.5px] tabular-nums">
-                          {d.profit > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {detalle.map((d) => (
+                  <span
+                    key={d.packageId}
+                    className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                  >
+                    {planPorId.get(d.packageId)?.packageName ?? "(plan eliminado)"}{" "}
+                    <strong className="tabular-nums text-foreground">
+                      {formatCurrency(d.profit + d.projectedProfit)}
+                    </strong>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            {sesiones.length > 0 ? (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-[12.5px]">
+                  <thead>
+                    <tr className="border-b border-border/70 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <th className="py-1.5 pr-3 text-left font-medium">
+                        Cliente y plan
+                      </th>
+                      <th className="px-3 py-1.5 text-right font-medium">Cobrado</th>
+                      <th className="py-1.5 pl-3 text-right font-medium">Ganancia</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {sesiones.map((r) => {
+                      const previsto = r.status === "previsto"
+                      return (
+                        <tr key={r.projectId}>
+                          <td className="py-1.5 pr-3">
+                            <p className="font-medium text-foreground">
+                              {r.clientName ?? "(sin cliente)"}
+                              {previsto ? (
+                                <span className="ml-1.5 rounded-full bg-amber-500/12 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                                  falta que pague
+                                </span>
+                              ) : null}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {r.packageName ?? "(sin plan)"}
+                              {r.date ? ` \u00b7 ${fechaCorta(r.date)}` : ""}
+                            </p>
+                          </td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">
                             <span className="text-foreground">
-                              {formatCurrency(d.profit)}
-                              <span className="ml-1 text-[11px] text-muted-foreground">
-                                ×{d.sessions}
+                              {formatCurrency(r.paid)}
+                            </span>
+                            {previsto ? (
+                              <span className="block text-[11px] text-muted-foreground">
+                                de {formatCurrency(r.total)}
                               </span>
-                            </span>
-                          ) : null}
-                          {d.projectedProfit > 0 ? (
-                            <span className="block text-[11px] text-muted-foreground">
-                              + {formatCurrency(d.projectedProfit)} previsto ×
-                              {d.projectedSessions}
-                            </span>
-                          ) : null}
-                        </span>
-                      </li>
-                    )
-                  })}
-                </ul>
+                            ) : null}
+                          </td>
+                          <td
+                            className={cn(
+                              "py-1.5 pl-3 text-right font-semibold tabular-nums",
+                              previsto ? "text-muted-foreground" : "text-foreground",
+                            )}
+                          >
+                            {previsto ? "+ " : ""}
+                            {formatCurrency(r.profit)}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <p className="mt-4 text-[12.5px] text-muted-foreground">

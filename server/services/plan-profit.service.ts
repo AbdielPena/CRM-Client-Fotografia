@@ -83,6 +83,26 @@ export interface MonthTotals {
   /** PREVISTO: sesiones registradas que aun no terminan de pagar. */
   projectedSessions: number
   projectedProfit: number
+  /** COBRADO: todo el dinero que entro ese mes, abonos incluidos. */
+  collected: number
+  payments: number
+}
+
+/** Una sesion dentro de un mes: quien, que plan, cuanto pago, cuanto deja. */
+export interface MonthClientRow {
+  projectId: string
+  clientName: string | null
+  projectName: string | null
+  packageName: string | null
+  /** Precio de la sesion. */
+  total: number
+  /** Lo que lleva pagado. */
+  paid: number
+  profit: number
+  /** 'confirmado' = ya pago todo. 'previsto' = todavia debe. */
+  status: "confirmado" | "previsto"
+  /** Fecha del ultimo pago (confirmado) o de la sesion (previsto). */
+  date: string | null
 }
 
 /** Lo que aporto (o aportara) un plan en UN mes. */
@@ -100,6 +120,8 @@ export interface PlanProfitSummary {
   months: MonthTotals[]
   /** Desglose por plan de cada mes, indexado por periodo. */
   byMonth: Record<string, MonthPlanRow[]>
+  /** Las sesiones de cada mes, una por una. */
+  byMonthClients: Record<string, MonthClientRow[]>
   /**
    * Sesiones sin saldar y SIN fecha: no hay a que mes asignarlas, asi que no
    * entran en ninguna proyeccion. Se reportan aparte para que no desaparezcan.
@@ -164,7 +186,7 @@ export async function getPlanProfit(
   // ── Sesiones vivas con plan y monto ──────────────────────────────────────
   const { data: projRaw } = await sb
     .from("projects")
-    .select("id, package_id, total_amount, event_date")
+    .select("id, package_id, total_amount, event_date, name, client_id")
     .eq("studio_id", studioId)
     .is("deleted_at", null)
     .is("cancelled_at", null)
@@ -175,6 +197,8 @@ export async function getPlanProfit(
     package_id: string
     total_amount: number | string
     event_date: string | null
+    name: string | null
+    client_id: string | null
   }>
   if (proyectos.length === 0) {
     return {
@@ -186,9 +210,12 @@ export async function getPlanProfit(
           profit: 0,
           projectedSessions: 0,
           projectedProfit: 0,
+          collected: 0,
+          payments: 0,
         },
       ],
       byMonth: { [actual]: [] },
+      byMonthClients: { [actual]: [] },
       unscheduled: { sessions: 0, profit: 0 },
     }
   }
@@ -237,11 +264,61 @@ export async function getPlanProfit(
     }
   }
 
+  // Nombres de cliente para el detalle: sin ellos la lista no sirve de nada.
+  const nombreCliente = new Map<string, string>()
+  const idsCliente = [
+    ...new Set(proyectos.map((p) => p.client_id).filter((x): x is string => !!x)),
+  ]
+  if (idsCliente.length > 0) {
+    const { data: cliRaw } = await sb
+      .from("clients")
+      .select("id, name")
+      .in("id", idsCliente)
+    for (const c of (cliRaw ?? []) as Array<{ id: string; name: string | null }>) {
+      if (c.name) nombreCliente.set(c.id, c.name)
+    }
+  }
+
+  // COBRADO del mes: TODO el dinero que entro, abonos incluidos y aunque la
+  // sesion no tenga plan. Es otra pregunta que la ganancia —cuanto entro por
+  // la puerta— y tiene que cuadrar con la cifra de la pantalla de Finanzas.
+  const cobradoMes = new Map<string, { monto: number; pagos: number }>()
+  for (let desde = 0; ; desde += 1000) {
+    const { data: todos } = await sb
+      .from("payments")
+      .select("amount, received_at")
+      .eq("studio_id", studioId)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .range(desde, desde + 999)
+    const tanda = (todos ?? []) as Array<{
+      amount: number | string
+      received_at: string | null
+    }>
+    for (const pg of tanda) {
+      if (!pg.received_at) continue
+      const per = periodoRD(new Date(pg.received_at))
+      const acc = cobradoMes.get(per) ?? { monto: 0, pagos: 0 }
+      acc.monto += Number(pg.amount ?? 0)
+      acc.pagos += 1
+      cobradoMes.set(per, acc)
+    }
+    if (tanda.length < 1000) break
+  }
+
   // ── Repartir cada sesión en su mes (o en "pendiente") ────────────────────
   const totales = new Map<string, { sessions: number; profit: number }>()
   const previstos = new Map<string, { sessions: number; profit: number }>()
   const porMes = new Map<string, Map<string, MonthPlanRow>>()
+  const clientesMes = new Map<string, MonthClientRow[]>()
   const unscheduled = { sessions: 0, profit: 0 }
+
+  /** Apunta una sesion en la lista de su mes. */
+  const anotarCliente = (periodo: string, fila: MonthClientRow) => {
+    const lista = clientesMes.get(periodo) ?? []
+    lista.push(fila)
+    clientesMes.set(periodo, lista)
+  }
 
   /** Fila de un plan dentro de un mes, creandola si hace falta. */
   const filaDelMes = (periodo: string, packageId: string): MonthPlanRow => {
@@ -292,6 +369,19 @@ export async function getPlanProfit(
       const fp = filaDelMes(periodo, proy.package_id)
       fp.projectedSessions += 1
       fp.projectedProfit += ganancia
+      anotarCliente(periodo, {
+        projectId: proy.id,
+        clientName: proy.client_id
+          ? (nombreCliente.get(proy.client_id) ?? null)
+          : null,
+        projectName: proy.name,
+        packageName: fila.packageName,
+        total,
+        paid: pagado,
+        profit: ganancia,
+        status: "previsto",
+        date: proy.event_date,
+      })
       continue
     }
     if (!acc?.ultimo) continue
@@ -305,23 +395,39 @@ export async function getPlanProfit(
     const fp = filaDelMes(periodo, proy.package_id)
     fp.sessions += 1
     fp.profit += ganancia
+    anotarCliente(periodo, {
+      projectId: proy.id,
+      clientName: proy.client_id
+        ? (nombreCliente.get(proy.client_id) ?? null)
+        : null,
+      projectName: proy.name,
+      packageName: fila.packageName,
+      total,
+      paid: pagado,
+      profit: ganancia,
+      status: "confirmado",
+      date: acc.ultimo,
+    })
   }
 
   // La serie va del primer mes con movimiento al ultimo mes con algo previsto
   // —ahi esta la gracia: los meses que vienen aparecen antes de cobrarse.
-  const conDatos = [...totales.keys(), ...previstos.keys(), actual].sort()
+  const conDatos = [...totales.keys(), ...previstos.keys(), ...cobradoMes.keys(), actual].sort()
   const periodos = serieDeMeses(conDatos[0], conDatos[conDatos.length - 1])
 
   const months: MonthTotals[] = periodos
     .map((period) => {
       const t = totales.get(period) ?? { sessions: 0, profit: 0 }
       const pr = previstos.get(period) ?? { sessions: 0, profit: 0 }
+      const cb = cobradoMes.get(period) ?? { monto: 0, pagos: 0 }
       return {
         period,
         sessions: t.sessions,
         profit: t.profit,
         projectedSessions: pr.sessions,
         projectedProfit: pr.profit,
+        collected: cb.monto,
+        payments: cb.pagos,
       }
     })
     .reverse() // el mes mas reciente primero
@@ -333,10 +439,21 @@ export async function getPlanProfit(
     )
   }
 
+  const byMonthClients: Record<string, MonthClientRow[]> = {}
+  for (const period of periodos) {
+    // Lo cobrado primero (es lo cierto), y dentro, lo que mas deja.
+    byMonthClients[period] = [...(clientesMes.get(period) ?? [])].sort(
+      (a, b) =>
+        (a.status === b.status ? 0 : a.status === "confirmado" ? -1 : 1) ||
+        b.profit - a.profit,
+    )
+  }
+
   return {
     plans: [...filas.values()].sort((a, b) => b.profit - a.profit),
     months,
     byMonth,
+    byMonthClients,
     unscheduled,
   }
 }
