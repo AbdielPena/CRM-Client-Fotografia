@@ -1,21 +1,26 @@
 "use client"
 
 import * as React from "react"
-import { ChevronDown, Clock3 } from "lucide-react"
+import { CalendarClock, ChevronDown, CircleHelp } from "lucide-react"
 
 import type { PlanProfitSummary } from "@/server/services/plan-profit.service"
 import { formatCurrency } from "@/lib/utils/currency"
 import { cn } from "@/lib/utils/cn"
 
 /**
- * Ganancia por mes y por plan.
+ * Ganancia por mes: lo confirmado y lo previsto.
  *
- * Manda el MES: a la izquierda están todos, uno por línea con su monto; a la
- * derecha el detalle del que elijas. La referencia fija por plan (precio y
- * ganancia) es otra pregunta —sirve para poner precios, no para saber cómo te
- * fue— así que vive plegada abajo y no compite por la atención.
+ * Manda el MES. A la izquierda están todos —los que pasaron y los que vienen—;
+ * a la derecha el detalle del que elijas.
  *
- * Sin porcentajes: el estudio pidió ver la ganancia y nada más.
+ * Los dos números viven separados a propósito y nunca se mezclan en uno solo:
+ *
+ *   · CONFIRMADO — sesiones ya cobradas completas. Es plata en mano.
+ *   · PREVISTO   — sesiones registradas que aún deben. Es una expectativa, y
+ *                  se cae si la clienta no paga.
+ *
+ * Sumarlos en una sola cifra haría creer que ya se ganó algo que todavía no
+ * entró. Por eso el total esperado va aparte y en menor jerarquía.
  */
 
 const MESES = [
@@ -40,8 +45,21 @@ function nombreMes(periodo: string): string {
 }
 
 export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
-  const { plans, months, byMonth, pending } = data
-  const [periodo, setPeriodo] = React.useState(months[0]?.period ?? "")
+  const { plans, months, byMonth, unscheduled } = data
+  // Arranca en el mes en curso: es el que se mira todos los días.
+  const actual = React.useMemo(
+    () => new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Santo_Domingo",
+      year: "numeric",
+      month: "2-digit",
+    })
+      .format(new Date())
+      .slice(0, 7),
+    [],
+  )
+  const [periodo, setPeriodo] = React.useState(
+    () => (months.some((m) => m.period === actual) ? actual : months[0]?.period) ?? "",
+  )
   const [verPlanes, setVerPlanes] = React.useState(false)
 
   const mes = months.find((m) => m.period === periodo) ?? months[0]
@@ -50,9 +68,8 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
     [plans],
   )
   const detalle = byMonth[periodo] ?? []
-  // La barra compara meses entre sí: sin referencia, un monto suelto no dice
-  // si fue un buen mes o no.
-  const tope = Math.max(...months.map((m) => m.profit), 1)
+  // La barra compara meses entre sí: un monto suelto no dice si fue buen mes.
+  const tope = Math.max(...months.map((m) => m.profit + m.projectedProfit), 1)
 
   if (!mes) return null
 
@@ -63,18 +80,20 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
           Ganancia por mes
         </h2>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Una sesión suma el mes en que la clienta <strong>termina</strong> de
-          pagar. Se calcula sobre lo que cobraste de verdad, así que subir un
-          precio hoy no cambia lo que ganaste antes.
+          <strong>Confirmado</strong> es lo ya cobrado completo.{" "}
+          <strong>Previsto</strong> son sesiones registradas que aún deben: caen
+          en el mes de su sesión, porque el saldo se paga ese día. Se actualiza
+          solo según vas registrando sesiones y pagos.
         </p>
       </div>
 
       <div className="sf-card overflow-hidden">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,220px)_1fr]">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,232px)_1fr]">
           {/* ── Los meses ─────────────────────────────────────────────── */}
           <ul className="border-b border-border/70 md:border-b-0 md:border-r">
             {months.map((m) => {
               const activo = m.period === periodo
+              const futuro = m.period > actual
               return (
                 <li key={m.period}>
                   <button
@@ -95,6 +114,11 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                         )}
                       >
                         {nombreMes(m.period)}
+                        {futuro ? (
+                          <span className="ml-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                            por venir
+                          </span>
+                        ) : null}
                       </span>
                       <span
                         className={cn(
@@ -107,15 +131,24 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                         {m.profit > 0 ? formatCurrency(m.profit) : "—"}
                       </span>
                     </div>
-                    <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-border/60">
+
+                    {/* Barra en dos tramos: sólido lo cobrado, tenue lo previsto. */}
+                    <div className="mt-1 flex h-1 w-full overflow-hidden rounded-full bg-border/60">
                       <div
-                        className={cn(
-                          "h-full rounded-full",
-                          activo ? "bg-emerald-500" : "bg-emerald-500/40",
-                        )}
-                        style={{ width: `${Math.round((m.profit / tope) * 100)}%` }}
+                        className="h-full bg-emerald-500"
+                        style={{ width: `${(m.profit / tope) * 100}%` }}
+                      />
+                      <div
+                        className="h-full bg-emerald-500/30"
+                        style={{ width: `${(m.projectedProfit / tope) * 100}%` }}
                       />
                     </div>
+
+                    {m.projectedProfit > 0 ? (
+                      <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+                        + {formatCurrency(m.projectedProfit)} previsto
+                      </p>
+                    ) : null}
                   </button>
                 </li>
               )
@@ -125,22 +158,52 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
           {/* ── El mes elegido ────────────────────────────────────────── */}
           <div className="p-4">
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-              En <span className="capitalize">{nombreMes(mes.period)}</span> ganaste
+              <span className="capitalize">{nombreMes(mes.period)}</span>
             </p>
-            <p className="mt-0.5 text-3xl font-bold tabular-nums text-foreground">
-              {formatCurrency(mes.profit)}
-            </p>
-            <p className="mt-0.5 text-[12px] text-muted-foreground">
-              {mes.sessions}{" "}
-              {mes.sessions === 1
-                ? "sesión cobrada completa"
-                : "sesiones cobradas completas"}
-            </p>
+
+            <div className="mt-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                Confirmado · ya cobrado completo
+              </p>
+              <p className="text-3xl font-bold tabular-nums text-foreground">
+                {formatCurrency(mes.profit)}
+              </p>
+              <p className="text-[12px] text-muted-foreground">
+                {mes.sessions}{" "}
+                {mes.sessions === 1
+                  ? "sesión cobrada completa"
+                  : "sesiones cobradas completas"}
+              </p>
+            </div>
+
+            {mes.projectedProfit > 0 ? (
+              <div className="mt-3 rounded-lg border border-border/70 bg-muted/25 p-3">
+                <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <CalendarClock className="size-3.5" />
+                  Previsto · falta que paguen
+                </p>
+                <p className="text-xl font-semibold tabular-nums text-foreground">
+                  + {formatCurrency(mes.projectedProfit)}
+                </p>
+                <p className="text-[12px] text-muted-foreground">
+                  {mes.projectedSessions}{" "}
+                  {mes.projectedSessions === 1
+                    ? "sesión registrada sin terminar de pagar"
+                    : "sesiones registradas sin terminar de pagar"}
+                </p>
+                <p className="mt-1.5 border-t border-border/60 pt-1.5 text-[12px] text-muted-foreground">
+                  Si todas pagan, el mes cierra en{" "}
+                  <strong className="tabular-nums text-foreground">
+                    {formatCurrency(mes.profit + mes.projectedProfit)}
+                  </strong>
+                </p>
+              </div>
+            ) : null}
 
             {detalle.length > 0 ? (
               <div className="mt-4">
                 <p className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-                  De qué planes salió
+                  De qué planes sale
                 </p>
                 <ul className="divide-y divide-border/60">
                   {detalle.map((d) => {
@@ -152,12 +215,22 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
                       >
                         <span className="min-w-0 truncate text-[12.5px] text-foreground">
                           {plan?.packageName ?? "(plan eliminado)"}
-                          <span className="ml-1.5 text-[11px] text-muted-foreground">
-                            ×{d.sessions}
-                          </span>
                         </span>
-                        <span className="shrink-0 text-[12.5px] tabular-nums text-foreground">
-                          {formatCurrency(d.profit)}
+                        <span className="shrink-0 text-right text-[12.5px] tabular-nums">
+                          {d.profit > 0 ? (
+                            <span className="text-foreground">
+                              {formatCurrency(d.profit)}
+                              <span className="ml-1 text-[11px] text-muted-foreground">
+                                ×{d.sessions}
+                              </span>
+                            </span>
+                          ) : null}
+                          {d.projectedProfit > 0 ? (
+                            <span className="block text-[11px] text-muted-foreground">
+                              + {formatCurrency(d.projectedProfit)} previsto ×
+                              {d.projectedSessions}
+                            </span>
+                          ) : null}
                         </span>
                       </li>
                     )
@@ -166,25 +239,23 @@ export function PlanProfitPanel({ data }: { data: PlanProfitSummary }) {
               </div>
             ) : (
               <p className="mt-4 text-[12.5px] text-muted-foreground">
-                Ninguna sesión terminó de pagarse en este mes.
+                Este mes no tiene sesiones cobradas ni registradas.
               </p>
             )}
           </div>
         </div>
       </div>
 
-      {/* Lo que todavía no cuenta. Va aparte y en una línea: es la confusión
-          de siempre —el dinero de las reservas aún no es ganancia. */}
-      {pending.sessions > 0 ? (
+      {/* Sin fecha no hay mes al que asignarlas: se dicen aparte para que no
+          desaparezcan del radar. */}
+      {unscheduled.sessions > 0 ? (
         <p className="flex items-start gap-1.5 text-[12px] text-muted-foreground">
-          <Clock3 className="mt-0.5 size-3.5 shrink-0" />
+          <CircleHelp className="mt-0.5 size-3.5 shrink-0" />
           <span>
-            <strong className="text-foreground">
-              {formatCurrency(pending.profit)}
-            </strong>{" "}
-            en camino. Son {pending.sessions}{" "}
-            {pending.sessions === 1 ? "sesión" : "sesiones"} sin terminar de
-            pagar; todavía no cuentan en ningún mes.
+            {unscheduled.sessions}{" "}
+            {unscheduled.sessions === 1 ? "sesión" : "sesiones"} sin fecha y sin
+            terminar de pagar ({formatCurrency(unscheduled.profit)}). Sin fecha
+            no se pueden proyectar a ningún mes — ponles fecha y aparecerán.
           </span>
         </p>
       ) : null}

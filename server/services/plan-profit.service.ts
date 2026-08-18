@@ -3,15 +3,24 @@ import "server-only"
 import { untypedService } from "@/server/supabase/untyped"
 
 /**
- * Ganancia por mes y por plan.
+ * Ganancia por mes y por plan, confirmada y prevista.
  *
  * Sale de la **ganancia limpia** que el dueño declaró en cada plan
  * (`packages.profit_amount`). Nada de porcentajes: el estudio pidió ver la
  * ganancia y punto.
  *
- * Regla de "ya cuenta": la misma que usa `session-profit.service.ts` — la
- * sesión suma cuando queda TOTALMENTE pagada, y suma en el mes del último pago.
- * Un abono no cuenta: el dinero adelantado todavía no es ganancia.
+ * Dos números por mes, que NUNCA se funden en uno:
+ *
+ *   · CONFIRMADO — la sesión quedó TOTALMENTE pagada, y suma en el mes del
+ *     último pago. Un abono no cuenta: el dinero adelantado todavía no es
+ *     ganancia. Es la misma regla de `session-profit.service.ts`.
+ *   · PREVISTO — la sesión está registrada pero aún debe. Se proyecta al mes
+ *     de la FECHA DE LA SESIÓN, porque el saldo se paga ese día. Si esa fecha
+ *     ya pasó y sigue sin saldar, se proyecta al mes en curso: el dinero no
+ *     entró, se espera ahora.
+ *
+ * Sumarlos en una cifra sola haría creer que ya se ganó algo que no ha
+ * entrado, así que el servicio los devuelve separados y la pantalla también.
  *
  * OJO con los meses pasados. La ganancia del plan es un número de HOY; si se
  * sube el precio, aplicarlo hacia atrás inflaría lo que de verdad se ganó. Por
@@ -68,15 +77,21 @@ export interface PlanRef {
 export interface MonthTotals {
   /** 'YYYY-MM' en hora RD. */
   period: string
+  /** CONFIRMADO: sesiones que ya se cobraron completas. */
   sessions: number
   profit: number
+  /** PREVISTO: sesiones registradas que aun no terminan de pagar. */
+  projectedSessions: number
+  projectedProfit: number
 }
 
-/** Lo que aporto un plan en UN mes. */
+/** Lo que aporto (o aportara) un plan en UN mes. */
 export interface MonthPlanRow {
   packageId: string
   sessions: number
   profit: number
+  projectedSessions: number
+  projectedProfit: number
 }
 
 export interface PlanProfitSummary {
@@ -85,8 +100,11 @@ export interface PlanProfitSummary {
   months: MonthTotals[]
   /** Desglose por plan de cada mes, indexado por periodo. */
   byMonth: Record<string, MonthPlanRow[]>
-  /** Sesiones vivas con saldo: su ganancia todavia no cuenta. */
-  pending: { sessions: number; profit: number }
+  /**
+   * Sesiones sin saldar y SIN fecha: no hay a que mes asignarlas, asi que no
+   * entran en ninguna proyeccion. Se reportan aparte para que no desaparezcan.
+   */
+  unscheduled: { sessions: number; profit: number }
 }
 
 interface PkgRow {
@@ -146,7 +164,7 @@ export async function getPlanProfit(
   // ── Sesiones vivas con plan y monto ──────────────────────────────────────
   const { data: projRaw } = await sb
     .from("projects")
-    .select("id, package_id, total_amount")
+    .select("id, package_id, total_amount, event_date")
     .eq("studio_id", studioId)
     .is("deleted_at", null)
     .is("cancelled_at", null)
@@ -156,13 +174,22 @@ export async function getPlanProfit(
     id: string
     package_id: string
     total_amount: number | string
+    event_date: string | null
   }>
   if (proyectos.length === 0) {
     return {
       plans: [...filas.values()],
-      months: [{ period: actual, sessions: 0, profit: 0 }],
+      months: [
+        {
+          period: actual,
+          sessions: 0,
+          profit: 0,
+          projectedSessions: 0,
+          projectedProfit: 0,
+        },
+      ],
       byMonth: { [actual]: [] },
-      pending: { sessions: 0, profit: 0 },
+      unscheduled: { sessions: 0, profit: 0 },
     }
   }
 
@@ -212,8 +239,24 @@ export async function getPlanProfit(
 
   // ── Repartir cada sesión en su mes (o en "pendiente") ────────────────────
   const totales = new Map<string, { sessions: number; profit: number }>()
+  const previstos = new Map<string, { sessions: number; profit: number }>()
   const porMes = new Map<string, Map<string, MonthPlanRow>>()
-  const pending = { sessions: 0, profit: 0 }
+  const unscheduled = { sessions: 0, profit: 0 }
+
+  /** Fila de un plan dentro de un mes, creandola si hace falta. */
+  const filaDelMes = (periodo: string, packageId: string): MonthPlanRow => {
+    const delMes = porMes.get(periodo) ?? new Map<string, MonthPlanRow>()
+    const fp = delMes.get(packageId) ?? {
+      packageId,
+      sessions: 0,
+      profit: 0,
+      projectedSessions: 0,
+      projectedProfit: 0,
+    }
+    delMes.set(packageId, fp)
+    porMes.set(periodo, delMes)
+    return fp
+  }
 
   for (const proy of proyectos) {
     const fila = filas.get(proy.package_id)
@@ -231,8 +274,24 @@ export async function getPlanProfit(
     // Margen de un peso: un redondeo no debe impedir que cuente.
     const saldada = total > 0 && pagado + 1 >= total
     if (!saldada) {
-      pending.sessions += 1
-      pending.profit += ganancia
+      // Todavia debe: se PROYECTA al mes en que se espera cobrarla. El ancla
+      // es la fecha de la sesion, porque el saldo se paga ese dia. Si esa
+      // fecha ya paso y sigue sin saldar, se espera cobrarla ahora.
+      if (!proy.event_date) {
+        unscheduled.sessions += 1
+        unscheduled.profit += ganancia
+        continue
+      }
+      const dela = periodoRD(new Date(`${proy.event_date}T12:00:00`))
+      const periodo = dela < actual ? actual : dela
+      const pr = previstos.get(periodo) ?? { sessions: 0, profit: 0 }
+      pr.sessions += 1
+      pr.profit += ganancia
+      previstos.set(periodo, pr)
+
+      const fp = filaDelMes(periodo, proy.package_id)
+      fp.projectedSessions += 1
+      fp.projectedProfit += ganancia
       continue
     }
     if (!acc?.ultimo) continue
@@ -243,35 +302,34 @@ export async function getPlanProfit(
     t.profit += ganancia
     totales.set(periodo, t)
 
-    const delMes = porMes.get(periodo) ?? new Map<string, MonthPlanRow>()
-    const fp = delMes.get(proy.package_id) ?? {
-      packageId: proy.package_id,
-      sessions: 0,
-      profit: 0,
-    }
+    const fp = filaDelMes(periodo, proy.package_id)
     fp.sessions += 1
     fp.profit += ganancia
-    delMes.set(proy.package_id, fp)
-    porMes.set(periodo, delMes)
   }
 
-  const conDatos = [...totales.keys()].sort()
-  const primero = conDatos[0] ?? actual
-  // Si hubo cobros de un mes futuro (fecha mal puesta), la serie llega hasta ahi.
-  const ultimo = conDatos[conDatos.length - 1] ?? actual
-  const periodos = serieDeMeses(primero, ultimo > actual ? ultimo : actual)
+  // La serie va del primer mes con movimiento al ultimo mes con algo previsto
+  // —ahi esta la gracia: los meses que vienen aparecen antes de cobrarse.
+  const conDatos = [...totales.keys(), ...previstos.keys(), actual].sort()
+  const periodos = serieDeMeses(conDatos[0], conDatos[conDatos.length - 1])
 
   const months: MonthTotals[] = periodos
     .map((period) => {
       const t = totales.get(period) ?? { sessions: 0, profit: 0 }
-      return { period, sessions: t.sessions, profit: t.profit }
+      const pr = previstos.get(period) ?? { sessions: 0, profit: 0 }
+      return {
+        period,
+        sessions: t.sessions,
+        profit: t.profit,
+        projectedSessions: pr.sessions,
+        projectedProfit: pr.profit,
+      }
     })
     .reverse() // el mes mas reciente primero
 
   const byMonth: Record<string, MonthPlanRow[]> = {}
   for (const period of periodos) {
     byMonth[period] = [...(porMes.get(period)?.values() ?? [])].sort(
-      (a, b) => b.profit - a.profit,
+      (a, b) => b.profit + b.projectedProfit - (a.profit + a.projectedProfit),
     )
   }
 
@@ -279,6 +337,6 @@ export async function getPlanProfit(
     plans: [...filas.values()].sort((a, b) => b.profit - a.profit),
     months,
     byMonth,
-    pending,
+    unscheduled,
   }
 }
