@@ -668,7 +668,11 @@ export async function acceptQuote(params: {
       // Sin plan, la sesión se llama "Cliente — trabajo cotizado". El
       // nombre del cliente va SIEMPRE delante: sin él la sesión no aparecía
       // al buscar por el cliente y parecía que nunca se había creado.
-      if (!q.package_id && q.quote_title) {
+      //
+      // Con VARIAS fechas manda el título de la cotización aunque haya plan:
+      // "Sofía — Quinceañera (sesión y fiesta)" dice lo que es; el nombre del
+      // plan se queda corto porque la sesión cubre más que ese plan.
+      if ((!q.package_id || eventos.length > 1) && q.quote_title) {
         const cliente = (q.client_name ?? "").trim()
         patch.name = cliente ? `${cliente} — ${q.quote_title}` : q.quote_title
       }
