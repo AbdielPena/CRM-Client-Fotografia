@@ -377,6 +377,14 @@ export type CreateGalleryInput = {
   templateId?: string | null
   availabilityDays?: number | null
   packageId?: string | null
+  /**
+   * De qué fecha de la sesión son estas fotos.
+   *
+   * Una quinceañera puede llevar la sesión de fotos un día y la fiesta otro:
+   * cada una entrega lo suyo, en su propio plazo. Vacío = la sesión entera,
+   * como siempre.
+   */
+  projectEventId?: string | null
 }
 
 /**
@@ -434,6 +442,21 @@ export async function createGallery(
   // Es la única vía por la que una galería de entrega final obtiene su package_id,
   // necesario para resolver los entitlements de impresión (álbum/marcos/prints).
   let packageId = data.packageId ?? null
+  // Si la galería es de un EVENTO concreto, manda el plan de ESE evento: la
+  // fiesta y la sesión de fotos pueden ir con planes distintos.
+  let bookDelEvento = false
+  if (data.projectEventId) {
+    const { data: ev } = await db
+      .from("project_events")
+      .select("package_id, includes_book")
+      .eq("id", data.projectEventId)
+      .eq("studio_id", studioId)
+      .maybeSingle()
+    if (ev) {
+      if (!packageId && ev.package_id) packageId = ev.package_id as string
+      bookDelEvento = ev.includes_book === true
+    }
+  }
   if (!packageId && data.projectId) {
     const { data: proj } = await db
       .from("projects")
@@ -482,6 +505,10 @@ export async function createGallery(
       template_id: templateId,
       availability_days: availabilityDays,
       package_id: packageId,
+      project_event_id: data.projectEventId ?? null,
+      // El Book Experience se cotizó para ESTE evento: la galería nace con el
+      // álbum encendido sin tener que acordarse de prenderlo a mano.
+      ...(bookDelEvento ? { book_enabled: true } : {}),
     })
     .select("*")
     .single()
@@ -2530,6 +2557,41 @@ export async function submitClientSelection(
       selection_locked: false,
     })
     .eq("id", galleryId)
+
+  // El plazo de ESTA galería, si sus fotos son de un evento concreto.
+  //
+  // La fiesta y la sesión de fotos pueden entregarse en plazos distintos, y la
+  // fecha estimada del proyecto es una sola. Por eso cada galería fija la suya
+  // en `galleries.delivery_date` —que es la que ya consume "Próximas
+  // entregas"— con los días acordados para SU evento.
+  //
+  // Ojo: `0` días es un valor (entrega el mismo día), no un "sin definir".
+  try {
+    const evId = (gallery as { project_event_id?: string | null })
+      .project_event_id
+    if (evId) {
+      // `project_events` y `galleries.delivery_date` son columnas nuevas que
+      // los tipos generados todavia no conocen.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sbEv = supabase as any
+      const { data: ev } = await sbEv
+        .from("project_events")
+        .select("delivery_days")
+        .eq("id", evId)
+        .maybeSingle()
+      const dias = (ev as { delivery_days?: number | null } | null)?.delivery_days
+      if (dias != null) {
+        const d = new Date()
+        d.setDate(d.getDate() + Number(dias))
+        await sbEv
+          .from("galleries")
+          .update({ delivery_date: d.toISOString().slice(0, 10) })
+          .eq("id", galleryId)
+      }
+    }
+  } catch (err) {
+    console.error("[submitClientSelection] plazo del evento falló:", err)
+  }
 
   // La entrega se cuenta DESDE la selección → recalcular la fecha estimada de
   // entrega ahora que el cliente eligió (best-effort; no bloquea el envío).

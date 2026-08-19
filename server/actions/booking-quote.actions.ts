@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache"
 
 import { requireStudioAuth } from "@/server/middleware/auth"
-import { createManualQuote } from "@/server/services/booking-quote.service"
+import {
+  cancelQuote,
+  createManualQuote,
+  resendQuoteEmail,
+} from "@/server/services/booking-quote.service"
+import type { ProjectEventInput } from "@/server/services/project-event.service"
 
 /**
  * Registra una cotización acordada por fuera (WhatsApp, llamada, en persona) y
@@ -18,14 +23,30 @@ export async function createQuoteAction(formData: FormData) {
   const eventDate = String(formData.get("eventDate") ?? "").trim()
   const rawAmount = String(formData.get("amount") ?? "").trim()
 
+  // Las fechas del trabajo. Con varias (la sesión un día, la fiesta otro) cada
+  // una lleva lo suyo: fotos, plazo, impresiones, Book Experience.
+  let events: ProjectEventInput[] = []
+  try {
+    const raw = String(formData.get("events") ?? "")
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw)
+      if (Array.isArray(parsed)) events = parsed as ProjectEventInput[]
+    }
+  } catch {
+    return { ok: false as const, error: "Las fechas tienen un formato inválido" }
+  }
+
   if (!clientName) return { ok: false as const, error: "Escribe el nombre del cliente" }
   if (!clientEmail || !clientEmail.includes("@"))
     return { ok: false as const, error: "Escribe un correo válido: ahí le llega la cotización" }
-  if (!eventDate) return { ok: false as const, error: "Elige la fecha de la sesión" }
+  if (!eventDate && events.length === 0)
+    return { ok: false as const, error: "Elige la fecha de la sesión" }
+  if (events.some((e) => !String(e?.eventDate ?? "").trim()))
+    return { ok: false as const, error: "Cada evento necesita su fecha" }
 
   // Cotización LIBRE: sin plan, con su propio presupuesto por líneas.
   const title = String(formData.get("title") ?? "").trim()
-  if (!packageId && !title) {
+  if (!packageId && !title && events.length === 0) {
     return {
       ok: false as const,
       error: "Escribe el título del trabajo que estás cotizando",
@@ -83,9 +104,11 @@ export async function createQuoteAction(formData: FormData) {
       eventDate,
       amount,
       note: String(formData.get("note") ?? "").trim() || null,
+      events,
     })
     revalidatePath("/cotizaciones")
     revalidatePath("/bookings")
+    revalidatePath("/calendar")
     return { ...r, ok: true as const }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "QUOTE_FAILED"
@@ -100,5 +123,53 @@ export async function createQuoteAction(formData: FormData) {
               ? "El presupuesto no puede quedar en cero."
               : "No se pudo crear la cotización."
     return { ok: false as const, error: human }
+  }
+}
+
+/** Le vuelve a mandar el correo de la cotización al cliente. */
+export async function resendQuoteAction(quoteId: string, toEmail?: string) {
+  const session = await requireStudioAuth()
+  try {
+    const r = await resendQuoteEmail(
+      session.studioId,
+      session.userId,
+      quoteId,
+      toEmail,
+    )
+    revalidatePath(`/cotizaciones/${quoteId}`)
+    revalidatePath("/cotizaciones")
+    return { ok: true as const, sentTo: r.sentTo }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : ""
+    return {
+      ok: false as const,
+      error:
+        msg === "QUOTE_ALREADY_ACCEPTED"
+          ? "Esta cotización ya fue aceptada: el cliente tiene su contrato y su factura."
+          : msg === "QUOTE_NOT_FOUND"
+            ? "No se encontró la cotización."
+            : "No se pudo reenviar el correo.",
+    }
+  }
+}
+
+/** Anula una cotización que no llegó a nada. No borra el registro. */
+export async function cancelQuoteAction(quoteId: string) {
+  const session = await requireStudioAuth()
+  try {
+    await cancelQuote(session.studioId, session.userId, quoteId)
+    revalidatePath(`/cotizaciones/${quoteId}`)
+    revalidatePath("/cotizaciones")
+    revalidatePath("/calendar")
+    return { ok: true as const }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : ""
+    return {
+      ok: false as const,
+      error:
+        msg === "QUOTE_ALREADY_ACCEPTED"
+          ? "Ya fue aceptada y tiene sesión: cancélala desde la sesión."
+          : "No se pudo anular la cotización.",
+    }
   }
 }

@@ -573,3 +573,182 @@ export async function updateSessionProfitAction(formData: FormData) {
   revalidatePath("/finance/tithe")
   return { success: true as const }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Las FECHAS de una sesión
+//
+// Una sesión puede llevar varias: la sesión de fotos un día y la fiesta otro,
+// cada una con su hora, su lugar y su propio plazo de entrega.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function numeroOnull(v: FormDataEntryValue | null): number | null {
+  const s = String(v ?? "").trim()
+  if (s === "") return null
+  const n = Number(s)
+  return Number.isFinite(n) ? n : null
+}
+
+export async function updateProjectEventAction(formData: FormData) {
+  const session = await requireStudioAuth()
+  const eventId = String(formData.get("eventId") ?? "").trim()
+  const projectId = String(formData.get("projectId") ?? "").trim()
+  if (!eventId) return { error: "Falta el evento" }
+
+  const { updateProjectEvent } = await import(
+    "@/server/services/project-event.service"
+  )
+  try {
+    const ev = await updateProjectEvent(session.studioId, eventId, {
+      name: String(formData.get("name") ?? ""),
+      eventDate: String(formData.get("eventDate") ?? "").slice(0, 10),
+      eventTime: String(formData.get("eventTime") ?? ""),
+      eventEndTime: String(formData.get("eventEndTime") ?? ""),
+      location: String(formData.get("location") ?? ""),
+      photoCount: numeroOnull(formData.get("photoCount")),
+      deliveryDays: numeroOnull(formData.get("deliveryDays")),
+      includesPrints: formData.get("includesPrints") === "on",
+      includesBook: formData.get("includesBook") === "on",
+    })
+    // `update` que no toca filas NO da error: sin fila devuelta, no era suya.
+    if (!ev) return { error: "No se encontró ese evento" }
+
+    await propagarEvento(session.studioId, projectId || ev.projectId, ev)
+    if (projectId) revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/calendar")
+    return { success: true as const }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "No se pudo guardar" }
+  }
+}
+
+/** Cambia cuál de las fechas manda como fecha de la sesión. */
+export async function setPrimaryProjectEventAction(formData: FormData) {
+  const session = await requireStudioAuth()
+  const eventId = String(formData.get("eventId") ?? "").trim()
+  const projectId = String(formData.get("projectId") ?? "").trim()
+  if (!eventId || !projectId) return { error: "Faltan datos" }
+
+  const { setPrimaryEvent, listEventsByProject, primaryEvent } = await import(
+    "@/server/services/project-event.service"
+  )
+  try {
+    await setPrimaryEvent(session.studioId, projectId, eventId)
+    const eventos = await listEventsByProject(session.studioId, projectId)
+    const ppal = primaryEvent(eventos)
+    if (ppal) await propagarEvento(session.studioId, projectId, ppal)
+    revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/calendar")
+    revalidatePath("/projects")
+    return { success: true as const }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "No se pudo cambiar" }
+  }
+}
+
+export async function addProjectEventAction(formData: FormData) {
+  const session = await requireStudioAuth()
+  const projectId = String(formData.get("projectId") ?? "").trim()
+  const eventDate = String(formData.get("eventDate") ?? "").slice(0, 10)
+  if (!projectId) return { error: "Falta la sesión" }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) return { error: "Falta la fecha" }
+
+  const { addProjectEvent } = await import(
+    "@/server/services/project-event.service"
+  )
+  try {
+    const ev = await addProjectEvent(session.studioId, projectId, {
+      name: String(formData.get("name") ?? "").trim() || "Evento",
+      eventDate,
+      eventTime: String(formData.get("eventTime") ?? ""),
+      location: String(formData.get("location") ?? ""),
+      photoCount: numeroOnull(formData.get("photoCount")),
+      deliveryDays: numeroOnull(formData.get("deliveryDays")),
+      includesPrints: formData.get("includesPrints") === "on",
+      includesBook: formData.get("includesBook") === "on",
+    })
+    if (ev) await propagarEvento(session.studioId, projectId, ev)
+    revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/calendar")
+    return { success: true as const }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "No se pudo agregar" }
+  }
+}
+
+export async function deleteProjectEventAction(formData: FormData) {
+  const session = await requireStudioAuth()
+  const eventId = String(formData.get("eventId") ?? "").trim()
+  const projectId = String(formData.get("projectId") ?? "").trim()
+  if (!eventId) return { error: "Falta el evento" }
+
+  const { deleteProjectEvent } = await import(
+    "@/server/services/project-event.service"
+  )
+  try {
+    await deleteProjectEvent(session.studioId, eventId)
+    if (projectId) revalidatePath(`/projects/${projectId}`)
+    revalidatePath("/calendar")
+    return { success: true as const }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "No se pudo quitar" }
+  }
+}
+
+/**
+ * Lo que arrastra tocar un evento.
+ *
+ * Si es el PRINCIPAL, su fecha es la fecha de la sesión: la copia a `projects`
+ * (de ahí viven el tablero, el recordatorio de saldo y "sesión realizada"),
+ * recalcula el plazo de entrega y re-sincroniza Google. Si es secundario, solo
+ * su propio evento de Google.
+ */
+async function propagarEvento(
+  studioId: string,
+  projectId: string | null,
+  ev: {
+    id: string
+    isPrimary?: boolean
+    eventDate: string
+    eventTime?: string | null
+    eventEndTime?: string | null
+    location?: string | null
+    deliveryDays?: number | null
+  },
+) {
+  if (!projectId) return
+  try {
+    if (ev.isPrimary) {
+      const { untypedService } = await import("@/server/supabase/untyped")
+      const sb = untypedService()
+      await sb
+        .from("projects")
+        .update({
+          event_date: ev.eventDate,
+          event_time: ev.eventTime ?? null,
+          event_end_time: ev.eventEndTime ?? null,
+          location: ev.location ?? null,
+          delivery_days_override: ev.deliveryDays ?? null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("studio_id", studioId)
+        .eq("id", projectId)
+
+      const { recomputeProjectDelivery } = await import(
+        "@/server/services/delivery.service"
+      )
+      await recomputeProjectDelivery(studioId, projectId)
+
+      const { syncProjectById } = await import(
+        "@/server/services/google-calendar.service"
+      )
+      await syncProjectById(studioId, projectId).catch(() => false)
+    } else {
+      const { syncProjectEventToGoogle } = await import(
+        "@/server/services/google-calendar.service"
+      )
+      await syncProjectEventToGoogle(studioId, ev.id).catch(() => null)
+    }
+  } catch (e) {
+    console.error("[evento] propagar", e instanceof Error ? e.message : e)
+  }
+}

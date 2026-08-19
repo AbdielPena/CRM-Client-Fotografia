@@ -20,19 +20,26 @@ export default async function CotizacionesPage() {
     listQuotes(session.studioId),
     sb
       .from("packages")
-      .select("id, name, price, is_active")
+      .select(
+        "id, name, price, is_active, delivery_days, edited_photos, gallery_book_enabled",
+      )
       .eq("studio_id", session.studioId)
       .is("deleted_at", null)
       .order("price", { ascending: false }),
     sb.from("studios").select("currency").eq("id", session.studioId).maybeSingle(),
   ])
 
+  // Al elegir un plan dentro de un evento, el formulario se autocompleta con
+  // lo que ese plan entrega: fotos, plazo y si lleva Book Experience.
   const packages = ((pkgRes.data ?? []) as Array<Record<string, unknown>>)
     .filter((p) => p.is_active !== false)
     .map((p) => ({
       id: String(p.id),
       name: String(p.name ?? ""),
       price: Number(p.price ?? 0),
+      deliveryDays: p.delivery_days == null ? null : Number(p.delivery_days),
+      photoCount: p.edited_photos == null ? null : Number(p.edited_photos),
+      bookEnabled: p.gallery_book_enabled === true,
     }))
   const currency =
     ((studioRes.data as { currency?: string } | null)?.currency as string) ?? "DOP"

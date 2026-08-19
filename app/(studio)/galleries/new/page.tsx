@@ -42,6 +42,34 @@ export default async function NewGalleryPage({
     client_id: string | null
   }>
 
+  // Las FECHAS de esa sesión. Si lleva más de una —la sesión de fotos un día y
+  // la fiesta otro— hay que decir de cuál son estas fotos: de ahí sale el plazo
+  // de entrega de ESTA galería. Con una sola no se pregunta nada.
+  let projectEvents: Array<{
+    id: string
+    name: string
+    eventDate: string
+    deliveryDays: number | null
+  }> = []
+  if (searchParams.projectId) {
+    const { listEventsByProject } = await import(
+      "@/server/services/project-event.service"
+    )
+    projectEvents = await listEventsByProject(
+      session.studioId,
+      searchParams.projectId,
+    )
+      .then((evs) =>
+        evs.map((e) => ({
+          id: e.id,
+          name: e.name,
+          eventDate: e.eventDate,
+          deliveryDays: e.deliveryDays ?? null,
+        })),
+      )
+      .catch(() => [])
+  }
+
   // Si viene de un proyecto con quinceañera registrada, pre-llenar el nombre de
   // la galería con el nombre de la quinceañera (columna nueva → cliente untyped).
   let prefillName = ""
@@ -176,6 +204,28 @@ export default async function NewGalleryPage({
                   ))}
                 </select>
               </div>
+              {projectEvents.length > 1 && (
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-foreground">
+                    ¿De qué evento son estas fotos?
+                  </label>
+                  <select name="projectEventId" className={inputCls}>
+                    <option value="">Toda la sesión</option>
+                    {projectEvents.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name} — {e.eventDate}
+                        {e.deliveryDays != null
+                          ? ` (entrega en ${e.deliveryDays} días)`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Esta sesión tiene varias fechas. La que elijas define el
+                    plazo de entrega de ESTA galería y su plan.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

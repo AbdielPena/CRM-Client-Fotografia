@@ -514,7 +514,23 @@ export async function getProjectSessionEvents(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const pickOne = (v: any) => (Array.isArray(v) ? (v[0] ?? null) : v)
 
-  return ((data as unknown[]) ?? []).map((raw) => {
+  // Sesiones con VARIAS fechas: sus eventos mandan.
+  //
+  // Una quinceañera puede llevar la sesion de fotos un dia y la fiesta otro.
+  // Esas fechas viven en `project_events`, no en `projects.event_date` -que
+  // solo guarda la principal-. Si una sesion tiene eventos NO se dibuja desde
+  // `projects`: saldria dos veces el mismo dia.
+  const proyectos = ((data as unknown[]) ?? []) as Array<{ id: string }>
+  const conEventos = await proyectosConEventos(
+    studioId,
+    proyectos.map((p) => String(p.id)),
+  )
+  const deEventos = await eventosDeProyectos(studioId, fromD, toD)
+  const cotizados = await eventosCotizados(studioId, fromD, toD)
+
+  const sesiones = ((data as unknown[]) ?? [])
+    .filter((raw) => !conEventos.has(String((raw as { id: string }).id)))
+    .map((raw) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const r = raw as any
     const dateStr: string = r.event_date
@@ -559,6 +575,158 @@ export async function getProjectSessionEvents(
       projectName: r.name,
     } satisfies CalendarEventRow
   })
+
+  return [...sesiones, ...deEventos, ...cotizados]
+}
+
+/**
+ * De estas sesiones, cuáles tienen sus fechas en `project_events`.
+ *
+ * Sin filtro de fecha a propósito: si la sesión lleva eventos, sus fechas salen
+ * SIEMPRE de ahí, aunque este mes no caiga ninguna.
+ */
+async function proyectosConEventos(
+  studioId: string,
+  projectIds: string[],
+): Promise<Set<string>> {
+  if (projectIds.length === 0) return new Set()
+  const sb = untypedServer()
+  const { data } = await sb
+    .from("project_events")
+    .select("project_id")
+    .eq("studio_id", studioId)
+    .in("project_id", projectIds)
+  const out = new Set<string>()
+  for (const r of (data ?? []) as Array<{ project_id: string | null }>) {
+    if (r.project_id) out.add(String(r.project_id))
+  }
+  return out
+}
+
+/** Una fila del calendario a partir de un evento de la sesión. */
+function eventoAFila(
+  r: Record<string, unknown>,
+  opts: { cotizado?: boolean } = {},
+): CalendarEventRow {
+  const fecha = String(r.event_date ?? "").slice(0, 10)
+  const hi = (r.event_time as string | null)?.slice(0, 5) ?? null
+  const hf = (r.event_end_time as string | null)?.slice(0, 5) ?? null
+  const proy = Array.isArray(r.project) ? r.project[0] : r.project
+  const cli = proy
+    ? Array.isArray((proy as { client?: unknown }).client)
+      ? ((proy as { client: unknown[] }).client[0] as { name?: string } | undefined)
+      : ((proy as { client?: { name?: string } }).client ?? undefined)
+    : undefined
+  const clienteSuelto = String(r.client_name ?? "") || null
+  const clientName = cli?.name ?? clienteSuelto
+  const nombre = String(r.name ?? "Evento")
+  // Sin hora se ancla a mediodía UTC para que el grid (que agrupa por fecha
+  // LOCAL) lo ubique en el día correcto en RD (UTC−4).
+  const startsAt = hi ? `${fecha}T${hi}:00` : `${fecha}T12:00:00Z`
+  const endsAt = hf
+    ? `${fecha}T${hf}:00`
+    : hi
+      ? `${fecha}T${hi}:00`
+      : `${fecha}T13:00:00Z`
+  const icono = opts.cotizado ? "📝" : "📸"
+  const etiqueta = opts.cotizado ? `Cotizado · ${nombre}` : nombre
+  return {
+    id: `pevent-${String(r.id)}`,
+    googleEventId: "",
+    googleCalendarId: "",
+    summary: clientName
+      ? `${icono} ${etiqueta} — ${clientName}`
+      : `${icono} ${etiqueta}`,
+    description: (r.notes as string) ?? null,
+    location: (r.location as string) ?? null,
+    startsAt,
+    endsAt,
+    isAllDay: !hi,
+    htmlLink: null,
+    status: opts.cotizado ? "tentative" : "confirmed",
+    origin: "studioflow",
+    projectId: (r.project_id as string) ?? null,
+    clientId:
+      (proy as { client_id?: string } | undefined)?.client_id ?? null,
+    bookingRequestId: (r.booking_request_id as string) ?? null,
+    contractId: null,
+    invoiceId: null,
+    galleryId: null,
+    deliveryId: null,
+    syncStatus: "local",
+    lastSyncedAt: null,
+    clientName,
+    projectName:
+      (proy as { name?: string } | undefined)?.name ?? nombre,
+  } satisfies CalendarEventRow
+}
+
+/** Las fechas de las sesiones que ya existen. */
+async function eventosDeProyectos(
+  studioId: string,
+  fromD: string | null,
+  toD: string | null,
+): Promise<CalendarEventRow[]> {
+  const sb = untypedServer()
+  let q = sb
+    .from("project_events")
+    .select(
+      "id, name, event_date, event_time, event_end_time, location, notes, " +
+        "project_id, booking_request_id, " +
+        "project:projects(id, name, client_id, deleted_at, client:clients(name))",
+    )
+    .eq("studio_id", studioId)
+    .not("project_id", "is", null)
+  if (fromD) q = q.gte("event_date", fromD)
+  if (toD) q = q.lte("event_date", toD)
+  const { data } = await q
+  return ((data ?? []) as Array<Record<string, unknown>>)
+    .filter((r) => {
+      const proy = Array.isArray(r.project) ? r.project[0] : r.project
+      return !(proy as { deleted_at?: string } | null)?.deleted_at
+    })
+    .map((r) => eventoAFila(r))
+}
+
+/**
+ * Las fechas de cotizaciones que el cliente TODAVÍA no ha aceptado.
+ *
+ * Salen marcadas como "Cotizado" para no comprometer dos veces el mismo día.
+ * No van a Google: hasta que no acepte, no hay nada que agendar de verdad.
+ */
+async function eventosCotizados(
+  studioId: string,
+  fromD: string | null,
+  toD: string | null,
+): Promise<CalendarEventRow[]> {
+  const sb = untypedServer()
+  let q = sb
+    .from("project_events")
+    .select(
+      "id, name, event_date, event_time, event_end_time, location, notes, " +
+        "project_id, booking_request_id, " +
+        "request:booking_requests(status, client_name, deleted_at)",
+    )
+    .eq("studio_id", studioId)
+    .is("project_id", null)
+    .not("booking_request_id", "is", null)
+  if (fromD) q = q.gte("event_date", fromD)
+  if (toD) q = q.lte("event_date", toD)
+  const { data } = await q
+  return ((data ?? []) as Array<Record<string, unknown>>)
+    .filter((r) => {
+      const req = Array.isArray(r.request) ? r.request[0] : r.request
+      const s2 = req as { status?: string; deleted_at?: string } | null
+      // Anuladas y ya aceptadas fuera: solo lo que sigue en el aire.
+      return !!s2 && !s2.deleted_at && s2.status === "quoted"
+    })
+    .map((r) => {
+      const req = Array.isArray(r.request) ? r.request[0] : r.request
+      return eventoAFila(
+        { ...r, client_name: (req as { client_name?: string })?.client_name },
+        { cotizado: true },
+      )
+    })
 }
 
 /** Recalcula (idempotente) la entrega de un proyecto vía la RPC. Best-effort. */

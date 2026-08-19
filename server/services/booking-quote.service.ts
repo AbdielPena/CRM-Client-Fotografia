@@ -5,6 +5,17 @@ import { randomBytes } from "node:crypto"
 import { untypedService } from "@/server/supabase/untyped"
 import { throwServiceError } from "@/lib/utils/api-error"
 import { logActivity } from "./activity.service"
+import {
+  attachQuoteEventsToProject,
+  createQuoteEvents,
+  eventsTotal,
+  listEventsByQuote,
+  listEventsByQuotePublic,
+  normalizeEvents,
+  primaryEvent,
+  type ProjectEvent,
+  type ProjectEventInput,
+} from "./project-event.service"
 
 /**
  * Cotizaciones manuales — las que Abdiel cierra por WhatsApp.
@@ -48,6 +59,12 @@ export type CreateQuoteInput = {
   amount?: number | null
   /** Nota visible para el cliente ("incluye 2 vestidos", "precio especial"). */
   note?: string | null
+  /**
+   * Las fechas del trabajo. Una quinceañera puede llevar la sesión de fotos un
+   * día (con un plan) y la fiesta otro (cotizada aparte), cada una con lo suyo.
+   * Vacío = cotización de una sola fecha, como siempre.
+   */
+  events?: ProjectEventInput[]
 }
 
 export type CreateQuoteResult = {
@@ -83,6 +100,25 @@ function appUrl(): string {
   )
 }
 
+/**
+ * A dónde manda el link de la cotización.
+ *
+ * Con un solo plan y una sola fecha: el formulario público de ese plan, como
+ * siempre. Con VARIOS eventos: la ruta propia, sí o sí — el formulario de un
+ * plan pide UNA fecha y no sabe nada de una fiesta en otro día.
+ */
+function quoteUrl(p: {
+  appUrl: string
+  token: string
+  studioSlug: string
+  packageSlug: string | null
+  eventCount: number
+}): string {
+  const suelta = `${p.appUrl}/cotizacion/${p.token}`
+  if (p.eventCount > 1 || !p.packageSlug) return suelta
+  return `${p.appUrl}/p/${p.studioSlug}/${p.packageSlug}/book?q=${p.token}`
+}
+
 /** Texto del usuario dentro de HTML: se escapa y se respetan los saltos. */
 function textoHtml(s: string): string {
   const esc = s
@@ -90,6 +126,82 @@ function textoHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
   return esc.replace(/\r?\n/g, "<br/>")
+}
+
+/** Lo que incluye un evento, en una línea legible. */
+export function eventSummary(e: {
+  photoCount?: number | null
+  deliveryDays?: number | null
+  includesPrints?: boolean
+  includesBook?: boolean
+}): string[] {
+  const partes: string[] = []
+  if (e.photoCount != null && e.photoCount > 0)
+    partes.push(`${e.photoCount} fotos editadas`)
+  if (e.deliveryDays != null)
+    partes.push(
+      e.deliveryDays === 0
+        ? "entrega el mismo día"
+        : `entrega en ${e.deliveryDays} días`,
+    )
+  if (e.includesPrints) partes.push("incluye impresiones")
+  if (e.includesBook) partes.push("incluye Book Experience")
+  return partes
+}
+
+/** Las fechas del trabajo, para el correo de la cotización. */
+function eventsHtml(eventos: ProjectEventInput[]): string {
+  if (eventos.length === 0) return ""
+  const filas = eventos
+    .map((e) => {
+      const detalle = eventSummary(e)
+      return (
+        `<li style="margin-bottom:6px"><strong>${textoHtml(e.name)}</strong> — ` +
+        `${dateLabel(e.eventDate)}` +
+        (e.eventTime ? `, ${e.eventTime}` : "") +
+        (e.location ? `<br/><span style="opacity:.75">${textoHtml(e.location)}</span>` : "") +
+        (detalle.length > 0
+          ? `<br/><span style="opacity:.75">${textoHtml(detalle.join(" · "))}</span>`
+          : "") +
+        "</li>"
+      )
+    })
+    .join("")
+  return `<p style="margin:12px 0 4px"><strong>Fechas:</strong></p><ul style="margin:0;padding-left:18px">${filas}</ul>`
+}
+
+/**
+ * Lo acordado, escrito en las notas de la sesión: es la constancia de qué se
+ * cotizó, visible desde el detalle sin tener que abrir la cotización.
+ */
+function notasDeLaCotizacion(
+  deliverables: string[],
+  eventos: ProjectEvent[],
+): string | null {
+  const bloques: string[] = []
+  if (eventos.length > 0) {
+    bloques.push(
+      "Fechas (según cotización):\n" +
+        eventos
+          .map((e) => {
+            const detalle = eventSummary(e)
+            return (
+              `• ${e.name} — ${dateLabel(e.eventDate)}` +
+              (e.eventTime ? `, ${e.eventTime}` : "") +
+              (e.location ? ` · ${e.location}` : "") +
+              (detalle.length > 0 ? `\n  ${detalle.join(" · ")}` : "")
+            )
+          })
+          .join("\n"),
+    )
+  }
+  if (deliverables.length > 0) {
+    bloques.push(
+      "Incluye (según cotización):\n" +
+        deliverables.map((d) => "• " + d).join("\n"),
+    )
+  }
+  return bloques.length > 0 ? bloques.join("\n\n") : null
 }
 
 function one<T>(v: T | T[] | null | undefined): T | null {
@@ -109,7 +221,14 @@ export async function createManualQuote(
 
   const email = input.clientEmail.trim().toLowerCase()
   if (!email) throw new Error("QUOTE_EMAIL_REQUIRED")
-  if (!input.eventDate) throw new Error("QUOTE_DATE_REQUIRED")
+
+  // Las fechas del trabajo. La del evento PRINCIPAL es la que queda como fecha
+  // de la cotización (y mañana como fecha de la sesión), para que todo lo que
+  // ya lee `event_date` siga funcionando igual.
+  const eventos = normalizeEvents(input.events)
+  const principal = primaryEvent(eventos)
+  const eventDate = principal?.eventDate || input.eventDate
+  if (!eventDate) throw new Error("QUOTE_DATE_REQUIRED")
 
   // Presupuesto libre: líneas propias, sin plan de la lista.
   const items = (input.items ?? [])
@@ -143,10 +262,11 @@ export async function createManualQuote(
       .maybeSingle()
     if (!pkgRow) throw new Error("QUOTE_PACKAGE_NOT_FOUND")
     pkg = pkgRow as QuotePkg
-  } else if (!input.title?.trim()) {
+  } else if (!input.title?.trim() && eventos.length === 0) {
     throw new Error("QUOTE_TITLE_REQUIRED")
   }
-  const title = input.title?.trim() || pkg?.name || "Cotización"
+  const title =
+    input.title?.trim() || pkg?.name || principal?.name || "Cotización"
 
   const { data: studioRow } = await sb
     .from("studios")
@@ -156,7 +276,12 @@ export async function createManualQuote(
   const studio = studioRow as { name: string; slug: string } | null
   if (!studio) throw new Error("QUOTE_STUDIO_NOT_FOUND")
 
-  const listPrice = pkg ? Number(pkg.price ?? 0) : itemsTotal
+  // Precio de lista: lo que suman los eventos y las líneas libres. Si no se
+  // puso monto en ninguno (cotización de un solo plan, como siempre), cae al
+  // precio del plan.
+  const sumaDetalle = eventsTotal(eventos) + itemsTotal
+  const listPrice =
+    sumaDetalle > 0 ? sumaDetalle : pkg ? Number(pkg.price ?? 0) : itemsTotal
   const amount =
     input.amount != null && Number.isFinite(input.amount) && input.amount > 0
       ? Math.round(Number(input.amount) * 100) / 100
@@ -175,7 +300,7 @@ export async function createManualQuote(
       client_name: input.clientName.trim(),
       client_email: email,
       client_phone: input.clientPhone?.trim() || null,
-      event_date: input.eventDate.slice(0, 10),
+      event_date: eventDate.slice(0, 10),
       // Fotografía del plan y del precio al momento de cotizar: si mañana
       // cambia la lista de precios, la cotización enviada no se altera.
       package_snapshot: pkg
@@ -208,10 +333,19 @@ export async function createManualQuote(
   if (error) throwServiceError("QUOTE_CREATE_FAILED", error, { studioId })
 
   const quoteId = String((row as { id: string }).id)
-  // Con plan: el formulario público de ese plan. Sin plan: ruta propia.
-  const url = pkg
-    ? `${appUrl()}/p/${studio.slug}/${pkg.slug}/book?q=${token}`
-    : `${appUrl()}/cotizacion/${token}`
+
+  // Las fechas del trabajo, cada una con lo suyo.
+  if (eventos.length > 0) {
+    await createQuoteEvents(studioId, quoteId, eventos)
+  }
+
+  const url = quoteUrl({
+    appUrl: appUrl(),
+    token,
+    studioSlug: studio.slug,
+    packageSlug: pkg?.slug ?? null,
+    eventCount: eventos.length,
+  })
 
   // Correo al cliente con la cotización y el link al formulario.
   let emailed = false
@@ -228,15 +362,19 @@ export async function createManualQuote(
       {
         client_name: firstName || input.clientName,
         package_name: title,
-        event_date: dateLabel(input.eventDate),
+        event_date: dateLabel(eventDate),
         quote_amount: money(amount),
         quote_note: input.note?.trim() ? textoHtml(input.note.trim()) : "",
+        // Las fechas van ANTES de lo que incluye: con una fiesta y una sesión
+        // de fotos en días distintos, lo primero que la clienta busca en el
+        // correo es cuándo es cada cosa.
         deliverables:
-          deliverables.length > 0
+          eventsHtml(eventos) +
+          (deliverables.length > 0
             ? `<p style="margin:12px 0 4px"><strong>Qué incluye:</strong></p><ul style="margin:0;padding-left:18px">${deliverables
                 .map((d) => `<li>${textoHtml(d)}</li>`)
                 .join("")}</ul>`
-            : "",
+            : ""),
         quote_url: url,
         studio_name: studio.name,
       },
@@ -266,7 +404,14 @@ export async function createManualQuote(
       entityType: "booking_request",
       entityId: quoteId,
       action: "booking_quote.created",
-      metadata: { amount, list_price: listPrice, package: pkg?.name ?? null, title, emailed },
+      metadata: {
+        amount,
+        list_price: listPrice,
+        package: pkg?.name ?? null,
+        title,
+        emailed,
+        events: eventos.length,
+      },
     })
   } catch {
     /* el historial no bloquea */
@@ -293,6 +438,8 @@ export type QuoteForForm = {
   deliverables: string[]
   currency: string
   alreadyAccepted: boolean
+  /** Las fechas del trabajo. Vacío = cotización de una sola fecha. */
+  events: ProjectEvent[]
 }
 
 /**
@@ -327,7 +474,10 @@ export async function getQuoteByToken(
   // Sin plan es válido (cotización libre); sin estudio no.
   if (!studio) return null
 
+  const events = await listEventsByQuotePublic(String(r.id))
+
   return {
+    events,
     id: String(r.id),
     studioSlug: studio.slug,
     studioName: studio.name,
@@ -411,6 +561,12 @@ export async function acceptQuote(params: {
 
   const d = params.data
   const nowIso = new Date().toISOString()
+
+  // Con varias fechas, la del evento PRINCIPAL es la de la sesión. El
+  // formulario ya no las vuelve a pedir: se acordaron al cotizar.
+  const eventos = await listEventsByQuotePublic(q.id)
+  const principal = primaryEvent(eventos)
+
   const { error: upErr } = await sb
     .from("booking_requests")
     .update({
@@ -418,10 +574,10 @@ export async function acceptQuote(params: {
       client_email: d.clientEmail.trim().toLowerCase(),
       client_phone: d.clientPhone?.trim() || null,
       client_whatsapp: d.clientWhatsapp?.trim() || null,
-      event_type: d.eventType || null,
-      event_date: d.eventDate.slice(0, 10),
-      event_time: d.eventTime || null,
-      event_location: d.eventLocation || null,
+      event_type: principal?.eventType || d.eventType || null,
+      event_date: (principal?.eventDate || d.eventDate).slice(0, 10),
+      event_time: principal?.eventTime || d.eventTime || null,
+      event_location: principal?.location || d.eventLocation || null,
       guest_count: d.guestCount ?? null,
       additional_notes: d.additionalNotes || null,
       status: "pending_review",
@@ -474,12 +630,19 @@ export async function acceptQuote(params: {
     )
   }
 
-  // Precio acordado → proyecto (de ahí lo toma la factura al firmar).
+  // Lo acordado → la sesión que acaba de nacer.
   const acordado = Number(q.quote_amount ?? 0)
-  if (acordado > 0) {
-    try {
-      // `projects` no guarda la solicitud; el enlace vive en el contrato que
-      // la conversión acaba de crear (contracts.booking_request_id).
+  try {
+    // La conversión escribe `booking_requests.project_id`; el contrato que
+    // creó es el respaldo por si esa escritura no llegó.
+    const { data: refrescado } = await sb
+      .from("booking_requests")
+      .select("project_id")
+      .eq("id", q.id)
+      .maybeSingle()
+    let projectId =
+      (refrescado as { project_id: string | null } | null)?.project_id ?? null
+    if (!projectId) {
       const { data: created } = await sb
         .from("contracts")
         .select("project_id")
@@ -488,34 +651,77 @@ export async function acceptQuote(params: {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle()
-      const projectId = (created as { project_id: string } | null)?.project_id
-      if (projectId) {
-        const patch: Record<string, unknown> = {
-          total_amount: acordado,
-          updated_at: nowIso,
-        }
-        // Sin plan, la sesión se llama "Cliente — trabajo cotizado". El
-        // nombre del cliente va SIEMPRE delante: sin él la sesión no aparecía
-        // al buscar por el cliente y parecía que nunca se había creado.
-        if (!q.package_id && q.quote_title) {
-          const cliente = (q.client_name ?? "").trim()
-          patch.name = cliente ? `${cliente} — ${q.quote_title}` : q.quote_title
-        }
-        // Lo acordado queda escrito en la sesión (constancia de qué incluye).
-        const ent = Array.isArray(q.quote_deliverables) ? q.quote_deliverables : []
-        if (ent.length > 0) {
-          patch.notes =
-            "Incluye (según cotización):\n" +
-            ent.map((d) => "• " + d).join("\n")
-        }
-        await sb.from("projects").update(patch).eq("id", projectId)
-      }
-    } catch (e) {
-      console.error(
-        "[cotizacion] no se pudo aplicar el precio acordado",
-        e instanceof Error ? e.message : e,
-      )
+      projectId = (created as { project_id: string } | null)?.project_id ?? null
     }
+
+    if (projectId) {
+      // Las fechas cotizadas pasan a ser las de la sesión. UNA sesión con
+      // varias fechas: no se parte en dos, ni se duplica el contrato.
+      const conSesion =
+        eventos.length > 0
+          ? await attachQuoteEventsToProject(q.id, projectId)
+          : null
+
+      const patch: Record<string, unknown> = { updated_at: nowIso }
+      if (acordado > 0) patch.total_amount = acordado
+
+      // Sin plan, la sesión se llama "Cliente — trabajo cotizado". El
+      // nombre del cliente va SIEMPRE delante: sin él la sesión no aparecía
+      // al buscar por el cliente y parecía que nunca se había creado.
+      if (!q.package_id && q.quote_title) {
+        const cliente = (q.client_name ?? "").trim()
+        patch.name = cliente ? `${cliente} — ${q.quote_title}` : q.quote_title
+      }
+
+      const ppal = conSesion ?? principal
+      if (ppal) {
+        // La fecha de la sesión es la del evento principal: es la que usan el
+        // tablero, el recordatorio de saldo y el aviso de "sesión realizada".
+        patch.event_date = ppal.eventDate
+        if (ppal.eventTime) patch.event_time = ppal.eventTime
+        if (ppal.eventEndTime) patch.event_end_time = ppal.eventEndTime
+        if (ppal.location) patch.location = ppal.location
+        // El plan del evento principal, si la sesión no traía uno.
+        if (ppal.packageId && !q.package_id) patch.package_id = ppal.packageId
+        // El plazo acordado manda sobre el del plan y el de la categoría.
+        if (ppal.deliveryDays != null)
+          patch.delivery_days_override = ppal.deliveryDays
+      }
+
+      // Lo acordado queda escrito en la sesión (constancia de qué incluye).
+      const notas = notasDeLaCotizacion(
+        Array.isArray(q.quote_deliverables) ? q.quote_deliverables : [],
+        eventos,
+      )
+      if (notas) patch.notes = notas
+
+      await sb.from("projects").update(patch).eq("id", projectId)
+
+      // Cada fecha, al calendario. La principal la lleva `syncProjectById`
+      // (que ya corrió al aprobar, pero la sesión acaba de cambiar de hora y
+      // lugar); las demás tienen su propio evento de Google.
+      try {
+        const { syncProjectById, syncProjectEventToGoogle } = await import(
+          "./google-calendar.service"
+        )
+        await syncProjectById(q.studio_id, projectId).catch(() => false)
+        for (const ev of eventos) {
+          if (ev.isPrimary) continue
+          await syncProjectEventToGoogle(q.studio_id, ev.id).catch(() => null)
+        }
+      } catch (e) {
+        // El calendario nunca bloquea la reserva.
+        console.error(
+          "[cotizacion] calendario",
+          e instanceof Error ? e.message : e,
+        )
+      }
+    }
+  } catch (e) {
+    console.error(
+      "[cotizacion] no se pudo aplicar lo acordado a la sesión",
+      e instanceof Error ? e.message : e,
+    )
   }
 
   try {
@@ -546,6 +752,10 @@ export type QuoteListItem = {
   sentAt: string | null
   acceptedAt: string | null
   url: string
+  /** Cuántas fechas lleva. 0 = de una sola fecha, como las de siempre. */
+  eventCount: number
+  /** La sesión que salió de ella, si el cliente ya aceptó. */
+  projectId: string | null
 }
 
 /** Cotizaciones del estudio (para la pantalla del CRM). */
@@ -563,7 +773,8 @@ export async function listQuotes(studioId: string): Promise<QuoteListItem[]> {
     .select(
       "id, client_name, client_email, event_date, status, quote_amount, " +
         "quote_token, quote_sent_at, quote_accepted_at, quote_title, package_id, " +
-        "package:packages(name, slug)",
+        "project_id, package:packages(name, slug), " +
+        "events:project_events(id)",
     )
     .eq("studio_id", studioId)
     .not("quote_token", "is", null)
@@ -574,6 +785,7 @@ export async function listQuotes(studioId: string): Promise<QuoteListItem[]> {
     const pkg = one(
       r.package as { name: string; slug: string } | Array<{ name: string; slug: string }> | null,
     )
+    const eventCount = Array.isArray(r.events) ? r.events.length : 0
     return {
       id: String(r.id),
       clientName: String(r.client_name ?? ""),
@@ -584,9 +796,252 @@ export async function listQuotes(studioId: string): Promise<QuoteListItem[]> {
       status: String(r.status ?? ""),
       sentAt: (r.quote_sent_at as string) ?? null,
       acceptedAt: (r.quote_accepted_at as string) ?? null,
-      url: r.package_id
-        ? `${appUrl()}/p/${studioSlug}/${pkg?.slug ?? ""}/book?q=${String(r.quote_token ?? "")}`
-        : `${appUrl()}/cotizacion/${String(r.quote_token ?? "")}`,
+      eventCount,
+      projectId: (r.project_id as string) ?? null,
+      url: quoteUrl({
+        appUrl: appUrl(),
+        token: String(r.quote_token ?? ""),
+        studioSlug,
+        packageSlug: r.package_id ? (pkg?.slug ?? null) : null,
+        eventCount,
+      }),
     }
   })
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Gestionar una cotización
+//
+// Hasta ahora /cotizaciones era una lista y nada más: no se podía abrir una,
+// ver qué incluye, reenviarla ni anularla. Todo lo acordado quedaba enterrado
+// en la fila de `booking_requests`.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type QuoteDetail = {
+  id: string
+  token: string
+  url: string
+  status: string
+  clientName: string
+  clientEmail: string
+  clientPhone: string | null
+  title: string
+  packageId: string | null
+  packageName: string | null
+  amount: number
+  listPrice: number
+  currency: string
+  note: string | null
+  items: QuoteItem[]
+  deliverables: string[]
+  events: ProjectEvent[]
+  eventDate: string
+  eventLocation: string | null
+  additionalNotes: string | null
+  sentAt: string | null
+  acceptedAt: string | null
+  createdAt: string | null
+  /** La sesión que salió de ella. Null = el cliente todavía no la aceptó. */
+  projectId: string | null
+  /** Mientras nadie la haya aceptado todavía se puede tocar. */
+  editable: boolean
+}
+
+export async function getQuoteDetail(
+  studioId: string,
+  quoteId: string,
+): Promise<QuoteDetail | null> {
+  const sb = untypedService()
+  const { data: studioRow } = await sb
+    .from("studios")
+    .select("slug, currency")
+    .eq("id", studioId)
+    .maybeSingle()
+  const studio = studioRow as { slug: string; currency: string | null } | null
+
+  const { data } = await sb
+    .from("booking_requests")
+    .select(
+      "id, status, client_name, client_email, client_phone, event_date, " +
+        "event_location, additional_notes, created_at, project_id, package_id, " +
+        "quote_token, quote_amount, quote_title, quote_items, quote_deliverables, " +
+        "quote_note, quote_sent_at, quote_accepted_at, pricing_snapshot, " +
+        "package:packages(id, name)",
+    )
+    .eq("studio_id", studioId)
+    .eq("id", quoteId)
+    .not("quote_token", "is", null)
+    .maybeSingle()
+  if (!data) return null
+
+  const r = data as Record<string, unknown>
+  const pkg = one(
+    r.package as { id: string; name: string } | Array<{ id: string; name: string }> | null,
+  )
+  const events = await listEventsByQuote(studioId, quoteId)
+  const snap = (r.pricing_snapshot ?? {}) as Record<string, unknown>
+  const token = String(r.quote_token ?? "")
+  const aceptada = r.quote_accepted_at != null || String(r.status ?? "") !== "quoted"
+
+  return {
+    id: String(r.id),
+    token,
+    url: quoteUrl({
+      appUrl: appUrl(),
+      token,
+      studioSlug: studio?.slug ?? "",
+      packageSlug: null,
+      eventCount: events.length,
+    }),
+    status: String(r.status ?? ""),
+    clientName: String(r.client_name ?? ""),
+    clientEmail: String(r.client_email ?? ""),
+    clientPhone: (r.client_phone as string) ?? null,
+    title: String(r.quote_title ?? pkg?.name ?? "Cotización"),
+    packageId: (r.package_id as string) ?? null,
+    packageName: pkg?.name ?? null,
+    amount: Number(r.quote_amount ?? 0),
+    listPrice: Number(snap.list_price ?? r.quote_amount ?? 0),
+    currency: String(snap.currency ?? studio?.currency ?? "DOP"),
+    note: (r.quote_note as string) ?? null,
+    items: Array.isArray(r.quote_items) ? (r.quote_items as QuoteItem[]) : [],
+    deliverables: Array.isArray(r.quote_deliverables)
+      ? (r.quote_deliverables as string[])
+      : [],
+    events,
+    eventDate: String(r.event_date ?? "").slice(0, 10),
+    eventLocation: (r.event_location as string) ?? null,
+    additionalNotes: (r.additional_notes as string) ?? null,
+    sentAt: (r.quote_sent_at as string) ?? null,
+    acceptedAt: (r.quote_accepted_at as string) ?? null,
+    createdAt: (r.created_at as string) ?? null,
+    projectId: (r.project_id as string) ?? null,
+    editable: !aceptada,
+  }
+}
+
+/**
+ * Vuelve a mandarle el correo al cliente (se le perdió, cambió de correo, o
+ * simplemente hay que recordárselo). Es el MISMO correo del envío original.
+ */
+export async function resendQuoteEmail(
+  studioId: string,
+  actorId: string | null,
+  quoteId: string,
+  toEmail?: string | null,
+): Promise<{ ok: boolean; sentTo: string }> {
+  const q = await getQuoteDetail(studioId, quoteId)
+  if (!q) throw new Error("QUOTE_NOT_FOUND")
+  if (!q.editable) throw new Error("QUOTE_ALREADY_ACCEPTED")
+
+  const sb = untypedService()
+  const { data: studioRow } = await sb
+    .from("studios")
+    .select("name")
+    .eq("id", studioId)
+    .maybeSingle()
+  const studioName = (studioRow as { name: string } | null)?.name ?? "El estudio"
+
+  const destino = (toEmail?.trim() || q.clientEmail).toLowerCase()
+  if (!destino.includes("@")) throw new Error("QUOTE_EMAIL_REQUIRED")
+
+  const { enqueueEmail } = await import("./email.service")
+  const { resolveTemplate, TEMPLATE_CATALOG } = await import(
+    "./email-template.service"
+  )
+  const d = TEMPLATE_CATALOG.booking_quote_sent
+  const firstName = q.clientName.trim().split(/\s+/)[0] || q.clientName
+  const tpl = await resolveTemplate(
+    studioId,
+    "booking_quote_sent",
+    {
+      client_name: firstName,
+      package_name: q.title,
+      event_date: dateLabel(q.events[0]?.eventDate || q.eventDate),
+      quote_amount: money(q.amount),
+      quote_note: q.note ? textoHtml(q.note) : "",
+      deliverables:
+        eventsHtml(q.events) +
+        (q.deliverables.length > 0
+          ? `<p style="margin:12px 0 4px"><strong>Qué incluye:</strong></p><ul style="margin:0;padding-left:18px">${q.deliverables
+              .map((x) => `<li>${textoHtml(x)}</li>`)
+              .join("")}</ul>`
+          : ""),
+      quote_url: q.url,
+      studio_name: studioName,
+    },
+    { subject: d.defaultSubject, bodyHtml: d.defaultBodyHtml },
+  )
+  await enqueueEmail({
+    studioId,
+    toEmail: destino,
+    toName: q.clientName,
+    subject: tpl.subject,
+    bodyHtml: tpl.bodyHtml,
+    fromName: tpl.fromName,
+    replyTo: tpl.replyTo,
+    templateSlug: "booking_quote_sent",
+    relatedEntityType: "booking_request",
+    relatedEntityId: q.id,
+  })
+
+  try {
+    await logActivity({
+      studioId,
+      actorId,
+      entityType: "booking_request",
+      entityId: q.id,
+      action: "booking_quote.resent",
+      metadata: { to: destino },
+    })
+  } catch {
+    /* el historial no bloquea */
+  }
+  return { ok: true, sentTo: destino }
+}
+
+/**
+ * Anula una cotización que no fue a ninguna parte. No borra nada: queda el
+ * registro de que se cotizó y por cuánto.
+ */
+export async function cancelQuote(
+  studioId: string,
+  actorId: string | null,
+  quoteId: string,
+): Promise<void> {
+  const sb = untypedService()
+  const { data: row } = await sb
+    .from("booking_requests")
+    .select("id, status, quote_accepted_at, project_id")
+    .eq("studio_id", studioId)
+    .eq("id", quoteId)
+    .maybeSingle()
+  const q = row as {
+    status: string
+    quote_accepted_at: string | null
+    project_id: string | null
+  } | null
+  if (!q) throw new Error("QUOTE_NOT_FOUND")
+  // Aceptada ya hay contrato, factura y sesión: eso se cancela desde la sesión,
+  // no desde aquí, o quedaría un cobro vivo sin cotización que lo respalde.
+  if (q.quote_accepted_at || q.project_id) throw new Error("QUOTE_ALREADY_ACCEPTED")
+
+  const { error } = await sb
+    .from("booking_requests")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("studio_id", studioId)
+    .eq("id", quoteId)
+  if (error) throwServiceError("QUOTE_CANCEL_FAILED", error, { quoteId })
+
+  try {
+    await logActivity({
+      studioId,
+      actorId,
+      entityType: "booking_request",
+      entityId: quoteId,
+      action: "booking_quote.cancelled",
+    })
+  } catch {
+    /* el historial no bloquea */
+  }
 }

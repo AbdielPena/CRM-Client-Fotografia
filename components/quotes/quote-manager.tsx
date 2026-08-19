@@ -1,13 +1,32 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, X, Copy, Check, FileText, Send } from "lucide-react"
+import {
+  Plus,
+  X,
+  Copy,
+  Check,
+  FileText,
+  Send,
+  CalendarDays,
+  ChevronRight,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils/cn"
-import { formatCurrency } from "@/lib/utils/currency"
+import { formatCurrency, formatDate } from "@/lib/utils/currency"
 import { createQuoteAction } from "@/server/actions/booking-quote.actions"
+import {
+  QuoteEventsEditor,
+  eventosParaGuardar,
+  nuevoEvento,
+  type EventDraft,
+  type PackageOption,
+} from "./quote-events-editor"
+
+export type { PackageOption }
 
 export type QuoteRow = {
   id: string
@@ -20,12 +39,8 @@ export type QuoteRow = {
   sentAt: string | null
   acceptedAt: string | null
   url: string
-}
-
-export type PackageOption = {
-  id: string
-  name: string
-  price: number
+  eventCount: number
+  projectId: string | null
 }
 
 const inputCls =
@@ -38,6 +53,8 @@ function estadoBadge(q: QuoteRow) {
       label: "Aceptada",
       cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400",
     }
+  if (q.status === "cancelled")
+    return { label: "Anulada", cls: "bg-muted text-muted-foreground" }
   if (q.status === "quoted")
     return {
       label: "Esperando al cliente",
@@ -112,9 +129,16 @@ export function QuoteManager({
             return (
               <div
                 key={q.id}
-                className="flex flex-wrap items-center gap-3 px-5 py-3"
+                className="flex flex-wrap items-center gap-3 px-5 py-3 hover:bg-muted/30"
               >
-                <div className="min-w-0 flex-1">
+                {/* Abre el detalle: qué incluye, sus fechas y cómo gestionarla.
+                    prefetch={false} — la lista se queda en blanco al navegar
+                    si Next precarga estas rutas dinámicas. */}
+                <Link
+                  href={`/cotizaciones/${q.id}`}
+                  prefetch={false}
+                  className="min-w-0 flex-1"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium text-foreground">
                       {q.clientName}
@@ -127,15 +151,23 @@ export function QuoteManager({
                     >
                       {b.label}
                     </span>
+                    {q.eventCount > 1 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        <CalendarDays className="h-2.5 w-2.5" />
+                        {q.eventCount} fechas
+                      </span>
+                    )}
                   </div>
                   <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {q.packageName} · {q.eventDate} · {q.clientEmail}
+                    {q.packageName}
+                    {q.eventDate ? ` · ${formatDate(q.eventDate)}` : ""} ·{" "}
+                    {q.clientEmail}
                   </p>
-                </div>
+                </Link>
                 <div className="text-sm font-semibold text-foreground">
                   {formatCurrency(q.amount, currency)}
                 </div>
-                {!q.acceptedAt && (
+                {!q.acceptedAt && q.status === "quoted" && (
                   <button
                     onClick={() => copy(q.url, q.id)}
                     title="Copiar el link para mandarlo por WhatsApp"
@@ -148,6 +180,14 @@ export function QuoteManager({
                     )}
                   </button>
                 )}
+                <Link
+                  href={`/cotizaciones/${q.id}`}
+                  prefetch={false}
+                  className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  title="Abrir la cotización"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
               </div>
             )
           })}
@@ -180,15 +220,18 @@ function QuoteModal({
   onClose: () => void
   onSaved: () => void
 }) {
-  const [mode, setMode] = React.useState<"plan" | "libre">("plan")
-  const [packageId, setPackageId] = React.useState(packages[0]?.id ?? "")
-  const [amount, setAmount] = React.useState(
-    packages[0] ? String(packages[0].price) : "",
-  )
+  // Empieza con UNA fecha, con el primer plan puesto: para el trabajo de todos
+  // los días esto se ve como el formulario de siempre.
+  const [eventos, setEventos] = React.useState<EventDraft[]>([
+    nuevoEvento(packages[0], true),
+  ])
   const [items, setItems] = React.useState<
     Array<{ concept: string; qty: string; price: string }>
   >([{ concept: "", qty: "1", price: "" }])
+  const [verExtras, setVerExtras] = React.useState(false)
   const [deliverables, setDeliverables] = React.useState<string[]>([""])
+  const [amount, setAmount] = React.useState("")
+  const [tocoElPrecio, setTocoElPrecio] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
 
   const setDeliv = (i: number, v: string) =>
@@ -201,10 +244,14 @@ function QuoteModal({
     (t, i) => t + (Number(i.qty) || 1) * (Number(i.price) || 0),
     0,
   )
-  // En modo libre el total sale del presupuesto (editable después).
+  const eventosTotal = eventos.reduce((t, e) => t + (Number(e.amount) || 0), 0)
+  const sugerido = eventosTotal + itemsTotal
+
+  // El precio acordado se va llenando solo con lo que suman las fechas y las
+  // líneas extra, hasta que él lo escriba a mano: ahí manda lo que él puso.
   React.useEffect(() => {
-    if (mode === "libre") setAmount(itemsTotal > 0 ? String(itemsTotal) : "")
-  }, [mode, itemsTotal])
+    if (!tocoElPrecio) setAmount(sugerido > 0 ? String(sugerido) : "")
+  }, [sugerido, tocoElPrecio])
 
   const setItem = (i: number, k: "concept" | "qty" | "price", v: string) =>
     setItems((prev) => prev.map((it, j) => (j === i ? { ...it, [k]: v } : it)))
@@ -213,39 +260,39 @@ function QuoteModal({
   const removeItem = (i: number) =>
     setItems((prev) => (prev.length === 1 ? prev : prev.filter((_, j) => j !== i)))
 
-  const pkg = packages.find((p) => p.id === packageId)
-  const listPrice = pkg?.price ?? 0
   const monto = Number(amount) || 0
-  const diferencia = monto - listPrice
-
-  // Al cambiar de plan, el precio sugerido es el de lista.
-  const onPackageChange = (id: string) => {
-    setPackageId(id)
-    const p = packages.find((x) => x.id === id)
-    if (p) setAmount(String(p.price))
-  }
+  const diferencia = monto - sugerido
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    const listos = eventosParaGuardar(eventos)
+    if (listos.length === 0) {
+      toast.error("Ponle fecha por lo menos a un evento")
+      return
+    }
     setSaving(true)
     const fd = new FormData(e.currentTarget)
-    if (mode === "libre") {
-      fd.delete("packageId")
-      fd.set(
-        "items",
-        JSON.stringify(
-          items
-            .map((i) => ({
-              concept: i.concept.trim(),
-              qty: Number(i.qty) || 1,
-              price: Number(i.price) || 0,
-            }))
-            .filter((i) => i.concept !== "" || i.price > 0),
-        ),
-      )
-    } else {
-      fd.delete("title")
-    }
+    fd.set("events", JSON.stringify(listos))
+
+    // La fecha y el plan del evento PRINCIPAL son los de la cotización: es lo
+    // que ya leen la conversión a sesión, la factura y el contrato.
+    const ppal = listos.find((x) => x.isPrimary) ?? listos[0]!
+    fd.set("eventDate", ppal.eventDate)
+    if (ppal.packageId) fd.set("packageId", ppal.packageId)
+    else fd.delete("packageId")
+
+    fd.set(
+      "items",
+      JSON.stringify(
+        items
+          .map((i) => ({
+            concept: i.concept.trim(),
+            qty: Number(i.qty) || 1,
+            price: Number(i.price) || 0,
+          }))
+          .filter((i) => i.concept !== "" || i.price > 0),
+      ),
+    )
     fd.set(
       "deliverables",
       JSON.stringify(deliverables.map((d) => d.trim()).filter((d) => d !== "")),
@@ -271,7 +318,7 @@ function QuoteModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-xl">
         <div className="mb-1 flex items-start justify-between">
           <h3 className="text-sm font-semibold text-foreground">
             Nueva cotización
@@ -310,144 +357,116 @@ function QuoteModal({
             </div>
           </div>
 
-          {/* Plan de la lista o presupuesto propio */}
-          <div className="flex gap-2 rounded-lg bg-muted/50 p-1">
-            {(["plan", "libre"] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMode(m)}
+          <div>
+            <label className={labelCls}>¿Qué estás cotizando?</label>
+            <input
+              name="title"
+              className={inputCls}
+              placeholder="Ej: Quinceañera de Sofía — sesión y fiesta"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Es el nombre que verá el cliente y con el que nace la sesión. Si lo
+              dejas vacío, se usa el del plan.
+            </p>
+          </div>
+
+          {/* Las fechas del trabajo, cada una con lo suyo. */}
+          <QuoteEventsEditor
+            eventos={eventos}
+            setEventos={setEventos}
+            packages={packages}
+            currency={currency}
+          />
+
+          {/* Cosas que no son un evento: un vestido extra, el traslado… */}
+          <div className="rounded-lg border border-border/60 p-3">
+            <button
+              type="button"
+              onClick={() => setVerExtras((v) => !v)}
+              className="text-xs font-medium text-primary hover:opacity-80"
+            >
+              {verExtras ? "− " : "+ "}
+              Otras líneas del presupuesto
+              {itemsTotal > 0 && !verExtras
+                ? ` (${formatCurrency(itemsTotal, currency)})`
+                : ""}
+            </button>
+            {verExtras && (
+              <div className="mt-3 space-y-2">
+                {items.map((it, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      value={it.concept}
+                      onChange={(e) => setItem(i, "concept", e.target.value)}
+                      placeholder="Concepto"
+                      className={cn(inputCls, "flex-1")}
+                    />
+                    <input
+                      value={it.qty}
+                      onChange={(e) => setItem(i, "qty", e.target.value)}
+                      type="number"
+                      min="1"
+                      className={cn(inputCls, "w-14 text-center")}
+                      title="Cantidad"
+                    />
+                    <input
+                      value={it.price}
+                      onChange={(e) => setItem(i, "price", e.target.value)}
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      className={cn(inputCls, "w-28")}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeItem(i)}
+                      className="rounded-md px-2 text-muted-foreground hover:bg-muted"
+                      title="Quitar línea"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="text-xs font-medium text-primary hover:opacity-80"
+                >
+                  + Agregar línea
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className={labelCls}>Precio acordado *</label>
+            <input
+              name="amount"
+              type="number"
+              step="0.01"
+              min="1"
+              value={amount}
+              onChange={(e) => {
+                setTocoElPrecio(true)
+                setAmount(e.target.value)
+              }}
+              className={inputCls}
+              required
+            />
+            {diferencia !== 0 && monto > 0 && sugerido > 0 && (
+              <p
                 className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 text-xs font-medium",
-                  mode === m
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
+                  "mt-1 text-[11px]",
+                  diferencia < 0 ? "text-sky-600" : "text-amber-600",
                 )}
               >
-                {m === "plan" ? "Desde un plan" : "Presupuesto libre"}
-              </button>
-            ))}
+                {diferencia < 0
+                  ? `Le estás haciendo un descuento de ${formatCurrency(Math.abs(diferencia), currency)} sobre lo que suma el desglose.`
+                  : `Está ${formatCurrency(diferencia, currency)} por encima de lo que suma el desglose.`}
+              </p>
+            )}
           </div>
-
-          {mode === "plan" ? (
-            <div>
-              <label className={labelCls}>Plan *</label>
-              <select
-                name="packageId"
-                value={packageId}
-                onChange={(e) => onPackageChange(e.target.value)}
-                className={inputCls}
-                required
-              >
-                {packages.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} — {formatCurrency(p.price, currency)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <>
-              <div>
-                <label className={labelCls}>¿Qué estás cotizando? *</label>
-                <input
-                  name="title"
-                  className={inputCls}
-                  placeholder="Ej: Sesión familiar en la playa"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className={labelCls}>Presupuesto</label>
-                <div className="space-y-2">
-                  {items.map((it, i) => (
-                    <div key={i} className="flex gap-2">
-                      <input
-                        value={it.concept}
-                        onChange={(e) => setItem(i, "concept", e.target.value)}
-                        placeholder="Concepto"
-                        className={cn(inputCls, "flex-1")}
-                      />
-                      <input
-                        value={it.qty}
-                        onChange={(e) => setItem(i, "qty", e.target.value)}
-                        type="number"
-                        min="1"
-                        className={cn(inputCls, "w-14 text-center")}
-                        title="Cantidad"
-                      />
-                      <input
-                        value={it.price}
-                        onChange={(e) => setItem(i, "price", e.target.value)}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        className={cn(inputCls, "w-28")}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeItem(i)}
-                        className="rounded-md px-2 text-muted-foreground hover:bg-muted"
-                        title="Quitar línea"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-2 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={addItem}
-                    className="text-xs font-medium text-primary hover:opacity-80"
-                  >
-                    + Agregar línea
-                  </button>
-                  <span className="text-xs text-muted-foreground">
-                    Suma:{" "}
-                    <strong className="text-foreground">
-                      {formatCurrency(itemsTotal, currency)}
-                    </strong>
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Fecha de la sesión *</label>
-              <input name="eventDate" type="date" className={inputCls} required />
-            </div>
-            <div>
-              <label className={labelCls}>Precio acordado *</label>
-              <input
-                name="amount"
-                type="number"
-                step="0.01"
-                min="1"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className={inputCls}
-                required
-              />
-            </div>
-          </div>
-
-          {mode === "plan" && diferencia !== 0 && monto > 0 && (
-            <p
-              className={cn(
-                "text-[11px]",
-                diferencia < 0 ? "text-sky-600" : "text-amber-600",
-              )}
-            >
-              {diferencia < 0
-                ? `Le estás haciendo un descuento de ${formatCurrency(Math.abs(diferencia), currency)} sobre el precio de lista.`
-                : `Está ${formatCurrency(diferencia, currency)} por encima del precio de lista.`}
-            </p>
-          )}
 
           {/* Qué recibe el cliente. Texto libre: cada estudio y cada trabajo
               incluyen cosas distintas. */}
@@ -503,7 +522,7 @@ function QuoteModal({
               + Agregar entregable
             </button>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Digitales, plazos de entrega, impresiones, álbum, enmarcado… Lo que
+              Lo que no cabe arriba: enmarcado, traslado, vestidos… Lo que
               escribas aquí lo ve el cliente y queda guardado en la sesión.
             </p>
           </div>

@@ -23,6 +23,8 @@ import { ensureClientAccessCode } from "@/server/services/client-portal.service"
 import { WhatsAppSendMenu } from "@/components/whatsapp/whatsapp-send-menu"
 import { FormResponsesPanel } from "@/components/admin/form-responses-panel"
 import { CollapsibleCard } from "@/components/ui/collapsible-card"
+import { ProjectEventsCard } from "@/components/projects/project-events-card"
+import { listEventsByProject } from "@/server/services/project-event.service"
 import {
   listProjectCollaborators,
   listCollaborators,
@@ -202,6 +204,13 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     .is("deleted_at", null)
     .maybeSingle()
   const bookingRequestId = (brRow as { id?: string } | null)?.id ?? null
+  // Las FECHAS de esta sesion. Una quinceañera puede llevar la sesion de fotos
+  // un dia y la fiesta otro: son la misma sesion, con un contrato y una
+  // factura, pero cada fecha se agenda aparte y entrega lo suyo.
+  const projectEvents = await listEventsByProject(
+    session.studioId,
+    params.id,
+  ).catch(() => [])
   // Si trae `quote_token`, esta sesion NACIO de una cotizacion: lo acordado
   // vive ahi y hasta ahora solo se veia en /cotizaciones.
   const quote = brRow as {
@@ -1029,6 +1038,38 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           {/* Ganancia. Sale SIEMPRE: es el numero que el estudio mira, y es
               donde se ajusta cuando hubo descuento. Los costos de abajo se
               muestran porque hay que pagarlos, no porque la modifiquen. */}
+          {projectEvents.length > 0 && (
+            <CollapsibleCard
+              title={projectEvents.length > 1 ? "Fechas" : "Fecha"}
+              icon={<Calendar className="h-4 w-4" />}
+              summary={
+                projectEvents.length > 1
+                  ? `${projectEvents.length} eventos`
+                  : undefined
+              }
+            >
+              <ProjectEventsCard
+                projectId={project.id as string}
+                events={projectEvents.map((e) => ({
+                  id: e.id,
+                  name: e.name,
+                  eventDate: e.eventDate,
+                  eventTime: e.eventTime ?? null,
+                  eventEndTime: e.eventEndTime ?? null,
+                  location: e.location ?? null,
+                  packageName: e.packageName,
+                  amount: e.amount ?? null,
+                  isPrimary: e.isPrimary === true,
+                  photoCount: e.photoCount ?? null,
+                  deliveryDays: e.deliveryDays ?? null,
+                  includesPrints: e.includesPrints === true,
+                  includesBook: e.includesBook === true,
+                }))}
+                currency={currency}
+              />
+            </CollapsibleCard>
+          )}
+
           {esCotizacion && (
             <CollapsibleCard
               title="Cotizacion"

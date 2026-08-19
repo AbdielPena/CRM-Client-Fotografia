@@ -582,36 +582,33 @@ function addHours(hhmm: string, hours: number): string {
   return `${hh}:${mm}`
 }
 
+
+type GoogleEventResult = {
+  id: string
+  htmlLink?: string
+  start?: { date?: string; dateTime?: string }
+  end?: { date?: string; dateTime?: string }
+}
+
 /**
- * Crea o actualiza el evento asociado al proyecto.
- * Si ya existe `google_event_id`, hace PATCH; si no, POST.
+ * Habla con Google: crea o actualiza UN evento y devuelve lo que respondió.
+ *
+ * Lo usan tanto la fecha principal de la sesión (que guarda su id en
+ * `projects`) como las fechas secundarias (que lo guardan en `project_events`).
+ * El cuidado con los invitados es el mismo para las dos: un PATCH que mande la
+ * lista de correos a secas BORRA el "aceptó/rechazó" de cada quien.
  */
-export async function syncProjectToEvent(
-  payload: ProjectEventPayload,
-): Promise<{ eventId: string; calendarId: string } | null> {
-  const supabase = createSupabaseServiceClient()
-  const integration = await loadIntegration(payload.studioId)
-  if (!integration) return null
-  const calendarId = integration.config.calendarId
-  if (!calendarId) return null
-
-  const token = await getAccessToken(payload.studioId)
-  if (!token) return null
-
-  // Leer google_event_id actual del proyecto
-  const { data: project } = await supabase
-    .from('projects')
-    .select('google_event_id, google_calendar_id')
-    .eq('id', payload.projectId)
-    .maybeSingle()
-
-  const existingEventId = project?.google_event_id
-  const existingCalId = project?.google_calendar_id ?? calendarId
-
+async function pushEventToGoogle(p: {
+  token: string
+  calendarId: string
+  existingEventId: string | null
+  payload: ProjectEventPayload
+}): Promise<GoogleEventResult> {
+  const { token, calendarId, existingEventId, payload } = p
   const body = buildEventBody(payload) as Record<string, unknown> & {
     attendees?: Array<{ email: string; responseStatus?: string }>
   }
-  const base = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(existingCalId)}/events`
+  const base = `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`
   // CREAR (POST) → sendUpdates=all: Google le manda la invitación a TODOS los
   // invitados (cliente + colaboradores) del MISMO evento.
   // EDITAR (PATCH) → sendUpdates=none por defecto: actualiza en silencio SIN
@@ -670,18 +667,173 @@ export async function syncProjectToEvent(
 
   if (!res.ok) {
     const errorText = await res.text()
-    await supabase
-      .from('projects')
-      .update({ google_sync_error: `${res.status}: ${errorText.slice(0, 200)}` })
-      .eq('id', payload.projectId)
     throw new Error(`Google sync failed: ${res.status} ${errorText}`)
   }
+  return (await res.json()) as GoogleEventResult
+}
 
-  const event = (await res.json()) as {
-    id: string
-    htmlLink?: string
-    start?: { date?: string; dateTime?: string }
-    end?: { date?: string; dateTime?: string }
+/**
+ * Sincroniza una fecha SECUNDARIA de la sesión (la fiesta, una segunda sesión).
+ *
+ * La principal la sigue llevando `syncProjectToEvent` contra `projects`; esta
+ * guarda su propio `google_event_id` en la fila del evento. Así cada fecha
+ * tiene su invitación en el calendario del cliente, con su hora y su lugar.
+ */
+export async function syncProjectEventToGoogle(
+  studioId: string,
+  eventId: string,
+): Promise<{ eventId: string; calendarId: string } | null> {
+  const supabase = createSupabaseServiceClient()
+  const integration = await loadIntegration(studioId)
+  if (!integration) return null
+  const calendarId = integration.config.calendarId
+  if (!calendarId) return null
+  const token = await getAccessToken(studioId)
+  if (!token) return null
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  const { data: row } = await sb
+    .from('project_events')
+    .select(
+      'id, studio_id, project_id, name, event_date, event_time, event_end_time, ' +
+        'location, notes, is_primary, google_event_id, google_calendar_id, ' +
+        'project:projects(id, name, client:clients(name, email))',
+    )
+    .eq('studio_id', studioId)
+    .eq('id', eventId)
+    .maybeSingle()
+  if (!row) return null
+
+  const r = row as Record<string, unknown>
+  // La principal NO pasa por aquí: su id vive en `projects` y lo maneja
+  // `syncProjectToEvent`. Sincronizarla por los dos lados crearía dos eventos.
+  if (r.is_primary === true) return null
+  const projectId = r.project_id ? String(r.project_id) : null
+  if (!projectId) return null
+
+  const proy = Array.isArray(r.project) ? r.project[0] : r.project
+  const cli = proy
+    ? Array.isArray((proy as { client?: unknown }).client)
+      ? ((proy as { client: unknown[] }).client[0] as { name?: string; email?: string })
+      : ((proy as { client?: { name?: string; email?: string } }).client ?? null)
+    : null
+
+  const nombreSesion = (proy as { name?: string } | null)?.name ?? ''
+  const titulo = cli?.name
+    ? `${String(r.name ?? 'Evento')} — ${cli.name}`
+    : String(r.name ?? nombreSesion ?? 'Evento')
+
+  const payload: ProjectEventPayload = {
+    projectId,
+    studioId,
+    title: titulo,
+    description: (r.notes as string) ?? null,
+    date: String(r.event_date ?? '').slice(0, 10),
+    startTime: (r.event_time as string | null)?.slice(0, 5) ?? null,
+    endTime: (r.event_end_time as string | null)?.slice(0, 5) ?? null,
+    location: (r.location as string) ?? null,
+    attendeeEmails: cli?.email ? [cli.email] : [],
+  }
+
+  const existingCalId = (r.google_calendar_id as string) ?? calendarId
+  let event: GoogleEventResult
+  try {
+    event = await pushEventToGoogle({
+      token,
+      calendarId: existingCalId,
+      existingEventId: (r.google_event_id as string) ?? null,
+      payload,
+    })
+  } catch (e) {
+    console.error(
+      '[gcal] evento de sesión falló',
+      e instanceof Error ? e.message : e,
+    )
+    return null
+  }
+
+  await sb
+    .from('project_events')
+    .update({
+      google_event_id: event.id,
+      google_calendar_id: existingCalId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', eventId)
+
+  // Espejo en google_events para que el calendario lo pinte como 'studioflow'.
+  const startDt =
+    event.start?.dateTime ?? (event.start?.date ? `${event.start.date}T00:00:00Z` : null)
+  const endDt =
+    event.end?.dateTime ?? (event.end?.date ? `${event.end.date}T23:59:59Z` : null)
+  await sb.from('google_events').upsert(
+    {
+      studio_id: studioId,
+      google_event_id: event.id,
+      google_calendar_id: existingCalId,
+      summary: payload.title,
+      description: payload.description ?? null,
+      location: payload.location ?? null,
+      starts_at: startDt,
+      ends_at: endDt,
+      is_all_day: !!event.start?.date && !event.start?.dateTime,
+      html_link: event.htmlLink ?? null,
+      status: 'confirmed',
+      origin: 'studioflow',
+      project_id: projectId,
+      sync_status: 'synced',
+      last_synced_at: new Date().toISOString(),
+      sync_error: null,
+    },
+    { onConflict: 'studio_id,google_event_id' },
+  )
+
+  return { eventId: event.id, calendarId: existingCalId }
+}
+
+/**
+ * Crea o actualiza el evento asociado al proyecto.
+ * Si ya existe `google_event_id`, hace PATCH; si no, POST.
+ */
+export async function syncProjectToEvent(
+  payload: ProjectEventPayload,
+): Promise<{ eventId: string; calendarId: string } | null> {
+  const supabase = createSupabaseServiceClient()
+  const integration = await loadIntegration(payload.studioId)
+  if (!integration) return null
+  const calendarId = integration.config.calendarId
+  if (!calendarId) return null
+
+  const token = await getAccessToken(payload.studioId)
+  if (!token) return null
+
+  // Leer google_event_id actual del proyecto
+  const { data: project } = await supabase
+    .from('projects')
+    .select('google_event_id, google_calendar_id')
+    .eq('id', payload.projectId)
+    .maybeSingle()
+
+  const existingEventId = project?.google_event_id
+  const existingCalId = project?.google_calendar_id ?? calendarId
+
+  let event: GoogleEventResult
+  try {
+    event = await pushEventToGoogle({
+      token,
+      calendarId: existingCalId,
+      existingEventId: existingEventId ?? null,
+      payload,
+    })
+  } catch (e) {
+    await supabase
+      .from('projects')
+      .update({
+        google_sync_error: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+      })
+      .eq('id', payload.projectId)
+    throw e
   }
 
   await supabase

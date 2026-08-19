@@ -5,6 +5,7 @@ import { headers } from "next/headers"
 import {
   getQuoteByToken,
   acceptQuote,
+  eventSummary,
 } from "@/server/services/booking-quote.service"
 import { getBookingFormConfigBySlug } from "@/server/services/booking-form.service"
 import { customFieldName, type BookingFormConfig } from "@/lib/forms/booking-form"
@@ -25,6 +26,22 @@ export const fetchCache = "force-no-store"
 
 const INPUT =
   "w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-gray-900"
+
+/**
+ * `2026-11-06` → `06 de noviembre de 2026`.
+ *
+ * Se ancla a UTC a propósito: una fecha "solo día" leída con `new Date()` en RD
+ * (UTC−4) retrocede un día y le muestra al cliente la víspera de su fiesta.
+ */
+function fechaLarga(dateOnly: string) {
+  if (!dateOnly) return ""
+  return new Intl.DateTimeFormat("es-DO", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${dateOnly.slice(0, 10)}T00:00:00Z`))
+}
 
 function money(n: number, currency: string) {
   return new Intl.NumberFormat("es-DO", {
@@ -116,8 +133,42 @@ export default async function CotizacionPage({
       <div className="mx-auto max-w-2xl px-5">
         <h1 className="text-2xl font-semibold text-gray-900">{quote.title}</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Cotización de {quote.studioName} · {quote.eventDate}
+          Cotización de {quote.studioName}
+          {quote.events.length > 1 ? "" : ` · ${fechaLarga(quote.eventDate)}`}
         </p>
+
+        {/* Las fechas del trabajo. Van primero: cuando hay una fiesta y una
+            sesión de fotos en días distintos, es lo primero que se busca. */}
+        {quote.events.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              {quote.events.length > 1 ? "Fechas" : "Fecha"}
+            </p>
+            <ul className="mt-3 space-y-3">
+              {quote.events.map((e) => {
+                const detalle = eventSummary(e)
+                return (
+                  <li
+                    key={e.id}
+                    className="border-l-2 border-gray-900/15 pl-3 text-[13px]"
+                  >
+                    <p className="font-medium text-gray-900">{e.name}</p>
+                    <p className="text-gray-600">
+                      {fechaLarga(e.eventDate)}
+                      {e.eventTime ? ` · ${e.eventTime}` : ""}
+                      {e.location ? ` · ${e.location}` : ""}
+                    </p>
+                    {detalle.length > 0 && (
+                      <p className="mt-0.5 text-[12px] text-gray-500">
+                        {detalle.join(" · ")}
+                      </p>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
 
         {/* Presupuesto */}
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">

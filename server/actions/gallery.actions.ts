@@ -74,6 +74,8 @@ const createGallerySchema = z.object({
   templateId: z.string().max(40).nullable(),
   availabilityDays: z.number().int().min(0).max(3650).nullable(),
   packageId: uuidOrNull,
+  // De que fecha de la sesion son estas fotos. Vacio = la sesion entera.
+  projectEventId: uuidOrNull,
 })
 
 const updateGallerySchema = z
@@ -136,6 +138,7 @@ export async function createGalleryAction(formData: FormData): Promise<{ id: str
     templateId: pickString(formData, "templateId"),
     availabilityDays: availabilityRaw ? Number(availabilityRaw) : null,
     packageId: pickString(formData, "packageId"),
+    projectEventId: pickString(formData, "projectEventId"),
   })
 
   const passwordHash = await passwordHashOrNull(data.password)
@@ -153,6 +156,7 @@ export async function createGalleryAction(formData: FormData): Promise<{ id: str
     templateId: data.templateId,
     availabilityDays: data.availabilityDays,
     packageId: data.packageId,
+    projectEventId: data.projectEventId,
   }
 
   const row = await createGallery(ctx.studioId, ctx.userId, input)
