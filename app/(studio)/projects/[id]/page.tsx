@@ -192,12 +192,31 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   // históricos que quedaron ligados solo por booking_request_id).
   const { data: brRow } = await supabase
     .from("booking_requests")
-    .select("id")
+    .select(
+      "id, quote_token, quote_title, quote_amount, quote_note, quote_items, " +
+        "quote_deliverables, quote_sent_at, quote_accepted_at, client_phone, " +
+        "event_location, additional_notes",
+    )
     .eq("studio_id", session.studioId)
     .eq("project_id", params.id)
     .is("deleted_at", null)
     .maybeSingle()
   const bookingRequestId = (brRow as { id?: string } | null)?.id ?? null
+  // Si trae `quote_token`, esta sesion NACIO de una cotizacion: lo acordado
+  // vive ahi y hasta ahora solo se veia en /cotizaciones.
+  const quote = brRow as {
+    quote_token?: string | null
+    quote_title?: string | null
+    quote_amount?: number | string | null
+    quote_note?: string | null
+    quote_items?: unknown
+    quote_deliverables?: unknown
+    quote_sent_at?: string | null
+    quote_accepted_at?: string | null
+    event_location?: string | null
+    additional_notes?: string | null
+  } | null
+  const esCotizacion = !!quote?.quote_token
   const formResponses = bookingRequestId
     ? await listFormResponsesForProject({
         studioId: session.studioId,
@@ -393,16 +412,18 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
   const sessionProfit = Number(
     (project as { profit_amount?: number | string | null }).profit_amount ?? NaN,
   )
+  const gananciaDelPlan = Number(
+    (pkg as { profit_amount?: number | string | null } | null)?.profit_amount ?? 0,
+  )
   const planProfit =
     Number.isFinite(sessionProfit) && sessionProfit >= 0
       ? sessionProfit
-      : Number(
-          (pkg as { profit_amount?: number | string | null } | null)?.profit_amount ?? 0,
-        )
+      : gananciaDelPlan
+  // Sin plan y sin ajuste no hay ganancia que mostrar. Antes se inventaba una
+  // —ingreso menos costos, o sea el 100% en una cotizacion sin gastos
+  // registrados— y eso es peor que decir que falta ponerla.
   const usaGananciaDelPlan = Number.isFinite(planProfit) && planProfit > 0
-  const netProfit = usaGananciaDelPlan
-    ? planProfit
-    : projectIncome - collaboratorCost - dressAbsorbed
+  const netProfit = usaGananciaDelPlan ? planProfit : 0
 
   // Badges de "pendiente": la HORA en toda sesión (parte importante); los
   // COLABORADORES y el VESTIDO solo en sesiones de quinceañera.
@@ -1008,41 +1029,117 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           {/* Ganancia. Sale SIEMPRE: es el numero que el estudio mira, y es
               donde se ajusta cuando hubo descuento. Los costos de abajo se
               muestran porque hay que pagarlos, no porque la modifiquen. */}
-          {usaGananciaDelPlan ||
-          projectCollaborators.length > 0 ||
-          (includesDress && dressCost > 0) ? (
+          {esCotizacion && (
             <CollapsibleCard
-              title="Ganancia"
-              icon={<DollarSign className="h-4 w-4" />}
-              summary={formatCurrency(netProfit, currency)}
+              title="Cotizacion"
+              icon={<FileText className="h-4 w-4" />}
+              summary={formatCurrency(Number(quote?.quote_amount ?? 0), currency)}
             >
               <dl className="space-y-2 text-xs">
-                {usaGananciaDelPlan && (
-                  <>
-                    <p className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
-                      Lo que te queda limpio por esta sesion, ya descontado todo.
-                      Los costos de abajo son lo que tienes que pagar por ella;
-                      no se le restan otra vez.
-                    </p>
-                    <SessionProfitEditor
-                      projectId={project.id as string}
-                      amount={netProfit}
-                      planAmount={Number(
-                        (pkg as { profit_amount?: number | string | null } | null)
-                          ?.profit_amount ?? 0,
-                      )}
-                      currency={currency}
-                      isOverride={
-                        Number.isFinite(sessionProfit) &&
-                        sessionProfit !==
-                          Number(
-                            (pkg as { profit_amount?: number | string | null } | null)
-                              ?.profit_amount ?? 0,
-                          )
-                      }
-                    />
-                  </>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Lo acordado</dt>
+                  <dd className="text-right font-medium text-foreground">
+                    {quote?.quote_title || "Cotizacion libre"}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Monto</dt>
+                  <dd className="font-semibold tabular-nums text-foreground">
+                    {formatCurrency(Number(quote?.quote_amount ?? 0), currency)}
+                  </dd>
+                </div>
+                {quote?.quote_sent_at && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Enviada</dt>
+                    <dd className="tabular-nums text-foreground/80">
+                      {formatDate(new Date(quote.quote_sent_at))}
+                    </dd>
+                  </div>
                 )}
+                {quote?.quote_accepted_at && (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted-foreground">Aceptada</dt>
+                    <dd className="tabular-nums text-emerald-600 dark:text-emerald-400">
+                      {formatDate(new Date(quote.quote_accepted_at))}
+                    </dd>
+                  </div>
+                )}
+                {Array.isArray(quote?.quote_deliverables) &&
+                  quote.quote_deliverables.length > 0 && (
+                    <div className="border-t border-border/60 pt-2">
+                      <dt className="mb-1 text-muted-foreground">Incluye</dt>
+                      <dd>
+                        <ul className="ml-4 list-disc space-y-0.5 text-foreground/80">
+                          {(quote.quote_deliverables as string[]).map((d, i) => (
+                            <li key={i}>{String(d)}</li>
+                          ))}
+                        </ul>
+                      </dd>
+                    </div>
+                  )}
+                {quote?.quote_note && (
+                  <div className="border-t border-border/60 pt-2">
+                    <dt className="mb-1 text-muted-foreground">Nota</dt>
+                    <dd className="whitespace-pre-wrap text-foreground/80">
+                      {quote.quote_note}
+                    </dd>
+                  </div>
+                )}
+                {quote?.event_location && (
+                  <div className="flex justify-between gap-3 border-t border-border/60 pt-2">
+                    <dt className="text-muted-foreground">Lugar</dt>
+                    <dd className="text-right text-foreground/80">
+                      {quote.event_location}
+                    </dd>
+                  </div>
+                )}
+                {quote?.additional_notes && (
+                  <div className="border-t border-border/60 pt-2">
+                    <dt className="mb-1 text-muted-foreground">Lo que pidio</dt>
+                    <dd className="whitespace-pre-wrap text-foreground/80">
+                      {quote.additional_notes}
+                    </dd>
+                  </div>
+                )}
+                <div className="border-t border-border/60 pt-2">
+                  <Link
+                    href="/cotizaciones"
+                    className="text-[11.5px] text-primary hover:underline"
+                  >
+                    Ver en Cotizaciones
+                  </Link>
+                </div>
+              </dl>
+            </CollapsibleCard>
+          )}
+
+          {/* Siempre visible: es donde se pone la ganancia de una sesion que
+              nacio de una cotizacion y no tiene plan del que copiarla. */}
+          <CollapsibleCard
+            title="Ganancia"
+            icon={<DollarSign className="h-4 w-4" />}
+            summary={
+              usaGananciaDelPlan
+                ? formatCurrency(netProfit, currency)
+                : "Sin definir"
+            }
+          >
+              <dl className="space-y-2 text-xs">
+                <p className="rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
+                  {usaGananciaDelPlan
+                    ? "Lo que te queda limpio por esta sesion, ya descontado todo. Los costos de abajo son lo que tienes que pagar por ella; no se le restan otra vez."
+                    : "Esta sesion no tiene ganancia definida, asi que no suma en Finanzas. Ponle lo que te queda limpio."}
+                </p>
+                <SessionProfitEditor
+                  projectId={project.id as string}
+                  amount={netProfit}
+                  planAmount={gananciaDelPlan}
+                  currency={currency}
+                  isOverride={
+                    Number.isFinite(sessionProfit) &&
+                    sessionProfit !== gananciaDelPlan
+                  }
+                />
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Ingreso del proyecto</dt>
                   <dd className="font-medium tabular-nums text-foreground">
@@ -1123,7 +1220,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                 )}
                 <div className="flex justify-between border-t border-border/60 pt-2">
                   <dt className="font-semibold text-foreground">
-                    {usaGananciaDelPlan ? "Ganancia de la sesion" : "Ganancia neta"}
+                    Ganancia de la sesion
                   </dt>
                   <dd
                     className={
@@ -1136,8 +1233,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
                   </dd>
                 </div>
               </dl>
-            </CollapsibleCard>
-          ) : null}
+          </CollapsibleCard>
 
           {/* Finance summary */}
           {invoices.length > 0 && (
