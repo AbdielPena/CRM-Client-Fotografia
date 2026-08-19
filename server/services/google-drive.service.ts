@@ -11,6 +11,24 @@ import { getDriveAccessToken } from "@/server/services/google-drive-oauth.servic
  * final a Drive en dos pistas (Redes / Máxima calidad).
  */
 
+/**
+ * Toda llamada a Google lleva tiempo limite.
+ *
+ * `fetch` sin timeout espera indefinidamente: una conexion a medias congelaba
+ * el respaldo entero en el primer archivo -sin subir, sin fallar y sin dejar
+ * rastro en el log-. Mejor fallar en un minuto y que el reintento lo agarre.
+ *
+ * La subida lleva su propio plazo, mas largo: un original de 12 MB por una
+ * conexion lenta es normal; colgarse una hora no.
+ */
+const TIMEOUT_MS = 60_000
+const TIMEOUT_SUBIDA_MS = 180_000
+
+/** `{ signal }` listo para pasarle a fetch. */
+function conTiempo(ms: number = TIMEOUT_MS) {
+  return { signal: AbortSignal.timeout(ms) }
+}
+
 const DRIVE_API = "https://www.googleapis.com/drive/v3"
 const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
 const FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -53,6 +71,7 @@ export async function getStorageQuota(studioId: string): Promise<DriveQuota> {
   const auth = await authHeader(studioId)
   const res = await fetch(`${DRIVE_API}/about?fields=storageQuota`, {
     headers: { Authorization: auth },
+    ...conTiempo(),
   })
   if (!res.ok) throw new Error(`Drive quota ${res.status}: ${await res.text()}`)
   const data = (await res.json()) as {
@@ -84,7 +103,7 @@ export async function findFolder(
     parentId ? `'${parentId}' in parents` : "'root' in parents",
   ].join(" and ")
   const url = `${DRIVE_API}/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1&spaces=drive`
-  const res = await fetch(url, { headers: { Authorization: auth } })
+  const res = await fetch(url, { headers: { Authorization: auth }, ...conTiempo() })
   if (!res.ok) throw new Error(`Drive findFolder ${res.status}: ${await res.text()}`)
   const data = (await res.json()) as { files?: Array<{ id: string }> }
   return data.files?.[0]?.id ?? null
@@ -103,6 +122,7 @@ export async function createFolder(
     method: "POST",
     headers: { Authorization: auth, "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    ...conTiempo(),
   })
   if (!res.ok) throw new Error(`Drive createFolder ${res.status}: ${await res.text()}`)
   const data = (await res.json()) as { id: string }
@@ -155,6 +175,7 @@ export async function uploadFile(
       "X-Upload-Content-Length": String(buffer.length),
     },
     body: JSON.stringify({ name, parents: [folderId] }),
+    ...conTiempo(),
   })
   if (!initRes.ok)
     throw new Error(`Drive upload init ${initRes.status}: ${await initRes.text()}`)
@@ -166,6 +187,7 @@ export async function uploadFile(
     method: "PUT",
     headers: { "Content-Type": mimeType },
     body: new Uint8Array(buffer),
+    ...conTiempo(TIMEOUT_SUBIDA_MS),
   })
   if (!putRes.ok) throw new Error(`Drive upload PUT ${putRes.status}: ${await putRes.text()}`)
   const data = (await putRes.json()) as { id: string }
@@ -202,7 +224,7 @@ export async function listFilesInFolder(
       `&fields=nextPageToken,files(id,name,createdTime)` +
       `&orderBy=createdTime desc&pageSize=${porPagina}&spaces=drive` +
       (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "")
-    const res = await fetch(url, { headers: { Authorization: auth } })
+    const res = await fetch(url, { headers: { Authorization: auth }, ...conTiempo() })
     if (!res.ok) throw new Error(`Drive listFiles ${res.status}: ${await res.text()}`)
     const data = (await res.json()) as {
       nextPageToken?: string
@@ -229,7 +251,7 @@ export async function revokePublicAccess(
   const auth = await authHeader(studioId)
   const res = await fetch(
     `${DRIVE_API}/files/${fileId}/permissions?fields=permissions(id,type)`,
-    { headers: { Authorization: auth } },
+    { headers: { Authorization: auth }, ...conTiempo() },
   )
   if (!res.ok) throw new Error(`Drive permissions ${res.status}: ${await res.text()}`)
   const data = (await res.json()) as {
@@ -265,7 +287,12 @@ export async function moveFile(
     `${DRIVE_API}/files/${fileId}` +
     `?addParents=${encodeURIComponent(toFolderId)}` +
     `&removeParents=${encodeURIComponent(fromFolderId)}&fields=id`
-  const res = await fetch(url, { method: "PATCH", headers: { Authorization: auth } })
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: { Authorization: auth },
+    ...conTiempo(),
+    ...conTiempo(),
+  })
   if (!res.ok) throw new Error(`Drive move ${res.status}: ${await res.text()}`)
 }
 
@@ -275,6 +302,7 @@ export async function deleteFile(studioId: string, fileId: string): Promise<void
   const res = await fetch(`${DRIVE_API}/files/${fileId}`, {
     method: "DELETE",
     headers: { Authorization: auth },
+    ...conTiempo(),
   })
   // 404 = ya no está. Es el resultado buscado, no un fallo.
   if (!res.ok && res.status !== 404) {
@@ -302,6 +330,7 @@ export async function shareFolder(
       method: "POST",
       headers: { Authorization: auth, "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      ...conTiempo(),
     },
   )
   // 400 con "already shared" no es fatal.
@@ -321,6 +350,7 @@ export async function getFileLink(
   const auth = await authHeader(studioId)
   const res = await fetch(`${DRIVE_API}/files/${fileId}?fields=webViewLink`, {
     headers: { Authorization: auth },
+    ...conTiempo(),
   })
   if (!res.ok) return null
   const data = (await res.json()) as { webViewLink?: string }
