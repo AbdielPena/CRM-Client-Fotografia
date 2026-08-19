@@ -362,6 +362,18 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     }
 
     const total = assets.length
+    // El avance se guarda tambien AQUI: las fotos que ya estaban en Drive hacen
+    // `continue` y se saltan el guardado de dentro del bucle. Sin esta linea,
+    // un respaldo reanudado terminaba marcando 0 subidas aunque estuviera todo.
+    await sb
+      .from("gallery_drive_backups")
+      .update({
+        uploaded_assets: uploaded,
+        bytes_uploaded: bytes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", backupId)
+
     const finalStatus = uploaded === 0 && total > 0 ? "failed" : uploaded < total ? "partial" : "completed"
 
     // ESPEJO: la carpeta del cliente contiene EXACTAMENTE la entrega y nada mas.
