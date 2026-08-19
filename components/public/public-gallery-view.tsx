@@ -111,21 +111,6 @@ const SERIF = "var(--font-serif), 'Playfair Display', 'Iowan Old Style', 'Palati
 const DEFAULT_THANKYOU =
   "Gracias por confiar en nosotros para capturar este momento. Fue un privilegio ser parte de él, y esperamos que estas fotografías te acompañen por siempre."
 
-/** Cadencia editorial tipo revista: pares, tríos y una foto sola de vez en cuando. */
-const EDITORIAL_CADENCE = [2, 3, 2, 1]
-function chunkEditorial<T>(items: T[]): { n: number; items: T[] }[] {
-  const rows: { n: number; items: T[] }[] = []
-  let i = 0
-  let c = 0
-  while (i < items.length) {
-    const n = EDITORIAL_CADENCE[c % EDITORIAL_CADENCE.length]!
-    rows.push({ n, items: items.slice(i, i + n) })
-    i += n
-    c++
-  }
-  return rows
-}
-
 /** Portada editorial (revista): imagen de estudio + overline + título serif grande. */
 function EditorialCover({
   gallery,
@@ -876,6 +861,25 @@ export function PublicGalleryView({
     return cols
   }, [visibleAssets, masonryCols])
 
+  // La ENTREGA va en tres columnas (dos en telefono). Mismo reparto en orden de
+  // lectura que la seleccion: 0,1,2,0,1,2… para que el orden de las fotos se
+  // siga de izquierda a derecha.
+  const [deliveryCols, setDeliveryCols] = useState(3)
+  useEffect(() => {
+    const calc = () => setDeliveryCols(window.innerWidth < 640 ? 2 : 3)
+    calc()
+    window.addEventListener("resize", calc)
+    return () => window.removeEventListener("resize", calc)
+  }, [])
+  const deliveryColumns = useMemo(() => {
+    const cols: Array<Array<{ a: Asset; i: number }>> = Array.from(
+      { length: deliveryCols },
+      () => [],
+    )
+    visibleAssets.forEach((a, i) => cols[i % deliveryCols]!.push({ a, i }))
+    return cols
+  }, [visibleAssets, deliveryCols])
+
   const requestZip = useCallback(
     async (key: string, assetIds: string[], resolution: "web" | "original") => {
       if (assetIds.length === 0) {
@@ -1201,10 +1205,14 @@ export function PublicGalleryView({
               : "0 24px 46px -30px rgba(40,34,24,.34)",
         }}
       >
-        {a.thumbUrl && (
+        {(compact ? a.thumbUrl : (a.webUrl ?? a.thumbUrl)) && (
+          // La ENTREGA usa la version grande (1600 px) tambien en la
+          // cuadricula: la miniatura es de 400 y en pantallas de alta densidad
+          // se veia blanda hasta abrirla. La SELECCION se queda con la
+          // miniatura: son cientos de fotos y ahi manda la velocidad.
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={a.thumbUrl}
+            src={(compact ? a.thumbUrl : (a.webUrl ?? a.thumbUrl)) ?? undefined}
             alt=""
             loading="lazy"
             draggable={false}
@@ -1876,28 +1884,17 @@ export function PublicGalleryView({
             Aún no hay fotos en esta galería.
           </p>
         ) : isShowingDelivery || deliveryOnly ? (
-          <div className="flex flex-col gap-6 sm:gap-9">
-            {chunkEditorial(visibleAssets.map((a, i) => ({ a, i }))).map((row, r) => {
-              if (row.n === 1) {
-                const first = row.items[0]!
-                return (
-                  <div key={r} className="mx-auto w-full max-w-[540px] py-2 sm:py-6">
-                    {renderTile(first.a, first.i)}
-                  </div>
-                )
-              }
-              return (
-                <div
-                  key={r}
-                  className={cn(
-                    "grid grid-cols-1 items-start gap-4 sm:gap-6",
-                    row.n === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2",
-                  )}
-                >
-                  {row.items.map(({ a, i }) => renderTile(a, i))}
-                </div>
-              )
-            })}
+          // Tres columnas parejas. Cada foto conserva SU proporcion —nada se
+          // recorta— y todas caen en la misma retícula, con las mismas
+          // separaciones. El flujo editorial de antes (filas de 1, 2 y 3 fotos
+          // de tamaños distintos) luce bien con seis fotos; con cuarenta y
+          // cinco se lee como desorden.
+          <div className="flex items-start gap-4 sm:gap-6">
+            {deliveryColumns.map((col, ci) => (
+              <div key={ci} className="flex min-w-0 flex-1 flex-col gap-4 sm:gap-6">
+                {col.map(({ a, i }) => renderTile(a, i))}
+              </div>
+            ))}
           </div>
         ) : (
           <div className="flex items-start gap-3">
