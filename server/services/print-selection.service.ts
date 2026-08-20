@@ -596,6 +596,8 @@ export interface StudioPrintItem {
   publicToken: string | null
   status: StudioPrintStatus
   submittedAt: string | null
+  /** El estudio ya las imprimio y avisó: estan LISTAS para retirar. */
+  readyAt: string | null
   locked: boolean
   /** Fecha de entrega/sesión (YYYY-MM-DD) para ordenar y mostrar. */
   deliveredDate: string | null
@@ -616,13 +618,14 @@ interface PrintGalleryRow {
   client_id: string | null
   print_submitted_at: string | null
   print_locked: boolean | null
+  print_ready_at: string | null
   delivery_ready_at: string | null
   delivery_date: string | null
   gallery_type: string | null
 }
 
 const PRINT_GALLERY_COLS =
-  "id, project_id, package_id, name, client_id, print_selection_enabled, print_submitted_at, print_locked, gallery_type, delivery_ready_at, delivery_date"
+  "id, project_id, package_id, name, client_id, print_selection_enabled, print_submitted_at, print_locked, print_ready_at, gallery_type, delivery_ready_at, delivery_date"
 
 /** Señales de "galería entregada" (cualquiera basta). */
 const DELIVERED_OR =
@@ -887,6 +890,7 @@ async function buildPrintItems(
       publicToken,
       status,
       submittedAt: g.print_submitted_at ?? null,
+      readyAt: g.print_ready_at ?? null,
       locked: !!g.print_locked,
       deliveredDate,
       summary: summarizeEntitlements(ent),
