@@ -260,7 +260,17 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       return
     }
 
-    const paraElCliente = b.notify_client !== false
+    // La carpeta de una ENTREGA FINAL siempre se comparte y siempre genera su
+    // enlace: para eso existe. Antes esto colgaba de `notify_client`, que en
+    // realidad solo debe decidir si además se le manda el correo al cliente.
+    //
+    // Como el barrido automático encola con `notifyClient: false` (para no
+    // repetir la tormenta de 95 correos), TODOS sus respaldos terminaban en la
+    // carpeta interna, sin compartir y sin enlace: 580 respaldos completos con
+    // el link en blanco. Por eso el mensaje de entrega salía sin enlace de
+    // Drive. Aquí ya está garantizado que es una entrega final —lo demás se
+    // frenó arriba—, así que va a la carpeta del cliente.
+    const paraElCliente = true
 
     // Cada destino tiene su RAÍZ. Separarlas es lo que impide que un fallo al
     // compartir vuelva a filtrar la selección: en la carpeta interna no hay

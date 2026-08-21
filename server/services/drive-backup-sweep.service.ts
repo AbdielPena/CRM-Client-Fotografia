@@ -120,11 +120,18 @@ async function candidatas(): Promise<Candidata[]> {
     if ((intentos.get(g.id) ?? 0) >= MAX_INTENTOS && !completos.has(g.id)) continue
 
     // Solo fotos listas: las que siguen procesándose no tienen original estable.
+    //
+    // Y SOLO las de "Máxima calidad", que son las que este barrido sube. Contar
+    // también las de "Redes" era un bucle infinito: la galería de Yudelka tiene
+    // las mismas 10 fotos en las dos pistas (20 filas), el respaldo cubría 10,
+    // y al comparar 10 contra 20 nunca se daba por completa. Se reencolaba cada
+    // 5 minutos — 676 veces — bajando y subiendo las mismas 10 fotos.
     const { data: assets } = await sb
       .from("gallery_assets")
       .select("file_size")
       .eq("gallery_id", g.id)
       .eq("status", "completed")
+      .eq("delivery_track", "high_quality")
       .not("original_key", "is", null)
     const filas = (assets ?? []) as Array<{ file_size: number | null }>
     if (filas.length === 0) continue
