@@ -117,7 +117,13 @@ async function candidatas(): Promise<Candidata[]> {
     // (fotos rotas, permisos, lo que sea) se reencolaba en CADA barrido, para
     // siempre. Tras varios intentos se deja quieta: que se vea como un problema
     // a resolver, no como un bucle silencioso.
-    if ((intentos.get(g.id) ?? 0) >= MAX_INTENTOS && !completos.has(g.id)) continue
+    //
+    // El tope vale TAMBIÉN para las que llegaron a completarse. Antes esas
+    // quedaban exentas, y ahí estaba el bucle: una entrega con fotos duplicadas
+    // que ya no tienen archivo en el servidor (Mia XV tiene 82 filas para 43
+    // fotas reales) nunca puede cubrirlas todas, así que se daba por incompleta
+    // y volvía a la cola cada 5 minutos. Yudelka llegó a 676 respaldos.
+    if ((intentos.get(g.id) ?? 0) >= MAX_INTENTOS) continue
 
     // Solo fotos listas: las que siguen procesándose no tienen original estable.
     //
