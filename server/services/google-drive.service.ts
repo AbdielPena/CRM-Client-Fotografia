@@ -203,7 +203,7 @@ export async function listFilesInFolder(
   studioId: string,
   folderId: string,
   pageSize = 100,
-): Promise<Array<{ id: string; name: string; createdTime: string }>> {
+): Promise<Array<{ id: string; name: string; createdTime: string; size: number }>> {
   const auth = await authHeader(studioId)
   const q = [
     `'${folderId}' in parents`,
@@ -215,22 +215,25 @@ export async function listFilesInFolder(
   // carpeta de 1500 fotos se veía como de 1000 — y quien use esta lista para
   // decidir qué mover o qué ya está subido, decidiría con datos incompletos.
   const porPagina = Math.min(Math.max(1, pageSize), 1000)
-  const out: Array<{ id: string; name: string; createdTime: string }> = []
+  const out: Array<{ id: string; name: string; createdTime: string; size: number }> = []
   let pageToken: string | null = null
 
   do {
     const url =
       `${DRIVE_API}/files?q=${encodeURIComponent(q)}` +
-      `&fields=nextPageToken,files(id,name,createdTime)` +
+      `&fields=nextPageToken,files(id,name,createdTime,size)` +
       `&orderBy=createdTime desc&pageSize=${porPagina}&spaces=drive` +
       (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "")
     const res = await fetch(url, { headers: { Authorization: auth }, ...conTiempo() })
     if (!res.ok) throw new Error(`Drive listFiles ${res.status}: ${await res.text()}`)
     const data = (await res.json()) as {
       nextPageToken?: string
-      files?: Array<{ id: string; name: string; createdTime: string }>
+      files?: Array<{ id: string; name: string; createdTime: string; size?: string }>
     }
-    out.push(...(data.files ?? []))
+    // `size` viene como texto y NO existe en los Google Docs nativos.
+    out.push(
+      ...(data.files ?? []).map((f) => ({ ...f, size: Number(f.size ?? 0) })),
+    )
     pageToken = data.nextPageToken ?? null
   } while (pageToken)
 

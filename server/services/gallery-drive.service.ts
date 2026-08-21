@@ -203,7 +203,7 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       sb
         .from("gallery_assets")
         .select(
-          "id, original_name, original_key, web_key, mime_type, delivery_track",
+          "id, original_name, original_key, web_key, mime_type, delivery_track, file_size",
         )
         .eq("gallery_id", b.gallery_id)
         .eq("status", "completed")
@@ -216,6 +216,8 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       web_key: string | null
       mime_type: string | null
       delivery_track: "high_quality" | "social" | null
+      /** Peso del ORIGINAL. Es lo que distingue la editada de la cruda. */
+      file_size: number | null
     }>
 
     // Determinar la pista efectiva de cada foto:
@@ -305,19 +307,31 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     // una sola corrida del cron, y al reintentarla volvería a subir todo,
     // duplicando cada foto en Drive. Con la lista previa, el reintento continúa
     // donde se quedó.
-    const yaEnDrive = new Map<string, Set<string>>()
+    // Nombre → TAMAÑOS que hay con ese nombre (Drive admite repetidos).
+    //
+    // Antes se guardaba solo el nombre, y ese fue el fallo que llenó las
+    // carpetas de las clientas con fotos crudas: la selección y la entrega de
+    // una misma sesión tienen los MISMOS nombres de archivo. Si la selección
+    // subía primero, al tocarle a la entrega el "ya está subido" las daba por
+    // hechas y la editada nunca reemplazaba a la cruda.
+    const yaEnDrive = new Map<string, Map<string, Set<number>>>()
     for (const tr of tracks) {
       const fid = folderIds[tr]
       if (!fid) continue
+      const porNombre = new Map<string, Set<number>>()
       try {
         const existentes = await drive.listFilesInFolder(studioId, fid, 1000)
-        yaEnDrive.set(tr, new Set(existentes.map((f) => f.name)))
+        for (const f of existentes) {
+          const tam = porNombre.get(f.name) ?? new Set<number>()
+          tam.add(f.size)
+          porNombre.set(f.name, tam)
+        }
       } catch (e) {
         // Si no se puede listar, se sigue: subir de más es recuperable,
         // no subir no lo es.
         console.error("[gallery-drive] no se pudo listar la carpeta", fid, e)
-        yaEnDrive.set(tr, new Set())
       }
+      yaEnDrive.set(tr, porNombre)
     }
 
     let uploaded = 0
@@ -334,7 +348,16 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       // ahorramos bajar la foto entera del storage para nada.
       const extPrev = tr === "high_quality" ? (a.original_name?.split(".").pop() ?? "jpg") : "webp"
       const nombrePrev = `${baseName(a.original_name, a.id)}${tr === "social" ? "_web" : ""}.${extPrev}`
-      if (yaEnDrive.get(tr)?.has(nombrePrev)) {
+      // Ya respaldada solo si coinciden nombre Y tamaño. `file_size` es el
+      // del original; en la pista de redes no se conoce de antemano, así que
+      // ahí basta el nombre (la versión web no colisiona con nada).
+      const tamEsperado = Number(a.file_size ?? 0)
+      const mismos = yaEnDrive.get(tr)?.get(nombrePrev)
+      const yaEstaba =
+        tr === "high_quality"
+          ? !!mismos && tamEsperado > 0 && mismos.has(tamEsperado)
+          : !!mismos
+      if (yaEstaba) {
         uploaded += 1 // ya estaba respaldada
         continue
       }
@@ -399,15 +422,41 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       for (const tr of tracks) {
         const fid = folderIds[tr]
         if (!fid) continue
-        const debenEstar = new Set(
-          assets.filter((a) => a.track === tr).map((a) => driveFileNameFor(a, tr)),
-        )
+        // Nombre → tamaños que SÍ deben estar. Por nombre a secas no bastaba:
+        // la foto cruda de la selección se llama igual que la editada, así que
+        // pasaba el filtro y se quedaba en la carpeta de la clienta para
+        // siempre. Con el tamaño, lo que no es de esta entrega se va.
+        const debenEstar = new Map<string, Set<number>>()
+        for (const a of assets) {
+          if (a.track !== tr) continue
+          const nombre = driveFileNameFor(a, tr)
+          const tam = debenEstar.get(nombre) ?? new Set<number>()
+          tam.add(Number(a.file_size ?? 0))
+          debenEstar.set(nombre, tam)
+        }
         try {
           const enDrive = await drive.listFilesInFolder(studioId, fid, 1000)
+          const vistos = new Set<string>()
           for (const f of enDrive) {
-            if (debenEstar.has(f.name)) continue
+            const esperados = debenEstar.get(f.name)
+            // En "Máxima calidad" tiene que cuadrar el tamaño; en "Redes" la
+            // versión web se regenera y su peso no está guardado, así que solo
+            // se exige el nombre. Un duplicado exacto también sobra.
+            const clave = `${f.name}|${f.size}`
+            const cuadra =
+              !!esperados &&
+              (tr !== "high_quality" || esperados.has(f.size)) &&
+              !vistos.has(clave)
+            if (cuadra) {
+              vistos.add(clave)
+              continue
+            }
             await drive.deleteFile(studioId, f.id)
-            console.warn("[gallery-drive] sobraba en la carpeta del cliente:", f.name)
+            console.warn(
+              "[gallery-drive] no es de esta entrega, fuera:",
+              f.name,
+              f.size,
+            )
           }
         } catch (e) {
           // No es fatal: la entrega ya esta subida. Se reintenta a la proxima.
