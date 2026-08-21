@@ -25,18 +25,15 @@ import { fetchAllPaged } from "@/server/services/gallery.service"
 
 const ORIGINALS_BUCKET = "gallery-originals"
 const RENDITIONS_BUCKET = "gallery-renditions"
-/** Carpeta de ENTREGAS: se comparte por enlace con el cliente. */
-const ROOT_FOLDER = "PixelOS Entregas"
 /**
- * Carpeta de RESPALDO INTERNO: nunca se comparte, nunca se enlaza.
+ * Carpeta de ENTREGAS: se comparte por enlace con el cliente.
  *
- * Existe porque la ruta de Drive se arma por PROYECTO, no por galería: la
- * selección y la entrega del mismo proyecto caían en la MISMA carpeta. Como esa
- * carpeta se comparte para la entrega, respaldar la selección ahí le daba al
- * cliente acceso a descargar TODAS las fotos de la sesión — incluidas las que
- * no eligió ni pagó.
+ * Es la ÚNICA raíz. Antes había una segunda, "PixelOS Respaldo interno", donde
+ * se escondían los respaldos de la selección para que no se compartieran. Ya no
+ * hace falta: la selección no se respalda nunca (ver `enqueueGalleryDriveBackup`),
+ * así que aquí dentro solo puede haber entregas finales.
  */
-const ROOT_INTERNO = "PixelOS Respaldo interno"
+const ROOT_FOLDER = "PixelOS Entregas"
 
 export type DriveTrack = "social" | "high_quality" | "both"
 
@@ -98,12 +95,23 @@ export async function enqueueGalleryDriveBackup(
   const sb = untypedService()
   const { data: g } = await sb
     .from("galleries")
-    .select("id, studio_id, project_id, client_id")
+    .select("id, studio_id, project_id, client_id, gallery_type")
     .eq("id", galleryId)
     .eq("studio_id", studioId)
     .is("deleted_at", null)
     .maybeSingle()
   if (!g) throw new Error("Galería no encontrada")
+
+  // A Drive sube SOLO lo que el estudio pone en la ENTREGA FINAL.
+  //
+  // La selección del cliente son las pruebas de la sesión: viven en el servidor
+  // y ahí se quedan. El freno va AQUÍ, en la puerta, y no al ejecutar: mientras
+  // se pudo encolar, bastaba que algo la ejecutara para que sus fotos crudas
+  // acabaran en la carpeta de la clienta. Así se subieron las 356 fotos de la
+  // selección de Andrea.
+  if ((g as { gallery_type?: string | null }).gallery_type !== "final_delivery") {
+    throw new Error("A Drive solo sube la galería de entrega final")
+  }
 
   const { data: existing } = await sb
     .from("gallery_drive_backups")
@@ -262,23 +270,9 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
       return
     }
 
-    // La carpeta de una ENTREGA FINAL siempre se comparte y siempre genera su
-    // enlace: para eso existe. Antes esto colgaba de `notify_client`, que en
-    // realidad solo debe decidir si además se le manda el correo al cliente.
-    //
-    // Como el barrido automático encola con `notifyClient: false` (para no
-    // repetir la tormenta de 95 correos), TODOS sus respaldos terminaban en la
-    // carpeta interna, sin compartir y sin enlace: 580 respaldos completos con
-    // el link en blanco. Por eso el mensaje de entrega salía sin enlace de
-    // Drive. Aquí ya está garantizado que es una entrega final —lo demás se
-    // frenó arriba—, así que va a la carpeta del cliente.
-    const paraElCliente = true
-
-    // Cada destino tiene su RAÍZ. Separarlas es lo que impide que un fallo al
-    // compartir vuelva a filtrar la selección: en la carpeta interna no hay
-    // nada compartido con nadie.
+    // Una sola raíz, la del cliente: aquí dentro solo puede haber entregas.
     const projectFolderId = await drive.ensureFolderPath(studioId, [
-      paraElCliente ? ROOT_FOLDER : ROOT_INTERNO,
+      ROOT_FOLDER,
       sanitize(categoryFolder),
       sanitize(clientName),
       sanitize(projectName),
@@ -385,14 +379,15 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
         .eq("id", backupId)
     }
 
-    // Compartir SOLO la entrega final. Antes esto corría siempre, así que un
-    // respaldo de la selección dejaba su carpeta con enlace público.
-    let link: string | null = null
-    if (paraElCliente) {
-      // "Cualquiera con el enlace" (lector, sin descubrimiento/indexado).
-      await drive.shareFolder(studioId, projectFolderId, {})
-      link = await drive.getFileLink(studioId, projectFolderId)
-    }
+    // La carpeta se comparte y se pide su enlace SIEMPRE: es una entrega, para
+    // eso está. Antes esto colgaba de `notify_client` —que solo debe decidir si
+    // además se manda el correo—, y como el barrido automático encola con
+    // `notifyClient: false`, sus 580 respaldos quedaron sin enlace. De ahí que
+    // el mensaje de entrega saliera sin link de Drive.
+    //
+    // "Cualquiera con el enlace" (lector, sin descubrimiento/indexado).
+    await drive.shareFolder(studioId, projectFolderId, {})
+    const link: string | null = await drive.getFileLink(studioId, projectFolderId)
 
     const total = assets.length
     // El avance se guarda tambien AQUI: las fotos que ya estaban en Drive hacen
@@ -418,7 +413,7 @@ export async function runGalleryDriveBackup(backupId: string): Promise<void> {
     //
     // Solo se limpia si la subida quedo COMPLETA: si fallo a medias, vaciar la
     // carpeta le quitaria al cliente fotos que si le tocan.
-    if (paraElCliente && finalStatus === "completed") {
+    if (finalStatus === "completed") {
       for (const tr of tracks) {
         const fid = folderIds[tr]
         if (!fid) continue
